@@ -1,0 +1,2 @@
+# DynamiQuote
+Inteligencia Comercial Dinamica.
