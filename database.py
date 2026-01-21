@@ -10,11 +10,49 @@ from typing import Optional, Generator
 import streamlit as st
 from dotenv import load_dotenv
 
-# Cargar variables de entorno
-load_dotenv()
+# ====================================
+# Configuración de Variables de Entorno
+# ====================================
 
-# Configuración
-DATABASE_URL = os.getenv("DATABASE_URL")
+def get_database_url() -> Optional[str]:
+    """
+    Obtiene DATABASE_URL de forma automática según el entorno:
+    1. Streamlit Cloud: usa st.secrets
+    2. Local: usa .env file
+    3. Fallback: variable de entorno del sistema
+    
+    Returns:
+        str: URL de conexión a PostgreSQL o None para usar SQLite
+    """
+    # Prioridad 1: Streamlit Cloud (secrets.toml)
+    try:
+        if hasattr(st, 'secrets') and 'DATABASE_URL' in st.secrets:
+            print("✅ Usando DATABASE_URL de Streamlit Cloud Secrets")
+            return st.secrets['DATABASE_URL']
+    except Exception:
+        pass
+    
+    # Prioridad 2: Archivo .env local
+    load_dotenv()
+    database_url = os.getenv('DATABASE_URL')
+    
+    if database_url and database_url.strip():
+        print("✅ Usando DATABASE_URL de archivo .env local")
+        return database_url
+    
+    # Prioridad 3: Variable de entorno del sistema
+    database_url = os.environ.get('DATABASE_URL')
+    
+    if database_url and database_url.strip():
+        print("✅ Usando DATABASE_URL de variable de entorno del sistema")
+        return database_url
+    
+    print("ℹ️  DATABASE_URL no encontrada. Usando SQLite local para desarrollo.")
+    return None
+
+
+# Obtener configuración
+DATABASE_URL = get_database_url()
 SQLITE_DB = "quotes_mvp.db"
 
 
@@ -23,24 +61,30 @@ def is_postgres() -> bool:
     return DATABASE_URL is not None and DATABASE_URL.strip() != ""
 
 
+def _create_connection():
+    """Crea una nueva conexión a la base de datos."""
+    if is_postgres():
+        try:
+            import psycopg2
+            conn = psycopg2.connect(DATABASE_URL)
+            return conn
+        except ImportError as e:
+            raise ImportError("psycopg2 no está instalado. Ejecuta: pip install psycopg2-binary") from e
+        except Exception as e:
+            raise ConnectionError(f"Error conectando a PostgreSQL: {e}") from e
+    else:
+        return sqlite3.connect(SQLITE_DB, check_same_thread=False)
+
+
 @st.cache_resource
 def get_connection():
     """
     Obtiene conexión a la base de datos (PostgreSQL o SQLite).
     Usa caché de Streamlit para mantener una sola conexión.
+    
+    Para uso fuera de Streamlit, usa _create_connection() directamente.
     """
-    if is_postgres():
-        try:
-            import psycopg2
-            return psycopg2.connect(DATABASE_URL)
-        except ImportError:
-            st.error("psycopg2 no está instalado. Ejecuta: pip install psycopg2-binary")
-            st.stop()
-        except Exception as e:
-            st.error(f"Error conectando a PostgreSQL: {e}")
-            st.stop()
-    else:
-        return sqlite3.connect(SQLITE_DB, check_same_thread=False)
+    return _create_connection()
 
 
 @contextmanager
