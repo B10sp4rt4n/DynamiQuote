@@ -1,4 +1,5 @@
 *.db
+*.db.backup
 *.pyc
 __pycache__/
 .venv/

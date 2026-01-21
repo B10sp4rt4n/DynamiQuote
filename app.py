@@ -1,18 +1,16 @@
 import streamlit as st
 import pandas as pd
-import sqlite3
 import uuid
-from datetime import datetime
+from datetime import datetime, UTC
 import matplotlib.pyplot as plt
 from spellchecker import SpellChecker
+from database import init_database, save_quote, get_all_quotes, get_quote_lines, get_database_info
 
 # =========================
 # Configuración
 # =========================
 st.set_page_config(page_title="Quote Intelligence MVP", layout="wide")
 st.title("🧾 Cotizador Universal – MVP Funcional")
-
-DB_NAME = "quotes_mvp.db"
 
 # =========================
 # Spellchecker
@@ -38,41 +36,15 @@ def suggest_description_fix(text):
 # =========================
 # DB Init
 # =========================
-conn = sqlite3.connect(DB_NAME)
-cur = conn.cursor()
+success, message = init_database()
+if not success:
+    st.error(message)
+    st.stop()
 
-cur.execute("""
-CREATE TABLE IF NOT EXISTS quotes (
-    quote_id TEXT PRIMARY KEY,
-    created_at TEXT,
-    status TEXT,
-    total_cost REAL,
-    total_revenue REAL,
-    gross_profit REAL,
-    avg_margin REAL
-)
-""")
-
-cur.execute("""
-CREATE TABLE IF NOT EXISTS quote_lines (
-    line_id TEXT PRIMARY KEY,
-    quote_id TEXT,
-    sku TEXT,
-    description_original TEXT,
-    description_final TEXT,
-    description_corrections TEXT,
-    line_type TEXT,
-    service_origin TEXT,
-    cost_unit REAL,
-    final_price_unit REAL,
-    margin_pct REAL,
-    strategy TEXT,
-    warnings TEXT,
-    created_at TEXT
-)
-""")
-
-conn.commit()
+# Mostrar info de base de datos
+db_info = get_database_info()
+st.sidebar.markdown(f"{db_info['icon']} **Base de datos:** {db_info['type']}")
+st.sidebar.caption(f"Conexión: {db_info['connection']}")
 
 # =========================
 # Session state
@@ -111,6 +83,20 @@ with st.form("add_line", clear_on_submit=True):
     submit = st.form_submit_button("Agregar línea")
 
     if submit:
+        # Validaciones
+        if not sku or not sku.strip():
+            st.error("❌ SKU es obligatorio")
+            st.stop()
+        
+        if not description_input or not description_input.strip():
+            st.error("❌ Descripción es obligatoria")
+            st.stop()
+        
+        # Verificar SKU duplicado en sesión actual
+        existing_skus = [line["sku"] for line in st.session_state.lines]
+        if sku in existing_skus:
+            st.warning(f"⚠️ El SKU '{sku}' ya existe en esta cotización")
+        
         # ---- Corrección de descripción
         corrected_desc, corrections = suggest_description_fix(description_input)
         use_corrected = False
@@ -151,7 +137,7 @@ with st.form("add_line", clear_on_submit=True):
             "margin_pct": margin_pct,
             "strategy": strategy,
             "warnings": ", ".join(warnings),
-            "created_at": datetime.utcnow().isoformat()
+            "created_at": datetime.now(UTC).isoformat()
         })
 
         st.success("Línea agregada correctamente")
@@ -187,7 +173,7 @@ if st.session_state.lines:
             "margin_pct",
             "warnings"
         ]],
-        use_container_width=True
+        width='stretch'
     )
 
     # =========================
@@ -202,6 +188,7 @@ if st.session_state.lines:
         comp_df = df.groupby("service_origin")["final_price_unit"].sum().reset_index()
         fig1, ax1 = plt.subplots(figsize=(6, 4))
         ax1.bar(comp_df["service_origin"], comp_df["final_price_unit"])
+        ax1.set_xticks(range(len(comp_df)))
         ax1.set_xticklabels(comp_df["service_origin"], rotation=30, ha='right')
         ax1.set_ylabel("Monto total")
         ax1.set_title("Aportación total por componente")
@@ -226,46 +213,46 @@ if st.session_state.lines:
     st.subheader("✅ Cerrar y guardar propuesta")
 
     if st.button("Cerrar propuesta"):
-        cur.execute(
-            "INSERT INTO quotes VALUES (?,?,?,?,?,?,?)",
-            (
-                st.session_state.quote_id,
-                datetime.utcnow().isoformat(),
-                "CLOSED",
-                total_cost,
-                total_revenue,
-                gross_profit,
-                avg_margin
-            )
+        # Preparar datos para guardar
+        quote_data = (
+            st.session_state.quote_id,
+            datetime.now(UTC).isoformat(),
+            "CLOSED",
+            total_cost,
+            total_revenue,
+            gross_profit,
+            avg_margin
         )
-
+        
+        lines_data = []
         for _, row in df.iterrows():
-            cur.execute(
-                "INSERT INTO quote_lines VALUES (?,?,?,?,?,?,?,?,?,?,?,?,?,?)",
-                (
-                    row["line_id"],
-                    st.session_state.quote_id,
-                    row["sku"],
-                    row["description_original"],
-                    row["description_final"],
-                    row["description_corrections"],
-                    row["line_type"],
-                    row["service_origin"],
-                    row["cost_unit"],
-                    row["final_price_unit"],
-                    row["margin_pct"],
-                    row["strategy"],
-                    row["warnings"],
-                    row["created_at"]
-                )
-            )
-
-        conn.commit()
-        st.success("✅ Propuesta guardada correctamente")
-
-        st.session_state.lines = []
-        st.session_state.quote_id = str(uuid.uuid4())
-        st.rerun()
+            lines_data.append((
+                row["line_id"],
+                st.session_state.quote_id,
+                row["sku"],
+                row["description_original"],
+                row["description_final"],
+                row["description_corrections"],
+                row["line_type"],
+                row["service_origin"],
+                row["cost_unit"],
+                row["final_price_unit"],
+                row["margin_pct"],
+                row["strategy"],
+                row["warnings"],
+                row["created_at"]
+            ))
+        
+        # Guardar usando función segura
+        success, message = save_quote(quote_data, lines_data)
+        
+        if success:
+            st.success(message)
+            st.session_state.lines = []
+            st.session_state.quote_id = str(uuid.uuid4())
+            st.rerun()
+        else:
+            st.error(message)
 
 else:
     st.info("Agrega líneas para iniciar una cotización")
@@ -277,11 +264,7 @@ st.divider()
 st.header("📚 Base de Datos de Propuestas")
 
 # Obtener propuestas cerradas
-quotes_query = cur.execute("""
-    SELECT quote_id, created_at, status, total_cost, total_revenue, gross_profit, avg_margin
-    FROM quotes
-    ORDER BY created_at DESC
-""").fetchall()
+quotes_query = get_all_quotes()
 
 if quotes_query:
     quotes_df = pd.DataFrame(
@@ -298,7 +281,7 @@ if quotes_query:
     quotes_df["Utilidad Bruta"] = quotes_df["Utilidad Bruta"].apply(lambda x: f"${x:,.2f}")
     quotes_df["Margen Promedio %"] = quotes_df["Margen Promedio %"].apply(lambda x: f"{x:.2f}%")
     
-    st.dataframe(quotes_df, use_container_width=True, hide_index=True)
+    st.dataframe(quotes_df, width='stretch', hide_index=True)
     
     # Selector de propuesta para ver detalle
     st.subheader("🔍 Ver detalle de propuesta")
@@ -311,12 +294,7 @@ if quotes_query:
     
     if selected_quote:
         # Obtener líneas de la propuesta seleccionada
-        lines_query = cur.execute("""
-            SELECT sku, description_final, line_type, service_origin, 
-                   cost_unit, final_price_unit, margin_pct, strategy, warnings
-            FROM quote_lines
-            WHERE quote_id = ?
-        """, (selected_quote,)).fetchall()
+        lines_query = get_quote_lines(selected_quote)
         
         if lines_query:
             lines_detail_df = pd.DataFrame(
@@ -324,7 +302,7 @@ if quotes_query:
                 columns=["SKU", "Descripción", "Tipo", "Origen", "Costo Unit.", "Precio Unit.", "Margen %", "Estrategia", "Advertencias"]
             )
             
-            st.dataframe(lines_detail_df, use_container_width=True, hide_index=True)
+            st.dataframe(lines_detail_df, width='stretch', hide_index=True)
             
             # Estadísticas de la propuesta seleccionada
             st.subheader("📊 Estadísticas")
@@ -340,4 +318,6 @@ if quotes_query:
 else:
     st.info("No hay propuestas guardadas aún")
 
-st.caption("MVP Cotizador Universal | SQLite | Corrección de typos | Estado productivo")
+# Info de base de datos en footer
+db_info = get_database_info()
+st.caption(f"MVP Cotizador Universal | {db_info['icon']} {db_info['type']} | Corrección de typos | Estado productivo")
