@@ -158,16 +158,72 @@ def suggest_description_fix(text):
 # =========================
 # Narrativa de Comparación
 # =========================
-def calculate_health_status(avg_margin, total_revenue):
-    """Calcula el estado de salud de una cotización basado en métricas."""
-    if avg_margin >= 35 and total_revenue > 0:
+def calculate_health_status(avg_margin, total_revenue, playbook_name="General", df_lines=None):
+    """
+    Calcula el estado de salud de una cotización usando playbook específico.
+    
+    Args:
+        avg_margin: Margen promedio de la cotización
+        total_revenue: Ingreso total
+        playbook_name: Nombre del playbook a usar (default: General)
+        df_lines: DataFrame con líneas para calcular red_ratio (opcional)
+    
+    Returns:
+        str: "verde", "amarillo" o "rojo"
+    """
+    pb = PLAYBOOKS.get(playbook_name, PLAYBOOKS["General"])
+    
+    # Si no hay revenue, es rojo automáticamente
+    if total_revenue <= 0:
+        return "rojo"
+    
+    # Calcular ratio de líneas rojas si tenemos el DataFrame
+    red_ratio = 0.0
+    if df_lines is not None and len(df_lines) > 0:
+        red_ratio = (df_lines["margin_pct"] < pb["yellow"]).sum() / len(df_lines)
+    
+    # Evaluación por playbook
+    if avg_margin >= pb["green"] and red_ratio <= pb["max_red_green"]:
         return "verde"
-    elif avg_margin >= 25 and total_revenue > 0:
+    elif avg_margin >= pb["yellow"] and red_ratio <= pb["max_red_yellow"]:
         return "amarillo"
     else:
         return "rojo"
 
-def generate_comparison_narrative(q1, q2, df1, df2):
+def score_version(q, health, playbook_name="General"):
+    """
+    Calcula score ponderado de una versión según playbook.
+    
+    Args:
+        q: Serie/dict con datos de cotización (avg_margin, gross_profit)
+        health: Estado de salud ("verde", "amarillo", "rojo")
+        playbook_name: Nombre del playbook
+    
+    Returns:
+        float: Score ponderado (0-100)
+    """
+    pb = PLAYBOOKS.get(playbook_name, PLAYBOOKS["General"])
+    
+    # Normalizar health a score
+    health_score = {"verde": 100, "amarillo": 60, "rojo": 20}.get(health, 0)
+    
+    # Normalizar margen (ya está en porcentaje 0-100)
+    margin_score = min(100, max(0, float(q.get("avg_margin", 0))))
+    
+    # Normalizar profit (asumimos $0-$100K como rango típico)
+    profit_raw = float(q.get("gross_profit", 0))
+    profit_score = min(100, max(0, (profit_raw / 1000) * 10))  # $10K = 100 puntos
+    
+    # Calcular score ponderado
+    final_score = (
+        pb["weights"]["health"] * health_score +
+        pb["weights"]["margin"] * margin_score +
+        pb["weights"]["profit"] * profit_score
+    )
+    
+    return round(final_score, 2)
+
+def generate_comparison_narrative(q1, q2, df1, df2, playbook_name="General"):
     """
     Genera narrativa estructurada sobre la comparación entre dos versiones.
     
@@ -176,6 +232,7 @@ def generate_comparison_narrative(q1, q2, df1, df2):
         q2: Serie con datos de versión 2
         df1: DataFrame con líneas de versión 1
         df2: DataFrame con líneas de versión 2
+        playbook_name: Nombre del playbook usado
     
     Returns:
         Dict con narrativa ejecutiva y detallada
@@ -183,9 +240,35 @@ def generate_comparison_narrative(q1, q2, df1, df2):
     narrative_exec = []
     narrative_detail = []
     
-    # Calcular salud
-    health_v1 = calculate_health_status(float(q1["avg_margin"]), float(q1["total_revenue"]))
-    health_v2 = calculate_health_status(float(q2["avg_margin"]), float(q2["total_revenue"]))
+    # Obtener configuración del playbook
+    pb = PLAYBOOKS.get(playbook_name, PLAYBOOKS["General"])
+    
+    # Calcular salud de cada versión con playbook
+    health_v1 = calculate_health_status(float(q1["avg_margin"]), float(q1["total_revenue"]), playbook_name, df1)
+    health_v2 = calculate_health_status(float(q2["avg_margin"]), float(q2["total_revenue"]), playbook_name, df2)
+    
+    # Calcular scores para recomendación inteligente
+    score_v1 = score_version(q1, health_v1, playbook_name)
+    score_v2 = score_version(q2, health_v2, playbook_name)
+    
+    # --- Contexto de playbook (si no es General)
+    if playbook_name != "General":
+        narrative_exec.append(
+            f"📘 Análisis bajo playbook '{playbook_name}' (verde: {pb['green']}%, amarillo: {pb['yellow']}%)"
+        )
+    
+    # --- Benchmark de industria
+    avg_margin_v2 = float(q2["avg_margin"])
+    if avg_margin_v2 >= pb["green"]:
+        benchmark_msg = f"✅ Margen {avg_margin_v2:.1f}% supera benchmark verde ({pb['green']}%)"
+    elif avg_margin_v2 >= pb["yellow"]:
+        gap_to_green = pb["green"] - avg_margin_v2
+        benchmark_msg = f"🟡 Margen {avg_margin_v2:.1f}% está {gap_to_green:.1f}pp por debajo de verde"
+    else:
+        gap_to_yellow = pb["yellow"] - avg_margin_v2
+        benchmark_msg = f"🔴 Margen {avg_margin_v2:.1f}% está {gap_to_yellow:.1f}pp por debajo de mínimo"
+    
+    narrative_detail.append(benchmark_msg)
     
     # --- Cambios financieros
     delta_revenue = float(q2["total_revenue"]) - float(q1["total_revenue"])
@@ -277,11 +360,29 @@ def generate_comparison_narrative(q1, q2, df1, df2):
             f"🎯 Optimización: menos ingreso pero mejor utilidad (+${round(delta_profit, 2):,.2f})."
         )
     
+    # --- Recomendación basada en score ponderado
+    if score_v2 > score_v1:
+        score_diff = score_v2 - score_v1
+        recommendation = f"✅ Recomendación: Usar v{int(q2['version'])} (score: {score_v2:.1f} vs {score_v1:.1f}, +{score_diff:.1f}pts)"
+    elif score_v1 > score_v2:
+        score_diff = score_v1 - score_v2
+        recommendation = f"⚠️ Recomendación: Mantener v{int(q1['version'])} (score: {score_v1:.1f} vs {score_v2:.1f}, +{score_diff:.1f}pts)"
+    else:
+        recommendation = f"⚖️ Ambas versiones equivalentes (score: {score_v1:.1f})"
+    
+    narrative_exec.append(recommendation)
+    
+    # Agregar info de pesos del playbook al detalle
+    weights_info = f"🎯 Pesos: Salud {pb['weights']['health']*100:.0f}%, Margen {pb['weights']['margin']*100:.0f}%, Ganancia {pb['weights']['profit']*100:.0f}%"
+    narrative_detail.append(weights_info)
+    
     return {
         "executive": " ".join(narrative_exec),
         "detail": " ".join(narrative_detail) if narrative_detail else "Sin cambios significativos en el detalle.",
         "health_v1": health_v1,
-        "health_v2": health_v2
+        "health_v2": health_v2,
+        "score_v1": score_v1,
+        "score_v2": score_v2
     }
 
 # =========================
@@ -513,6 +614,26 @@ if not hist_compare.empty:
                 st.divider()
                 st.subheader(f"📊 Análisis Comparativo: v{v1} → v{v2}")
                 
+                # ===== SELECTOR DE PLAYBOOK =====
+                st.markdown("### 📘 Playbook / Contexto de Industria")
+                
+                col_playbook, col_playbook_desc = st.columns([1, 2])
+                
+                with col_playbook:
+                    selected_playbook = st.selectbox(
+                        "Selecciona playbook",
+                        list(PLAYBOOKS.keys()),
+                        help="El playbook ajusta umbrales de salud y pesos de decisión según el contexto de negocio"
+                    )
+                
+                with col_playbook_desc:
+                    pb_desc = PLAYBOOKS[selected_playbook]["description"]
+                    pb_green = PLAYBOOKS[selected_playbook]["green"]
+                    pb_yellow = PLAYBOOKS[selected_playbook]["yellow"]
+                    st.info(f"**{selected_playbook}:** {pb_desc}  \n📊 Verde ≥{pb_green}% | Amarillo ≥{pb_yellow}%")
+                
+                st.divider()
+                
                 # Cargar datos de versiones
                 versions = load_versions_for_group(g)
                 q1 = versions[versions["version"] == v1].iloc[0]
@@ -699,12 +820,13 @@ if not hist_compare.empty:
                 # ===== NARRATIVA AUTOMÁTICA =====
                 st.markdown("### 📝 Narrativa Automática")
                 
-                # Generar narrativa estructurada
+                # Generar narrativa estructurada con playbook
                 narrative = generate_comparison_narrative(
                     q1=q1,
                     q2=q2,
                     df1=l1,
-                    df2=l2
+                    df2=l2,
+                    playbook_name=selected_playbook
                 )
                 
                 # Mostrar narrativa ejecutiva
@@ -1021,8 +1143,24 @@ if st.session_state.lines:
     # Cerrar propuesta
     # =========================
     st.subheader("✅ Cerrar y guardar propuesta")
+    
+    # Selector de playbook antes de guardar
+    col_save_pb, col_save_btn = st.columns([2, 1])
+    
+    with col_save_pb:
+        save_playbook = st.selectbox(
+            "📘 Playbook a aplicar",
+            list(PLAYBOOKS.keys()),
+            help="El playbook determina cómo se evaluará esta cotización en comparaciones futuras"
+        )
+        pb_save = PLAYBOOKS[save_playbook]
+        st.caption(f"Verde ≥{pb_save['green']}% | Amarillo ≥{pb_save['yellow']}%")
 
-    if st.button("Cerrar propuesta"):
+    with col_save_btn:
+        st.write("")  # Espaciado
+        save_button = st.button("Cerrar propuesta", type="primary")
+
+    if save_button:
         # Preparar datos para guardar (convertir numpy/pandas a tipos nativos Python)
         quote_data = (
             st.session_state.quote_id,
@@ -1034,7 +1172,8 @@ if st.session_state.lines:
             float(total_cost),
             float(total_revenue),
             float(gross_profit),
-            float(avg_margin)
+            float(avg_margin),
+            save_playbook  # Agregar playbook seleccionado
         )
         
         lines_data = []

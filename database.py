@@ -145,7 +145,8 @@ def init_database():
             total_cost DECIMAL(10,2),
             total_revenue DECIMAL(10,2),
             gross_profit DECIMAL(10,2),
-            avg_margin DECIMAL(5,2)
+            avg_margin DECIMAL(5,2),
+            playbook_name TEXT DEFAULT 'General'
         )
         """
         
@@ -179,7 +180,8 @@ def init_database():
             total_cost REAL,
             total_revenue REAL,
             gross_profit REAL,
-            avg_margin REAL
+            avg_margin REAL,
+            playbook_name TEXT DEFAULT 'General'
         )
         """
         
@@ -216,7 +218,7 @@ def save_quote(quote_data: tuple, lines_data: list) -> tuple[bool, str]:
     Guarda cotización y sus líneas en una transacción atómica.
     
     Args:
-        quote_data: Tupla con datos de la cotización (10 campos: quote_id, quote_group_id, version, parent_quote_id, created_at, status, total_cost, total_revenue, gross_profit, avg_margin)
+        quote_data: Tupla con datos de la cotización (11 campos: quote_id, quote_group_id, version, parent_quote_id, created_at, status, total_cost, total_revenue, gross_profit, avg_margin, playbook_name)
         lines_data: Lista de tuplas con datos de líneas (14 campos cada una)
     
     Returns:
@@ -228,8 +230,8 @@ def save_quote(quote_data: tuple, lines_data: list) -> tuple[bool, str]:
             if is_postgres():
                 cur.execute(
                     """INSERT INTO quotes 
-                       (quote_id, quote_group_id, version, parent_quote_id, created_at, status, total_cost, total_revenue, gross_profit, avg_margin)
-                       VALUES (%s, %s, %s, %s, %s, %s, %s, %s, %s, %s)""",
+                       (quote_id, quote_group_id, version, parent_quote_id, created_at, status, total_cost, total_revenue, gross_profit, avg_margin, playbook_name)
+                       VALUES (%s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s)""",
                     quote_data
                 )
                 
@@ -245,7 +247,7 @@ def save_quote(quote_data: tuple, lines_data: list) -> tuple[bool, str]:
                     )
             else:
                 cur.execute(
-                    "INSERT INTO quotes VALUES (?,?,?,?,?,?,?,?,?,?)",
+                    "INSERT INTO quotes VALUES (?,?,?,?,?,?,?,?,?,?,?)",
                     quote_data
                 )
                 
