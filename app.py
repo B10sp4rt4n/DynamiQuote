@@ -4,7 +4,7 @@ import uuid
 from datetime import datetime, UTC
 import matplotlib.pyplot as plt
 from spellchecker import SpellChecker
-from database import init_database, save_quote, get_all_quotes, get_quote_lines, get_database_info
+from database import init_database, save_quote, get_all_quotes, get_quote_lines, get_quote_lines_full, get_latest_version, get_database_info
 import os
 
 # =========================
@@ -174,6 +174,15 @@ st.sidebar.caption(f"Conexión: {db_info['connection']}")
 if "quote_id" not in st.session_state:
     st.session_state.quote_id = str(uuid.uuid4())
 
+if "quote_group_id" not in st.session_state:
+    st.session_state.quote_group_id = str(uuid.uuid4())
+
+if "version" not in st.session_state:
+    st.session_state.version = 1
+
+if "parent_quote_id" not in st.session_state:
+    st.session_state.parent_quote_id = None
+
 if "lines" not in st.session_state:
     st.session_state.lines = []
 
@@ -184,6 +193,12 @@ if "pending_line" not in st.session_state:
 # Formulario
 # =========================
 st.subheader("➕ Agregar línea")
+
+# Mostrar información de versión actual
+version_info = f"📝 Oportunidad: {st.session_state.quote_group_id[:8]}... | Versión: {st.session_state.version}"
+if st.session_state.parent_quote_id:
+    version_info += f" (basada en versión anterior)"
+st.info(version_info)
 
 # Mostrar errores persistentes de OpenAI si existen
 if 'ai_error' in st.session_state:
@@ -393,10 +408,12 @@ if st.session_state.lines:
     st.subheader("✅ Cerrar y guardar propuesta")
 
     if st.button("Cerrar propuesta"):
-        # Preparar datos para guardar
         # Preparar datos para guardar (convertir numpy/pandas a tipos nativos Python)
         quote_data = (
             st.session_state.quote_id,
+            st.session_state.quote_group_id,
+            st.session_state.version,
+            st.session_state.parent_quote_id,
             datetime.now(UTC).isoformat(),
             "CLOSED",
             float(total_cost),
@@ -429,8 +446,12 @@ if st.session_state.lines:
         
         if success:
             st.success(message)
+            # Reiniciar para nueva cotización
             st.session_state.lines = []
             st.session_state.quote_id = str(uuid.uuid4())
+            st.session_state.quote_group_id = str(uuid.uuid4())
+            st.session_state.version = 1
+            st.session_state.parent_quote_id = None
             st.rerun()
         else:
             st.error(message)
@@ -448,9 +469,91 @@ st.header("📚 Base de Datos de Propuestas")
 quotes_query = get_all_quotes()
 
 if quotes_query:
+    # Agrupar por quote_group_id para mostrar versiones
+    st.subheader("🗂️ Oportunidades y Versiones")
+    
+    # Convertir a DataFrame para agrupar
+    all_quotes_df = pd.DataFrame(
+        quotes_query,
+        columns=["ID", "Group ID", "Versión", "Parent ID", "Fecha", "Estado", "Costo Total", "Ingreso Total", "Utilidad Bruta", "Margen Promedio %"]
+    )
+    
+    # Agrupar por Group ID
+    for group_id, group_df in all_quotes_df.groupby("Group ID"):
+        with st.expander(f"🎯 Oportunidad {group_id[:8]}... ({len(group_df)} versiones)", expanded=False):
+            for _, q in group_df.iterrows():
+                col1, col2, col3, col4, col5 = st.columns([1, 2, 2, 2, 2])
+                
+                with col1:
+                    st.markdown(f"**v{int(q['Versión'])}**")
+                
+                with col2:
+                    fecha = pd.to_datetime(q['Fecha']).strftime("%Y-%m-%d %H:%M")
+                    st.caption(f"📅 {fecha}")
+                
+                with col3:
+                    st.metric("Ingreso", f"${q['Ingreso Total']:,.2f}")
+                
+                with col4:
+                    st.metric("Margen", f"{q['Margen Promedio %']:.2f}%")
+                
+                with col5:
+                    if st.button("➕ Nueva versión", key=f"new_v_{q['ID']}"):
+                        # Cargar líneas de esta versión
+                        lines_full = get_quote_lines_full(q['ID'])
+                        
+                        if lines_full:
+                            # Preparar nuevas líneas con nuevos IDs
+                            new_lines = []
+                            for line in lines_full:
+                                new_lines.append({
+                                    "line_id": str(uuid.uuid4()),  # Nuevo ID
+                                    "sku": line[2],
+                                    "description_original": line[3],
+                                    "description_input": line[3],
+                                    "description_final": line[4],
+                                    "description_corrections": line[5],
+                                    "corrected_desc": line[4],
+                                    "corrections": line[5].split(", ") if line[5] else [],
+                                    "line_type": line[6],
+                                    "service_origin": line[7],
+                                    "cost_unit": line[8],
+                                    "final_price_unit": line[9],
+                                    "margin_pct": line[10],
+                                    "strategy": line[11],
+                                    "warnings": line[12],
+                                    "created_at": datetime.now(UTC).isoformat()
+                                })
+                            
+                            # Configurar nueva versión
+                            st.session_state.quote_group_id = q['Group ID']
+                            st.session_state.version = int(q['Versión']) + 1
+                            st.session_state.parent_quote_id = q['ID']
+                            st.session_state.quote_id = str(uuid.uuid4())
+                            st.session_state.lines = new_lines
+                            st.success(f"✅ Versión {int(q['Versión']) + 1} creada. Modifica las líneas y guarda.")
+                            st.rerun()
+                
+                # Mostrar líneas de esta versión
+                with st.container():
+                    st.caption(f"📋 Líneas de v{int(q['Versión'])}")
+                    lines = get_quote_lines(q['ID'])
+                    if lines:
+                        lines_df = pd.DataFrame(
+                            lines,
+                            columns=["SKU", "Descripción", "Tipo", "Origen", "Costo Unit.", "Precio Unit.", "Margen %", "Estrategia", "Advertencias"]
+                        )
+                        st.dataframe(lines_df, hide_index=True, use_container_width=True)
+                
+                st.divider()
+    
+    st.divider()
+    
+    # Vista consolidada (anterior)
+    st.subheader("📊 Vista Consolidada")
     quotes_df = pd.DataFrame(
         quotes_query,
-        columns=["ID", "Fecha", "Estado", "Costo Total", "Ingreso Total", "Utilidad Bruta", "Margen Promedio %"]
+        columns=["ID", "Group ID", "Versión", "Parent ID", "Fecha", "Estado", "Costo Total", "Ingreso Total", "Utilidad Bruta", "Margen Promedio %"]
     )
     
     # Formatear fecha
@@ -462,7 +565,11 @@ if quotes_query:
     quotes_df["Utilidad Bruta"] = quotes_df["Utilidad Bruta"].apply(lambda x: f"${x:,.2f}")
     quotes_df["Margen Promedio %"] = quotes_df["Margen Promedio %"].apply(lambda x: f"{x:.2f}%")
     
-    st.dataframe(quotes_df, width='stretch', hide_index=True)
+    # Mostrar solo columnas relevantes
+    display_df = quotes_df[["Group ID", "Versión", "Fecha", "Costo Total", "Ingreso Total", "Utilidad Bruta", "Margen Promedio %"]]
+    display_df["Group ID"] = display_df["Group ID"].apply(lambda x: f"{x[:8]}...")
+    
+    st.dataframe(display_df, width='stretch', hide_index=True)
     
     # Selector de propuesta para ver detalle
     st.subheader("🔍 Ver detalle de propuesta")

@@ -137,6 +137,9 @@ def init_database():
         quotes_table = """
         CREATE TABLE IF NOT EXISTS quotes (
             quote_id TEXT PRIMARY KEY,
+            quote_group_id TEXT,
+            version INTEGER DEFAULT 1,
+            parent_quote_id TEXT,
             created_at TIMESTAMP,
             status TEXT,
             total_cost DECIMAL(10,2),
@@ -168,6 +171,9 @@ def init_database():
         quotes_table = """
         CREATE TABLE IF NOT EXISTS quotes (
             quote_id TEXT PRIMARY KEY,
+            quote_group_id TEXT,
+            version INTEGER DEFAULT 1,
+            parent_quote_id TEXT,
             created_at TEXT,
             status TEXT,
             total_cost REAL,
@@ -210,7 +216,7 @@ def save_quote(quote_data: tuple, lines_data: list) -> tuple[bool, str]:
     Guarda cotización y sus líneas en una transacción atómica.
     
     Args:
-        quote_data: Tupla con datos de la cotización (7 campos)
+        quote_data: Tupla con datos de la cotización (10 campos: quote_id, quote_group_id, version, parent_quote_id, created_at, status, total_cost, total_revenue, gross_profit, avg_margin)
         lines_data: Lista de tuplas con datos de líneas (14 campos cada una)
     
     Returns:
@@ -222,8 +228,8 @@ def save_quote(quote_data: tuple, lines_data: list) -> tuple[bool, str]:
             if is_postgres():
                 cur.execute(
                     """INSERT INTO quotes 
-                       (quote_id, created_at, status, total_cost, total_revenue, gross_profit, avg_margin)
-                       VALUES (%s, %s, %s, %s, %s, %s, %s)""",
+                       (quote_id, quote_group_id, version, parent_quote_id, created_at, status, total_cost, total_revenue, gross_profit, avg_margin)
+                       VALUES (%s, %s, %s, %s, %s, %s, %s, %s, %s, %s)""",
                     quote_data
                 )
                 
@@ -239,7 +245,7 @@ def save_quote(quote_data: tuple, lines_data: list) -> tuple[bool, str]:
                     )
             else:
                 cur.execute(
-                    "INSERT INTO quotes VALUES (?,?,?,?,?,?,?)",
+                    "INSERT INTO quotes VALUES (?,?,?,?,?,?,?,?,?,?)",
                     quote_data
                 )
                 
@@ -259,13 +265,13 @@ def save_quote(quote_data: tuple, lines_data: list) -> tuple[bool, str]:
 
 
 def get_all_quotes() -> list:
-    """Obtiene todas las cotizaciones ordenadas por fecha."""
+    """Obtiene todas las cotizaciones ordenadas por grupo y versión."""
     try:
         with get_cursor() as cur:
             cur.execute("""
-                SELECT quote_id, created_at, status, total_cost, total_revenue, gross_profit, avg_margin
+                SELECT quote_id, quote_group_id, version, parent_quote_id, created_at, status, total_cost, total_revenue, gross_profit, avg_margin
                 FROM quotes
-                ORDER BY created_at DESC
+                ORDER BY quote_group_id, version DESC
             """)
             return cur.fetchall()
     except Exception as e:
@@ -295,6 +301,51 @@ def get_quote_lines(quote_id: str) -> list:
     except Exception as e:
         st.error(f"Error obteniendo líneas: {e}")
         return []
+
+
+def get_quote_lines_full(quote_id: str) -> list:
+    """Obtiene todas las líneas de una cotización con todos los campos."""
+    try:
+        with get_cursor() as cur:
+            if is_postgres():
+                cur.execute("""
+                    SELECT line_id, quote_id, sku, description_original, description_final, 
+                           description_corrections, line_type, service_origin, cost_unit, 
+                           final_price_unit, margin_pct, strategy, warnings, created_at
+                    FROM quote_lines
+                    WHERE quote_id = %s
+                """, (quote_id,))
+            else:
+                cur.execute("""
+                    SELECT line_id, quote_id, sku, description_original, description_final, 
+                           description_corrections, line_type, service_origin, cost_unit, 
+                           final_price_unit, margin_pct, strategy, warnings, created_at
+                    FROM quote_lines
+                    WHERE quote_id = ?
+                """, (quote_id,))
+            return cur.fetchall()
+    except Exception as e:
+        st.error(f"Error obteniendo líneas completas: {e}")
+        return []
+
+
+def get_latest_version(quote_group_id: str) -> int:
+    """Obtiene el número de versión más reciente de un grupo."""
+    try:
+        with get_cursor() as cur:
+            if is_postgres():
+                cur.execute("""
+                    SELECT MAX(version) FROM quotes WHERE quote_group_id = %s
+                """, (quote_group_id,))
+            else:
+                cur.execute("""
+                    SELECT MAX(version) FROM quotes WHERE quote_group_id = ?
+                """, (quote_group_id,))
+            result = cur.fetchone()
+            return result[0] if result[0] else 0
+    except Exception as e:
+        st.error(f"Error obteniendo última versión: {e}")
+        return 0
 
 
 def get_database_info() -> dict:
