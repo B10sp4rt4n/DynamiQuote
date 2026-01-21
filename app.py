@@ -5,19 +5,60 @@ from datetime import datetime, UTC
 import matplotlib.pyplot as plt
 from spellchecker import SpellChecker
 from database import init_database, save_quote, get_all_quotes, get_quote_lines, get_database_info
+import os
 
 # =========================
 # Configuración
 # =========================
 st.set_page_config(page_title="Quote Intelligence MVP", layout="wide")
+
+# =========================
+# Sidebar - Configuración de OpenAI
+# =========================
+with st.sidebar:
+    st.header("⚙️ Configuración")
+    
+    # OpenAI API Key
+    st.subheader("🤖 Corrección Inteligente con IA")
+    
+    # Intentar cargar desde variable de entorno primero
+    default_api_key = os.getenv("OPENAI_API_KEY", "")
+    
+    openai_api_key = st.text_input(
+        "OpenAI API Key",
+        value=default_api_key,
+        type="password",
+        help="Ingresa tu API key de OpenAI para habilitar corrección inteligente de texto. Obténla en: https://platform.openai.com/api-keys"
+    )
+    
+    if openai_api_key and openai_api_key.startswith("sk-"):
+        st.success("✅ OpenAI habilitado - Corrección inteligente activa")
+        # Guardar en session state
+        st.session_state.openai_enabled = True
+        st.session_state.openai_api_key = openai_api_key
+    else:
+        st.warning("⚠️ OpenAI deshabilitado - Usando corrector básico")
+        st.caption("Sin API key, se usará el corrector ortográfico básico.")
+        st.session_state.openai_enabled = False
+        st.session_state.openai_api_key = None
+    
+    st.divider()
+    
+    # Info de base de datos
+    db_info = get_database_info()
+    st.caption(f"💾 Base de datos: {db_info['type']}")
+    if db_info['type'] == 'PostgreSQL':
+        st.caption(f"🌐 Host: {db_info['host']}")
+
 st.title("🧾 Cotizador Universal – MVP Funcional")
 
 # =========================
-# Spellchecker
+# Spellchecker Básico
 # =========================
 spell = SpellChecker(language="es")
 
-def suggest_description_fix(text):
+def suggest_description_fix_basic(text):
+    """Corrector ortográfico básico usando PySpellChecker."""
     words = text.split()
     corrected_words = []
     suggestions = []
@@ -32,6 +73,87 @@ def suggest_description_fix(text):
                 suggestions.append(f"{w} → {correction}")
 
     return " ".join(corrected_words), suggestions
+
+def suggest_description_fix_ai(text, api_key):
+    """Corrector inteligente usando OpenAI GPT."""
+    try:
+        from openai import OpenAI
+        
+        # Validar API key
+        if not api_key or not api_key.strip():
+            st.session_state.ai_error = "⚠️ API Key vacía. Usando corrector básico."
+            return suggest_description_fix_basic(text)
+        
+        client = OpenAI(api_key=api_key)
+        
+        # Mostrar indicador de carga
+        with st.spinner("🤖 OpenAI analizando texto..."):
+            response = client.chat.completions.create(
+                model="gpt-4o-mini",  # Modelo más económico
+                messages=[
+                    {
+                        "role": "system",
+                        "content": """Eres un asistente experto en corrección de textos comerciales en español.
+Tu tarea es:
+1. Corregir ortografía y gramática
+2. Expandir abreviaturas comunes (SW → software, soport → soporte)
+3. Profesionalizar el texto manteniendo el significado
+4. Mantener términos técnicos y números exactos
+5. Responder SOLO con el texto corregido, sin explicaciones adicionales"""
+                    },
+                    {
+                        "role": "user",
+                        "content": f"Corrige y mejora este texto: {text}"
+                    }
+                ],
+                temperature=0.3,
+                max_tokens=200,
+                timeout=10.0  # Timeout de 10 segundos
+            )
+        
+        corrected = response.choices[0].message.content.strip()
+        
+        # Generar lista de cambios comparando palabra por palabra
+        suggestions = []
+        if corrected.lower() != text.lower():
+            # Mostrar cambios específicos
+            original_words = text.split()
+            corrected_words = corrected.split()
+            
+            # Si cambió significativamente, mostrar antes/después
+            if len(original_words) != len(corrected_words) or corrected != text:
+                suggestions.append(f"📝 {text} → ✨ {corrected}")
+        
+        # Limpiar error previo si todo salió bien
+        if 'ai_error' in st.session_state:
+            del st.session_state.ai_error
+        
+        return corrected, suggestions
+        
+    except ImportError:
+        error_msg = "⚠️ Librería OpenAI no instalada. Usando corrector básico."
+        st.session_state.ai_error = error_msg
+        return suggest_description_fix_basic(text)
+    except Exception as e:
+        error_msg = str(e)
+        if "api_key" in error_msg.lower() or "authentication" in error_msg.lower() or "incorrect" in error_msg.lower():
+            st.session_state.ai_error = "❌ API Key de OpenAI inválida. Verifica tu clave en la barra lateral."
+        elif "quota" in error_msg.lower():
+            st.session_state.ai_error = "❌ Cuota de OpenAI excedida. Verifica tu cuenta en platform.openai.com"
+        elif "timeout" in error_msg.lower():
+            st.session_state.ai_error = "❌ Timeout conectando a OpenAI. Intenta de nuevo."
+        else:
+            st.session_state.ai_error = f"❌ Error OpenAI: {error_msg[:100]}"
+        
+        return suggest_description_fix_basic(text)
+
+def suggest_description_fix(text):
+    """Función principal de corrección - usa OpenAI si está habilitado."""
+    if st.session_state.get('openai_enabled', False):
+        api_key = st.session_state.get('openai_api_key')
+        return suggest_description_fix_ai(text, api_key)
+    else:
+        return suggest_description_fix_basic(text)
 
 # =========================
 # DB Init
@@ -55,10 +177,63 @@ if "quote_id" not in st.session_state:
 if "lines" not in st.session_state:
     st.session_state.lines = []
 
+if "pending_line" not in st.session_state:
+    st.session_state.pending_line = None
+
 # =========================
 # Formulario
 # =========================
 st.subheader("➕ Agregar línea")
+
+# Mostrar errores persistentes de OpenAI si existen
+if 'ai_error' in st.session_state:
+    error_container = st.container()
+    with error_container:
+        col1, col2 = st.columns([4, 1])
+        with col1:
+            st.error(st.session_state.ai_error)
+        with col2:
+            if st.button("❌ Cerrar", key="dismiss_error"):
+                del st.session_state.ai_error
+                st.rerun()
+
+# Si hay una línea pendiente de confirmación (con correcciones)
+if st.session_state.pending_line:
+    st.warning("🔍 Se detectaron posibles errores ortográficos en la descripción")
+    
+    pending = st.session_state.pending_line
+    col1, col2 = st.columns(2)
+    with col1:
+        st.markdown("**📝 Original:**")
+        st.info(pending["description_input"])
+    with col2:
+        st.markdown("**✨ Sugerencia:**")
+        st.success(pending["corrected_desc"])
+    
+    st.markdown("**🔧 Cambios detectados:**")
+    for correction in pending["corrections"]:
+        st.caption(f"  • {correction}")
+    
+    col_a, col_b = st.columns(2)
+    with col_a:
+        if st.button("✅ Usar descripción corregida", type="primary", use_container_width=True):
+            # Usar versión corregida
+            pending["description_final"] = pending["corrected_desc"]
+            st.session_state.lines.append(pending)
+            st.session_state.pending_line = None
+            st.success("✅ Línea agregada con descripción corregida")
+            st.rerun()
+    
+    with col_b:
+        if st.button("❌ Usar descripción original", use_container_width=True):
+            # Usar versión original
+            pending["description_final"] = pending["description_input"]
+            st.session_state.lines.append(pending)
+            st.session_state.pending_line = None
+            st.success("✅ Línea agregada con descripción original")
+            st.rerun()
+    
+    st.divider()
 
 with st.form("add_line", clear_on_submit=True):
     col1, col2, col3 = st.columns(3)
@@ -82,65 +257,70 @@ with st.form("add_line", clear_on_submit=True):
 
     submit = st.form_submit_button("Agregar línea")
 
-    if submit:
-        # Validaciones
-        if not sku or not sku.strip():
-            st.error("❌ SKU es obligatorio")
-            st.stop()
-        
-        if not description_input or not description_input.strip():
-            st.error("❌ Descripción es obligatoria")
-            st.stop()
-        
-        # Verificar SKU duplicado en sesión actual
-        existing_skus = [line["sku"] for line in st.session_state.lines]
-        if sku in existing_skus:
-            st.warning(f"⚠️ El SKU '{sku}' ya existe en esta cotización")
-        
-        # ---- Corrección de descripción
-        corrected_desc, corrections = suggest_description_fix(description_input)
-        use_corrected = False
+# Procesar submit fuera del formulario
+if submit:
+    # Validaciones
+    if not sku or not sku.strip():
+        st.error("❌ SKU es obligatorio")
+        st.stop()
+    
+    if not description_input or not description_input.strip():
+        st.error("❌ Descripción es obligatoria")
+        st.stop()
+    
+    # Verificar SKU duplicado
+    existing_skus = [line["sku"] for line in st.session_state.lines]
+    if sku in existing_skus:
+        st.warning(f"⚠️ El SKU '{sku}' ya existe en esta cotización")
+    
+    # Corrección de descripción
+    corrected_desc, corrections = suggest_description_fix(description_input)
+    
+    # Cálculos
+    warnings = []
+    margin_pct = None
+    final_price = price
 
-        if corrections:
-            st.warning("Se detectaron posibles errores en la descripción")
-            st.markdown("**Sugerencia:**")
-            st.write(corrected_desc)
-            use_corrected = st.checkbox("Usar descripción corregida")
-
-        description_final = corrected_desc if use_corrected else description_input
-
-        # ---- Cálculos
-        warnings = []
-        margin_pct = None
-        final_price = price
-
-        if cost > 0 and price > 0:
-            margin_pct = round(((price - cost) / price) * 100, 2)
-        elif cost > 0 and margin_target > 0:
-            final_price = round(cost / (1 - margin_target / 100), 2)
-            margin_pct = round(margin_target, 2)
-            warnings.append("Precio sugerido a partir de margen objetivo")
-        else:
-            st.error("Debes ingresar costo + precio o costo + margen")
-            st.stop()
-
-        st.session_state.lines.append({
-            "line_id": str(uuid.uuid4()),
-            "sku": sku,
-            "description_original": description_input,
-            "description_final": description_final,
-            "description_corrections": ", ".join(corrections),
-            "line_type": line_type,
-            "service_origin": service_origin,
-            "cost_unit": cost,
-            "final_price_unit": final_price,
-            "margin_pct": margin_pct,
-            "strategy": strategy,
-            "warnings": ", ".join(warnings),
-            "created_at": datetime.now(UTC).isoformat()
-        })
-
-        st.success("Línea agregada correctamente")
+    if cost > 0 and price > 0:
+        margin_pct = round(((price - cost) / price) * 100, 2)
+    elif cost > 0 and margin_target > 0:
+        final_price = round(cost / (1 - margin_target / 100), 2)
+        margin_pct = round(margin_target, 2)
+        warnings.append("Precio sugerido a partir de margen objetivo")
+    else:
+        st.error("Debes ingresar costo + precio o costo + margen")
+        st.stop()
+    
+    # Preparar línea
+    new_line = {
+        "line_id": str(uuid.uuid4()),
+        "sku": sku,
+        "description_original": description_input,
+        "description_input": description_input,
+        "description_final": None,  # Se definirá después
+        "description_corrections": ", ".join(corrections),
+        "corrected_desc": corrected_desc,
+        "corrections": corrections,
+        "line_type": line_type,
+        "service_origin": service_origin,
+        "cost_unit": cost,
+        "final_price_unit": final_price,
+        "margin_pct": margin_pct,
+        "strategy": strategy,
+        "warnings": ", ".join(warnings),
+        "created_at": datetime.now(UTC).isoformat()
+    }
+    
+    # Si hay correcciones, guardar como pendiente
+    if corrections:
+        st.session_state.pending_line = new_line
+        st.rerun()
+    else:
+        # Sin correcciones, agregar directamente
+        new_line["description_final"] = description_input
+        st.session_state.lines.append(new_line)
+        st.success("✅ Línea agregada correctamente")
+        st.rerun()
 
 # =========================
 # Mostrar cotización
@@ -214,33 +394,34 @@ if st.session_state.lines:
 
     if st.button("Cerrar propuesta"):
         # Preparar datos para guardar
+        # Preparar datos para guardar (convertir numpy/pandas a tipos nativos Python)
         quote_data = (
             st.session_state.quote_id,
             datetime.now(UTC).isoformat(),
             "CLOSED",
-            total_cost,
-            total_revenue,
-            gross_profit,
-            avg_margin
+            float(total_cost),
+            float(total_revenue),
+            float(gross_profit),
+            float(avg_margin)
         )
         
         lines_data = []
         for _, row in df.iterrows():
             lines_data.append((
-                row["line_id"],
-                st.session_state.quote_id,
-                row["sku"],
-                row["description_original"],
-                row["description_final"],
-                row["description_corrections"],
-                row["line_type"],
-                row["service_origin"],
-                row["cost_unit"],
-                row["final_price_unit"],
-                row["margin_pct"],
-                row["strategy"],
-                row["warnings"],
-                row["created_at"]
+                str(row["line_id"]),
+                str(st.session_state.quote_id),
+                str(row["sku"]),
+                str(row["description_original"]),
+                str(row["description_final"]),
+                str(row["description_corrections"]),
+                str(row["line_type"]),
+                str(row["service_origin"]),
+                float(row["cost_unit"]),
+                float(row["final_price_unit"]),
+                float(row["margin_pct"]) if row["margin_pct"] is not None else None,
+                str(row["strategy"]),
+                str(row["warnings"]),
+                str(row["created_at"])
             ))
         
         # Guardar usando función segura

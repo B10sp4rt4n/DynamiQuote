@@ -91,23 +91,42 @@ def get_connection():
 def get_cursor() -> Generator:
     """
     Context manager para operaciones de base de datos.
-    Maneja automáticamente commit/rollback y cierre de cursor.
+    Maneja automáticamente commit/rollback y cierre de cursor y conexión.
+    
+    Para PostgreSQL, crea una nueva conexión en cada operación.
+    Para SQLite, usa la conexión cacheada.
     
     Ejemplo:
         with get_cursor() as cur:
             cur.execute("SELECT * FROM quotes")
             results = cur.fetchall()
     """
-    conn = get_connection()
-    cur = conn.cursor()
-    try:
-        yield cur
-        conn.commit()
-    except Exception as e:
-        conn.rollback()
-        raise e
-    finally:
-        cur.close()
+    # Para PostgreSQL, crear nueva conexión en cada operación
+    if is_postgres():
+        conn = _create_connection()
+        cur = conn.cursor()
+        try:
+            yield cur
+            conn.commit()
+        except Exception as e:
+            conn.rollback()
+            raise e
+        finally:
+            cur.close()
+            conn.close()  # Cerrar conexión después de cada operación
+    else:
+        # Para SQLite, usar conexión cacheada
+        conn = get_connection()
+        cur = conn.cursor()
+        try:
+            yield cur
+            conn.commit()
+        except Exception as e:
+            conn.rollback()
+            raise e
+        finally:
+            cur.close()
+            # NO cerrar conexión SQLite - es cacheada
 
 
 def init_database():
