@@ -348,6 +348,67 @@ def get_latest_version(quote_group_id: str) -> int:
         return 0
 
 
+def load_versions_for_group(quote_group_id: str):
+    """Carga todas las versiones de una oportunidad."""
+    try:
+        import pandas as pd
+        with get_cursor() as cur:
+            if is_postgres():
+                cur.execute("""
+                    SELECT quote_id, quote_group_id, version, parent_quote_id, created_at, 
+                           status, total_cost, total_revenue, gross_profit, avg_margin
+                    FROM quotes
+                    WHERE quote_group_id = %s
+                    ORDER BY version ASC
+                """, (quote_group_id,))
+            else:
+                cur.execute("""
+                    SELECT quote_id, quote_group_id, version, parent_quote_id, created_at, 
+                           status, total_cost, total_revenue, gross_profit, avg_margin
+                    FROM quotes
+                    WHERE quote_group_id = ?
+                    ORDER BY version ASC
+                """, (quote_group_id,))
+            
+            columns = ["quote_id", "quote_group_id", "version", "parent_quote_id", "created_at",
+                      "status", "total_cost", "total_revenue", "gross_profit", "avg_margin"]
+            return pd.DataFrame(cur.fetchall(), columns=columns)
+    except Exception as e:
+        st.error(f"Error cargando versiones: {e}")
+        return pd.DataFrame()
+
+
+def load_lines_for_quote(quote_id: str):
+    """Carga todas las líneas de una cotización para comparación."""
+    try:
+        import pandas as pd
+        with get_cursor() as cur:
+            if is_postgres():
+                cur.execute("""
+                    SELECT line_id, quote_id, sku, description_original, description_final,
+                           description_corrections, line_type, service_origin, cost_unit,
+                           final_price_unit, margin_pct, strategy, warnings, created_at
+                    FROM quote_lines
+                    WHERE quote_id = %s
+                """, (quote_id,))
+            else:
+                cur.execute("""
+                    SELECT line_id, quote_id, sku, description_original, description_final,
+                           description_corrections, line_type, service_origin, cost_unit,
+                           final_price_unit, margin_pct, strategy, warnings, created_at
+                    FROM quote_lines
+                    WHERE quote_id = ?
+                """, (quote_id,))
+            
+            columns = ["line_id", "quote_id", "sku", "description_original", "description_final",
+                      "description_corrections", "line_type", "service_origin", "cost_unit",
+                      "final_price_unit", "margin_pct", "strategy", "warnings", "created_at"]
+            return pd.DataFrame(cur.fetchall(), columns=columns)
+    except Exception as e:
+        st.error(f"Error cargando líneas: {e}")
+        return pd.DataFrame()
+
+
 def get_database_info() -> dict:
     """Retorna información sobre la base de datos en uso."""
     if is_postgres():
@@ -359,19 +420,22 @@ def get_database_info() -> dict:
                 "type": "PostgreSQL (Neon)",
                 "version": version,
                 "connection": "Cloud",
-                "icon": "☁️"
+                "icon": "☁️",
+                "host": DATABASE_URL.split("@")[1].split("/")[0] if "@" in DATABASE_URL else "Unknown"
             }
         except:
             return {
                 "type": "PostgreSQL (Neon)",
                 "version": "Unknown",
                 "connection": "Cloud",
-                "icon": "☁️"
+                "icon": "☁️",
+                "host": "Unknown"
             }
     else:
         return {
             "type": "SQLite",
             "version": sqlite3.sqlite_version,
             "connection": "Local",
-            "icon": "💾"
+            "icon": "💾",
+            "host": "Local"
         }
