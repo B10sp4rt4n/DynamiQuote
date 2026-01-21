@@ -285,6 +285,137 @@ def generate_comparison_narrative(q1, q2, df1, df2):
     }
 
 # =========================
+# IA para Reformulación de Narrativas
+# =========================
+def build_ai_prompt(audience, executive_text, detail_text):
+    """
+    Construye prompt para IA que SOLO reformula (no calcula, no recomienda).
+    
+    Args:
+        audience: Tipo de audiencia objetivo
+        executive_text: Narrativa ejecutiva estructurada
+        detail_text: Narrativa detallada
+    
+    Returns:
+        Prompt para LLM
+    """
+    return f"""Eres un asistente que SOLO reformula texto para diferentes audiencias.
+
+IMPORTANTE - NO PUEDES:
+- Cambiar cifras o números
+- Agregar recomendaciones nuevas
+- Interpretar o añadir juicios
+- Inventar información
+
+SOLO PUEDES:
+- Ajustar el tono según la audiencia
+- Reorganizar información existente
+- Mejorar claridad manteniendo hechos
+
+Audiencia objetivo: {audience}
+
+Texto base ejecutivo:
+{executive_text}
+
+Detalle técnico:
+{detail_text}
+
+Instrucciones:
+1. Mantén TODAS las cifras exactamente iguales
+2. No agregues juicios nuevos
+3. Ajusta SOLO el tono y claridad según la audiencia
+4. Devuelve un texto de máximo 2 párrafos
+5. Si la audiencia es "Cliente ejecutivo": enfoca en valor de negocio
+6. Si la audiencia es "Comité financiero": enfoca en métricas y riesgos
+7. Si la audiencia es "Uso interno (ventas)": usa lenguaje directo y accionable
+
+Responde SOLO con el texto reformulado, sin explicaciones adicionales."""
+
+def ai_rewrite_narrative(audience, executive, detail):
+    """
+    Reformula narrativa usando IA según audiencia.
+    
+    IMPORTANTE: Esta función NO cambia números ni recomendaciones.
+    Solo ajusta tono y presentación.
+    
+    Args:
+        audience: Tipo de audiencia
+        executive: Narrativa ejecutiva
+        detail: Narrativa detallada
+    
+    Returns:
+        Texto reformulado o placeholder si IA no disponible
+    """
+    # Verificar si OpenAI está habilitado
+    if st.session_state.get('openai_enabled', False):
+        try:
+            from openai import OpenAI
+            
+            api_key = st.session_state.get('openai_api_key')
+            if not api_key or not api_key.strip():
+                return f"""[Reformulación no disponible - API Key vacía]
+
+{executive}
+
+Detalle: {detail}"""
+            
+            client = OpenAI(api_key=api_key)
+            
+            prompt = build_ai_prompt(audience, executive, detail)
+            
+            with st.spinner("🤖 Reformulando narrativa con IA..."):
+                response = client.chat.completions.create(
+                    model="gpt-4o-mini",
+                    messages=[
+                        {
+                            "role": "system",
+                            "content": "Eres un asistente experto en comunicación empresarial que reformula textos manteniendo precisión factual absoluta."
+                        },
+                        {
+                            "role": "user",
+                            "content": prompt
+                        }
+                    ],
+                    temperature=0.3,  # Baja temperatura para consistencia
+                    max_tokens=400,
+                    timeout=15.0
+                )
+            
+            return response.choices[0].message.content.strip()
+        
+        except ImportError:
+            return f"""[Librería OpenAI no disponible]
+
+{executive}
+
+Detalle: {detail}"""
+        
+        except Exception as e:
+            error_msg = str(e)
+            if "api_key" in error_msg.lower() or "authentication" in error_msg.lower():
+                return f"""[Error: API Key inválida]
+
+{executive}
+
+Detalle: {detail}"""
+            else:
+                return f"""[Error en reformulación IA: {error_msg[:50]}]
+
+{executive}
+
+Detalle: {detail}"""
+    
+    else:
+        # Placeholder cuando OpenAI no está habilitado
+        return f"""[Reformulación para: {audience}]
+
+{executive}
+
+{detail}
+
+Nota: Habilita OpenAI en la barra lateral para reformulación inteligente."""
+
+# =========================
 # DB Init
 # =========================
 success, message = init_database()
@@ -593,6 +724,43 @@ if not hist_compare.empty:
                 
                 with col_health2:
                     st.caption(f"Salud v{v2}: {health_color[narrative['health_v2']]} {narrative['health_v2'].upper()}")
+                
+                st.divider()
+                
+                # ===== REFORMULACIÓN CON IA =====
+                st.markdown("### 🎯 Reformular Narrativa con IA")
+                st.caption("La IA reformula el lenguaje según la audiencia, sin cambiar cifras ni recomendaciones.")
+                
+                col_audience, col_button = st.columns([3, 1])
+                
+                with col_audience:
+                    audience = st.selectbox(
+                        "Selecciona audiencia",
+                        [
+                            "Cliente ejecutivo",
+                            "Comité financiero",
+                            "Uso interno (ventas)"
+                        ],
+                        key="audience_selector",
+                        help="La IA ajustará el tono y claridad según la audiencia seleccionada"
+                    )
+                
+                with col_button:
+                    generate_ai = st.button("✨ Generar", type="primary", use_container_width=True, key="generate_ai_narrative")
+                
+                # Generar narrativa reformulada si se presiona el botón
+                if generate_ai:
+                    ai_text = ai_rewrite_narrative(
+                        audience=audience,
+                        executive=narrative["executive"],
+                        detail=narrative["detail"]
+                    )
+                    
+                    st.markdown("#### 🧠 Narrativa Reformulada")
+                    st.success(ai_text)
+                    
+                    # Botón para copiar al portapapeles
+                    st.caption("💡 Tip: Copia este texto para emails, reportes o presentaciones.")
                 
                 st.divider()
                 
