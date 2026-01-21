@@ -156,6 +156,135 @@ def suggest_description_fix(text):
         return suggest_description_fix_basic(text)
 
 # =========================
+# Narrativa de Comparación
+# =========================
+def calculate_health_status(avg_margin, total_revenue):
+    """Calcula el estado de salud de una cotización basado en métricas."""
+    if avg_margin >= 35 and total_revenue > 0:
+        return "verde"
+    elif avg_margin >= 25 and total_revenue > 0:
+        return "amarillo"
+    else:
+        return "rojo"
+
+def generate_comparison_narrative(q1, q2, df1, df2):
+    """
+    Genera narrativa estructurada sobre la comparación entre dos versiones.
+    
+    Args:
+        q1: Serie con datos de versión 1
+        q2: Serie con datos de versión 2
+        df1: DataFrame con líneas de versión 1
+        df2: DataFrame con líneas de versión 2
+    
+    Returns:
+        Dict con narrativa ejecutiva y detallada
+    """
+    narrative_exec = []
+    narrative_detail = []
+    
+    # Calcular salud
+    health_v1 = calculate_health_status(float(q1["avg_margin"]), float(q1["total_revenue"]))
+    health_v2 = calculate_health_status(float(q2["avg_margin"]), float(q2["total_revenue"]))
+    
+    # --- Cambios financieros
+    delta_revenue = float(q2["total_revenue"]) - float(q1["total_revenue"])
+    delta_profit = float(q2["gross_profit"]) - float(q1["gross_profit"])
+    delta_margin = float(q2["avg_margin"]) - float(q1["avg_margin"])
+    
+    if delta_revenue > 0:
+        narrative_exec.append(
+            f"La versión v{int(q2['version'])} incrementó el ingreso en ${round(delta_revenue, 2):,.2f}."
+        )
+    elif delta_revenue < 0:
+        narrative_exec.append(
+            f"La versión v{int(q2['version'])} redujo el ingreso en ${round(abs(delta_revenue), 2):,.2f}."
+        )
+    else:
+        narrative_exec.append(
+            f"La versión v{int(q2['version'])} mantuvo el mismo nivel de ingreso."
+        )
+    
+    if delta_margin < 0:
+        narrative_exec.append(
+            f"El margen promedio disminuyó {round(abs(delta_margin), 2):.2f} puntos porcentuales."
+        )
+    elif delta_margin > 0:
+        narrative_exec.append(
+            f"El margen promedio mejoró {round(delta_margin, 2):.2f} puntos porcentuales."
+        )
+    else:
+        narrative_exec.append(
+            f"El margen promedio se mantuvo estable."
+        )
+    
+    # --- Salud general
+    if health_v2 != health_v1:
+        narrative_exec.append(
+            f"La salud general pasó de {health_v1.upper()} a {health_v2.upper()}."
+        )
+    else:
+        narrative_detail.append(
+            f"La salud se mantuvo en nivel {health_v1.upper()}."
+        )
+    
+    # --- Análisis por componente
+    comp1 = df1.groupby("service_origin")["final_price_unit"].sum()
+    comp2 = df2.groupby("service_origin")["final_price_unit"].sum()
+    
+    comp_delta = (comp2 - comp1).fillna(comp2).fillna(0)
+    
+    top_change = comp_delta.abs().sort_values(ascending=False)
+    
+    if not top_change.empty and top_change.iloc[0] != 0:
+        main_component = top_change.index[0]
+        value = comp_delta[main_component]
+        
+        direction = "incrementó" if value > 0 else "redujo"
+        narrative_detail.append(
+            f"El componente '{main_component}' {direction} su aportación en ${round(abs(value), 2):,.2f}."
+        )
+    
+    # --- Cambios en número de líneas
+    delta_lines = len(df2) - len(df1)
+    if delta_lines > 0:
+        narrative_detail.append(
+            f"Se agregaron {delta_lines} línea(s) nueva(s)."
+        )
+    elif delta_lines < 0:
+        narrative_detail.append(
+            f"Se eliminaron {abs(delta_lines)} línea(s)."
+        )
+    
+    # --- Líneas en riesgo
+    red_lines_v2 = (df2["margin_pct"] < 20).sum()
+    if red_lines_v2 > 0:
+        narrative_detail.append(
+            f"⚠️ La versión v{int(q2['version'])} contiene {red_lines_v2} línea(s) con margen crítico (<20%)."
+        )
+    
+    # --- Análisis de utilidad
+    if delta_profit > 0 and delta_revenue > 0:
+        narrative_detail.append(
+            f"✅ Cambio estructuralmente positivo: más ingreso (+${round(delta_revenue, 2):,.2f}) y mayor utilidad (+${round(delta_profit, 2):,.2f})."
+        )
+    elif delta_profit < 0 and delta_revenue > 0:
+        narrative_detail.append(
+            f"⚠️ Crecimiento costoso: más ingreso pero menor utilidad (-${round(abs(delta_profit), 2):,.2f})."
+        )
+    elif delta_profit > 0 and delta_revenue < 0:
+        narrative_detail.append(
+            f"🎯 Optimización: menos ingreso pero mejor utilidad (+${round(delta_profit, 2):,.2f})."
+        )
+    
+    return {
+        "executive": " ".join(narrative_exec),
+        "detail": " ".join(narrative_detail) if narrative_detail else "Sin cambios significativos en el detalle.",
+        "health_v1": health_v1,
+        "health_v2": health_v2
+    }
+
+# =========================
 # DB Init
 # =========================
 success, message = init_database()
@@ -435,6 +564,37 @@ if not hist_compare.empty:
                 display_comp["Δ %"] = display_comp["Δ %"].apply(lambda x: f"{x:+.1f}%")
                 
                 st.dataframe(display_comp, use_container_width=True)
+                
+                # ===== NARRATIVA AUTOMÁTICA =====
+                st.markdown("### 📝 Narrativa Automática")
+                
+                # Generar narrativa estructurada
+                narrative = generate_comparison_narrative(
+                    q1=q1,
+                    q2=q2,
+                    df1=l1,
+                    df2=l2
+                )
+                
+                # Mostrar narrativa ejecutiva
+                st.info(f"**Resumen Ejecutivo:** {narrative['executive']}")
+                
+                # Mostrar detalle técnico
+                if narrative["detail"]:
+                    with st.expander("📋 Ver detalle técnico", expanded=False):
+                        st.write(narrative["detail"])
+                
+                # Indicadores de salud
+                col_health1, col_health2 = st.columns(2)
+                
+                with col_health1:
+                    health_color = {"verde": "🟢", "amarillo": "🟡", "rojo": "🔴"}
+                    st.caption(f"Salud v{v1}: {health_color[narrative['health_v1']]} {narrative['health_v1'].upper()}")
+                
+                with col_health2:
+                    st.caption(f"Salud v{v2}: {health_color[narrative['health_v2']]} {narrative['health_v2'].upper()}")
+                
+                st.divider()
                 
                 # Insight automático
                 st.markdown("### 💡 Insight Rápido")
