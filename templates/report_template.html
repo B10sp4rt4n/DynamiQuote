@@ -1,0 +1,492 @@
+<!DOCTYPE html>
+<html lang="es">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Análisis Comparativo de Propuesta Comercial</title>
+    <style>
+        {{ styles }}
+    </style>
+</head>
+<body>
+    <!-- ============================================
+         PORTADA (Página 1)
+         ============================================ -->
+    <div class="page cover">
+        {% if branding.logo_url %}
+        <img src="{{ branding.logo_url }}" alt="Logo" class="logo" style="margin-bottom: 50px;">
+        {% endif %}
+        
+        <h1>Análisis Comparativo de<br>Propuesta Comercial</h1>
+        
+        <div class="subtitle">
+            Evaluación Técnica y Financiera
+        </div>
+        
+        <div class="cover-details">
+            <div class="row">
+                <span class="label">Proveedor</span>
+                <span class="value">{{ branding.company_name }}</span>
+            </div>
+            <div class="row">
+                <span class="label">Oportunidad</span>
+                <span class="value">{{ data.quote_group }}</span>
+            </div>
+            <div class="row">
+                <span class="label">Versiones Comparadas</span>
+                <span class="value">v{{ data.version_base }} → v{{ data.version_compared }}</span>
+            </div>
+            <div class="row">
+                <span class="label">Playbook Aplicado</span>
+                <span class="value">{{ data.playbook.name }}</span>
+            </div>
+            <div class="row">
+                <span class="label">Fecha de Generación</span>
+                <span class="value">{{ data.generated_date }}</span>
+            </div>
+        </div>
+        
+        <div style="position: fixed; bottom: 30mm; left: 0; right: 0; text-align: center; color: #6B7280; font-size: 9pt;">
+            <p>Documento generado automáticamente con base en reglas objetivas.</p>
+            <p style="font-weight: 600; margin-top: 10px;">Quote Intelligence Engine by {{ branding.company_name }}</p>
+        </div>
+    </div>
+    
+    <!-- ============================================
+         RESUMEN EJECUTIVO (Página 2)
+         ============================================ -->
+    <div class="page">
+        <div class="header">
+            {% if branding.logo_url %}
+            <img src="{{ branding.logo_url }}" alt="Logo" class="logo">
+            {% endif %}
+            <div class="header-info">
+                <div>{{ data.quote_group }}</div>
+                <div>{{ data.generated_date }}</div>
+            </div>
+        </div>
+        
+        <h1>📊 Resumen Ejecutivo</h1>
+        
+        <div class="narrative-box executive">
+            <div class="narrative-title">Resultado del Análisis</div>
+            <div class="narrative-content">
+                <p>Tras analizar ambas versiones bajo el playbook <strong>{{ data.playbook.name }}</strong>, 
+                {{ data.recommendation.text }}</p>
+            </div>
+        </div>
+        
+        <h2>Métricas Clave</h2>
+        <div class="metrics-grid">
+            <div class="metric-card">
+                <div class="metric-label">Ingreso Total</div>
+                <div class="metric-value">${{ data.metrics.revenue_v2|format_money }}</div>
+                <div class="metric-delta {{ data.metrics.delta_revenue_class }}">
+                    {{ data.metrics.delta_revenue_text }}
+                </div>
+            </div>
+            
+            <div class="metric-card">
+                <div class="metric-label">Utilidad Bruta</div>
+                <div class="metric-value">${{ data.metrics.profit_v2|format_money }}</div>
+                <div class="metric-delta {{ data.metrics.delta_profit_class }}">
+                    {{ data.metrics.delta_profit_text }}
+                </div>
+            </div>
+            
+            <div class="metric-card">
+                <div class="metric-label">Margen Promedio</div>
+                <div class="metric-value">{{ data.metrics.margin_v2 }}%</div>
+                <div class="metric-delta {{ data.metrics.delta_margin_class }}">
+                    {{ data.metrics.delta_margin_text }}
+                </div>
+            </div>
+        </div>
+        
+        <h2>Estado de Salud</h2>
+        <div style="display: flex; justify-content: space-around; margin: 30px 0;">
+            <div style="text-align: center;">
+                <div style="font-size: 10pt; color: #6B7280; margin-bottom: 10px;">Versión {{ data.version_base }}</div>
+                <span class="health-indicator health-{{ data.health.v1 }}">
+                    {% if data.health.v1 == 'verde' %}🟢{% elif data.health.v1 == 'amarillo' %}🟡{% else %}🔴{% endif %}
+                    {{ data.health.v1|upper }}
+                </span>
+            </div>
+            <div style="text-align: center;">
+                <div style="font-size: 10pt; color: #6B7280; margin-bottom: 10px;">Versión {{ data.version_compared }}</div>
+                <span class="health-indicator health-{{ data.health.v2 }}">
+                    {% if data.health.v2 == 'verde' %}🟢{% elif data.health.v2 == 'amarillo' %}🟡{% else %}🔴{% endif %}
+                    {{ data.health.v2|upper }}
+                </span>
+            </div>
+        </div>
+    </div>
+    
+    <!-- ============================================
+         CONTEXTO DE LA OPORTUNIDAD (Página 3)
+         ============================================ -->
+    <div class="page">
+        <div class="header">
+            {% if branding.logo_url %}
+            <img src="{{ branding.logo_url }}" alt="Logo" class="logo">
+            {% endif %}
+            <div class="header-info">
+                <div>{{ data.quote_group }}</div>
+                <div>{{ data.generated_date }}</div>
+            </div>
+        </div>
+        
+        <h1>📋 Contexto de la Oportunidad</h1>
+        
+        <h3>Tipo de Operación</h3>
+        <p>{{ data.operation_type }}</p>
+        
+        <h3>Playbook Aplicado</h3>
+        <div style="margin: 20px 0;">
+            <span class="playbook-badge">{{ data.playbook.name }}</span>
+        </div>
+        <p style="color: #6B7280; font-size: 10pt; margin-top: 10px;">
+            {{ data.playbook.description }}
+        </p>
+        
+        <div style="background: #F9FAFB; padding: 20px; border-radius: 8px; margin: 20px 0;">
+            <h4 style="margin: 0 0 10px 0; color: #4F46E5;">Umbrales de Evaluación</h4>
+            <div style="display: grid; grid-template-columns: repeat(2, 1fr); gap: 15px;">
+                <div>
+                    <div style="font-size: 9pt; color: #6B7280; margin-bottom: 5px;">MARGEN VERDE</div>
+                    <div style="font-size: 18pt; font-weight: 700; color: #10B981;">≥ {{ data.playbook.green }}%</div>
+                </div>
+                <div>
+                    <div style="font-size: 9pt; color: #6B7280; margin-bottom: 5px;">MARGEN AMARILLO</div>
+                    <div style="font-size: 18pt; font-weight: 700; color: #F59E0B;">≥ {{ data.playbook.yellow }}%</div>
+                </div>
+            </div>
+        </div>
+        
+        <h3>Intención Comercial</h3>
+        <p>{{ data.commercial_intent }}</p>
+        
+        <div class="section-divider"></div>
+        
+        <div style="background: #FFFBEB; border-left: 4px solid #F59E0B; padding: 15px; border-radius: 4px;">
+            <p style="margin: 0; font-size: 10pt; color: #92400E;">
+                <strong>Nota aclaratoria:</strong> El análisis se basa en criterios financieros y de sostenibilidad 
+                definidos por el playbook seleccionado. Los umbrales y pesos aplicados son consistentes con 
+                estándares de la industria y objetivos comerciales establecidos.
+            </p>
+        </div>
+    </div>
+    
+    <!-- ============================================
+         COMPARACIÓN FINANCIERA (Página 4)
+         ============================================ -->
+    <div class="page">
+        <div class="header">
+            {% if branding.logo_url %}
+            <img src="{{ branding.logo_url }}" alt="Logo" class="logo">
+            {% endif %}
+            <div class="header-info">
+                <div>{{ data.quote_group }}</div>
+                <div>{{ data.generated_date }}</div>
+            </div>
+        </div>
+        
+        <h1>💰 Comparación Financiera</h1>
+        
+        <table class="comparison-table">
+            <thead>
+                <tr>
+                    <th>Métrica</th>
+                    <th style="text-align: right;">v{{ data.version_base }}</th>
+                    <th style="text-align: right;">v{{ data.version_compared }}</th>
+                    <th style="text-align: right;">Diferencia</th>
+                </tr>
+            </thead>
+            <tbody>
+                <tr>
+                    <td><strong>Ingreso Total</strong></td>
+                    <td style="text-align: right;">${{ data.metrics.revenue_v1|format_money }}</td>
+                    <td style="text-align: right;">${{ data.metrics.revenue_v2|format_money }}</td>
+                    <td style="text-align: right; font-weight: 600;" class="{{ data.metrics.delta_revenue_class }}">
+                        {{ data.metrics.delta_revenue_text }}
+                    </td>
+                </tr>
+                <tr>
+                    <td><strong>Costo Total</strong></td>
+                    <td style="text-align: right;">${{ data.metrics.cost_v1|format_money }}</td>
+                    <td style="text-align: right;">${{ data.metrics.cost_v2|format_money }}</td>
+                    <td style="text-align: right; font-weight: 600;" class="{{ data.metrics.delta_cost_class }}">
+                        {{ data.metrics.delta_cost_text }}
+                    </td>
+                </tr>
+                <tr>
+                    <td><strong>Utilidad Bruta</strong></td>
+                    <td style="text-align: right;">${{ data.metrics.profit_v1|format_money }}</td>
+                    <td style="text-align: right;">${{ data.metrics.profit_v2|format_money }}</td>
+                    <td style="text-align: right; font-weight: 600;" class="{{ data.metrics.delta_profit_class }}">
+                        {{ data.metrics.delta_profit_text }}
+                    </td>
+                </tr>
+                <tr style="background: #F9FAFB;">
+                    <td><strong>Margen Promedio</strong></td>
+                    <td style="text-align: right; font-weight: 700;">{{ data.metrics.margin_v1 }}%</td>
+                    <td style="text-align: right; font-weight: 700;">{{ data.metrics.margin_v2 }}%</td>
+                    <td style="text-align: right; font-weight: 700;" class="{{ data.metrics.delta_margin_class }}">
+                        {{ data.metrics.delta_margin_text }}
+                    </td>
+                </tr>
+            </tbody>
+        </table>
+        
+        <div class="section-divider"></div>
+        
+        <h2>Análisis de Componentes</h2>
+        <table class="comparison-table">
+            <thead>
+                <tr>
+                    <th>Componente</th>
+                    <th style="text-align: right;">v{{ data.version_base }}</th>
+                    <th style="text-align: right;">v{{ data.version_compared }}</th>
+                    <th style="text-align: right;">Cambio</th>
+                </tr>
+            </thead>
+            <tbody>
+                {% for component in data.components %}
+                <tr>
+                    <td>{{ component.name }}</td>
+                    <td style="text-align: right;">${{ component.v1|format_money }}</td>
+                    <td style="text-align: right;">${{ component.v2|format_money }}</td>
+                    <td style="text-align: right; font-weight: 600;" class="{{ component.delta_class }}">
+                        {{ component.delta_text }}
+                    </td>
+                </tr>
+                {% endfor %}
+            </tbody>
+        </table>
+    </div>
+    
+    <!-- ============================================
+         GRÁFICOS DE COMPARACIÓN (Página 5)
+         ============================================ -->
+    <div class="page">
+        <div class="header">
+            {% if branding.logo_url %}
+            <img src="{{ branding.logo_url }}" alt="Logo" class="logo">
+            {% endif %}
+            <div class="header-info">
+                <div>{{ data.quote_group }}</div>
+                <div>{{ data.generated_date }}</div>
+            </div>
+        </div>
+        
+        <h1>📈 Análisis Visual</h1>
+        
+        <div class="chart-container">
+            <h3>Ingreso vs Utilidad por Versión</h3>
+            {% if charts.revenue_profit %}
+            <img src="{{ charts.revenue_profit }}" alt="Gráfico de Ingreso vs Utilidad">
+            <p class="chart-caption">Comparación de métricas financieras principales entre versiones</p>
+            {% else %}
+            <div style="background: #F9FAFB; padding: 40px; text-align: center; color: #6B7280;">
+                Gráfico no disponible
+            </div>
+            {% endif %}
+        </div>
+        
+        <div class="section-divider"></div>
+        
+        <div class="chart-container">
+            <h3>Aportación por Componente</h3>
+            {% if charts.components %}
+            <img src="{{ charts.components }}" alt="Gráfico de Componentes">
+            <p class="chart-caption">Distribución de ingresos por componente en cada versión</p>
+            {% else %}
+            <div style="background: #F9FAFB; padding: 40px; text-align: center; color: #6B7280;">
+                Gráfico no disponible
+            </div>
+            {% endif %}
+        </div>
+    </div>
+    
+    <!-- ============================================
+         SALUD DE LA PROPUESTA (Página 6)
+         ============================================ -->
+    <div class="page">
+        <div class="header">
+            {% if branding.logo_url %}
+            <img src="{{ branding.logo_url }}" alt="Logo" class="logo">
+            {% endif %}
+            <div class="header-info">
+                <div>{{ data.quote_group }}</div>
+                <div>{{ data.generated_date }}</div>
+            </div>
+        </div>
+        
+        <h1>🏥 Salud de la Propuesta</h1>
+        
+        <h2>Evaluación General</h2>
+        <div style="display: grid; grid-template-columns: repeat(2, 1fr); gap: 30px; margin: 30px 0;">
+            <div style="text-align: center; padding: 30px; background: #F9FAFB; border-radius: 8px;">
+                <div style="font-size: 12pt; color: #6B7280; margin-bottom: 15px; font-weight: 600;">
+                    VERSIÓN {{ data.version_base }}
+                </div>
+                <span class="health-indicator health-{{ data.health.v1 }}" style="font-size: 14pt; padding: 12px 30px;">
+                    {% if data.health.v1 == 'verde' %}🟢 SANA{% elif data.health.v1 == 'amarillo' %}🟡 ATENCIÓN{% else %}🔴 RIESGO{% endif %}
+                </span>
+                <div style="margin-top: 20px; font-size: 10pt; color: #6B7280;">
+                    <div>Margen: {{ data.metrics.margin_v1 }}%</div>
+                    <div>Líneas en riesgo: {{ data.health.red_lines_v1 }}</div>
+                </div>
+            </div>
+            
+            <div style="text-align: center; padding: 30px; background: #F9FAFB; border-radius: 8px;">
+                <div style="font-size: 12pt; color: #6B7280; margin-bottom: 15px; font-weight: 600;">
+                    VERSIÓN {{ data.version_compared }}
+                </div>
+                <span class="health-indicator health-{{ data.health.v2 }}" style="font-size: 14pt; padding: 12px 30px;">
+                    {% if data.health.v2 == 'verde' %}🟢 SANA{% elif data.health.v2 == 'amarillo' %}🟡 ATENCIÓN{% else %}🔴 RIESGO{% endif %}
+                </span>
+                <div style="margin-top: 20px; font-size: 10pt; color: #6B7280;">
+                    <div>Margen: {{ data.metrics.margin_v2 }}%</div>
+                    <div>Líneas en riesgo: {{ data.health.red_lines_v2 }}</div>
+                </div>
+            </div>
+        </div>
+        
+        <div class="section-divider"></div>
+        
+        <h2>Detalle de Riesgo</h2>
+        {% if data.health.risk_details %}
+        <div class="narrative-box detail">
+            <div class="narrative-content">
+                {{ data.health.risk_details }}
+            </div>
+        </div>
+        {% else %}
+        <div style="background: #D1FAE5; border-left: 4px solid #10B981; padding: 20px; border-radius: 4px;">
+            <p style="margin: 0; color: #065F46;">
+                ✅ Ambas versiones presentan estructura de riesgo controlado dentro de los parámetros esperados.
+            </p>
+        </div>
+        {% endif %}
+        
+        <h2>Benchmark de Industria</h2>
+        <div style="background: #F9FAFB; padding: 20px; border-radius: 8px;">
+            <p style="margin: 0; line-height: 1.8;">
+                {{ data.playbook.benchmark_text }}
+            </p>
+        </div>
+    </div>
+    
+    <!-- ============================================
+         NARRATIVA AUTOMÁTICA (Página 7)
+         ============================================ -->
+    <div class="page">
+        <div class="header">
+            {% if branding.logo_url %}
+            <img src="{{ branding.logo_url }}" alt="Logo" class="logo">
+            {% endif %}
+            <div class="header-info">
+                <div>{{ data.quote_group }}</div>
+                <div>{{ data.generated_date }}</div>
+            </div>
+        </div>
+        
+        <h1>📝 Narrativa Automática</h1>
+        
+        <h2>Resumen Ejecutivo</h2>
+        <div class="narrative-box executive">
+            <div class="narrative-content">
+                {{ data.narrative.executive }}
+            </div>
+        </div>
+        
+        <h2>Detalle Técnico</h2>
+        <div class="narrative-box detail">
+            <div class="narrative-content">
+                {{ data.narrative.detail }}
+            </div>
+        </div>
+        
+        <div class="section-divider"></div>
+        
+        <div style="background: #EEF2FF; border-left: 4px solid #4F46E5; padding: 20px; border-radius: 4px;">
+            <p style="margin: 0; font-size: 10pt; color: #3730A3;">
+                <strong>💡 Nota:</strong> Este texto ha sido generado automáticamente por el sistema y está 
+                listo para ser utilizado en comunicaciones formales, correos electrónicos o presentaciones 
+                ejecutivas. La narrativa se basa exclusivamente en los datos de la comparación y los criterios 
+                del playbook aplicado.
+            </p>
+        </div>
+    </div>
+    
+    <!-- ============================================
+         RECOMENDACIÓN FINAL (Página 8)
+         ============================================ -->
+    <div class="page">
+        <div class="header">
+            {% if branding.logo_url %}
+            <img src="{{ branding.logo_url }}" alt="Logo" class="logo">
+            {% endif %}
+            <div class="header-info">
+                <div>{{ data.quote_group }}</div>
+                <div>{{ data.generated_date }}</div>
+            </div>
+        </div>
+        
+        <h1>✅ Recomendación Final</h1>
+        
+        <div class="recommendation">
+            <h3>{{ data.recommendation.title }}</h3>
+            <div class="recommendation-content">
+                {{ data.recommendation.text }}
+            </div>
+            
+            <div class="score-display">
+                <div class="score-item">
+                    <div class="score-label">Versión {{ data.version_base }}</div>
+                    <div class="score-value">{{ data.recommendation.score_v1 }}</div>
+                </div>
+                <div class="score-item">
+                    <div class="score-label">Versión {{ data.version_compared }}</div>
+                    <div class="score-value">{{ data.recommendation.score_v2 }}</div>
+                </div>
+            </div>
+        </div>
+        
+        <h2>Razón Principal</h2>
+        <div style="background: #F9FAFB; padding: 20px; border-radius: 8px; margin: 20px 0;">
+            <p style="margin: 0; line-height: 1.8;">
+                {{ data.recommendation.main_reason }}
+            </p>
+        </div>
+        
+        {% if data.recommendation.tradeoff %}
+        <h2>Consideraciones (Trade-offs)</h2>
+        <div style="background: #FFFBEB; border-left: 4px solid #F59E0B; padding: 20px; border-radius: 4px;">
+            <p style="margin: 0; line-height: 1.8; color: #92400E;">
+                {{ data.recommendation.tradeoff }}
+            </p>
+        </div>
+        {% endif %}
+        
+        <div class="section-divider"></div>
+        
+        <div style="text-align: center; padding: 40px 0;">
+            <p style="font-size: 10pt; color: #6B7280; margin-bottom: 20px;">
+                Documento generado automáticamente el {{ data.generated_date }}
+            </p>
+            <p style="font-size: 9pt; color: #9CA3AF;">
+                <strong>Quote Intelligence Engine</strong> by {{ branding.company_name }}<br>
+                ID de reporte: {{ data.report_id }}
+            </p>
+        </div>
+    </div>
+    
+    <!-- Footer para todas las páginas -->
+    <div class="footer">
+        <span>{{ branding.company_name }} | Análisis Comparativo</span>
+        <span>{{ data.generated_date }}</span>
+    </div>
+</body>
+</html>

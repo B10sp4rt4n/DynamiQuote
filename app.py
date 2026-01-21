@@ -886,6 +886,75 @@ if not hist_compare.empty:
                 
                 st.divider()
                 
+                # ===== EXPORTACIÓN PDF EJECUTIVO =====
+                st.markdown("### 📄 Exportación Ejecutiva")
+                st.caption("Genera un reporte PDF profesional con el análisis completo.")
+                
+                col_pdf1, col_pdf2 = st.columns([2, 1])
+                
+                with col_pdf1:
+                    pdf_branding_name = st.text_input(
+                        "Nombre de la empresa (opcional)",
+                        value="DynamiQuote",
+                        help="Aparecerá en el encabezado y portada del PDF"
+                    )
+                
+                with col_pdf2:
+                    st.write("")  # Espaciado
+                    generate_pdf = st.button("📥 Descargar PDF", type="primary", use_container_width=True, key="generate_pdf_btn")
+                
+                if generate_pdf:
+                    try:
+                        # Importar módulo de PDF
+                        from pdf_generator import prepare_report_data, generate_pdf_report, WEASYPRINT_AVAILABLE
+                        
+                        if not WEASYPRINT_AVAILABLE:
+                            st.error("⚠️ WeasyPrint no está instalado. Ejecutar: `pip install weasyprint`")
+                        else:
+                            with st.spinner("Generando PDF ejecutivo..."):
+                                # Preparar datos estructurados
+                                report_data = prepare_report_data(
+                                    q1=q1,
+                                    q2=q2,
+                                    df1=l1,
+                                    df2=l2,
+                                    narrative=narrative,
+                                    playbook_name=selected_playbook,
+                                    playbook_config=PLAYBOOKS[selected_playbook]
+                                )
+                                
+                                # Configurar branding
+                                branding = {
+                                    'logo_url': None,  # Futuro: permitir subir logo
+                                    'primary_color': '#4F46E5',
+                                    'secondary_color': '#F59E0B',
+                                    'company_name': pdf_branding_name
+                                }
+                                
+                                # Generar PDF
+                                pdf_bytes = generate_pdf_report(report_data, branding)
+                                
+                                # Botón de descarga
+                                st.download_button(
+                                    label="⬇️ Descargar Reporte PDF",
+                                    data=pdf_bytes,
+                                    file_name=f"analisis_comparativo_v{v1}_v{v2}_{datetime.now().strftime('%Y%m%d')}.pdf",
+                                    mime="application/pdf",
+                                    use_container_width=True
+                                )
+                                
+                                st.success("✅ PDF generado exitosamente. Haz click en 'Descargar Reporte PDF' arriba.")
+                    
+                    except ImportError as e:
+                        st.error(f"⚠️ Error de importación: {e}. Asegúrate de tener todos los requisitos instalados.")
+                    except Exception as e:
+                        st.error(f"❌ Error generando PDF: {e}")
+                        import traceback
+                        with st.expander("Ver detalles del error"):
+                            st.code(traceback.format_exc())
+                
+                st.divider()
+                
                 # Insight automático
                 st.markdown("### 💡 Insight Rápido")
                 
