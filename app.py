@@ -594,7 +594,7 @@ if not hist_compare.empty:
                 )
             
             with col3:
-                if st.button("🔄 Comparar", type="primary", use_container_width=True):
+                if st.button("🔄 Comparar", type="primary", width="stretch"):
                     if v1 == v2:
                         st.warning("⚠️ Selecciona versiones distintas")
                     else:
@@ -724,7 +724,7 @@ if not hist_compare.empty:
                     }
                 ])
                 
-                st.dataframe(comp_df, use_container_width=True, hide_index=True)
+                st.dataframe(comp_df, width="stretch", hide_index=True)
                 
                 # Análisis de líneas
                 st.markdown("### 📦 Análisis de Líneas")
@@ -815,7 +815,7 @@ if not hist_compare.empty:
                 display_comp["Δ Absoluto"] = display_comp["Δ Absoluto"].apply(lambda x: f"${x:,.2f}")
                 display_comp["Δ %"] = display_comp["Δ %"].apply(lambda x: f"{x:+.1f}%")
                 
-                st.dataframe(display_comp, use_container_width=True)
+                st.dataframe(display_comp, width="stretch")
                 
                 # ===== NARRATIVA AUTOMÁTICA =====
                 st.markdown("### 📝 Narrativa Automática")
@@ -868,7 +868,7 @@ if not hist_compare.empty:
                     )
                 
                 with col_button:
-                    generate_ai = st.button("✨ Generar", type="primary", use_container_width=True, key="generate_ai_narrative")
+                    generate_ai = st.button("✨ Generar", type="primary", width="stretch", key="generate_ai_narrative")
                 
                 # Generar narrativa reformulada si se presiona el botón
                 if generate_ai:
@@ -901,7 +901,7 @@ if not hist_compare.empty:
                 
                 with col_pdf2:
                     st.write("")  # Espaciado
-                    generate_pdf = st.button("📥 Descargar PDF", type="primary", use_container_width=True, key="generate_pdf_btn")
+                    generate_pdf = st.button("📥 Descargar PDF", type="primary", width="stretch", key="generate_pdf_btn")
                 
                 if generate_pdf:
                     try:
@@ -940,7 +940,7 @@ if not hist_compare.empty:
                                     data=pdf_bytes,
                                     file_name=f"analisis_comparativo_v{v1}_v{v2}_{datetime.now().strftime('%Y%m%d')}.pdf",
                                     mime="application/pdf",
-                                    use_container_width=True
+                                    width="stretch"
                                 )
                                 
                                 st.success("✅ PDF generado exitosamente. Haz click en 'Descargar Reporte PDF' arriba.")
@@ -1037,7 +1037,7 @@ if st.session_state.pending_line:
     
     col_a, col_b = st.columns(2)
     with col_a:
-        if st.button("✅ Usar descripción corregida", type="primary", use_container_width=True):
+        if st.button("✅ Usar descripción corregida", type="primary", width="stretch"):
             # Usar versión corregida
             pending["description_final"] = pending["corrected_desc"]
             st.session_state.lines.append(pending)
@@ -1046,7 +1046,7 @@ if st.session_state.pending_line:
             st.rerun()
     
     with col_b:
-        if st.button("❌ Usar descripción original", use_container_width=True):
+        if st.button("❌ Usar descripción original", width="stretch"):
             # Usar versión original
             pending["description_final"] = pending["description_input"]
             st.session_state.lines.append(pending)
@@ -1366,7 +1366,7 @@ if quotes_query:
                             lines,
                             columns=["SKU", "Descripción", "Tipo", "Origen", "Costo Unit.", "Precio Unit.", "Margen %", "Estrategia", "Advertencias"]
                         )
-                        st.dataframe(lines_df, hide_index=True, use_container_width=True)
+                        st.dataframe(lines_df, hide_index=True, width="stretch")
                 
                 st.divider()
     
@@ -1389,7 +1389,7 @@ if quotes_query:
     quotes_df["Margen Promedio %"] = quotes_df["Margen Promedio %"].apply(lambda x: f"{x:.2f}%")
     
     # Mostrar solo columnas relevantes
-    display_df = quotes_df[["Group ID", "Versión", "Fecha", "Costo Total", "Ingreso Total", "Utilidad Bruta", "Margen Promedio %"]]
+    display_df = quotes_df[["Group ID", "Versión", "Fecha", "Costo Total", "Ingreso Total", "Utilidad Bruta", "Margen Promedio %"]].copy()
     display_df["Group ID"] = display_df["Group ID"].apply(lambda x: f"{x[:8]}...")
     
     st.dataframe(display_df, width='stretch', hide_index=True)
