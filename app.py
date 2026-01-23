@@ -1172,24 +1172,20 @@ with st.expander("📥 O importa múltiples líneas desde Excel", expanded=False
             
             with col_confirm:
                 if st.button("✅ Confirmar e Importar Todo", type="primary", width="stretch"):
-                    # Aplicar ediciones a las líneas originales
+                    # Aplicar ediciones a las líneas originales (incluye SKU editado)
                     for idx, line in enumerate(import_result["lines"]):
                         if idx < len(edited_df):
-                            line["sku"] = edited_df.iloc[idx]["SKU"]
-                            line["description_original"] = edited_df.iloc[idx]["Descripción"]
+                            line["sku"] = str(edited_df.iloc[idx]["SKU"])
+                            line["description_original"] = str(edited_df.iloc[idx]["Descripción"])
+                            line["description_final"] = str(edited_df.iloc[idx]["Descripción"])  # Usar descripción tal cual
+                            line["description_corrections"] = ""  # Sin correcciones en import Excel
                             line["_cantidad"] = int(edited_df.iloc[idx]["Cantidad"])
                             line["cost_unit"] = float(edited_df.iloc[idx]["Costo Unit"])
                             line["margin_pct"] = float(edited_df.iloc[idx]["Margen %"])
                             line["final_price_unit"] = float(edited_df.iloc[idx]["Precio Unit"])
-                            line["line_type"] = edited_df.iloc[idx]["Tipo"]
-                            line["service_origin"] = edited_df.iloc[idx]["Origen"]
-                            line["strategy"] = edited_df.iloc[idx]["Estrategia"]
-                    
-                    # Aplicar corrección ortográfica a todas las líneas
-                    for line in import_result["lines"]:
-                        corrected_desc, corrections = suggest_description_fix(line["description_original"])
-                        line["description_final"] = corrected_desc
-                        line["description_corrections"] = ", ".join(corrections)
+                            line["line_type"] = str(edited_df.iloc[idx]["Tipo"])
+                            line["service_origin"] = str(edited_df.iloc[idx]["Origen"])
+                            line["strategy"] = str(edited_df.iloc[idx]["Estrategia"])
                     
                     # Agregar a session state
                     st.session_state.lines.extend(import_result["lines"])
