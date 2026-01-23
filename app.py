@@ -1124,9 +1124,13 @@ with st.expander("📥 O importa múltiples líneas desde Excel", expanded=False
                     for dup in import_result["duplicates"]:
                         st.markdown(f"- **{dup['new_description']}** similar a *{dup['existing_description']}* ({dup['similarity']}%)")
             
-            # Preview editable
-            st.subheader("📋 Preview - Editar antes de importar")
-            st.info("💡 **Edita los campos y al confirmar se recalcularán automáticamente:** Si cambias Costo+Precio→Recalcula Margen | Si cambias Costo+Margen→Recalcula Precio")
+            # Preview editable con doble confirmación
+            st.subheader("📋 Paso 1: Revisar y Editar Datos")
+            st.info("💡 **Haz doble-click en cualquier celda para editar.** Al confirmar, se recalculará: Costo+Precio→Margen | Costo+Margen→Precio")
+            
+            # Inicializar estado de edición si no existe
+            if "edited_import_data" not in st.session_state:
+                st.session_state.edited_import_data = None
             
             # Convertir a DataFrame para edición
             preview_data = []
@@ -1145,89 +1149,114 @@ with st.expander("📥 O importa múltiples líneas desde Excel", expanded=False
             
             preview_df = pd.DataFrame(preview_data)
             
+            # Mostrar editor
             edited_df = st.data_editor(
                 preview_df,
                 column_config={
-                    "SKU": st.column_config.TextColumn(
-                        width="medium",
-                        help="Edita el SKU si es necesario",
-                        disabled=False
-                    ),
-                    "Descripción": st.column_config.TextColumn(
-                        width="large",
-                        help="Edita la descripción del producto",
-                        disabled=False
-                    ),
-                    "Cantidad": st.column_config.NumberColumn(
-                        min_value=1,
-                        format="%d",
-                        help="Cantidad a cotizar",
-                        disabled=False
-                    ),
-                    "Costo": st.column_config.NumberColumn(
-                        min_value=0,
-                        format="$%.2f",
-                        help="Costo unitario (editable)",
-                        disabled=False
-                    ),
-                    "Margen%": st.column_config.NumberColumn(
-                        min_value=0,
-                        max_value=99,
-                        format="%.1f",
-                        help="Margen % (editable)",
-                        disabled=False
-                    ),
-                    "Precio": st.column_config.NumberColumn(
-                        min_value=0,
-                        format="$%.2f",
-                        help="Precio unitario (editable)",
-                        disabled=False
-                    ),
-                    "Tipo": st.column_config.SelectboxColumn(
-                        options=["product", "service"],
-                        disabled=False
-                    ),
+                    "SKU": st.column_config.TextColumn(width="medium"),
+                    "Descripción": st.column_config.TextColumn(width="large"),
+                    "Cantidad": st.column_config.NumberColumn(min_value=1, format="%d"),
+                    "Costo": st.column_config.NumberColumn(min_value=0, format="$%.2f"),
+                    "Margen%": st.column_config.NumberColumn(min_value=0, max_value=99, format="%.1f"),
+                    "Precio": st.column_config.NumberColumn(min_value=0, format="$%.2f"),
+                    "Tipo": st.column_config.SelectboxColumn(options=["product", "service"]),
                     "Origen": st.column_config.SelectboxColumn(
-                        options=["producto", "refacciones", "póliza", "implementación", "soporte", "capacitación", "otro"],
-                        disabled=False
+                        options=["producto", "refacciones", "póliza", "implementación", "soporte", "capacitación", "otro"]
                     ),
                     "Estrategia": st.column_config.SelectboxColumn(
-                        options=["penetration", "defense", "upsell", "renewal"],
-                        disabled=False
+                        options=["penetration", "defense", "upsell", "renewal"]
                     )
                 },
                 num_rows="dynamic",
                 use_container_width=True,
                 hide_index=False,
-                disabled=False,
-                key="preview_editor"
+                key=f"preview_editor_{import_result['import_batch_id']}"
             )
             
-            # Botones de acción
+            # Detectar cambios
+            cambios_detectados = not preview_df.equals(edited_df)
+            
+            if cambios_detectados:
+                st.warning(f"⚠️ Se detectaron cambios en {len(edited_df)} filas")
+                
+                # Mostrar tabla de cambios
+                with st.expander("Ver cambios detectados", expanded=True):
+                    for idx in range(len(edited_df)):
+                        if idx < len(preview_df):
+                            cambios_fila = []
+                            for col in edited_df.columns:
+                                if str(preview_df.iloc[idx][col]) != str(edited_df.iloc[idx][col]):
+                                    cambios_fila.append(f"**{col}**: {preview_df.iloc[idx][col]} → {edited_df.iloc[idx][col]}")
+                            
+                            if cambios_fila:
+                                st.markdown(f"**Fila {idx+1}:** " + " | ".join(cambios_fila))
+            
+            # Botón para procesar y mostrar vista previa final
+            if st.button("🔄 Procesar Cambios y Ver Resumen Final", type="secondary", use_container_width=True):
+                # Aplicar ediciones y recalcular
+                st.session_state.edited_import_data = edited_df
+                st.rerun()
+            
+            # Mostrar tabla final con cálculos aplicados
+            if st.session_state.edited_import_data is not None:
+                st.subheader("📊 Paso 2: Confirmar Datos Finales (con cálculos aplicados)")
+                
+                final_data = []
+                for idx in range(len(st.session_state.edited_import_data)):
+                    costo = float(st.session_state.edited_import_data.iloc[idx]["Costo"])
+                    margen = float(st.session_state.edited_import_data.iloc[idx]["Margen%"])
+                    precio = float(st.session_state.edited_import_data.iloc[idx]["Precio"])
+                    
+                    # Recalcular
+                    if costo > 0 and precio > 0:
+                        margen_final = round(((precio - costo) / precio) * 100, 2)
+                    elif costo > 0 and margen > 0:
+                        precio = round(costo / (1 - margen / 100), 2)
+                        margen_final = margen
+                    else:
+                        margen_final = margen
+                    
+                    final_data.append({
+                        "SKU": st.session_state.edited_import_data.iloc[idx]["SKU"],
+                        "Descripción": st.session_state.edited_import_data.iloc[idx]["Descripción"],
+                        "Cantidad": int(st.session_state.edited_import_data.iloc[idx]["Cantidad"]),
+                        "Costo": f"${costo:.2f}",
+                        "Margen": f"{margen_final:.1f}%",
+                        "Precio": f"${precio:.2f}",
+                        "Tipo": st.session_state.edited_import_data.iloc[idx]["Tipo"]
+                    })
+                
+                final_df = pd.DataFrame(final_data)
+                st.dataframe(final_df, use_container_width=True, hide_index=False)
+                
+                st.success(f"✅ {len(final_df)} líneas listas para importar con cálculos aplicados")
+            
+            # Botones de acción final
             col_confirm, col_cancel = st.columns(2)
             
             with col_confirm:
-                if st.button("✅ Confirmar e Importar Todo", type="primary", width="stretch"):
-                    # Aplicar ediciones y recalcular margen/precio según cambios
+                if st.button("✅ Confirmar e Importar Todo", type="primary", width="stretch", 
+                           disabled=(st.session_state.edited_import_data is None)):
+                    # Aplicar ediciones finales
                     updated_lines = []
-                    for idx in range(len(edited_df)):
+                    for idx in range(len(st.session_state.edited_import_data)):
                         if idx < len(import_result["lines"]):
                             line = import_result["lines"][idx].copy()
                             
                             # Aplicar cambios del editor
-                            line["sku"] = str(edited_df.iloc[idx]["SKU"])
-                            line["description_original"] = str(edited_df.iloc[idx]["Descripción"])
-                            line["description_final"] = str(edited_df.iloc[idx]["Descripción"])
+                            line["sku"] = str(st.session_state.edited_import_data.iloc[idx]["SKU"])
+                            line["description_original"] = str(st.session_state.edited_import_data.iloc[idx]["Descripción"])
+                            line["description_final"] = str(st.session_state.edited_import_data.iloc[idx]["Descripción"])
                             line["description_corrections"] = ""
-                            line["_cantidad"] = int(edited_df.iloc[idx]["Cantidad"])
-                            line["line_type"] = str(edited_df.iloc[idx]["Tipo"])
-                            line["service_origin"] = str(edited_df.iloc[idx]["Origen"])
-                            line["strategy"] = str(edited_df.iloc[idx]["Estrategia"])
+                            line["_cantidad"] = int(st.session_state.edited_import_data.iloc[idx]["Cantidad"])
+                            line["line_type"] = str(st.session_state.edited_import_data.iloc[idx]["Tipo"])
+                            line["service_origin"] = str(st.session_state.edited_import_data.iloc[idx]["Origen"])
+                            line["strategy"] = str(st.session_state.edited_import_data.iloc[idx]["Estrategia"])
                             
                             # Obtener valores editados
-                            costo = float(edited_df.iloc[idx]["Costo"])
-                            margen = float(edited_df.iloc[idx]["Margen%"])
-                            precio = float(edited_df.iloc[idx]["Precio"])
+                            costo = float(st.session_state.edited_import_data.iloc[idx]["Costo"])
+                            margen = float(st.session_state.edited_import_data.iloc[idx]["Margen%"])
+                            precio = float(st.session_state.edited_import_data.iloc[idx]["Precio"])
                             
                             # Recalcular coherencia: si precio y costo son válidos, calcular margen real
                             if costo > 0 and precio > 0:
@@ -1252,6 +1281,9 @@ with st.expander("📥 O importa múltiples líneas desde Excel", expanded=False
                     # Agregar a session state
                     st.session_state.lines.extend(updated_lines)
                     
+                    # Limpiar estado de edición
+                    st.session_state.edited_import_data = None
+                    
                     # Guardar archivo para auditoría
                     file_id = import_result["import_batch_id"]
                     quote_id = st.session_state.quote_id
@@ -1268,7 +1300,8 @@ with st.expander("📥 O importa múltiples líneas desde Excel", expanded=False
                     
                     st.success(f"✅ {len(import_result['lines'])} líneas importadas correctamente")
                     st.rerun()
-            
+            session_state.edited_import_data = None
+                    st.
             with col_cancel:
                 if st.button("❌ Cancelar Import", width="stretch"):
                     st.rerun()
