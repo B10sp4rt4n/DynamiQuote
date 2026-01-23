@@ -1172,23 +1172,49 @@ with st.expander("📥 O importa múltiples líneas desde Excel", expanded=False
             
             with col_confirm:
                 if st.button("✅ Confirmar e Importar Todo", type="primary", width="stretch"):
-                    # Aplicar ediciones a las líneas originales (incluye SKU editado)
-                    for idx, line in enumerate(import_result["lines"]):
-                        if idx < len(edited_df):
+                    # Aplicar ediciones y recalcular margen/precio según cambios
+                    updated_lines = []
+                    for idx in range(len(edited_df)):
+                        if idx < len(import_result["lines"]):
+                            line = import_result["lines"][idx].copy()
+                            
+                            # Aplicar cambios del editor
                             line["sku"] = str(edited_df.iloc[idx]["SKU"])
                             line["description_original"] = str(edited_df.iloc[idx]["Descripción"])
-                            line["description_final"] = str(edited_df.iloc[idx]["Descripción"])  # Usar descripción tal cual
-                            line["description_corrections"] = ""  # Sin correcciones en import Excel
+                            line["description_final"] = str(edited_df.iloc[idx]["Descripción"])
+                            line["description_corrections"] = ""
                             line["_cantidad"] = int(edited_df.iloc[idx]["Cantidad"])
-                            line["cost_unit"] = float(edited_df.iloc[idx]["Costo Unit"])
-                            line["margin_pct"] = float(edited_df.iloc[idx]["Margen %"])
-                            line["final_price_unit"] = float(edited_df.iloc[idx]["Precio Unit"])
                             line["line_type"] = str(edited_df.iloc[idx]["Tipo"])
                             line["service_origin"] = str(edited_df.iloc[idx]["Origen"])
                             line["strategy"] = str(edited_df.iloc[idx]["Estrategia"])
+                            
+                            # Obtener valores editados
+                            costo = float(edited_df.iloc[idx]["Costo Unit"])
+                            margen = float(edited_df.iloc[idx]["Margen %"])
+                            precio = float(edited_df.iloc[idx]["Precio Unit"])
+                            
+                            # Recalcular coherencia: si precio y costo son válidos, calcular margen real
+                            if costo > 0 and precio > 0:
+                                margen_real = round(((precio - costo) / precio) * 100, 2)
+                                line["cost_unit"] = costo
+                                line["final_price_unit"] = precio
+                                line["margin_pct"] = margen_real
+                            elif costo > 0 and margen > 0:
+                                # Si solo tiene costo y margen, calcular precio
+                                precio_calculado = round(costo / (1 - margen / 100), 2)
+                                line["cost_unit"] = costo
+                                line["margin_pct"] = margen
+                                line["final_price_unit"] = precio_calculado
+                            else:
+                                # Usar valores tal cual si no hay coherencia
+                                line["cost_unit"] = costo
+                                line["margin_pct"] = margen
+                                line["final_price_unit"] = precio
+                            
+                            updated_lines.append(line)
                     
                     # Agregar a session state
-                    st.session_state.lines.extend(import_result["lines"])
+                    st.session_state.lines.extend(updated_lines)
                     
                     # Guardar archivo para auditoría
                     file_id = import_result["import_batch_id"]
