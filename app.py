@@ -4,7 +4,8 @@ import uuid
 from datetime import datetime, UTC
 import matplotlib.pyplot as plt
 from spellchecker import SpellChecker
-from database import init_database, save_quote, get_all_quotes, get_quote_lines, get_quote_lines_full, get_latest_version, load_versions_for_group, load_lines_for_quote, get_database_info
+from database import init_database, save_quote, save_import_file, get_all_quotes, get_quote_lines, get_quote_lines_full, get_latest_version, load_versions_for_group, load_lines_for_quote, get_database_info
+from excel_import import import_excel_file, format_validation_report
 import os
 
 # =========================
@@ -1056,6 +1057,163 @@ if st.session_state.pending_line:
     
     st.divider()
 
+# =========================
+# IMPORTACIÓN DESDE EXCEL
+# =========================
+with st.expander("📥 O importa múltiples líneas desde Excel", expanded=False):
+    st.markdown("""
+    Importa productos desde Excel para acelerar la creación de cotizaciones.
+    
+    **Pasos:**
+    1. Descarga la plantilla Excel
+    2. Llena tus productos
+    3. Sube el archivo
+    4. Revisa y confirma
+    """)
+    
+    # Botón de descarga del template
+    col_download, col_upload = st.columns(2)
+    
+    with col_download:
+        try:
+            with open("templates/import/dynamiquote_simple.xlsx", "rb") as template_file:
+                st.download_button(
+                    label="📄 Descargar Plantilla Excel",
+                    data=template_file,
+                    file_name="dynamiquote_productos.xlsx",
+                    mime="application/vnd.openxmlformats-officedocument.spreadsheetml.sheet",
+                    help="Descarga la plantilla, llénala y súbela de vuelta"
+                )
+        except FileNotFoundError:
+            st.error("❌ Plantilla no encontrada. Contacta al administrador.")
+    
+    with col_upload:
+        uploaded_file = st.file_uploader(
+            "📁 Subir Excel completado",
+            type=['xlsx'],
+            help="Solo archivos .xlsx",
+            key="excel_upload"
+        )
+    
+    if uploaded_file is not None:
+        # Procesar archivo
+        with st.spinner("Procesando Excel..."):
+            import_result = import_excel_file(
+                uploaded_file.getvalue(),
+                uploaded_file.name,
+                existing_lines=st.session_state.lines
+            )
+        
+        if not import_result["success"]:
+            st.error(import_result["error"])
+            if import_result["validation_report"]:
+                with st.expander("Ver detalles de errores"):
+                    st.markdown(format_validation_report(import_result["validation_report"]))
+        else:
+            # Mostrar resumen
+            report = import_result["validation_report"]
+            col1, col2, col3 = st.columns(3)
+            col1.metric("✅ Filas válidas", report["valid_rows"])
+            col2.metric("❌ Filas con errores", report["error_rows"])
+            col3.metric("📦 Total procesado", report["total_rows"])
+            
+            # Mostrar duplicados detectados
+            if import_result["duplicates"]:
+                st.warning(f"⚠️ Se detectaron {len(import_result['duplicates'])} posibles duplicados:")
+                with st.expander("Ver duplicados detectados"):
+                    for dup in import_result["duplicates"]:
+                        st.markdown(f"- **{dup['new_description']}** similar a *{dup['existing_description']}* ({dup['similarity']}%)")
+            
+            # Preview editable
+            st.subheader("📋 Preview - Editar antes de importar")
+            st.caption("Puedes editar las líneas antes de confirmar. Los precios ya incluyen margen del 35%.")
+            
+            # Convertir a DataFrame para edición
+            preview_data = []
+            for line in import_result["lines"]:
+                preview_data.append({
+                    "Descripción": line["description_original"],
+                    "SKU": line["sku"],
+                    "Costo Unit": line["cost_unit"],
+                    "Precio Unit": line["final_price_unit"],
+                    "Margen %": line["margin_pct"],
+                    "Tipo": line["line_type"],
+                    "Origen": line["service_origin"],
+                    "Estrategia": line["strategy"]
+                })
+            
+            preview_df = pd.DataFrame(preview_data)
+            
+            edited_df = st.data_editor(
+                preview_df,
+                column_config={
+                    "Descripción": st.column_config.TextColumn(width="large"),
+                    "SKU": st.column_config.TextColumn(width="medium"),
+                    "Costo Unit": st.column_config.NumberColumn(min_value=0, format="$%.2f"),
+                    "Precio Unit": st.column_config.NumberColumn(min_value=0, format="$%.2f"),
+                    "Margen %": st.column_config.NumberColumn(min_value=0, max_value=99, format="%.1f%%"),
+                    "Tipo": st.column_config.SelectboxColumn(options=["product", "service"]),
+                    "Origen": st.column_config.SelectboxColumn(
+                        options=["producto", "refacciones", "póliza", "implementación", "soporte", "capacitación", "otro"]
+                    ),
+                    "Estrategia": st.column_config.SelectboxColumn(
+                        options=["penetration", "defense", "upsell", "renewal"]
+                    )
+                },
+                num_rows="dynamic",
+                use_container_width=True,
+                key="preview_editor"
+            )
+            
+            # Botones de acción
+            col_confirm, col_cancel = st.columns(2)
+            
+            with col_confirm:
+                if st.button("✅ Confirmar e Importar Todo", type="primary", use_container_width=True):
+                    # Aplicar ediciones a las líneas originales
+                    for idx, line in enumerate(import_result["lines"]):
+                        if idx < len(edited_df):
+                            line["description_original"] = edited_df.iloc[idx]["Descripción"]
+                            line["sku"] = edited_df.iloc[idx]["SKU"]
+                            line["cost_unit"] = float(edited_df.iloc[idx]["Costo Unit"])
+                            line["final_price_unit"] = float(edited_df.iloc[idx]["Precio Unit"])
+                            line["margin_pct"] = float(edited_df.iloc[idx]["Margen %"])
+                            line["line_type"] = edited_df.iloc[idx]["Tipo"]
+                            line["service_origin"] = edited_df.iloc[idx]["Origen"]
+                            line["strategy"] = edited_df.iloc[idx]["Estrategia"]
+                    
+                    # Aplicar corrección ortográfica a todas las líneas
+                    for line in import_result["lines"]:
+                        corrected_desc, corrections = suggest_description_fix(line["description_original"])
+                        line["description_final"] = corrected_desc
+                        line["description_corrections"] = ", ".join(corrections)
+                    
+                    # Agregar a session state
+                    st.session_state.lines.extend(import_result["lines"])
+                    
+                    # Guardar archivo para auditoría
+                    file_id = import_result["import_batch_id"]
+                    quote_id = st.session_state.quote_id
+                    success_file, msg_file = save_import_file(
+                        file_id=file_id,
+                        quote_id=quote_id,
+                        filename=uploaded_file.name,
+                        uploaded_at=datetime.now(UTC).isoformat(),
+                        file_data=uploaded_file.getvalue(),
+                        file_size=import_result["file_info"]["size"],
+                        rows_imported=import_result["file_info"]["rows_imported"],
+                        rows_errors=import_result["file_info"]["rows_errors"]
+                    )
+                    
+                    st.success(f"✅ {len(import_result['lines'])} líneas importadas correctamente")
+                    st.rerun()
+            
+            with col_cancel:
+                if st.button("❌ Cancelar Import", use_container_width=True):
+                    st.rerun()
+
+st.divider()
+
 with st.form("add_line", clear_on_submit=True):
     col1, col2, col3 = st.columns(3)
 
@@ -1261,7 +1419,9 @@ if st.session_state.lines:
                 float(row["margin_pct"]) if row["margin_pct"] is not None else None,
                 str(row["strategy"]),
                 str(row["warnings"]),
-                str(row["created_at"])
+                str(row["created_at"]),
+                str(row.get("import_source", "manual")),
+                str(row.get("import_batch_id", "")) if row.get("import_batch_id") else None
             ))
         
         # Guardar usando función segura

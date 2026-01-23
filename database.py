@@ -165,7 +165,22 @@ def init_database():
             margin_pct DECIMAL(5,2),
             strategy TEXT,
             warnings TEXT,
-            created_at TIMESTAMP
+            created_at TIMESTAMP,
+            import_source TEXT DEFAULT 'manual',
+            import_batch_id TEXT
+        )
+        """
+        
+        import_files_table = """
+        CREATE TABLE IF NOT EXISTS import_files (
+            file_id TEXT PRIMARY KEY,
+            quote_id TEXT REFERENCES quotes(quote_id),
+            filename TEXT NOT NULL,
+            uploaded_at TIMESTAMP NOT NULL,
+            file_data BYTEA NOT NULL,
+            file_size INTEGER,
+            rows_imported INTEGER,
+            rows_errors INTEGER
         )
         """
     else:
@@ -200,7 +215,23 @@ def init_database():
             margin_pct REAL,
             strategy TEXT,
             warnings TEXT,
-            created_at TEXT
+            created_at TEXT,
+            import_source TEXT DEFAULT 'manual',
+            import_batch_id TEXT
+        )
+        """
+        
+        import_files_table = """
+        CREATE TABLE IF NOT EXISTS import_files (
+            file_id TEXT PRIMARY KEY,
+            quote_id TEXT,
+            filename TEXT NOT NULL,
+            uploaded_at TEXT NOT NULL,
+            file_data BLOB NOT NULL,
+            file_size INTEGER,
+            rows_imported INTEGER,
+            rows_errors INTEGER,
+            FOREIGN KEY (quote_id) REFERENCES quotes(quote_id)
         )
         """
     
@@ -208,9 +239,47 @@ def init_database():
         with get_cursor() as cur:
             cur.execute(quotes_table)
             cur.execute(quote_lines_table)
+            cur.execute(import_files_table)
         return True, "Base de datos inicializada correctamente"
     except Exception as e:
         return False, f"Error inicializando base de datos: {e}"
+
+
+def save_import_file(file_id: str, quote_id: str, filename: str, uploaded_at: str, 
+                     file_data: bytes, file_size: int, rows_imported: int, rows_errors: int) -> tuple[bool, str]:
+    """
+    Guarda archivo Excel importado para auditoría.
+    
+    Args:
+        file_id: UUID del archivo
+        quote_id: ID de la cotización asociada
+        filename: Nombre original del archivo
+        uploaded_at: Timestamp de carga
+        file_data: Datos binarios del archivo
+        file_size: Tamaño en bytes
+        rows_imported: Número de filas importadas exitosamente
+        rows_errors: Número de filas con errores
+    
+    Returns:
+        Tupla (success: bool, message: str)
+    """
+    try:
+        with get_cursor() as cur:
+            if is_postgres():
+                cur.execute(
+                    """INSERT INTO import_files 
+                       (file_id, quote_id, filename, uploaded_at, file_data, file_size, rows_imported, rows_errors)
+                       VALUES (%s, %s, %s, %s, %s, %s, %s, %s)""",
+                    (file_id, quote_id, filename, uploaded_at, file_data, file_size, rows_imported, rows_errors)
+                )
+            else:
+                cur.execute(
+                    "INSERT INTO import_files VALUES (?,?,?,?,?,?,?,?)",
+                    (file_id, quote_id, filename, uploaded_at, file_data, file_size, rows_imported, rows_errors)
+                )
+        return True, "✅ Archivo guardado para auditoría"
+    except Exception as e:
+        return False, f"❌ Error guardando archivo: {e}"
 
 
 def save_quote(quote_data: tuple, lines_data: list) -> tuple[bool, str]:
@@ -219,7 +288,7 @@ def save_quote(quote_data: tuple, lines_data: list) -> tuple[bool, str]:
     
     Args:
         quote_data: Tupla con datos de la cotización (11 campos: quote_id, quote_group_id, version, parent_quote_id, created_at, status, total_cost, total_revenue, gross_profit, avg_margin, playbook_name)
-        lines_data: Lista de tuplas con datos de líneas (14 campos cada una)
+        lines_data: Lista de tuplas con datos de líneas (16 campos cada una: incluye import_source, import_batch_id)
     
     Returns:
         Tupla (success: bool, message: str)
@@ -241,8 +310,9 @@ def save_quote(quote_data: tuple, lines_data: list) -> tuple[bool, str]:
                         """INSERT INTO quote_lines 
                            (line_id, quote_id, sku, description_original, description_final,
                             description_corrections, line_type, service_origin, cost_unit,
-                            final_price_unit, margin_pct, strategy, warnings, created_at)
-                           VALUES (%s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s)""",
+                            final_price_unit, margin_pct, strategy, warnings, created_at,
+                            import_source, import_batch_id)
+                           VALUES (%s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s)""",
                         line
                     )
             else:
@@ -253,7 +323,7 @@ def save_quote(quote_data: tuple, lines_data: list) -> tuple[bool, str]:
                 
                 for line in lines_data:
                     cur.execute(
-                        "INSERT INTO quote_lines VALUES (?,?,?,?,?,?,?,?,?,?,?,?,?,?)",
+                        "INSERT INTO quote_lines VALUES (?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?)",
                         line
                     )
         
@@ -389,7 +459,8 @@ def load_lines_for_quote(quote_id: str):
                 cur.execute("""
                     SELECT line_id, quote_id, sku, description_original, description_final,
                            description_corrections, line_type, service_origin, cost_unit,
-                           final_price_unit, margin_pct, strategy, warnings, created_at
+                           final_price_unit, margin_pct, strategy, warnings, created_at,
+                           import_source, import_batch_id
                     FROM quote_lines
                     WHERE quote_id = %s
                 """, (quote_id,))
@@ -397,14 +468,16 @@ def load_lines_for_quote(quote_id: str):
                 cur.execute("""
                     SELECT line_id, quote_id, sku, description_original, description_final,
                            description_corrections, line_type, service_origin, cost_unit,
-                           final_price_unit, margin_pct, strategy, warnings, created_at
+                           final_price_unit, margin_pct, strategy, warnings, created_at,
+                           import_source, import_batch_id
                     FROM quote_lines
                     WHERE quote_id = ?
                 """, (quote_id,))
             
             columns = ["line_id", "quote_id", "sku", "description_original", "description_final",
                       "description_corrections", "line_type", "service_origin", "cost_unit",
-                      "final_price_unit", "margin_pct", "strategy", "warnings", "created_at"]
+                      "final_price_unit", "margin_pct", "strategy", "warnings", "created_at",
+                      "import_source", "import_batch_id"]
             return pd.DataFrame(cur.fetchall(), columns=columns)
     except Exception as e:
         st.error(f"Error cargando líneas: {e}")
