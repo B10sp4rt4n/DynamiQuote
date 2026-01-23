@@ -1126,17 +1126,18 @@ with st.expander("📥 O importa múltiples líneas desde Excel", expanded=False
             
             # Preview editable
             st.subheader("📋 Preview - Editar antes de importar")
-            st.caption("Puedes editar las líneas antes de confirmar. Los precios ya incluyen margen del 35%.")
+            st.caption("Edita SKU, Descripción, Cantidad, Margen, Precio. Los cambios se aplican antes de confirmar.")
             
             # Convertir a DataFrame para edición
             preview_data = []
             for line in import_result["lines"]:
                 preview_data.append({
-                    "Descripción": line["description_original"],
                     "SKU": line["sku"],
+                    "Descripción": line["description_original"],
+                    "Cantidad": line.get("_cantidad", 1),
                     "Costo Unit": line["cost_unit"],
-                    "Precio Unit": line["final_price_unit"],
                     "Margen %": line["margin_pct"],
+                    "Precio Unit": line["final_price_unit"],
                     "Tipo": line["line_type"],
                     "Origen": line["service_origin"],
                     "Estrategia": line["strategy"]
@@ -1147,11 +1148,12 @@ with st.expander("📥 O importa múltiples líneas desde Excel", expanded=False
             edited_df = st.data_editor(
                 preview_df,
                 column_config={
-                    "Descripción": st.column_config.TextColumn(width="large"),
-                    "SKU": st.column_config.TextColumn(width="medium"),
-                    "Costo Unit": st.column_config.NumberColumn(min_value=0, format="$%.2f"),
-                    "Precio Unit": st.column_config.NumberColumn(min_value=0, format="$%.2f"),
-                    "Margen %": st.column_config.NumberColumn(min_value=0, max_value=99, format="%.1f%%"),
+                    "SKU": st.column_config.TextColumn(width="medium", help="SKU del producto"),
+                    "Descripción": st.column_config.TextColumn(width="large", help="Descripción editable"),
+                    "Cantidad": st.column_config.NumberColumn(min_value=1, format="%d", help="Cantidad a cotizar"),
+                    "Costo Unit": st.column_config.NumberColumn(min_value=0, format="$%.2f", help="Costo unitario"),
+                    "Margen %": st.column_config.NumberColumn(min_value=0, max_value=99, format="%.1f%%", help="Margen objetivo"),
+                    "Precio Unit": st.column_config.NumberColumn(min_value=0, format="$%.2f", help="Precio de venta unitario"),
                     "Tipo": st.column_config.SelectboxColumn(options=["product", "service"]),
                     "Origen": st.column_config.SelectboxColumn(
                         options=["producto", "refacciones", "póliza", "implementación", "soporte", "capacitación", "otro"]
@@ -1161,7 +1163,7 @@ with st.expander("📥 O importa múltiples líneas desde Excel", expanded=False
                     )
                 },
                 num_rows="dynamic",
-                use_container_width=True,
+                width="stretch",
                 key="preview_editor"
             )
             
@@ -1169,15 +1171,16 @@ with st.expander("📥 O importa múltiples líneas desde Excel", expanded=False
             col_confirm, col_cancel = st.columns(2)
             
             with col_confirm:
-                if st.button("✅ Confirmar e Importar Todo", type="primary", use_container_width=True):
+                if st.button("✅ Confirmar e Importar Todo", type="primary", width="stretch"):
                     # Aplicar ediciones a las líneas originales
                     for idx, line in enumerate(import_result["lines"]):
                         if idx < len(edited_df):
-                            line["description_original"] = edited_df.iloc[idx]["Descripción"]
                             line["sku"] = edited_df.iloc[idx]["SKU"]
+                            line["description_original"] = edited_df.iloc[idx]["Descripción"]
+                            line["_cantidad"] = int(edited_df.iloc[idx]["Cantidad"])
                             line["cost_unit"] = float(edited_df.iloc[idx]["Costo Unit"])
-                            line["final_price_unit"] = float(edited_df.iloc[idx]["Precio Unit"])
                             line["margin_pct"] = float(edited_df.iloc[idx]["Margen %"])
+                            line["final_price_unit"] = float(edited_df.iloc[idx]["Precio Unit"])
                             line["line_type"] = edited_df.iloc[idx]["Tipo"]
                             line["service_origin"] = edited_df.iloc[idx]["Origen"]
                             line["strategy"] = edited_df.iloc[idx]["Estrategia"]
@@ -1209,7 +1212,7 @@ with st.expander("📥 O importa múltiples líneas desde Excel", expanded=False
                     st.rerun()
             
             with col_cancel:
-                if st.button("❌ Cancelar Import", use_container_width=True):
+                if st.button("❌ Cancelar Import", width="stretch"):
                     st.rerun()
 
 st.divider()
