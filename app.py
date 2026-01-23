@@ -1126,7 +1126,7 @@ with st.expander("📥 O importa múltiples líneas desde Excel", expanded=False
             
             # Preview editable
             st.subheader("📋 Preview - Editar antes de importar")
-            st.caption("Edita SKU, Descripción, Cantidad, Margen, Precio. Los cambios se aplican antes de confirmar.")
+            st.info("💡 **Edita los campos y al confirmar se recalcularán automáticamente:** Si cambias Costo+Precio→Recalcula Margen | Si cambias Costo+Margen→Recalcula Precio")
             
             # Convertir a DataFrame para edición
             preview_data = []
@@ -1135,9 +1135,9 @@ with st.expander("📥 O importa múltiples líneas desde Excel", expanded=False
                     "SKU": line["sku"],
                     "Descripción": line["description_original"],
                     "Cantidad": line.get("_cantidad", 1),
-                    "Costo Unit": line["cost_unit"],
-                    "Margen %": line["margin_pct"],
-                    "Precio Unit": line["final_price_unit"],
+                    "Costo": line["cost_unit"],
+                    "Margen%": line["margin_pct"],
+                    "Precio": line["final_price_unit"],
                     "Tipo": line["line_type"],
                     "Origen": line["service_origin"],
                     "Estrategia": line["strategy"]
@@ -1148,22 +1148,58 @@ with st.expander("📥 O importa múltiples líneas desde Excel", expanded=False
             edited_df = st.data_editor(
                 preview_df,
                 column_config={
-                    "SKU": st.column_config.TextColumn(width="medium", help="SKU del producto"),
-                    "Descripción": st.column_config.TextColumn(width="large", help="Descripción editable"),
-                    "Cantidad": st.column_config.NumberColumn(min_value=1, format="%d", help="Cantidad a cotizar"),
-                    "Costo Unit": st.column_config.NumberColumn(min_value=0, format="$%.2f", help="Costo unitario"),
-                    "Margen %": st.column_config.NumberColumn(min_value=0, max_value=99, format="%.1f%%", help="Margen objetivo"),
-                    "Precio Unit": st.column_config.NumberColumn(min_value=0, format="$%.2f", help="Precio de venta unitario"),
-                    "Tipo": st.column_config.SelectboxColumn(options=["product", "service"]),
+                    "SKU": st.column_config.TextColumn(
+                        width="medium",
+                        help="Edita el SKU si es necesario",
+                        disabled=False
+                    ),
+                    "Descripción": st.column_config.TextColumn(
+                        width="large",
+                        help="Edita la descripción del producto",
+                        disabled=False
+                    ),
+                    "Cantidad": st.column_config.NumberColumn(
+                        min_value=1,
+                        format="%d",
+                        help="Cantidad a cotizar",
+                        disabled=False
+                    ),
+                    "Costo": st.column_config.NumberColumn(
+                        min_value=0,
+                        format="$%.2f",
+                        help="Costo unitario (editable)",
+                        disabled=False
+                    ),
+                    "Margen%": st.column_config.NumberColumn(
+                        min_value=0,
+                        max_value=99,
+                        format="%.1f",
+                        help="Margen % (editable)",
+                        disabled=False
+                    ),
+                    "Precio": st.column_config.NumberColumn(
+                        min_value=0,
+                        format="$%.2f",
+                        help="Precio unitario (editable)",
+                        disabled=False
+                    ),
+                    "Tipo": st.column_config.SelectboxColumn(
+                        options=["product", "service"],
+                        disabled=False
+                    ),
                     "Origen": st.column_config.SelectboxColumn(
-                        options=["producto", "refacciones", "póliza", "implementación", "soporte", "capacitación", "otro"]
+                        options=["producto", "refacciones", "póliza", "implementación", "soporte", "capacitación", "otro"],
+                        disabled=False
                     ),
                     "Estrategia": st.column_config.SelectboxColumn(
-                        options=["penetration", "defense", "upsell", "renewal"]
+                        options=["penetration", "defense", "upsell", "renewal"],
+                        disabled=False
                     )
                 },
                 num_rows="dynamic",
-                width="stretch",
+                use_container_width=True,
+                hide_index=False,
+                disabled=False,
                 key="preview_editor"
             )
             
@@ -1189,9 +1225,9 @@ with st.expander("📥 O importa múltiples líneas desde Excel", expanded=False
                             line["strategy"] = str(edited_df.iloc[idx]["Estrategia"])
                             
                             # Obtener valores editados
-                            costo = float(edited_df.iloc[idx]["Costo Unit"])
-                            margen = float(edited_df.iloc[idx]["Margen %"])
-                            precio = float(edited_df.iloc[idx]["Precio Unit"])
+                            costo = float(edited_df.iloc[idx]["Costo"])
+                            margen = float(edited_df.iloc[idx]["Margen%"])
+                            precio = float(edited_df.iloc[idx]["Precio"])
                             
                             # Recalcular coherencia: si precio y costo son válidos, calcular margen real
                             if costo > 0 and precio > 0:
