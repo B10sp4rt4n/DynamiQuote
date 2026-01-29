@@ -9,6 +9,48 @@ from excel_import import import_excel_file, format_validation_report
 import os
 
 # =========================
+# Playbooks de Evaluación
+# =========================
+PLAYBOOKS = {
+    "General": {
+        "description": "Evaluación estándar para cotizaciones generales",
+        "green": 0.35,
+        "yellow": 0.25,
+        "red": 0.25
+    },
+    "MSP": {
+        "description": "Managed Service Provider - Servicios recurrentes",
+        "green": 0.30,
+        "yellow": 0.20,
+        "red": 0.20
+    },
+    "SaaS": {
+        "description": "Software as a Service - Productos digitales",
+        "green": 0.40,
+        "yellow": 0.30,
+        "red": 0.30
+    },
+    "Construcción": {
+        "description": "Proyectos de construcción e infraestructura",
+        "green": 0.25,
+        "yellow": 0.18,
+        "red": 0.18
+    },
+    "Gobierno": {
+        "description": "Licitaciones y contratos gubernamentales",
+        "green": 0.20,
+        "yellow": 0.15,
+        "red": 0.15
+    },
+    "Penetración": {
+        "description": "Estrategia agresiva de entrada al mercado",
+        "green": 0.15,
+        "yellow": 0.10,
+        "red": 0.10
+    }
+}
+
+# =========================
 # Configuración
 # =========================
 st.set_page_config(page_title="Quote Intelligence MVP", layout="wide")
@@ -764,24 +806,28 @@ if not hist_compare.empty:
                 
                 with col_chart1:
                     st.markdown("**Ingreso vs Utilidad**")
-                    fig1, ax1 = plt.subplots(figsize=(6, 4))
+                    fig1, (ax1a, ax1b) = plt.subplots(1, 2, figsize=(8, 4))
                     
-                    x_labels = [f"v{v1}", f"v{v2}"]
-                    x_pos = range(len(x_labels))
-                    width = 0.35
+                    # Gráfico de pastel para v1
+                    ax1a.pie(
+                        [float(q1["total_cost"]), float(q1["gross_profit"])],
+                        labels=["Costo", "Utilidad"],
+                        autopct="%1.1f%%",
+                        startangle=90,
+                        colors=["#ff7f0e", "#2ca02c"]
+                    )
+                    ax1a.set_title(f"v{v1}: ${float(q1['total_revenue']):,.0f}")
                     
-                    ax1.bar([p - width/2 for p in x_pos], 
-                           [float(q1["total_revenue"]), float(q2["total_revenue"])], 
-                           width, label="Ingreso", color="#1f77b4")
-                    ax1.bar([p + width/2 for p in x_pos], 
-                           [float(q1["gross_profit"]), float(q2["gross_profit"])], 
-                           width, label="Utilidad", color="#2ca02c")
+                    # Gráfico de pastel para v2
+                    ax1b.pie(
+                        [float(q2["total_cost"]), float(q2["gross_profit"])],
+                        labels=["Costo", "Utilidad"],
+                        autopct="%1.1f%%",
+                        startangle=90,
+                        colors=["#ff7f0e", "#2ca02c"]
+                    )
+                    ax1b.set_title(f"v{v2}: ${float(q2['total_revenue']):,.0f}")
                     
-                    ax1.set_xticks(x_pos)
-                    ax1.set_xticklabels(x_labels)
-                    ax1.set_ylabel("Monto ($)")
-                    ax1.set_title("Ingreso vs Utilidad por Versión")
-                    ax1.legend()
                     plt.tight_layout()
                     st.pyplot(fig1)
                 
@@ -1036,23 +1082,64 @@ if st.session_state.pending_line:
     for correction in pending["corrections"]:
         st.caption(f"  • {correction}")
     
-    col_a, col_b = st.columns(2)
-    with col_a:
-        if st.button("✅ Usar descripción corregida", type="primary", width="stretch"):
-            # Usar versión corregida
-            pending["description_final"] = pending["corrected_desc"]
-            st.session_state.lines.append(pending)
-            st.session_state.pending_line = None
-            st.success("✅ Línea agregada con descripción corregida")
-            st.rerun()
+    st.divider()
+    st.subheader("✏️ Editar antes de consolidar")
     
-    with col_b:
-        if st.button("❌ Usar descripción original", width="stretch"):
-            # Usar versión original
-            pending["description_final"] = pending["description_input"]
-            st.session_state.lines.append(pending)
+    with st.form("confirm_line"):
+        # SKU editable
+        edit_sku = st.text_input(
+            "SKU (editable)",
+            value=pending["sku"],
+            help="Puedes modificar el SKU antes de agregar la línea"
+        )
+        
+        # Descripción editable - permitir elegir qué versión usar como base
+        desc_option = st.radio(
+            "Selecciona la base para la descripción:",
+            ["Usar versión corregida", "Usar versión original"],
+            horizontal=True
+        )
+        
+        if desc_option == "Usar versión corregida":
+            default_desc = pending["corrected_desc"]
+        else:
+            default_desc = pending["description_input"]
+        
+        edit_description = st.text_area(
+            "Descripción final (editable)",
+            value=default_desc,
+            height=100,
+            help="Puedes modificar la descripción antes de agregar la línea"
+        )
+        
+        col_a, col_b, col_c = st.columns([2, 2, 1])
+        with col_a:
+            confirm_btn = st.form_submit_button("✅ Consolidar línea", type="primary")
+        with col_b:
+            cancel_btn = st.form_submit_button("❌ Cancelar")
+        
+        if confirm_btn:
+            if not edit_description or not edit_description.strip():
+                st.error("❌ La descripción no puede estar vacía")
+            elif not edit_sku or not edit_sku.strip():
+                st.error("❌ El SKU no puede estar vacío")
+            else:
+                # Verificar si el SKU editado ya existe
+                existing_skus = [line["sku"] for line in st.session_state.lines]
+                if edit_sku != pending["sku"] and edit_sku in existing_skus:
+                    st.error(f"❌ El SKU '{edit_sku}' ya existe en esta cotización")
+                else:
+                    # Actualizar datos editados
+                    pending["sku"] = edit_sku
+                    pending["description_final"] = edit_description
+                    st.session_state.lines.append(pending)
+                    st.session_state.pending_line = None
+                    st.success("✅ Línea consolidada exitosamente")
+                    st.rerun()
+        
+        if cancel_btn:
             st.session_state.pending_line = None
-            st.success("✅ Línea agregada con descripción original")
+            st.info("❌ Línea descartada")
             st.rerun()
     
     st.divider()
@@ -1402,17 +1489,22 @@ if st.session_state.lines:
     st.subheader("📊 Cotización en curso")
 
     df = pd.DataFrame(st.session_state.lines)
+    
+    # Convertir a numérico para evitar errores
+    df["cost_unit"] = pd.to_numeric(df["cost_unit"], errors='coerce').fillna(0)
+    df["final_price_unit"] = pd.to_numeric(df["final_price_unit"], errors='coerce').fillna(0)
+    df["margin_pct"] = pd.to_numeric(df["margin_pct"], errors='coerce').fillna(0)
 
     total_cost = df["cost_unit"].sum()
     total_revenue = df["final_price_unit"].sum()
     gross_profit = total_revenue - total_cost
-    avg_margin = round(df["margin_pct"].mean(), 2)
+    gross_margin_pct = round((gross_profit / total_revenue * 100) if total_revenue > 0 else 0, 2)
 
     colA, colB, colC, colD = st.columns(4)
     colA.metric("Ingreso total", f"${round(total_revenue,2)}")
     colB.metric("Costo total", f"${round(total_cost,2)}")
     colC.metric("Utilidad bruta", f"${round(gross_profit,2)}")
-    colD.metric("Margen promedio %", avg_margin)
+    colD.metric("Margen bruto %", gross_margin_pct)
 
     st.dataframe(
         df[[
@@ -1440,10 +1532,12 @@ if st.session_state.lines:
         st.markdown("**Aportación por componente**")
         comp_df = df.groupby("service_origin")["final_price_unit"].sum().reset_index()
         fig1, ax1 = plt.subplots(figsize=(6, 4))
-        ax1.bar(comp_df["service_origin"], comp_df["final_price_unit"])
-        ax1.set_xticks(range(len(comp_df)))
-        ax1.set_xticklabels(comp_df["service_origin"], rotation=30, ha='right')
-        ax1.set_ylabel("Monto total")
+        ax1.pie(
+            comp_df["final_price_unit"],
+            labels=comp_df["service_origin"],
+            autopct="%1.1f%%",
+            startangle=90
+        )
         ax1.set_title("Aportación total por componente")
         plt.tight_layout()
         st.pyplot(fig1)
