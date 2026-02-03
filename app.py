@@ -1764,8 +1764,8 @@ with tab_aup:
     
     if "aup_context" not in st.session_state:
         st.session_state.aup_context = {
-            "tenant_id": "",
-            "user_id": "",
+            "tenant_id": "default-tenant",
+            "user_id": "default-user",
             "tenant_is_active": True,
             "user_has_permission": True,
         }
@@ -1776,28 +1776,37 @@ with tab_aup:
     if "aup_derived_id" not in st.session_state:
         st.session_state.aup_derived_id = None
 
+    # Nota informativa sobre multitenancy
+    st.info("ℹ️ **Nota:** El sistema multitenancy está desactivado. Los campos tenant_id y user_id son opcionales con valores por defecto.")
+
     col_ctx1, col_ctx2, col_ctx3, col_ctx4 = st.columns([2, 2, 1, 1])
     with col_ctx1:
         st.session_state.aup_context["tenant_id"] = st.text_input(
-            "tenant_id",
-            value=st.session_state.aup_context.get("tenant_id", ""),
-            placeholder="tenant-001",
+            "tenant_id (opcional)",
+            value=st.session_state.aup_context.get("tenant_id", "default-tenant"),
+            placeholder="default-tenant",
+            help="Sistema multitenancy no activo"
         )
     with col_ctx2:
         st.session_state.aup_context["user_id"] = st.text_input(
-            "user_id",
-            value=st.session_state.aup_context.get("user_id", ""),
-            placeholder="user-001",
+            "user_id (opcional)",
+            value=st.session_state.aup_context.get("user_id", "default-user"),
+            placeholder="default-user",
+            help="Sistema multitenancy no activo"
         )
     with col_ctx3:
         st.session_state.aup_context["tenant_is_active"] = st.checkbox(
             "tenant activo",
             value=st.session_state.aup_context.get("tenant_is_active", True),
+            disabled=True,
+            help="Siempre activo (multitenancy desactivado)"
         )
     with col_ctx4:
         st.session_state.aup_context["user_has_permission"] = st.checkbox(
             "permiso",
             value=st.session_state.aup_context.get("user_has_permission", True),
+            disabled=True,
+            help="Siempre con permiso (multitenancy desactivado)"
         )
 
     context = st.session_state.aup_context

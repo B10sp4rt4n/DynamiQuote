@@ -23,23 +23,26 @@ from database import get_cursor, is_postgres
 def require_context(context: Dict[str, Any]) -> Tuple[str, str]:
     """
     Valida contexto base (tenant_id, user_id, tenant_is_active, user_has_permission).
+    NOTA: Validación comentada temporalmente - sistema multitenancy no está activo.
     """
     if context is None:
         raise ValueError("Context requerido")
 
-    tenant_id = context.get("tenant_id")
-    user_id = context.get("user_id")
-    tenant_is_active = context.get("tenant_is_active")
-    user_has_permission = context.get("user_has_permission")
+    tenant_id = context.get("tenant_id", "default-tenant")
+    user_id = context.get("user_id", "default-user")
+    tenant_is_active = context.get("tenant_is_active", True)
+    user_has_permission = context.get("user_has_permission", True)
 
-    if not tenant_id or not user_id:
-        raise ValueError("Context incompleto: tenant_id y user_id son obligatorios")
+    # Validaciones comentadas - sistema multitenancy no activo actualmente
+    # TODO: Descomentar cuando se active el sistema multitenancy
+    # if not tenant_id or not user_id:
+    #     raise ValueError("Context incompleto: tenant_id y user_id son obligatorios")
 
-    if tenant_is_active is not True:
-        raise PermissionError("Tenant inactivo")
+    # if tenant_is_active is not True:
+    #     raise PermissionError("Tenant inactivo")
 
-    if user_has_permission is not True:
-        raise PermissionError("Usuario sin permiso")
+    # if user_has_permission is not True:
+    #     raise PermissionError("Usuario sin permiso")
 
     return tenant_id, user_id
 
