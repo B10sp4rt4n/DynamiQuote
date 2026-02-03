@@ -1858,32 +1858,32 @@ with tab_aup:
             selected_label = st.selectbox("Selecciona item", list(options.keys()))
             selected_item = options[selected_label]
 
-        with st.form("aup_edit_item"):
-            quantity = st.number_input("Cantidad", min_value=0.01, value=float(selected_item.get("quantity") or 1))
-            description = st.text_input("Descripción", value=selected_item.get("description") or "")
-            price_unit = st.number_input(
-                "Precio unitario (opcional)",
-                min_value=0.0,
-                value=float(selected_item.get("price_unit") or 0.0),
-            )
-            component_type = st.text_input("Tipo de componente", value=selected_item.get("component_type") or "")
-            submitted = st.form_submit_button("Actualizar item")
-
-        if submitted:
-            try:
-                update_proposal_item(
-                    selected_item["item_id"],
-                    {
-                        "quantity": quantity,
-                        "description": description,
-                        "price_unit": price_unit if price_unit > 0 else None,
-                        "component_type": component_type or None,
-                    },
-                    context,
+            with st.form("aup_edit_item"):
+                quantity = st.number_input("Cantidad", min_value=0.01, value=float(selected_item.get("quantity") or 1))
+                description = st.text_input("Descripción", value=selected_item.get("description") or "")
+                price_unit = st.number_input(
+                    "Precio unitario (opcional)",
+                    min_value=0.0,
+                    value=float(selected_item.get("price_unit") or 0.0),
                 )
-                st.success("✅ Item actualizado")
-            except Exception as exc:
-                st.error(f"❌ {exc}")
+                component_type = st.text_input("Tipo de componente", value=selected_item.get("component_type") or "")
+                submitted = st.form_submit_button("Actualizar item")
+
+            if submitted:
+                try:
+                    update_proposal_item(
+                        selected_item["item_id"],
+                        {
+                            "quantity": quantity,
+                            "description": description,
+                            "price_unit": price_unit if price_unit > 0 else None,
+                            "component_type": component_type or None,
+                        },
+                        context,
+                    )
+                    st.success("✅ Item actualizado")
+                except Exception as exc:
+                    st.error(f"❌ {exc}")
 
         else:
             st.info("No hay items todavía")
