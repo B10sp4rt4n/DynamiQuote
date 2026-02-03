@@ -753,7 +753,8 @@ def get_quote_lines_full(quote_id: str) -> list:
                 cur.execute("""
                     SELECT line_id, quote_id, sku, quantity, description_original, description_final, 
                            description_corrections, line_type, service_origin, cost_unit, 
-                           final_price_unit, margin_pct, strategy, warnings, created_at
+                           final_price_unit, margin_pct, strategy, warnings, created_at,
+                           import_source, import_batch_id
                     FROM quote_lines
                     WHERE quote_id = %s
                 """, (quote_id,))
@@ -761,7 +762,8 @@ def get_quote_lines_full(quote_id: str) -> list:
                 cur.execute("""
                     SELECT line_id, quote_id, sku, quantity, description_original, description_final, 
                            description_corrections, line_type, service_origin, cost_unit, 
-                           final_price_unit, margin_pct, strategy, warnings, created_at
+                           final_price_unit, margin_pct, strategy, warnings, created_at,
+                           import_source, import_batch_id
                     FROM quote_lines
                     WHERE quote_id = ?
                 """, (quote_id,))
