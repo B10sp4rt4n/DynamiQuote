@@ -1902,7 +1902,15 @@ with tab_aup:
             st.caption("Nodo integrado no disponible")
 
         st.subheader("🔒 Cierre formal")
-        if st.button("Cerrar propuesta AUP"):
+        
+        # Verificar si hay items antes de permitir cerrar
+        items_count = len(items) if items else 0
+        can_close = items_count > 0
+        
+        if not can_close:
+            st.warning("⚠️ No puedes cerrar una propuesta vacía. Importa un Excel o agrega items primero.")
+        
+        if st.button("Cerrar propuesta AUP", disabled=not can_close):
             try:
                 result = close_proposal(proposal_id, context)
                 st.success(f"✅ Propuesta cerrada. Hash: {result.get('hash')}")
