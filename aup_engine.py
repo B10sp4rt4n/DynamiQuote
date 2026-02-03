@@ -238,11 +238,21 @@ def import_excel(proposal_id: str, excel_file: bytes, context: Dict[str, Any]) -
     if errors:
         return {"success": False, "errors": errors, "imported": 0}
 
+    # Obtener el siguiente item_number inicial
     with get_cursor() as cur:
         _ensure_proposal_open(cur, proposal_id, tenant_id)
+        
+        result = _fetchone(
+            cur,
+            "SELECT MAX(item_number) as max_num FROM proposal_items WHERE proposal_id = %s AND tenant_id = %s",
+            "SELECT MAX(item_number) as max_num FROM proposal_items WHERE proposal_id = ? AND tenant_id = ?",
+            (proposal_id, tenant_id),
+        )
+        item_number = (result.get("max_num") or 0) + 1
 
-        item_number = 1
-        for row in parsed_rows:
+    # Procesar línea por línea, consolidando inputs y recalculando después de cada inserción
+    for row in parsed_rows:
+        with get_cursor() as cur:
             item_id = str(uuid.uuid4())
             subtotal_cost = row["quantity"] * row["cost_unit"]
             created_at = _now_iso()
@@ -283,9 +293,10 @@ def import_excel(proposal_id: str, excel_file: bytes, context: Dict[str, Any]) -
                     created_at,
                 ),
             )
-            item_number += 1
-
-    recalculate_integrated_node(proposal_id, context)
+        
+        # Recalcular nodo integrado después de cada línea para consolidar inputs y cálculos
+        recalculate_integrated_node(proposal_id, context)
+        item_number += 1
 
     return {"success": True, "errors": [], "imported": len(parsed_rows)}
 
