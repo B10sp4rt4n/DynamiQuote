@@ -626,60 +626,90 @@ def save_quote(quote_data: tuple, lines_data: list) -> tuple[bool, str]:
     
     Args:
         quote_data: Tupla con datos de la cotización (11 campos: quote_id, quote_group_id, version, parent_quote_id, created_at, status, total_cost, total_revenue, gross_profit, avg_margin, playbook_name)
-        lines_data: Lista de tuplas con datos de líneas (16 campos cada una: incluye import_source, import_batch_id)
+        lines_data: Lista de tuplas con datos de líneas (17 campos cada una: incluye import_source, import_batch_id)
     
     Returns:
         Tupla (success: bool, message: str)
     """
+    print(f"[DEBUG] save_quote: Recibidas {len(lines_data)} líneas para guardar")
+    
+    if not lines_data:
+        return False, "❌ Error: No hay líneas para guardar"
+    
     try:
         with get_cursor() as cur:
             # Insertar cotización
             if is_postgres():
+                print(f"[DEBUG] Guardando cotización en PostgreSQL: {quote_data[0]}")
                 cur.execute(
                     """INSERT INTO quotes 
                        (quote_id, quote_group_id, version, parent_quote_id, created_at, status, total_cost, total_revenue, gross_profit, avg_margin, playbook_name)
                        VALUES (%s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s)""",
                     quote_data
                 )
+                print(f"[DEBUG] Cotización guardada, insertando líneas...")
                 
                 # Insertar líneas
-                for line in lines_data:
-                    cur.execute(
-                        """INSERT INTO quote_lines 
-                           (line_id, quote_id, sku, quantity, description_original, description_final,
-                            description_corrections, line_type, service_origin, cost_unit,
-                            final_price_unit, margin_pct, strategy, warnings, created_at,
-                            import_source, import_batch_id)
-                           VALUES (%s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s)""",
-                        line
-                    )
+                lines_saved = 0
+                for idx, line in enumerate(lines_data):
+                    try:
+                        print(f"[DEBUG] Guardando línea {idx+1}/{len(lines_data)}: {line[2]}")
+                        cur.execute(
+                            """INSERT INTO quote_lines 
+                               (line_id, quote_id, sku, quantity, description_original, description_final,
+                                description_corrections, line_type, service_origin, cost_unit,
+                                final_price_unit, margin_pct, strategy, warnings, created_at,
+                                import_source, import_batch_id)
+                               VALUES (%s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s)""",
+                            line
+                        )
+                        lines_saved += 1
+                    except Exception as line_error:
+                        print(f"[ERROR] Error guardando línea {idx+1}: {line_error}")
+                        print(f"[ERROR] Datos de la línea: {line}")
+                        raise
+                print(f"[DEBUG] save_quote: Se guardaron {lines_saved} líneas en PostgreSQL")
             else:
+                print(f"[DEBUG] Guardando cotización en SQLite: {quote_data[0]}")
                 cur.execute(
                     "INSERT INTO quotes VALUES (?,?,?,?,?,?,?,?,?,?,?)",
                     quote_data
                 )
+                print(f"[DEBUG] Cotización guardada, insertando líneas...")
                 
-                for line in lines_data:
-                    cur.execute(
-                        "INSERT INTO quote_lines VALUES (?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?)",
-                        line
-                    )
+                lines_saved = 0
+                for idx, line in enumerate(lines_data):
+                    try:
+                        print(f"[DEBUG] Guardando línea {idx+1}/{len(lines_data)}: {line[2]}")
+                        cur.execute(
+                            "INSERT INTO quote_lines VALUES (?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?)",
+                            line
+                        )
+                        lines_saved += 1
+                    except Exception as line_error:
+                        print(f"[ERROR] Error guardando línea {idx+1}: {line_error}")
+                        print(f"[ERROR] Datos de la línea: {line}")
+                        raise
+                print(f"[DEBUG] save_quote: Se guardaron {lines_saved} líneas en SQLite")
         
-        return True, "✅ Propuesta guardada correctamente"
+        print(f"[DEBUG] ✅ Transacción completada exitosamente")
+        return True, f"✅ Propuesta guardada correctamente con {lines_saved} línea(s)"
     
     except Exception as e:
         error_msg = str(e)
+        print(f"[ERROR] save_quote falló: {error_msg}")
         if "duplicate" in error_msg.lower() or "unique" in error_msg.lower():
             return False, "❌ Error: Ya existe una cotización con este ID"
         return False, f"❌ Error al guardar: {error_msg}"
 
 
+@st.cache_data(ttl=30)  # Cache por 30 segundos
 def get_all_quotes() -> list:
     """Obtiene todas las cotizaciones ordenadas por grupo y versión."""
     try:
         with get_cursor() as cur:
             cur.execute("""
-                SELECT quote_id, quote_group_id, version, parent_quote_id, created_at, status, total_cost, total_revenue, gross_profit, avg_margin
+                SELECT quote_id, quote_group_id, version, parent_quote_id, created_at, status, total_cost, total_revenue, gross_profit, avg_margin, playbook_name
                 FROM quotes
                 ORDER BY quote_group_id, version DESC
             """)
@@ -689,6 +719,7 @@ def get_all_quotes() -> list:
         return []
 
 
+@st.cache_data(ttl=60)  # Cache por 1 minuto
 def get_quote_lines(quote_id: str) -> list:
     """Obtiene las líneas de una cotización específica."""
     try:
@@ -713,6 +744,7 @@ def get_quote_lines(quote_id: str) -> list:
         return []
 
 
+@st.cache_data(ttl=60)  # Cache por 1 minuto
 def get_quote_lines_full(quote_id: str) -> list:
     """Obtiene todas las líneas de una cotización con todos los campos."""
     try:
@@ -758,6 +790,7 @@ def get_latest_version(quote_group_id: str) -> int:
         return 0
 
 
+@st.cache_data(ttl=60)  # Cache por 1 minuto
 def load_versions_for_group(quote_group_id: str):
     """Carga todas las versiones de una oportunidad."""
     try:
@@ -788,6 +821,7 @@ def load_versions_for_group(quote_group_id: str):
         return pd.DataFrame()
 
 
+@st.cache_data(ttl=60)  # Cache por 1 minuto  
 def load_lines_for_quote(quote_id: str):
     """Carga todas las líneas de una cotización para comparación."""
     try:
