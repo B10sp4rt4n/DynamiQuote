@@ -104,6 +104,92 @@ def evaluate_net_health(net_margin_pct: Optional[float]) -> str:
 
 
 # =========================
+# Nodos de cálculo por item
+# =========================
+
+def calculate_item_node(item: Dict[str, Any]) -> Dict[str, Any]:
+    """
+    Calcula el nodo de cada item de forma independiente.
+    Cada línea es un nodo que se calcula por separado.
+    """
+    quantity = float(item.get("quantity", 0))
+    cost_unit = float(item.get("cost_unit", 0))
+    price_unit = item.get("price_unit")
+    
+    # Cálculos básicos del nodo
+    subtotal_cost = quantity * cost_unit
+    
+    node = {
+        "item_id": item.get("item_id"),
+        "item_number": item.get("item_number"),
+        "quantity": quantity,
+        "cost_unit": cost_unit,
+        "subtotal_cost": subtotal_cost,
+        "price_unit": None,
+        "subtotal_price": None,
+        "gross_profit": None,
+        "margin_pct": None,
+        "health": "undefined"
+    }
+    
+    # Si tiene precio, calcular métricas de rentabilidad
+    if price_unit is not None and float(price_unit) > 0:
+        price_unit = float(price_unit)
+        subtotal_price = quantity * price_unit
+        gross_profit = subtotal_price - subtotal_cost
+        margin_pct = gross_profit / subtotal_price if subtotal_price > 0 else None
+        health = evaluate_health(margin_pct)
+        
+        node.update({
+            "price_unit": price_unit,
+            "subtotal_price": subtotal_price,
+            "gross_profit": gross_profit,
+            "margin_pct": margin_pct,
+            "health": health
+        })
+    
+    return node
+
+
+def get_items_with_nodes(proposal_id: str, context: Dict[str, Any]) -> List[Dict[str, Any]]:
+    """
+    Obtiene todos los items de una propuesta con sus nodos calculados de forma independiente.
+    """
+    tenant_id, _ = require_context(context)
+    
+    with get_cursor() as cur:
+        items = _fetchall(
+            cur,
+            """
+            SELECT item_id, item_number, quantity, sku, description, cost_unit, price_unit,
+                   subtotal_cost, subtotal_price, status, origin, component_type
+            FROM proposal_items
+            WHERE proposal_id = %s AND tenant_id = %s AND status != %s
+            ORDER BY item_number
+            """,
+            """
+            SELECT item_id, item_number, quantity, sku, description, cost_unit, price_unit,
+                   subtotal_cost, subtotal_price, status, origin, component_type
+            FROM proposal_items
+            WHERE proposal_id = ? AND tenant_id = ? AND status != ?
+            ORDER BY item_number
+            """,
+            (proposal_id, tenant_id, "deleted"),
+        )
+    
+    # Calcular el nodo de cada item
+    items_with_nodes = []
+    for item in items:
+        node = calculate_item_node(item)
+        items_with_nodes.append({
+            **item,
+            "node": node
+        })
+    
+    return items_with_nodes
+
+
+# =========================
 # Propuestas (AUP)
 # =========================
 
@@ -250,7 +336,7 @@ def import_excel(proposal_id: str, excel_file: bytes, context: Dict[str, Any]) -
         )
         item_number = (result.get("max_num") or 0) + 1
 
-    # Procesar línea por línea, consolidando inputs y recalculando después de cada inserción
+    # Procesar línea por línea, cada línea es un nodo independiente
     for row in parsed_rows:
         with get_cursor() as cur:
             item_id = str(uuid.uuid4())
@@ -294,7 +380,17 @@ def import_excel(proposal_id: str, excel_file: bytes, context: Dict[str, Any]) -
                 ),
             )
         
-        # Recalcular nodo integrado después de cada línea para consolidar inputs y cálculos
+        # Calcular el nodo de este item de forma independiente
+        item_data = {
+            "item_id": item_id,
+            "item_number": item_number,
+            "quantity": row["quantity"],
+            "cost_unit": row["cost_unit"],
+            "price_unit": None
+        }
+        item_node = calculate_item_node(item_data)
+        
+        # Recalcular nodo integrado después de cada línea para consolidar todos los items
         recalculate_integrated_node(proposal_id, context)
         item_number += 1
 
@@ -377,9 +473,20 @@ def add_proposal_item(
             ),
         )
 
+    # Calcular el nodo de este item de forma independiente
+    item_data = {
+        "item_id": item_id,
+        "item_number": item_number,
+        "quantity": quantity,
+        "cost_unit": cost_unit,
+        "price_unit": None
+    }
+    item_node = calculate_item_node(item_data)
+
+    # Recalcular nodo integrado consolidando todos los items
     recalculate_integrated_node(proposal_id, context)
 
-    return {"item_id": item_id, "item_number": item_number}
+    return {"item_id": item_id, "item_number": item_number, "node": item_node}
 
 
 def update_proposal_item(item_id: str, updates: Dict[str, Any], context: Dict[str, Any]) -> Dict[str, Any]:
@@ -443,9 +550,20 @@ def update_proposal_item(item_id: str, updates: Dict[str, Any], context: Dict[st
 
         proposal_id = item.get("proposal_id")
 
+    # Calcular el nodo del item actualizado de forma independiente
+    updated_item_data = {
+        "item_id": item_id,
+        "item_number": item.get("item_number"),
+        "quantity": quantity,
+        "cost_unit": item.get("cost_unit"),
+        "price_unit": price_unit
+    }
+    item_node = calculate_item_node(updated_item_data)
+
+    # Recalcular nodo integrado consolidando todos los items
     recalculate_integrated_node(proposal_id, context)
 
-    return {"success": True, "item_id": item_id}
+    return {"success": True, "item_id": item_id, "node": item_node}
 
 
 # =========================

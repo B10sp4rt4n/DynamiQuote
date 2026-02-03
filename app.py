@@ -12,6 +12,8 @@ from aup_engine import (
     import_excel,
     add_proposal_item,
     update_proposal_item,
+    calculate_item_node,
+    get_items_with_nodes,
     recalculate_integrated_node,
     close_proposal,
     derive_proposal,
