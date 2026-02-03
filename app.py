@@ -4,9 +4,21 @@ import uuid
 from datetime import datetime, UTC
 import matplotlib.pyplot as plt
 from spellchecker import SpellChecker
-from database import init_database, save_quote, save_import_file, get_all_quotes, get_quote_lines, get_quote_lines_full, get_latest_version, load_versions_for_group, load_lines_for_quote, get_database_info
+from database import init_database, save_quote, save_import_file, get_all_quotes, get_quote_lines, get_quote_lines_full, get_latest_version, load_versions_for_group, load_lines_for_quote, get_database_info, get_cursor, is_postgres
 from excel_import import import_excel_file, format_validation_report
 import os
+from aup_engine import (
+    create_proposal,
+    import_excel,
+    update_proposal_item,
+    recalculate_integrated_node,
+    close_proposal,
+    derive_proposal,
+    add_project_expense,
+    recalculate_profitability_node,
+    compare_proposals,
+    generate_charts_data,
+)
 
 # =========================
 # Playbooks de Evaluación
@@ -93,7 +105,12 @@ with st.sidebar:
     if db_info['type'] == 'PostgreSQL':
         st.caption(f"🌐 Host: {db_info['host']}")
 
-st.title("🧾 Cotizador Universal – MVP Funcional")
+st.title("🧾 DynamiQuote – Motor Multitenant de Propuestas")
+
+# =========================
+# Tabs principais
+# =========================
+tab_aup, tab_legacy, tab_proposals, tab_db = st.tabs(["🧠 Motor AUP", "📝 Cotizador Legacy", "📄 Propuestas Formales", "📚 Base de Datos"])
 
 # =========================
 # Spellchecker Básico
@@ -197,6 +214,98 @@ def suggest_description_fix(text):
         return suggest_description_fix_ai(text, api_key)
     else:
         return suggest_description_fix_basic(text)
+
+# =========================
+# Helpers de lectura AUP
+# =========================
+
+def _aup_execute(cur, query_pg, query_sqlite, params):
+    if is_postgres():
+        cur.execute(query_pg, params)
+    else:
+        cur.execute(query_sqlite, params)
+
+
+def _aup_fetchone(query_pg, query_sqlite, params):
+    with get_cursor() as cur:
+        _aup_execute(cur, query_pg, query_sqlite, params)
+        row = cur.fetchone()
+        if row is None:
+            return None
+        cols = [desc[0] for desc in cur.description]
+        return dict(zip(cols, row))
+
+
+def _aup_fetchall(query_pg, query_sqlite, params):
+    with get_cursor() as cur:
+        _aup_execute(cur, query_pg, query_sqlite, params)
+        rows = cur.fetchall()
+        if not rows:
+            return []
+        cols = [desc[0] for desc in cur.description]
+        return [dict(zip(cols, row)) for row in rows]
+
+
+def aup_get_proposal(proposal_id, tenant_id):
+    return _aup_fetchone(
+        "SELECT * FROM proposals WHERE proposal_id = %s AND tenant_id = %s",
+        "SELECT * FROM proposals WHERE proposal_id = ? AND tenant_id = ?",
+        (proposal_id, tenant_id),
+    )
+
+
+def aup_get_items(proposal_id, tenant_id):
+    return _aup_fetchall(
+        """
+        SELECT item_id, item_number, quantity, sku, description, cost_unit, price_unit,
+               subtotal_cost, subtotal_price, status, origin, component_type
+        FROM proposal_items
+        WHERE proposal_id = %s AND tenant_id = %s
+        ORDER BY item_number
+        """,
+        """
+        SELECT item_id, item_number, quantity, sku, description, cost_unit, price_unit,
+               subtotal_cost, subtotal_price, status, origin, component_type
+        FROM proposal_items
+        WHERE proposal_id = ? AND tenant_id = ?
+        ORDER BY item_number
+        """,
+        (proposal_id, tenant_id),
+    )
+
+
+def aup_get_integrated_node(proposal_id, tenant_id):
+    return _aup_fetchone(
+        "SELECT * FROM proposal_integrated_node WHERE proposal_id = %s AND tenant_id = %s",
+        "SELECT * FROM proposal_integrated_node WHERE proposal_id = ? AND tenant_id = ?",
+        (proposal_id, tenant_id),
+    )
+
+
+def aup_get_profitability_node(proposal_id, tenant_id):
+    return _aup_fetchone(
+        "SELECT * FROM proposal_profitability_node WHERE proposal_id = %s AND tenant_id = %s",
+        "SELECT * FROM proposal_profitability_node WHERE proposal_id = ? AND tenant_id = ?",
+        (proposal_id, tenant_id),
+    )
+
+
+def aup_get_expenses(proposal_id, tenant_id):
+    return _aup_fetchall(
+        """
+        SELECT expense_id, category, description, amount, created_at
+        FROM project_expenses
+        WHERE proposal_id = %s AND tenant_id = %s
+        ORDER BY created_at DESC
+        """,
+        """
+        SELECT expense_id, category, description, amount, created_at
+        FROM project_expenses
+        WHERE proposal_id = ? AND tenant_id = ?
+        ORDER BY created_at DESC
+        """,
+        (proposal_id, tenant_id),
+    )
 
 # =========================
 # Narrativa de Comparación
@@ -1260,108 +1369,102 @@ with st.expander("📥 O importa múltiples líneas desde Excel", expanded=False
                 key=f"preview_editor_{import_result['import_batch_id']}"
             )
             
-            # Detectar cambios
+            # Detectar cambios y aplicar recálculo automático
             cambios_detectados = not preview_df.equals(edited_df)
             
-            if cambios_detectados:
-                st.warning(f"⚠️ Se detectaron cambios en {len(edited_df)} filas")
-                
-                # Mostrar tabla de cambios
-                with st.expander("Ver cambios detectados", expanded=True):
-                    for idx in range(len(edited_df)):
-                        if idx < len(preview_df):
-                            cambios_fila = []
-                            for col in edited_df.columns:
-                                if str(preview_df.iloc[idx][col]) != str(edited_df.iloc[idx][col]):
-                                    cambios_fila.append(f"**{col}**: {preview_df.iloc[idx][col]} → {edited_df.iloc[idx][col]}")
-                            
-                            if cambios_fila:
-                                st.markdown(f"**Fila {idx+1}:** " + " | ".join(cambios_fila))
+            # Recalcular automáticamente con cada cambio
+            st.subheader("📊 Vista Previa con Cálculos Aplicados")
+            st.info("💡 **Cambias Costo+Margen → Calcula Precio | Cambias Costo+Precio → Calcula Margen**")
             
-            # Botón para procesar y mostrar vista previa final
-            if st.button("🔄 Procesar Cambios y Ver Resumen Final", type="secondary", use_container_width=True):
-                # Aplicar ediciones y recalcular
-                st.session_state.edited_import_data = edited_df
-                st.rerun()
-            
-            # Mostrar tabla final con cálculos aplicados
-            if st.session_state.edited_import_data is not None:
-                st.subheader("📊 Paso 2: Confirmar Datos Finales (con cálculos aplicados)")
+            final_data = []
+            for idx in range(len(edited_df)):
+                costo = float(edited_df.iloc[idx]["Costo"])
+                margen = float(edited_df.iloc[idx]["Margen%"])
+                precio = float(edited_df.iloc[idx]["Precio"])
                 
-                final_data = []
-                for idx in range(len(st.session_state.edited_import_data)):
-                    costo = float(st.session_state.edited_import_data.iloc[idx]["Costo"])
-                    margen = float(st.session_state.edited_import_data.iloc[idx]["Margen%"])
-                    precio = float(st.session_state.edited_import_data.iloc[idx]["Precio"])
-                    
-                    # Recalcular
-                    if costo > 0 and precio > 0:
-                        margen_final = round(((precio - costo) / precio) * 100, 2)
-                    elif costo > 0 and margen > 0:
+                # Detectar qué cambió comparando con original
+                costo_original = float(preview_df.iloc[idx]["Costo"]) if idx < len(preview_df) else 0
+                margen_original = float(preview_df.iloc[idx]["Margen%"]) if idx < len(preview_df) else 0
+                precio_original = float(preview_df.iloc[idx]["Precio"]) if idx < len(preview_df) else 0
+                
+                # Recalcular según lo que cambió
+                if costo != costo_original or margen != margen_original:
+                    # Si cambió costo o margen, recalcular precio
+                    if costo > 0 and margen > 0 and margen < 100:
                         precio = round(costo / (1 - margen / 100), 2)
                         margen_final = margen
+                    elif costo > 0 and precio > 0:
+                        margen_final = round(((precio - costo) / precio) * 100, 2)
                     else:
                         margen_final = margen
-                    
-                    final_data.append({
-                        "SKU": st.session_state.edited_import_data.iloc[idx]["SKU"],
-                        "Descripción": st.session_state.edited_import_data.iloc[idx]["Descripción"],
-                        "Cantidad": int(st.session_state.edited_import_data.iloc[idx]["Cantidad"]),
-                        "Costo": f"${costo:.2f}",
-                        "Margen": f"{margen_final:.1f}%",
-                        "Precio": f"${precio:.2f}",
-                        "Tipo": st.session_state.edited_import_data.iloc[idx]["Tipo"]
-                    })
+                elif precio != precio_original:
+                    # Si cambió precio, recalcular margen
+                    if costo > 0 and precio > 0:
+                        margen_final = round(((precio - costo) / precio) * 100, 2)
+                    else:
+                        margen_final = margen
+                else:
+                    # Sin cambios, usar valores actuales
+                    if costo > 0 and precio > 0:
+                        margen_final = round(((precio - costo) / precio) * 100, 2)
+                    else:
+                        margen_final = margen
                 
-                final_df = pd.DataFrame(final_data)
-                st.dataframe(final_df, use_container_width=True, hide_index=False)
-                
-                st.success(f"✅ {len(final_df)} líneas listas para importar con cálculos aplicados")
+                final_data.append({
+                    "SKU": edited_df.iloc[idx]["SKU"],
+                    "Descripción": edited_df.iloc[idx]["Descripción"],
+                    "Cantidad": int(edited_df.iloc[idx]["Cantidad"]),
+                    "Costo": costo,
+                    "Margen%": margen_final,
+                    "Precio": precio,
+                    "Tipo": edited_df.iloc[idx]["Tipo"],
+                    "Origen": edited_df.iloc[idx]["Origen"],
+                    "Estrategia": edited_df.iloc[idx]["Estrategia"]
+                })
+            
+            final_df = pd.DataFrame(final_data)
+            
+            # Mostrar tabla recalculada con formato
+            display_df = final_df.copy()
+            display_df["Costo"] = display_df["Costo"].apply(lambda x: f"${x:,.2f}")
+            display_df["Margen%"] = display_df["Margen%"].apply(lambda x: f"{x:.1f}%")
+            display_df["Precio"] = display_df["Precio"].apply(lambda x: f"${x:,.2f}")
+            
+            st.dataframe(display_df, use_container_width=True, hide_index=False)
+            
+            if cambios_detectados:
+                st.warning(f"⚠️ Se detectaron cambios en {len(final_df)} filas")
+            
+            st.success(f"✅ {len(final_df)} líneas listas para importar con cálculos aplicados")
+            
+            # Guardar en session state para confirmar
+            st.session_state.edited_import_data = final_df
             
             # Botones de acción final
             col_confirm, col_cancel = st.columns(2)
             
             with col_confirm:
-                if st.button("✅ Confirmar e Importar Todo", type="primary", width="stretch", 
-                           disabled=(st.session_state.edited_import_data is None)):
-                    # Aplicar ediciones finales
+                if st.button("✅ Confirmar e Importar Todo", type="primary", width="stretch"):
+                    # Aplicar ediciones finales usando final_df ya recalculado
                     updated_lines = []
-                    for idx in range(len(st.session_state.edited_import_data)):
+                    for idx in range(len(final_df)):
                         if idx < len(import_result["lines"]):
                             line = import_result["lines"][idx].copy()
                             
                             # Aplicar cambios del editor
-                            line["sku"] = str(st.session_state.edited_import_data.iloc[idx]["SKU"])
-                            line["description_original"] = str(st.session_state.edited_import_data.iloc[idx]["Descripción"])
-                            line["description_final"] = str(st.session_state.edited_import_data.iloc[idx]["Descripción"])
+                            line["sku"] = str(final_df.iloc[idx]["SKU"])
+                            line["description_original"] = str(final_df.iloc[idx]["Descripción"])
+                            line["description_final"] = str(final_df.iloc[idx]["Descripción"])
                             line["description_corrections"] = ""
-                            line["_cantidad"] = int(st.session_state.edited_import_data.iloc[idx]["Cantidad"])
-                            line["line_type"] = str(st.session_state.edited_import_data.iloc[idx]["Tipo"])
-                            line["service_origin"] = str(st.session_state.edited_import_data.iloc[idx]["Origen"])
-                            line["strategy"] = str(st.session_state.edited_import_data.iloc[idx]["Estrategia"])
+                            line["_cantidad"] = int(final_df.iloc[idx]["Cantidad"])
+                            line["line_type"] = str(final_df.iloc[idx]["Tipo"])
+                            line["service_origin"] = str(final_df.iloc[idx]["Origen"])
+                            line["strategy"] = str(final_df.iloc[idx]["Estrategia"])
                             
-                            # Obtener valores editados
-                            costo = float(st.session_state.edited_import_data.iloc[idx]["Costo"])
-                            margen = float(st.session_state.edited_import_data.iloc[idx]["Margen%"])
-                            precio = float(st.session_state.edited_import_data.iloc[idx]["Precio"])
-                            
-                            # Recalcular coherencia: si precio y costo son válidos, calcular margen real
-                            if costo > 0 and precio > 0:
-                                margen_real = round(((precio - costo) / precio) * 100, 2)
-                                line["cost_unit"] = costo
-                                line["final_price_unit"] = precio
-                                line["margin_pct"] = margen_real
-                            elif costo > 0 and margen > 0:
-                                # Si solo tiene costo y margen, calcular precio
-                                precio_calculado = round(costo / (1 - margen / 100), 2)
-                                line["cost_unit"] = costo
-                                line["margin_pct"] = margen
-                                line["final_price_unit"] = precio_calculado
-                            else:
-                                # Usar valores tal cual si no hay coherencia
-                                line["cost_unit"] = costo
-                                line["margin_pct"] = margen
-                                line["final_price_unit"] = precio
+                            # Usar valores recalculados
+                            line["cost_unit"] = float(final_df.iloc[idx]["Costo"])
+                            line["margin_pct"] = float(final_df.iloc[idx]["Margen%"])
+                            line["final_price_unit"] = float(final_df.iloc[idx]["Precio"])
                             
                             updated_lines.append(line)
                     
@@ -1387,396 +1490,1382 @@ with st.expander("📥 O importa múltiples líneas desde Excel", expanded=False
                     
                     st.success(f"✅ {len(import_result['lines'])} líneas importadas correctamente")
                     st.rerun()
-            session_state.edited_import_data = None
-                    st.
+            
             with col_cancel:
                 if st.button("❌ Cancelar Import", width="stretch"):
                     st.rerun()
 
-st.divider()
-
-with st.form("add_line", clear_on_submit=True):
-    col1, col2, col3 = st.columns(3)
-
-    with col1:
-        sku = st.text_input("SKU *")
-        description_input = st.text_input("Descripción *")
-        line_type = st.selectbox("Tipo de línea", ["product", "service"])
-
-    with col2:
-        service_origin = st.selectbox(
-            "Origen / componente",
-            ["producto", "refacciones", "póliza", "implementación", "soporte", "capacitación", "otro"]
-        )
-        cost = st.number_input("Costo unitario", min_value=0.0, step=0.01)
-        price = st.number_input("Precio unitario", min_value=0.0, step=0.01)
-
-    with col3:
-        margin_target = st.number_input("Margen objetivo % (opcional)", min_value=0.0, max_value=99.0, step=0.1)
-        strategy = st.selectbox("Estrategia", ["penetration", "defense", "upsell", "renewal"])
-
-    submit = st.form_submit_button("Agregar línea")
-
-# Procesar submit fuera del formulario
-if submit:
-    # Validaciones
-    if not sku or not sku.strip():
-        st.error("❌ SKU es obligatorio")
-        st.stop()
-    
-    if not description_input or not description_input.strip():
-        st.error("❌ Descripción es obligatoria")
-        st.stop()
-    
-    # Verificar SKU duplicado
-    existing_skus = [line["sku"] for line in st.session_state.lines]
-    if sku in existing_skus:
-        st.warning(f"⚠️ El SKU '{sku}' ya existe en esta cotización")
-    
-    # Corrección de descripción
-    corrected_desc, corrections = suggest_description_fix(description_input)
-    
-    # Cálculos
-    warnings = []
-    margin_pct = None
-    final_price = price
-
-    if cost > 0 and price > 0:
-        margin_pct = round(((price - cost) / price) * 100, 2)
-    elif cost > 0 and margin_target > 0:
-        final_price = round(cost / (1 - margin_target / 100), 2)
-        margin_pct = round(margin_target, 2)
-        warnings.append("Precio sugerido a partir de margen objetivo")
-    else:
-        st.error("Debes ingresar costo + precio o costo + margen")
-        st.stop()
-    
-    # Preparar línea
-    new_line = {
-        "line_id": str(uuid.uuid4()),
-        "sku": sku,
-        "description_original": description_input,
-        "description_input": description_input,
-        "description_final": None,  # Se definirá después
-        "description_corrections": ", ".join(corrections),
-        "corrected_desc": corrected_desc,
-        "corrections": corrections,
-        "line_type": line_type,
-        "service_origin": service_origin,
-        "cost_unit": cost,
-        "final_price_unit": final_price,
-        "margin_pct": margin_pct,
-        "strategy": strategy,
-        "warnings": ", ".join(warnings),
-        "created_at": datetime.now(UTC).isoformat()
-    }
-    
-    # Si hay correcciones, guardar como pendiente
-    if corrections:
-        st.session_state.pending_line = new_line
-        st.rerun()
-    else:
-        # Sin correcciones, agregar directamente
-        new_line["description_final"] = description_input
-        st.session_state.lines.append(new_line)
-        st.success("✅ Línea agregada correctamente")
-        st.rerun()
-
 # =========================
-# Mostrar cotización
+# TAB: LEGACY COTIZADOR
 # =========================
-if st.session_state.lines:
-    st.subheader("📊 Cotización en curso")
-
-    df = pd.DataFrame(st.session_state.lines)
+with tab_legacy:
+    st.header("📝 Cotizador Universal – MVP Funcional")
+    st.divider()
     
-    # Convertir a numérico para evitar errores
-    df["cost_unit"] = pd.to_numeric(df["cost_unit"], errors='coerce').fillna(0)
-    df["final_price_unit"] = pd.to_numeric(df["final_price_unit"], errors='coerce').fillna(0)
-    df["margin_pct"] = pd.to_numeric(df["margin_pct"], errors='coerce').fillna(0)
+    # Opción para cargar desde propuesta anterior
+    with st.expander("📄 Cargar desde Propuesta Anterior", expanded=False):
+        from database import get_formal_proposals, get_formal_proposal
+        
+        all_proposals = get_formal_proposals()
+        if all_proposals:
+            proposal_options = {
+                f"{p['proposal_number']} - {p['recipient_company']} - {p['issued_date']}": p['proposal_doc_id']
+                for p in all_proposals
+            }
+            
+            selected_proposal = st.selectbox(
+                "Selecciona una propuesta",
+                options=["-- Ninguna --"] + list(proposal_options.keys()),
+                key="load_from_proposal"
+            )
+            
+            if selected_proposal != "-- Ninguna --":
+                if st.button("🔄 Cargar Datos de esta Propuesta", type="primary"):
+                    proposal_id = proposal_options[selected_proposal]
+                    existing_proposal = get_formal_proposal(proposal_id)
+                    
+                    if existing_proposal and existing_proposal.get('quote_id'):
+                        # Cargar líneas de la cotización original
+                        quote_lines_raw = get_quote_lines_full(existing_proposal['quote_id'])
+                        
+                        if quote_lines_raw:
+                            # Convertir a formato de session_state.lines con nuevos IDs
+                            st.session_state.lines = []
+                            columns = ["line_id", "quote_id", "sku", "quantity", "description_original", 
+                                      "description_final", "description_corrections", "line_type", 
+                                      "service_origin", "cost_unit", "final_price_unit", "margin_pct", 
+                                      "strategy", "warnings", "created_at"]
+                            
+                            for row in quote_lines_raw:
+                                line_dict = dict(zip(columns, row))
+                                # Generar nuevos IDs para evitar conflictos
+                                line_dict['line_id'] = str(uuid.uuid4())
+                                line_dict['created_at'] = datetime.now(UTC).isoformat()
+                                # Asegurar que description_input esté presente
+                                line_dict['description_input'] = line_dict.get('description_original', '')
+                                line_dict['corrected_desc'] = line_dict.get('description_final', '')
+                                line_dict['corrections'] = line_dict.get('description_corrections', '').split(', ') if line_dict.get('description_corrections') else []
+                                
+                                st.session_state.lines.append(line_dict)
+                            
+                            # Generar nuevos IDs de cotización
+                            st.session_state.quote_id = str(uuid.uuid4())
+                            st.session_state.quote_group_id = str(uuid.uuid4())
+                            st.session_state.version = 1
+                            st.session_state.parent_quote_id = None
+                            
+                            st.success(f"✅ Cargadas {len(quote_lines_raw)} líneas desde {existing_proposal['proposal_number']}")
+                            st.rerun()
+                        else:
+                            st.error("No se encontraron líneas en la propuesta")
+                    else:
+                        st.error("No se pudo cargar la propuesta")
+        else:
+            st.info("No hay propuestas anteriores disponibles")
+    
+    st.subheader("➕ Agregar línea")
 
-    total_cost = df["cost_unit"].sum()
-    total_revenue = df["final_price_unit"].sum()
-    gross_profit = total_revenue - total_cost
-    gross_margin_pct = round((gross_profit / total_revenue * 100) if total_revenue > 0 else 0, 2)
+    with st.form("add_line", clear_on_submit=True):
+        col1, col2, col3 = st.columns(3)
 
-    colA, colB, colC, colD = st.columns(4)
-    colA.metric("Ingreso total", f"${round(total_revenue,2)}")
-    colB.metric("Costo total", f"${round(total_cost,2)}")
-    colC.metric("Utilidad bruta", f"${round(gross_profit,2)}")
-    colD.metric("Margen bruto %", gross_margin_pct)
+        with col1:
+            sku = st.text_input("SKU *")
+            description_input = st.text_input("Descripción *")
+            quantity = st.number_input("Cantidad *", min_value=0.01, value=1.0, step=1.0)
+            line_type = st.selectbox("Tipo de línea", ["product", "service"])
 
-    st.dataframe(
-        df[[
+        with col2:
+            service_origin = st.selectbox(
+                "Origen / componente",
+                ["producto", "refacciones", "póliza", "implementación", "soporte", "capacitación", "otro"]
+            )
+            cost = st.number_input("Costo unitario", min_value=0.0, step=0.01)
+            price = st.number_input("Precio unitario", min_value=0.0, step=0.01)
+
+        with col3:
+            margin_target = st.number_input("Margen objetivo % (opcional)", min_value=0.0, max_value=99.0, step=0.1)
+            strategy = st.selectbox("Estrategia", ["penetration", "defense", "upsell", "renewal"])
+
+        submit = st.form_submit_button("Agregar línea")
+
+    # Procesar submit fuera del formulario
+    if submit:
+        # Validaciones
+        if not sku or not sku.strip():
+            st.error("❌ SKU es obligatorio")
+            st.stop()
+        
+        if not description_input or not description_input.strip():
+            st.error("❌ Descripción es obligatoria")
+            st.stop()
+        
+        # Verificar SKU duplicado
+        existing_skus = [line["sku"] for line in st.session_state.lines]
+        if sku in existing_skus:
+            st.warning(f"⚠️ El SKU '{sku}' ya existe en esta cotización")
+        
+        # Corrección de descripción
+        corrected_desc, corrections = suggest_description_fix(description_input)
+        
+        # Cálculos
+        warnings = []
+        margin_pct = None
+        final_price = price
+
+        if cost > 0 and price > 0:
+            margin_pct = round(((price - cost) / price) * 100, 2)
+        elif cost > 0 and margin_target > 0:
+            final_price = round(cost / (1 - margin_target / 100), 2)
+            margin_pct = round(margin_target, 2)
+            warnings.append("Precio sugerido a partir de margen objetivo")
+        else:
+            st.error("Debes ingresar costo + precio o costo + margen")
+            st.stop()
+        
+        # Preparar línea
+        new_line = {
+            "line_id": str(uuid.uuid4()),
+            "sku": sku,
+            "quantity": quantity,
+            "description_original": description_input,
+            "description_input": description_input,
+            "description_final": None,  # Se definirá después
+            "description_corrections": ", ".join(corrections),
+            "corrected_desc": corrected_desc,
+            "corrections": corrections,
+            "line_type": line_type,
+            "service_origin": service_origin,
+            "cost_unit": cost,
+            "final_price_unit": final_price,
+            "margin_pct": margin_pct,
+            "strategy": strategy,
+            "warnings": ", ".join(warnings),
+            "created_at": datetime.now(UTC).isoformat()
+        }
+        
+        # Si hay correcciones, guardar como pendiente
+        if corrections:
+            st.session_state.pending_line = new_line
+            st.rerun()
+        else:
+            # Sin correcciones, agregar directamente
+            new_line["description_final"] = description_input
+            st.session_state.lines.append(new_line)
+            st.success("✅ Línea agregada correctamente")
+            st.rerun()
+
+    # Mostrar cotización si hay líneas
+    if not st.session_state.lines:
+        st.info("Agrega líneas para iniciar una cotización")
+    else:
+        st.divider()
+        st.subheader("📊 Cotización en curso")
+        
+        df = pd.DataFrame(st.session_state.lines)
+        
+        # Convertir a numérico para evitar errores
+        df["cost_unit"] = pd.to_numeric(df["cost_unit"], errors='coerce').fillna(0)
+        df["final_price_unit"] = pd.to_numeric(df["final_price_unit"], errors='coerce').fillna(0)
+        df["margin_pct"] = pd.to_numeric(df["margin_pct"], errors='coerce').fillna(0)
+        df["quantity"] = pd.to_numeric(df["quantity"], errors='coerce').fillna(1)
+
+        # Calcular subtotales considerando cantidad
+        df["subtotal_cost"] = df["cost_unit"] * df["quantity"]
+        df["subtotal_price"] = df["final_price_unit"] * df["quantity"]
+        
+        total_cost = df["subtotal_cost"].sum()
+        total_revenue = df["subtotal_price"].sum()
+        gross_profit = total_revenue - total_cost
+        gross_margin_pct = round((gross_profit / total_revenue * 100) if total_revenue > 0 else 0, 2)
+
+        colA, colB, colC, colD = st.columns(4)
+        colA.metric("Ingreso total", f"${round(total_revenue,2)}")
+        colB.metric("Costo total", f"${round(total_cost,2)}")
+        colC.metric("Utilidad bruta", f"${round(gross_profit,2)}")
+        colD.metric("Margen bruto %", gross_margin_pct)
+
+        # Preparar DataFrame para mostrar con formato
+        display_df = df[[
             "sku",
             "description_final",
+            "quantity",
             "line_type",
             "service_origin",
             "strategy",
             "cost_unit",
             "final_price_unit",
+            "subtotal_price",
             "margin_pct",
             "warnings"
-        ]],
-        width='stretch'
-    )
-
-    # =========================
-    # Gráficas lado a lado
-    # =========================
-    st.subheader("📊 Visualizaciones")
-
-    col_graph1, col_graph2 = st.columns(2)
-
-    with col_graph1:
-        st.markdown("**Aportación por componente**")
-        comp_df = df.groupby("service_origin")["final_price_unit"].sum().reset_index()
-        fig1, ax1 = plt.subplots(figsize=(6, 4))
-        ax1.pie(
-            comp_df["final_price_unit"],
-            labels=comp_df["service_origin"],
-            autopct="%1.1f%%",
-            startangle=90
+        ]].copy()
+        
+        # Renombrar columnas para mejor presentación
+        display_df.columns = [
+            "SKU", "Descripción", "Cant.", "Tipo", "Origen", "Estrategia",
+            "Costo Unit.", "Precio Unit.", "Subtotal", "Margen %", "Advertencias"
+        ]
+        
+        # Mostrar tabla con opción de edición
+        st.markdown("**💡 Tip:** Puedes editar las líneas directamente en la tabla. Los cambios se aplican al hacer clic fuera de la celda.")
+        
+        edited_df = st.data_editor(
+            display_df,
+            use_container_width=True,
+            hide_index=False,
+            num_rows="fixed",
+            column_config={
+                "SKU": st.column_config.TextColumn("SKU", width="small"),
+                "Descripción": st.column_config.TextColumn("Descripción", width="large"),
+                "Cant.": st.column_config.NumberColumn("Cant.", min_value=0.01, step=1, format="%.2f"),
+                "Tipo": st.column_config.SelectboxColumn("Tipo", options=["product", "service"]),
+                "Origen": st.column_config.SelectboxColumn("Origen", options=["producto", "refacciones", "póliza", "implementación", "soporte", "capacitación", "otro"]),
+                "Estrategia": st.column_config.SelectboxColumn("Estrategia", options=["penetration", "defense", "upsell", "renewal"]),
+                "Costo Unit.": st.column_config.NumberColumn("Costo Unit.", min_value=0, step=0.01, format="$%.2f"),
+                "Precio Unit.": st.column_config.NumberColumn("Precio Unit.", min_value=0, step=0.01, format="$%.2f"),
+                "Subtotal": st.column_config.NumberColumn("Subtotal", disabled=True, format="$%.2f"),
+                "Margen %": st.column_config.NumberColumn("Margen %", format="%.2f%%"),
+                "Advertencias": st.column_config.TextColumn("Advertencias", disabled=True)
+            }
         )
-        ax1.set_title("Aportación total por componente")
-        plt.tight_layout()
-        st.pyplot(fig1)
+        
+        # Aplicar cambios si hay ediciones
+        if not edited_df.equals(display_df):
+            if st.button("💾 Aplicar Cambios", type="primary"):
+                # Recalcular con los nuevos valores
+                for idx in range(len(edited_df)):
+                    # Actualizar valores en session_state.lines
+                    st.session_state.lines[idx]["sku"] = edited_df.iloc[idx]["SKU"]
+                    st.session_state.lines[idx]["description_final"] = edited_df.iloc[idx]["Descripción"]
+                    st.session_state.lines[idx]["quantity"] = float(edited_df.iloc[idx]["Cant."])
+                    st.session_state.lines[idx]["line_type"] = edited_df.iloc[idx]["Tipo"]
+                    st.session_state.lines[idx]["service_origin"] = edited_df.iloc[idx]["Origen"]
+                    st.session_state.lines[idx]["strategy"] = edited_df.iloc[idx]["Estrategia"]
+                    st.session_state.lines[idx]["cost_unit"] = float(edited_df.iloc[idx]["Costo Unit."])
+                    st.session_state.lines[idx]["final_price_unit"] = float(edited_df.iloc[idx]["Precio Unit."])
+                    
+                    # Recalcular margen
+                    costo = float(edited_df.iloc[idx]["Costo Unit."])
+                    precio = float(edited_df.iloc[idx]["Precio Unit."])
+                    if precio > 0:
+                        margen = round(((precio - costo) / precio) * 100, 2)
+                        st.session_state.lines[idx]["margin_pct"] = margen
+                
+                st.success("✅ Cambios aplicados correctamente")
+                st.rerun()
+        
+        # Botones de gestión de líneas
+        col_delete, col_clear = st.columns(2)
+        
+        with col_delete:
+            delete_indices = st.multiselect(
+                "Selecciona líneas para eliminar",
+                options=list(range(len(st.session_state.lines))),
+                format_func=lambda x: f"Línea {x+1}: {st.session_state.lines[x]['sku']}"
+            )
+            
+            if delete_indices and st.button("🗑️ Eliminar Líneas Seleccionadas", type="secondary"):
+                # Eliminar en orden inverso para evitar problemas de índice
+                for idx in sorted(delete_indices, reverse=True):
+                    st.session_state.lines.pop(idx)
+                st.success(f"✅ {len(delete_indices)} línea(s) eliminada(s)")
+                st.rerun()
+        
+        with col_clear:
+            st.write("")  # Espaciado
+            st.write("")  # Espaciado
+            if st.button("🔄 Limpiar Todo", type="secondary"):
+                if st.session_state.lines:
+                    st.session_state.lines = []
+                    st.success("✅ Cotización limpiada")
+                    st.rerun()
 
-    with col_graph2:
-        st.markdown("**Costo vs Utilidad Bruta**")
-        fig2, ax2 = plt.subplots(figsize=(6, 4))
-        ax2.pie(
-            [total_cost, gross_profit],
-            labels=["Costo", "Utilidad Bruta"],
-            autopct="%1.1f%%",
-            startangle=90
-        )
-        ax2.set_title("Distribución financiera")
-        st.pyplot(fig2)
+        # =========================
+        # Gráficas lado a lado
+        # =========================
+        st.subheader("📊 Visualizaciones")
 
-    # =========================
-    # Cerrar propuesta
-    # =========================
-    st.subheader("✅ Cerrar y guardar propuesta")
+        col_graph1, col_graph2 = st.columns(2)
+
+        with col_graph1:
+            st.markdown("**Aportación por componente**")
+            comp_df = df.groupby("service_origin")["subtotal_price"].sum().reset_index()
+            fig1, ax1 = plt.subplots(figsize=(6, 4))
+            ax1.pie(
+                comp_df["subtotal_price"],
+                labels=comp_df["service_origin"],
+                autopct="%1.1f%%",
+                startangle=90
+            )
+            ax1.set_title("Aportación total por componente")
+            plt.tight_layout()
+            st.pyplot(fig1)
+
+        with col_graph2:
+            st.markdown("**Costo vs Utilidad Bruta**")
+            fig2, ax2 = plt.subplots(figsize=(6, 4))
+            ax2.pie(
+                [total_cost, gross_profit],
+                labels=["Costo", "Utilidad Bruta"],
+                autopct="%1.1f%%",
+                startangle=90
+            )
+            ax2.set_title("Distribución financiera")
+            st.pyplot(fig2)
+
+        # =========================
+        # Cerrar propuesta
+        # =========================
+        st.subheader("✅ Cerrar y guardar propuesta")
+        
+        # Selector de playbook antes de guardar
+        col_save_pb, col_save_btn = st.columns([2, 1])
+        
+        with col_save_pb:
+            save_playbook = st.selectbox(
+                "📘 Playbook a aplicar",
+                list(PLAYBOOKS.keys()),
+                help="El playbook determina cómo se evaluará esta cotización en comparaciones futuras"
+            )
+            pb_save = PLAYBOOKS[save_playbook]
+            st.caption(f"Verde ≥{pb_save['green']}% | Amarillo ≥{pb_save['yellow']}%")
+
+        with col_save_btn:
+            st.write("")  # Espaciado
+            save_button = st.button("Cerrar propuesta", type="primary")
+
+        if save_button:
+            # Preparar datos para guardar (convertir numpy/pandas a tipos nativos Python)
+            quote_data = (
+                st.session_state.quote_id,
+                st.session_state.quote_group_id,
+                st.session_state.version,
+                st.session_state.parent_quote_id,
+                datetime.now(UTC).isoformat(),
+                "CLOSED",
+                float(total_cost),
+                float(total_revenue),
+                float(gross_profit),
+                float(gross_margin_pct),
+                save_playbook  # Agregar playbook seleccionado
+            )
+            
+            lines_data = []
+            for _, row in df.iterrows():
+                lines_data.append((
+                    str(row["line_id"]),
+                    str(st.session_state.quote_id),
+                    str(row["sku"]),
+                    float(row.get("quantity", 1.0)),  # quantity después de sku
+                    str(row["description_original"]),
+                    str(row["description_final"]),
+                    str(row["description_corrections"]),
+                    str(row["line_type"]),
+                    str(row["service_origin"]),
+                    float(row["cost_unit"]),
+                    float(row["final_price_unit"]),
+                    float(row["margin_pct"]) if row["margin_pct"] is not None else None,
+                    str(row["strategy"]),
+                    str(row["warnings"]),
+                    str(row["created_at"]),
+                    str(row.get("import_source", "manual")),
+                    str(row.get("import_batch_id", "")) if row.get("import_batch_id") else None
+                ))
+            
+            # Guardar usando función segura
+            success, message = save_quote(quote_data, lines_data)
+            
+            if success:
+                st.success(message)
+                # Reiniciar para nueva cotización
+                st.session_state.lines = []
+                st.session_state.quote_id = str(uuid.uuid4())
+                st.session_state.quote_group_id = str(uuid.uuid4())
+                st.session_state.version = 1
+                st.session_state.parent_quote_id = None
+                st.rerun()
+            else:
+                st.error(message)
+
+# =========================
+# TAB: MOTOR AUP (Multitenant)
+# =========================
+with tab_aup:
+    st.header("🧠 Motor AUP (Multitenant)")
+    st.divider()
     
-    # Selector de playbook antes de guardar
-    col_save_pb, col_save_btn = st.columns([2, 1])
-    
-    with col_save_pb:
-        save_playbook = st.selectbox(
-            "📘 Playbook a aplicar",
-            list(PLAYBOOKS.keys()),
-            help="El playbook determina cómo se evaluará esta cotización en comparaciones futuras"
-        )
-        pb_save = PLAYBOOKS[save_playbook]
-        st.caption(f"Verde ≥{pb_save['green']}% | Amarillo ≥{pb_save['yellow']}%")
+    if "aup_context" not in st.session_state:
+        st.session_state.aup_context = {
+            "tenant_id": "",
+            "user_id": "",
+            "tenant_is_active": True,
+            "user_has_permission": True,
+        }
 
-    with col_save_btn:
-        st.write("")  # Espaciado
-        save_button = st.button("Cerrar propuesta", type="primary")
+    if "aup_proposal_id" not in st.session_state:
+        st.session_state.aup_proposal_id = None
 
-    if save_button:
-        # Preparar datos para guardar (convertir numpy/pandas a tipos nativos Python)
-        quote_data = (
-            st.session_state.quote_id,
-            st.session_state.quote_group_id,
-            st.session_state.version,
-            st.session_state.parent_quote_id,
-            datetime.now(UTC).isoformat(),
-            "CLOSED",
-            float(total_cost),
-            float(total_revenue),
-            float(gross_profit),
-            float(avg_margin),
-            save_playbook  # Agregar playbook seleccionado
+    if "aup_derived_id" not in st.session_state:
+        st.session_state.aup_derived_id = None
+
+    col_ctx1, col_ctx2, col_ctx3, col_ctx4 = st.columns([2, 2, 1, 1])
+    with col_ctx1:
+        st.session_state.aup_context["tenant_id"] = st.text_input(
+            "tenant_id",
+            value=st.session_state.aup_context.get("tenant_id", ""),
+            placeholder="tenant-001",
         )
-        
-        lines_data = []
-        for _, row in df.iterrows():
-            lines_data.append((
-                str(row["line_id"]),
-                str(st.session_state.quote_id),
-                str(row["sku"]),
-                str(row["description_original"]),
-                str(row["description_final"]),
-                str(row["description_corrections"]),
-                str(row["line_type"]),
-                str(row["service_origin"]),
-                float(row["cost_unit"]),
-                float(row["final_price_unit"]),
-                float(row["margin_pct"]) if row["margin_pct"] is not None else None,
-                str(row["strategy"]),
-                str(row["warnings"]),
-                str(row["created_at"]),
-                str(row.get("import_source", "manual")),
-                str(row.get("import_batch_id", "")) if row.get("import_batch_id") else None
-            ))
-        
-        # Guardar usando función segura
-        success, message = save_quote(quote_data, lines_data)
-        
-        if success:
-            st.success(message)
-            # Reiniciar para nueva cotización
-            st.session_state.lines = []
-            st.session_state.quote_id = str(uuid.uuid4())
-            st.session_state.quote_group_id = str(uuid.uuid4())
-            st.session_state.version = 1
-            st.session_state.parent_quote_id = None
-            st.rerun()
+    with col_ctx2:
+        st.session_state.aup_context["user_id"] = st.text_input(
+            "user_id",
+            value=st.session_state.aup_context.get("user_id", ""),
+            placeholder="user-001",
+        )
+    with col_ctx3:
+        st.session_state.aup_context["tenant_is_active"] = st.checkbox(
+            "tenant activo",
+            value=st.session_state.aup_context.get("tenant_is_active", True),
+        )
+    with col_ctx4:
+        st.session_state.aup_context["user_has_permission"] = st.checkbox(
+            "permiso",
+            value=st.session_state.aup_context.get("user_has_permission", True),
+        )
+
+    context = st.session_state.aup_context
+
+    col_create, col_status = st.columns([1, 3])
+    with col_create:
+        if st.button("Crear propuesta AUP", type="primary"):
+            try:
+                st.session_state.aup_proposal_id = create_proposal("manual", context)
+                st.session_state.aup_derived_id = None
+                st.success("✅ Propuesta creada")
+            except Exception as exc:
+                st.error(f"❌ {exc}")
+
+    with col_status:
+        if st.session_state.aup_proposal_id:
+            proposal = aup_get_proposal(st.session_state.aup_proposal_id, context.get("tenant_id"))
+            if proposal:
+                st.caption(
+                    f"Propuesta: {proposal['proposal_id']} | Estado: {proposal['status']} | Origen: {proposal.get('origin')}"
+                )
+
+    if st.session_state.aup_proposal_id:
+        proposal_id = st.session_state.aup_proposal_id
+        tenant_id = context.get("tenant_id")
+
+        st.subheader("📥 Importar Excel")
+        excel_file = st.file_uploader("Archivo Excel", type=["xlsx", "xls"], key="aup_excel")
+        if st.button("Importar Excel a propuesta"):
+            if excel_file is None:
+                st.warning("Selecciona un archivo")
+            else:
+                try:
+                    result = import_excel(proposal_id, excel_file.read(), context)
+                    if result.get("success"):
+                        st.success(f"✅ Filas importadas: {result.get('imported')}")
+                    else:
+                        st.error(f"❌ Errores: {result.get('errors')}")
+                except Exception as exc:
+                    st.error(f"❌ {exc}")
+
+        st.subheader("📦 Items de propuesta")
+        items = aup_get_items(proposal_id, tenant_id)
+        if items:
+            st.dataframe(pd.DataFrame(items), width="stretch")
+
+            st.markdown("**Editar item (controlado)**")
+            options = {f"#{i['item_number']} · {i.get('description','')}": i for i in items}
+            selected_label = st.selectbox("Selecciona item", list(options.keys()))
+            selected_item = options[selected_label]
+
+        with st.form("aup_edit_item"):
+            quantity = st.number_input("Cantidad", min_value=0.01, value=float(selected_item.get("quantity") or 1))
+            description = st.text_input("Descripción", value=selected_item.get("description") or "")
+            price_unit = st.number_input(
+                "Precio unitario (opcional)",
+                min_value=0.0,
+                value=float(selected_item.get("price_unit") or 0.0),
+            )
+            component_type = st.text_input("Tipo de componente", value=selected_item.get("component_type") or "")
+            submitted = st.form_submit_button("Actualizar item")
+
+        if submitted:
+            try:
+                update_proposal_item(
+                    selected_item["item_id"],
+                    {
+                        "quantity": quantity,
+                        "description": description,
+                        "price_unit": price_unit if price_unit > 0 else None,
+                        "component_type": component_type or None,
+                    },
+                    context,
+                )
+                st.success("✅ Item actualizado")
+            except Exception as exc:
+                st.error(f"❌ {exc}")
+
         else:
-            st.error(message)
+            st.info("No hay items todavía")
 
-else:
-    st.info("Agrega líneas para iniciar una cotización")
+        st.subheader("🧮 Nodo integrado (única verdad)")
+        integrated = aup_get_integrated_node(proposal_id, tenant_id)
+        if integrated:
+            col_i1, col_i2, col_i3, col_i4, col_i5 = st.columns(5)
+            col_i1.metric("Costo total", f"${float(integrated.get('total_cost') or 0):,.2f}")
+            col_i2.metric("Precio total", f"${float(integrated.get('total_price') or 0):,.2f}")
+            col_i3.metric("Utilidad bruta", f"${float(integrated.get('gross_profit') or 0):,.2f}")
+            margin_pct = integrated.get("margin_pct")
+            col_i4.metric("Margen", f"{(float(margin_pct) * 100):.2f}%" if margin_pct is not None else "N/A")
+            col_i5.metric("Health", str(integrated.get("health")))
+        else:
+            st.caption("Nodo integrado no disponible")
+
+        st.subheader("🔒 Cierre formal")
+        if st.button("Cerrar propuesta AUP"):
+            try:
+                result = close_proposal(proposal_id, context)
+                st.success(f"✅ Propuesta cerrada. Hash: {result.get('hash')}")
+            except Exception as exc:
+                st.error(f"❌ {exc}")
+
+        proposal = aup_get_proposal(proposal_id, tenant_id)
+        if proposal and proposal.get("status") == "closed":
+            st.subheader("🧬 Derivar nueva propuesta")
+            if st.button("Derivar propuesta"):
+                try:
+                    st.session_state.aup_derived_id = derive_proposal(proposal_id, context)
+                    st.success(f"✅ Derivada: {st.session_state.aup_derived_id}")
+                except Exception as exc:
+                    st.error(f"❌ {exc}")
+
+            st.subheader("💰 Gastos asociados (post-cotización)")
+            with st.form("aup_add_expense"):
+                category = st.selectbox(
+                    "Categoría",
+                    ["logistica", "seguros", "fianzas", "administrativos", "contingencias", "financieros"],
+                )
+                description = st.text_input("Descripción del gasto")
+                amount = st.number_input("Monto", min_value=0.0, value=0.0)
+                add_expense = st.form_submit_button("Agregar gasto")
+
+            if add_expense:
+                try:
+                    add_project_expense(
+                        proposal_id,
+                        {"category": category, "description": description, "amount": amount},
+                        context,
+                    )
+                    st.success("✅ Gasto agregado")
+                except Exception as exc:
+                    st.error(f"❌ {exc}")
+
+            expenses = aup_get_expenses(proposal_id, tenant_id)
+            if expenses:
+                st.dataframe(pd.DataFrame(expenses), width="stretch")
+
+            st.subheader("📈 Nodo de rentabilidad")
+            profitability = aup_get_profitability_node(proposal_id, tenant_id)
+            if profitability:
+                col_p1, col_p2, col_p3, col_p4, col_p5 = st.columns(5)
+                col_p1.metric("Ventas", f"${float(profitability.get('total_sales') or 0):,.2f}")
+                col_p2.metric("Costos", f"${float(profitability.get('total_cost') or 0):,.2f}")
+                col_p3.metric("Gastos", f"${float(profitability.get('total_expenses') or 0):,.2f}")
+                net_margin = profitability.get("net_margin_pct")
+                col_p4.metric("Margen neto", f"{(float(net_margin) * 100):.2f}%" if net_margin is not None else "N/A")
+                col_p5.metric("Health", str(profitability.get("health")))
+
+        if st.session_state.aup_derived_id:
+            st.subheader("🔍 Comparación entre propuestas")
+            try:
+                comparison = compare_proposals(proposal_id, st.session_state.aup_derived_id, context)
+                col_c1, col_c2 = st.columns(2)
+                col_c1.metric("Δ Precio", f"${float(comparison.get('delta_price') or 0):,.2f}")
+                col_c2.metric("Δ Margen", f"{float(comparison.get('delta_margin') or 0) * 100:.2f}%")
+                st.dataframe(pd.DataFrame(comparison.get("drilldown", [])), width="stretch")
+            except Exception as exc:
+                st.error(f"❌ {exc}")
+
+        st.subheader("📊 Visualizaciones (solo lectura)")
+        try:
+            charts = generate_charts_data(proposal_id, context)
+            col_g1, col_g2, col_g3 = st.columns(3)
+
+            with col_g1:
+                st.markdown("**Aportación por componente**")
+                comp_data = charts.get("pie_component_contribution", {})
+                if comp_data:
+                    fig, ax = plt.subplots(figsize=(4, 4))
+                    ax.pie(comp_data.values(), labels=comp_data.keys(), autopct="%1.1f%%")
+                    st.pyplot(fig)
+                else:
+                    st.caption("Sin datos")
+
+            with col_g2:
+                st.markdown("**Costo vs Utilidad Bruta**")
+                cvp = charts.get("pie_cost_vs_profit", {})
+                fig, ax = plt.subplots(figsize=(4, 4))
+                ax.pie([cvp.get("total_cost", 0), cvp.get("gross_profit", 0)], labels=["Costo", "Utilidad"])
+                st.pyplot(fig)
+
+            with col_g3:
+                st.markdown("**Distribución neta**")
+                net = charts.get("pie_net_distribution", {})
+                fig, ax = plt.subplots(figsize=(4, 4))
+                ax.pie(
+                    [net.get("total_cost", 0), net.get("total_expenses", 0), net.get("net_profit", 0)],
+                    labels=["Costo", "Gastos", "Utilidad Neta"],
+                )
+                st.pyplot(fig)
+        except Exception as exc:
+            st.caption(f"Visualizaciones no disponibles: {exc}")
+    else:
+        st.info("Crea una propuesta para comenzar")
 
 # =========================
-# Base de datos de propuestas
+# TAB: PROPUESTAS FORMALES
 # =========================
-st.divider()
-st.header("📚 Base de Datos de Propuestas")
-
-# Obtener propuestas cerradas
-quotes_query = get_all_quotes()
-
-if quotes_query:
-    # Agrupar por quote_group_id para mostrar versiones
-    st.subheader("🗂️ Oportunidades y Versiones")
+with tab_proposals:
+    st.header("📄 Generador de Propuestas Formales")
+    st.divider()
     
-    # Convertir a DataFrame para agrupar
-    all_quotes_df = pd.DataFrame(
-        quotes_query,
-        columns=["ID", "Group ID", "Versión", "Parent ID", "Fecha", "Estado", "Costo Total", "Ingreso Total", "Utilidad Bruta", "Margen Promedio %"]
-    )
+    st.markdown("""
+    ### Sistema de Propuestas Profesionales
     
-    # Agrupar por Group ID
-    for group_id, group_df in all_quotes_df.groupby("Group ID"):
-        with st.expander(f"🎯 Oportunidad {group_id[:8]}... ({len(group_df)} versiones)", expanded=False):
-            for _, q in group_df.iterrows():
-                col1, col2, col3, col4, col5 = st.columns([1, 2, 2, 2, 2])
-                
-                with col1:
-                    st.markdown(f"**v{int(q['Versión'])}**")
-                
-                with col2:
-                    fecha = pd.to_datetime(q['Fecha']).strftime("%Y-%m-%d %H:%M")
-                    st.caption(f"📅 {fecha}")
-                
-                with col3:
-                    st.metric("Ingreso", f"${q['Ingreso Total']:,.2f}")
-                
-                with col4:
-                    st.metric("Margen", f"{q['Margen Promedio %']:.2f}%")
-                
-                with col5:
-                    if st.button("➕ Nueva versión", key=f"new_v_{q['ID']}"):
-                        # Cargar líneas de esta versión
-                        lines_full = get_quote_lines_full(q['ID'])
-                        
-                        if lines_full:
-                            # Preparar nuevas líneas con nuevos IDs
-                            new_lines = []
-                            for line in lines_full:
-                                new_lines.append({
-                                    "line_id": str(uuid.uuid4()),  # Nuevo ID
-                                    "sku": line[2],
-                                    "description_original": line[3],
-                                    "description_input": line[3],
-                                    "description_final": line[4],
-                                    "description_corrections": line[5],
-                                    "corrected_desc": line[4],
-                                    "corrections": line[5].split(", ") if line[5] else [],
-                                    "line_type": line[6],
-                                    "service_origin": line[7],
-                                    "cost_unit": line[8],
-                                    "final_price_unit": line[9],
-                                    "margin_pct": line[10],
-                                    "strategy": line[11],
-                                    "warnings": line[12],
-                                    "created_at": datetime.now(UTC).isoformat()
-                                })
-                            
-                            # Configurar nueva versión
-                            st.session_state.quote_group_id = q['Group ID']
-                            st.session_state.version = int(q['Versión']) + 1
-                            st.session_state.parent_quote_id = q['ID']
-                            st.session_state.quote_id = str(uuid.uuid4())
-                            st.session_state.lines = new_lines
-                            st.success(f"✅ Versión {int(q['Versión']) + 1} creada. Modifica las líneas y guarda.")
-                            st.rerun()
-                
-                # Mostrar líneas de esta versión
-                with st.container():
-                    st.caption(f"📋 Líneas de v{int(q['Versión'])}")
-                    lines = get_quote_lines(q['ID'])
-                    if lines:
-                        lines_df = pd.DataFrame(
-                            lines,
-                            columns=["SKU", "Descripción", "Tipo", "Origen", "Costo Unit.", "Precio Unit.", "Margen %", "Estrategia", "Advertencias"]
-                        )
-                        st.dataframe(lines_df, hide_index=True, width="stretch")
-                
-                st.divider()
+    Genera documentos formales de propuestas comerciales con:
+    - ✅ Personalización completa de emisor y receptor
+    - 🎨 Logos de empresa y cliente
+    - 📝 Introducción inteligente adaptada al sector
+    - 💰 Gestión de IVA (integrado o desglosado)
+    - 📋 Términos y condiciones editables
+    - ✍️ Firma digital
+    - 📄 PDF profesional listo para envío
+    """)
     
     st.divider()
     
-    # Vista consolidada (anterior)
-    st.subheader("📊 Vista Consolidada")
-    quotes_df = pd.DataFrame(
-        quotes_query,
-        columns=["ID", "Group ID", "Versión", "Parent ID", "Fecha", "Estado", "Costo Total", "Ingreso Total", "Utilidad Bruta", "Margen Promedio %"]
+    # Selector de origen
+    st.subheader("1️⃣ Seleccionar Origen de la Propuesta")
+    
+    origin_type = st.radio(
+        "¿Desde dónde quieres generar la propuesta?",
+        ["Cotización Legacy", "Propuesta AUP", "Propuesta Anterior (Nueva Versión)"],
+        horizontal=True
     )
     
-    # Formatear fecha
-    quotes_df["Fecha"] = pd.to_datetime(quotes_df["Fecha"]).dt.strftime("%Y-%m-%d %H:%M")
+    source_id = None
+    source_data = None
+    existing_proposal = None
     
-    # Formatear montos
-    quotes_df["Costo Total"] = quotes_df["Costo Total"].apply(lambda x: f"${x:,.2f}")
-    quotes_df["Ingreso Total"] = quotes_df["Ingreso Total"].apply(lambda x: f"${x:,.2f}")
-    quotes_df["Utilidad Bruta"] = quotes_df["Utilidad Bruta"].apply(lambda x: f"${x:,.2f}")
-    quotes_df["Margen Promedio %"] = quotes_df["Margen Promedio %"].apply(lambda x: f"{x:.2f}%")
-    
-    # Mostrar solo columnas relevantes
-    display_df = quotes_df[["Group ID", "Versión", "Fecha", "Costo Total", "Ingreso Total", "Utilidad Bruta", "Margen Promedio %"]].copy()
-    display_df["Group ID"] = display_df["Group ID"].apply(lambda x: f"{x[:8]}...")
-    
-    st.dataframe(display_df, width='stretch', hide_index=True)
-    
-    # Selector de propuesta para ver detalle
-    st.subheader("🔍 Ver detalle de propuesta")
-    quote_ids = [q[0] for q in quotes_query]
-    selected_quote = st.selectbox(
-        "Selecciona una propuesta",
-        options=quote_ids,
-        format_func=lambda x: f"Propuesta {x[:8]}..."
-    )
-    
-    if selected_quote:
-        # Obtener líneas de la propuesta seleccionada
-        lines_query = get_quote_lines(selected_quote)
-        
-        if lines_query:
-            lines_detail_df = pd.DataFrame(
-                lines_query,
-                columns=["SKU", "Descripción", "Tipo", "Origen", "Costo Unit.", "Precio Unit.", "Margen %", "Estrategia", "Advertencias"]
+    if origin_type == "Cotización Legacy":
+        # Obtener cotizaciones disponibles
+        all_quotes = get_all_quotes()
+        if all_quotes:
+            quote_options = {
+                f"{q[0][:8]}... - {q[5]} - ${q[7]:,.2f}": q[0] 
+                for q in all_quotes
+            }
+            
+            selected_quote = st.selectbox(
+                "Selecciona una cotización",
+                options=list(quote_options.keys())
             )
             
-            st.dataframe(lines_detail_df, width='stretch', hide_index=True)
+            if selected_quote:
+                source_id = quote_options[selected_quote]
+                source_data = [q for q in all_quotes if q[0] == source_id][0]
+                
+                # Mostrar resumen
+                col1, col2, col3 = st.columns(3)
+                col1.metric("Total", f"${source_data[7]:,.2f}")
+                col2.metric("Margen", f"{source_data[9]:.1f}%")
+                col3.metric("Estado", source_data[5])
+        else:
+            st.warning("No hay cotizaciones disponibles")
+    
+    elif origin_type == "Propuesta Anterior (Nueva Versión)":
+        # Obtener propuestas disponibles
+        from database import get_formal_proposals
+        all_proposals = get_formal_proposals()
+        
+        if all_proposals:
+            proposal_options = {
+                f"{p['proposal_number']} - {p['recipient_company']} - {p['issued_date']}": p['proposal_doc_id']
+                for p in all_proposals
+            }
             
-            # Estadísticas de la propuesta seleccionada
-            st.subheader("📊 Estadísticas")
+            selected_proposal = st.selectbox(
+                "Selecciona una propuesta anterior",
+                options=list(proposal_options.keys())
+            )
+            
+            if selected_proposal:
+                proposal_id = proposal_options[selected_proposal]
+                from database import get_formal_proposal
+                existing_proposal = get_formal_proposal(proposal_id)
+                
+                if existing_proposal:
+                    source_id = existing_proposal.get('quote_id')
+                    
+                    # Mostrar resumen
+                    st.info(f"📄 **{existing_proposal['proposal_number']}** - Generada el {existing_proposal['issued_date']}")
+                    st.caption("Se creará una nueva versión basada en esta propuesta con los datos prellenados")
+        else:
+            st.warning("No hay propuestas anteriores disponibles")
+    
+    else:  # Propuesta AUP
+        st.info("🚧 Integración con Motor AUP próximamente")
+    
+    if source_id or existing_proposal:
+        st.success(f"✅ Origen seleccionado: {source_id[:8]}...")
+        st.divider()
+        
+        # =========================
+        # Configuración de Propuesta
+        # =========================
+        st.subheader("2️⃣ Configuración de la Propuesta")
+        
+        # Sección: Datos del Emisor
+        with st.expander("🏢 Datos del Emisor (Tu Empresa)", expanded=True):
+            col1, col2 = st.columns(2)
+            
+            with col1:
+                issuer_company = st.text_input(
+                    "Nombre de la Empresa *", 
+                    value=existing_proposal.get('issuer_company') or 'Tu Empresa S.A. de C.V.' if existing_proposal else "Tu Empresa S.A. de C.V.", 
+                    key="issuer_company"
+                )
+                issuer_contact = st.text_input(
+                    "Nombre del Contacto", 
+                    value=existing_proposal.get('issuer_contact_name') or '' if existing_proposal else "", 
+                    key="issuer_contact"
+                )
+                issuer_title = st.text_input(
+                    "Cargo", 
+                    value=existing_proposal.get('issuer_contact_title') or '' if existing_proposal else "", 
+                    key="issuer_title"
+                )
+            
+            with col2:
+                issuer_email = st.text_input(
+                    "Email", 
+                    value=existing_proposal.get('issuer_email') or '' if existing_proposal else "", 
+                    key="issuer_email"
+                )
+                issuer_phone = st.text_input(
+                    "Teléfono", 
+                    value=existing_proposal.get('issuer_phone') or '' if existing_proposal else "", 
+                    key="issuer_phone"
+                )
+        
+        # Sección: Datos del Receptor
+        with st.expander("👤 Datos del Cliente (Receptor)", expanded=True):
+            col1, col2 = st.columns(2)
+            
+            with col1:
+                recipient_company = st.text_input(
+                    "Nombre de la Empresa *", 
+                    value=existing_proposal.get('recipient_company') or '' if existing_proposal else "", 
+                    key="recipient_company"
+                )
+                recipient_contact = st.text_input(
+                    "Nombre del Contacto *", 
+                    value=existing_proposal.get('recipient_contact_name') or '' if existing_proposal else "", 
+                    key="recipient_contact"
+                )
+                recipient_title = st.text_input(
+                    "Cargo", 
+                    value=existing_proposal.get('recipient_contact_title') or '' if existing_proposal else "", 
+                    key="recipient_title"
+                )
+            
+            with col2:
+                recipient_email = st.text_input(
+                    "Email", 
+                    value=existing_proposal.get('recipient_email', '') if existing_proposal else "", 
+                    key="recipient_email"
+                )
+        
+        # Sección: Contexto
+        with st.expander("🎯 Contexto y Personalización", expanded=True):
+            col1, col2 = st.columns(2)
+            
+            with col1:
+                from formal_proposal_generator import CLIENT_TYPES, MARKET_SECTORS
+                
+                # Determinar índices si hay propuesta existente
+                default_client_idx = 0
+                default_sector_idx = 0
+                if existing_proposal:
+                    try:
+                        if existing_proposal.get('client_type') in CLIENT_TYPES:
+                            default_client_idx = CLIENT_TYPES.index(existing_proposal['client_type'])
+                    except:
+                        pass
+                    try:
+                        if existing_proposal.get('market_sector') in MARKET_SECTORS:
+                            default_sector_idx = MARKET_SECTORS.index(existing_proposal['market_sector'])
+                    except:
+                        pass
+                
+                client_type = st.selectbox(
+                    "Tipo de Cliente",
+                    options=CLIENT_TYPES,
+                    index=default_client_idx,
+                    key="client_type"
+                )
+                
+                market_sector = st.selectbox(
+                    "Sector de Mercado",
+                    options=MARKET_SECTORS,
+                    index=default_sector_idx,
+                    key="market_sector"
+                )
+            
+            with col2:
+                subject = st.text_area(
+                    "Asunto / Motivo",
+                    value=existing_proposal.get('subject', '') if existing_proposal else "",
+                    height=100,
+                    help="Describe el motivo o asunto de la propuesta",
+                    key="subject"
+                )
+        
+        # Sección: Logos
+        with st.expander("🎨 Logos", expanded=False):
+            st.markdown("**Logo del Emisor (Tu Empresa)**")
+            
+            col1, col2 = st.columns(2)
+            
+            with col1:
+                # Logos existentes
+                from database import get_logos
+                issuer_logos = get_logos('issuer')
+                
+                if issuer_logos:
+                    logo_options = ["Ninguno"] + [f"{logo['logo_name']} ({logo['company_name']})" for logo in issuer_logos]
+                    selected_issuer_logo = st.selectbox(
+                        "Seleccionar logo existente",
+                        options=logo_options,
+                        key="selected_issuer_logo"
+                    )
+                    
+                    if selected_issuer_logo != "Ninguno":
+                        selected_idx = logo_options.index(selected_issuer_logo) - 1
+                        st.session_state.issuer_logo_id = issuer_logos[selected_idx]['logo_id']
+                else:
+                    st.info("No hay logos guardados")
+            
+            with col2:
+                # Upload nuevo logo
+                uploaded_issuer_logo = st.file_uploader(
+                    "Subir nuevo logo",
+                    type=['png', 'jpg', 'jpeg'],
+                    key="upload_issuer_logo"
+                )
+                
+                if uploaded_issuer_logo:
+                    from formal_proposal_generator import process_logo_upload
+                    import uuid
+                    from database import save_logo
+                    
+                    try:
+                        logo_data, logo_format = process_logo_upload(uploaded_issuer_logo)
+                        logo_id = str(uuid.uuid4())
+                        
+                        # Guardar logo
+                        success, msg = save_logo(
+                            logo_id,
+                            uploaded_issuer_logo.name,
+                            'issuer',
+                            issuer_company,
+                            logo_data,
+                            logo_format
+                        )
+                        
+                        if success:
+                            st.success(msg)
+                            st.session_state.issuer_logo_id = logo_id
+                        else:
+                            st.error(msg)
+                    except Exception as e:
+                        st.error(f"Error: {e}")
+            
+            st.divider()
+            st.markdown("**Logo del Cliente (Opcional)**")
+            
+            col1, col2 = st.columns(2)
+            
+            with col1:
+                client_logos = get_logos('client')
+                
+                if client_logos:
+                    logo_options = ["Ninguno"] + [f"{logo['logo_name']} ({logo['company_name']})" for logo in client_logos]
+                    selected_client_logo = st.selectbox(
+                        "Seleccionar logo existente",
+                        options=logo_options,
+                        key="selected_client_logo"
+                    )
+                    
+                    if selected_client_logo != "Ninguno":
+                        selected_idx = logo_options.index(selected_client_logo) - 1
+                        st.session_state.client_logo_id = client_logos[selected_idx]['logo_id']
+                else:
+                    st.info("No hay logos de clientes guardados")
+            
+            with col2:
+                uploaded_client_logo = st.file_uploader(
+                    "Subir logo de cliente",
+                    type=['png', 'jpg', 'jpeg'],
+                    key="upload_client_logo"
+                )
+                
+                if uploaded_client_logo:
+                    try:
+                        logo_data, logo_format = process_logo_upload(uploaded_client_logo)
+                        logo_id = str(uuid.uuid4())
+                        
+                        success, msg = save_logo(
+                            logo_id,
+                            uploaded_client_logo.name,
+                            'client',
+                            recipient_company,
+                            logo_data,
+                            logo_format
+                        )
+                        
+                        if success:
+                            st.success(msg)
+                            st.session_state.client_logo_id = logo_id
+                        else:
+                            st.error(msg)
+                    except Exception as e:
+                        st.error(f"Error: {e}")
+        
+        # Sección: Configuración de IVA y Moneda
+        with st.expander("💰 Configuración de IVA y Moneda", expanded=True):
             col1, col2, col3 = st.columns(3)
             
-            total_lines = len(lines_query)
-            products = sum(1 for line in lines_query if line[2] == "product")
-            services = sum(1 for line in lines_query if line[2] == "service")
+            # Determinar valores por defecto de moneda
+            default_currency = "MXN (Pesos Mexicanos)"
+            if existing_proposal and existing_proposal.get('currency') == 'USD':
+                default_currency = "USD (Dólares)"
             
-            col1.metric("Total de líneas", total_lines)
-            col2.metric("Productos", products)
-            col3.metric("Servicios", services)
-else:
-    st.info("No hay propuestas guardadas aún")
+            with col1:
+                currency = st.selectbox(
+                    "Moneda",
+                    options=["MXN (Pesos Mexicanos)", "USD (Dólares)"],
+                    index=0 if default_currency.startswith("MXN") else 1,
+                    key="currency",
+                    help="Moneda en la que se presenta la propuesta"
+                )
+                currency_code = "MXN" if currency.startswith("MXN") else "USD"
+                currency_symbol = "$" if currency_code == "MXN" else "US$"
+            
+            with col2:
+                iva_rate = st.number_input(
+                    "Tasa de IVA (%)",
+                    min_value=0.0,
+                    max_value=100.0,
+                    value=float(existing_proposal.get('iva_rate', 0.16) * 100) if existing_proposal else 16.0,
+                    step=1.0,
+                    help="Tasa de IVA a aplicar (México: 16%)",
+                    key="iva_rate"
+                ) / 100
+            
+            with col3:
+                default_iva_mode = "Desglosado (se suma al total)"
+                if existing_proposal and existing_proposal.get('iva_included'):
+                    default_iva_mode = "Integrado (ya incluido en precios)"
+                
+                iva_included = st.radio(
+                    "¿Cómo mostrar el IVA?",
+                    options=["Desglosado (se suma al total)", "Integrado (ya incluido en precios)"],
+                    index=0 if default_iva_mode.startswith("Desglosado") else 1,
+                    key="iva_included"
+                )
+                
+                iva_included_bool = iva_included.startswith("Integrado")
+        
+        # Sección: Términos y Condiciones
+        with st.expander("📋 Términos y Condiciones", expanded=False):
+            from formal_proposal_generator import DEFAULT_TERMS
+            
+            terms = st.text_area(
+                "Edita los términos y condiciones",
+                value=existing_proposal.get('terms_and_conditions', DEFAULT_TERMS) if existing_proposal else DEFAULT_TERMS,
+                height=300,
+                help="Personaliza los términos según tu negocio",
+                key="terms"
+            )
+        
+        # Sección: Firma
+        with st.expander("✍️ Firma", expanded=True):
+            col1, col2 = st.columns(2)
+            
+            with col1:
+                signature_name = st.text_input(
+                    "Nombre de quien firma",
+                    value=existing_proposal.get('signature_name', '') if existing_proposal else "",
+                    key="signature_name"
+                )
+            
+            with col2:
+                signature_title = st.text_input(
+                    "Cargo/Posición",
+                    value=existing_proposal.get('signature_title', 'Ejecutivo Comercial') if existing_proposal else "Ejecutivo Comercial",
+                    key="signature_title"
+                )
+        
+        st.divider()
+        
+        # =========================
+        # Vista Previa y Generación
+        # =========================
+        st.subheader("3️⃣ Generar Propuesta")
+        
+        # Botón de generación
+        col1, col2, col3 = st.columns([2, 1, 1])
+        
+        with col1:
+            generate_button = st.button(
+                "🎯 Generar Propuesta Formal",
+                type="primary",
+                use_container_width=True
+            )
+        
+        with col2:
+            preview_intro = st.button(
+                "👁️ Vista Previa Intro",
+                use_container_width=True
+            )
+        
+        if preview_intro:
+            from formal_proposal_generator import generate_intro_text
+            
+            # Validación básica para mostrar preview
+            issuer_clean = (issuer_company or "").strip()
+            recipient_comp_clean = (recipient_company or "").strip()
+            recipient_cont_clean = (recipient_contact or "").strip()
+            
+            if not issuer_clean or not recipient_comp_clean or not recipient_cont_clean:
+                st.warning("⚠️ Completa los campos obligatorios (Empresa emisora, Empresa receptora, Contacto) para ver la vista previa")
+            else:
+                with st.spinner("Generando vista previa..."):
+                    intro_text = generate_intro_text(
+                        recipient_company,
+                        recipient_contact,
+                        client_type,
+                        market_sector,
+                        issuer_company,
+                        use_ai=st.session_state.get('openai_enabled', False),
+                        openai_api_key=st.session_state.get('openai_api_key')
+                    )
+                    
+                    st.markdown("---")
+                    st.markdown("### 📝 Vista Previa de Introducción")
+                    st.info(intro_text)
+                    st.markdown("---")
+        
+        if generate_button:
+            # Debug: mostrar valores capturados
+            with st.expander("🔍 Debug - Valores capturados", expanded=False):
+                st.write("**Valores raw:**")
+                st.write(f"issuer_company: '{issuer_company}' (tipo: {type(issuer_company)})")
+                st.write(f"recipient_company: '{recipient_company}' (tipo: {type(recipient_company)})")
+                st.write(f"recipient_contact: '{recipient_contact}' (tipo: {type(recipient_contact)})")
+            
+            # Validar campos requeridos - limpiar espacios primero
+            issuer_company_clean = (issuer_company or "").strip()
+            recipient_company_clean = (recipient_company or "").strip()
+            recipient_contact_clean = (recipient_contact or "").strip()
+            
+            missing_fields = []
+            if not issuer_company_clean:
+                missing_fields.append("Nombre de Empresa Emisora")
+            if not recipient_company_clean:
+                missing_fields.append("Nombre de Empresa Receptora")
+            if not recipient_contact_clean:
+                missing_fields.append("Nombre del Contacto Receptor")
+            
+            if missing_fields:
+                st.error(f"❌ Completa los siguientes campos obligatorios: {', '.join(missing_fields)}")
+            else:
+                with st.spinner("🎨 Generando propuesta formal..."):
+                    try:
+                        from formal_proposal_generator import create_formal_proposal
+                        
+                        # Preparar datos
+                        issuer_data = {
+                            'company': issuer_company,
+                            'contact_name': issuer_contact,
+                            'contact_title': issuer_title,
+                            'email': issuer_email,
+                            'phone': issuer_phone
+                        }
+                        
+                        recipient_data = {
+                            'company': recipient_company,
+                            'contact_name': recipient_contact,
+                            'contact_title': recipient_title,
+                            'email': recipient_email
+                        }
+                        
+                        context_data = {
+                            'client_type': client_type,
+                            'market_sector': market_sector,
+                            'subject': subject
+                        }
+                        
+                        logo_ids = {
+                            'issuer': st.session_state.get('issuer_logo_id'),
+                            'client': st.session_state.get('client_logo_id')
+                        }
+                        
+                        signature_data = {
+                            'name': signature_name,
+                            'title': signature_title
+                        }
+                        
+                        iva_config = {
+                            'rate': iva_rate,
+                            'included': iva_included_bool,
+                            'currency': currency_code,
+                            'currency_symbol': currency_symbol
+                        }
+                        
+                        # Generar propuesta
+                        success, proposal_doc_id, message = create_formal_proposal(
+                            quote_id=source_id,
+                            issuer_data=issuer_data,
+                            recipient_data=recipient_data,
+                            context_data=context_data,
+                            logo_ids=logo_ids,
+                            terms=terms,
+                            signature_data=signature_data,
+                            iva_config=iva_config,
+                            created_by="user"
+                        )
+                        
+                        if success:
+                            st.success(f"✅ {message}")
+                            st.balloons()
+                            
+                            # Obtener PDF
+                            from database import get_formal_proposal
+                            proposal = get_formal_proposal(proposal_doc_id)
+                            
+                            if proposal and proposal.get('pdf_file_data'):
+                                # Convertir memoryview a bytes si es necesario
+                                pdf_data = proposal['pdf_file_data']
+                                if isinstance(pdf_data, memoryview):
+                                    pdf_data = bytes(pdf_data)
+                                
+                                st.download_button(
+                                    label="📥 Descargar PDF",
+                                    data=pdf_data,
+                                    file_name=f"{proposal['proposal_number']}.pdf",
+                                    mime="application/pdf",
+                                    use_container_width=True
+                                )
+                        else:
+                            st.error(f"❌ {message}")
+                    
+                    except Exception as e:
+                        st.error(f"❌ Error generando propuesta: {e}")
+                        import traceback
+                        st.code(traceback.format_exc())
+        
+        # =========================
+        # Historial de Propuestas
+        # =========================
+        st.divider()
+        st.subheader("📚 Propuestas Generadas")
+        
+        from database import get_formal_proposals, get_formal_proposal
+        
+        all_proposals = get_formal_proposals()
+        
+        if all_proposals:
+            for prop in all_proposals:
+                with st.expander(f"📄 {prop['proposal_number']} - {prop['recipient_company']} ({prop['status']})"):
+                    col1, col2, col3 = st.columns(3)
+                    
+                    col1.write(f"**Fecha:** {prop['issued_date']}")
+                    col2.write(f"**Cliente:** {prop['recipient_company']}")
+                    col3.write(f"**Estado:** {prop['status']}")
+                    
+                    # Descargar PDF
+                    proposal_full = get_formal_proposal(prop['proposal_doc_id'])
+                    if proposal_full and proposal_full.get('pdf_file_data'):
+                        # Convertir memoryview a bytes si es necesario
+                        pdf_data = proposal_full['pdf_file_data']
+                        if isinstance(pdf_data, memoryview):
+                            pdf_data = bytes(pdf_data)
+                        
+                        st.download_button(
+                            label="📥 Descargar PDF",
+                            data=pdf_data,
+                            file_name=f"{prop['proposal_number']}.pdf",
+                            mime="application/pdf",
+                            key=f"download_{prop['proposal_doc_id']}"
+                        )
+        else:
+            st.info("No hay propuestas formales generadas aún")
 
-# Info de base de datos en footer
+# =========================
+# TAB: BASE DE DATOS
+# =========================
+with tab_db:
+    st.header("📚 Base de Datos de Propuestas")
+    st.divider()
+    
+    # Obtener propuestas cerradas
+    quotes_query = get_all_quotes()
+    
+    if quotes_query:
+        # Agrupar por quote_group_id para mostrar versiones
+        st.subheader("🗂️ Oportunidades y Versiones")
+        
+        # Convertir a DataFrame para agrupar
+        all_quotes_df = pd.DataFrame(
+            quotes_query,
+            columns=["ID", "Group ID", "Versión", "Parent ID", "Fecha", "Estado", "Costo Total", "Ingreso Total", "Utilidad Bruta", "Margen Promedio %"]
+        )
+        
+        # Agrupar por Group ID
+        for group_id, group_df in all_quotes_df.groupby("Group ID"):
+            with st.expander(f"🎯 Oportunidad {group_id[:8]}... ({len(group_df)} versiones)", expanded=False):
+                for _, q in group_df.iterrows():
+                    col1, col2, col3, col4, col5 = st.columns([1, 2, 2, 2, 2])
+                    
+                    with col1:
+                        st.markdown(f"**v{int(q['Versión'])}**")
+                    
+                    with col2:
+                        fecha = pd.to_datetime(q['Fecha']).strftime("%Y-%m-%d %H:%M")
+                        st.caption(f"📅 {fecha}")
+                    
+                    with col3:
+                        st.metric("Ingreso", f"${q['Ingreso Total']:,.2f}")
+                    
+                    with col4:
+                        st.metric("Margen", f"{q['Margen Promedio %']:.2f}%")
+                    
+                    with col5:
+                        if st.button("➕ Nueva versión", key=f"new_v_{q['ID']}"):
+                            # Cargar líneas de esta versión
+                            lines_full = get_quote_lines_full(q['ID'])
+                            
+                            if lines_full:
+                                # Preparar nuevas líneas con nuevos IDs
+                                new_lines = []
+                                for line in lines_full:
+                                    new_lines.append({
+                                        "line_id": str(uuid.uuid4()),  # Nuevo ID
+                                        "sku": line[2],
+                                        "description_original": line[3],
+                                        "description_input": line[3],
+                                        "description_final": line[4],
+                                        "description_corrections": line[5],
+                                        "corrected_desc": line[4],
+                                        "corrections": line[5].split(", ") if line[5] else [],
+                                        "line_type": line[6],
+                                        "service_origin": line[7],
+                                        "cost_unit": line[8],
+                                        "final_price_unit": line[9],
+                                        "margin_pct": line[10],
+                                        "strategy": line[11],
+                                        "warnings": line[12],
+                                        "created_at": datetime.now(UTC).isoformat()
+                                    })
+                                
+                                # Configurar nueva versión
+                                st.session_state.quote_group_id = q['Group ID']
+                                st.session_state.version = int(q['Versión']) + 1
+                                st.session_state.parent_quote_id = q['ID']
+                                st.session_state.quote_id = str(uuid.uuid4())
+                                st.session_state.lines = new_lines
+                                st.success(f"✅ Versión {int(q['Versión']) + 1} creada. Modifica las líneas y guarda.")
+                                st.rerun()
+                    
+                    # Mostrar líneas de esta versión
+                    with st.container():
+                        st.caption(f"📋 Líneas de v{int(q['Versión'])}")
+                        lines = get_quote_lines(q['ID'])
+                        if lines:
+                            lines_df = pd.DataFrame(
+                                lines,
+                                columns=["SKU", "Descripción", "Tipo", "Origen", "Costo Unit.", "Precio Unit.", "Margen %", "Estrategia", "Advertencias"]
+                            )
+                            st.dataframe(lines_df, hide_index=True, width="stretch")
+                    
+                    st.divider()
+        
+        st.divider()
+        
+        # Vista consolidada (anterior)
+        st.subheader("📊 Vista Consolidada")
+        quotes_df = pd.DataFrame(
+            quotes_query,
+            columns=["ID", "Group ID", "Versión", "Parent ID", "Fecha", "Estado", "Costo Total", "Ingreso Total", "Utilidad Bruta", "Margen Promedio %"]
+        )
+        
+        # Formatear fecha
+        quotes_df["Fecha"] = pd.to_datetime(quotes_df["Fecha"]).dt.strftime("%Y-%m-%d %H:%M")
+        
+        # Formatear montos
+        quotes_df["Costo Total"] = quotes_df["Costo Total"].apply(lambda x: f"${x:,.2f}")
+        quotes_df["Ingreso Total"] = quotes_df["Ingreso Total"].apply(lambda x: f"${x:,.2f}")
+        quotes_df["Utilidad Bruta"] = quotes_df["Utilidad Bruta"].apply(lambda x: f"${x:,.2f}")
+        quotes_df["Margen Promedio %"] = quotes_df["Margen Promedio %"].apply(lambda x: f"{x:.2f}%")
+        
+        # Mostrar solo columnas relevantes
+        display_df = quotes_df[["Group ID", "Versión", "Fecha", "Costo Total", "Ingreso Total", "Utilidad Bruta", "Margen Promedio %"]].copy()
+        display_df["Group ID"] = display_df["Group ID"].apply(lambda x: f"{x[:8]}...")
+        
+        st.dataframe(display_df, width='stretch', hide_index=True)
+        
+        # Selector de propuesta para ver detalle
+        st.subheader("🔍 Ver detalle de propuesta")
+        quote_ids = [q[0] for q in quotes_query]
+        selected_quote = st.selectbox(
+            "Selecciona una propuesta",
+            options=quote_ids,
+            format_func=lambda x: f"Propuesta {x[:8]}..."
+        )
+        
+        if selected_quote:
+            # Obtener líneas de la propuesta seleccionada
+            lines_query = get_quote_lines(selected_quote)
+            
+            if lines_query:
+                lines_detail_df = pd.DataFrame(
+                    lines_query,
+                    columns=["SKU", "Descripción", "Tipo", "Origen", "Costo Unit.", "Precio Unit.", "Margen %", "Estrategia", "Advertencias"]
+                )
+                
+                st.dataframe(lines_detail_df, width='stretch', hide_index=True)
+                
+                # Estadísticas de la propuesta seleccionada
+                st.subheader("📊 Estadísticas")
+                col1, col2, col3 = st.columns(3)
+                
+                total_lines = len(lines_query)
+                products = sum(1 for line in lines_query if line[2] == "product")
+                services = sum(1 for line in lines_query if line[2] == "service")
+                
+                col1.metric("Total de líneas", total_lines)
+                col2.metric("Productos", products)
+                col3.metric("Servicios", services)
+        else:
+            st.info("No hay propuestas guardadas aún")
+
+# =========================
+# FOOTER
+# =========================
+st.divider()
 db_info = get_database_info()
-st.caption(f"MVP Cotizador Universal | {db_info['icon']} {db_info['type']} | Corrección de typos | Estado productivo")
+st.caption(f"DynamiQuote © 2026 | {db_info['icon']} {db_info['type']} | Motor AUP + Legacy Cotizador | State: Production-Ready")

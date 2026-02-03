@@ -1,0 +1,595 @@
+<!DOCTYPE html>
+<html lang="es">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Propuesta Comercial - {{ proposal.proposal_number }}</title>
+    <style>
+        /* ==================== CONFIGURACIÓN DE PÁGINA ==================== */
+        @page {
+            size: letter;
+            margin: 2.5cm 2cm 2cm 2cm;
+            
+            @top-right {
+                content: "{{ proposal.proposal_number }}";
+                font-size: 9pt;
+                color: #7f8c8d;
+                font-family: 'Helvetica', sans-serif;
+            }
+            
+            @bottom-center {
+                content: "Página " counter(page) " de " counter(pages);
+                font-size: 9pt;
+                color: #95a5a6;
+                font-family: 'Helvetica', sans-serif;
+            }
+            
+            @bottom-left {
+                content: "{{ proposal.issuer_company }}";
+                font-size: 8pt;
+                color: #bdc3c7;
+            }
+        }
+        
+        /* ==================== ESTILOS GENERALES ==================== */
+        * {
+            margin: 0;
+            padding: 0;
+            box-sizing: border-box;
+        }
+        
+        body {
+            font-family: 'Helvetica Neue', 'Helvetica', 'Arial', sans-serif;
+            font-size: 11pt;
+            line-height: 1.6;
+            color: #2c3e50;
+            background: white;
+        }
+        
+        h1, h2, h3, h4 {
+            font-weight: 600;
+            color: #2c3e50;
+        }
+        
+        h1 {
+            font-size: 24pt;
+            margin-bottom: 10px;
+        }
+        
+        h2 {
+            font-size: 16pt;
+            margin: 30px 0 15px 0;
+            padding-bottom: 8px;
+            border-bottom: 3px solid #3498db;
+        }
+        
+        h3 {
+            font-size: 12pt;
+            color: #34495e;
+            margin-bottom: 10px;
+            padding-bottom: 5px;
+            border-bottom: 1px solid #ecf0f1;
+        }
+        
+        /* ==================== HEADER ==================== */
+        .header {
+            display: table;
+            width: 100%;
+            margin-bottom: 40px;
+            padding-bottom: 20px;
+            border-bottom: 4px solid #2c3e50;
+        }
+        
+        .header-left {
+            display: table-cell;
+            width: 50%;
+            vertical-align: middle;
+        }
+        
+        .header-right {
+            display: table-cell;
+            width: 50%;
+            text-align: right;
+            vertical-align: middle;
+        }
+        
+        .header-logo {
+            max-width: 180px;
+            max-height: 70px;
+            object-fit: contain;
+        }
+        
+        .client-logo {
+            max-width: 150px;
+            max-height: 60px;
+            object-fit: contain;
+        }
+        
+        .proposal-title {
+            font-size: 18pt;
+            font-weight: 700;
+            color: #2c3e50;
+            margin-top: 10px;
+        }
+        
+        .proposal-number {
+            font-size: 14pt;
+            font-weight: 600;
+            color: #3498db;
+            margin-top: 5px;
+        }
+        
+        /* ==================== METADATA ==================== */
+        .metadata {
+            display: table;
+            width: 100%;
+            margin-bottom: 35px;
+        }
+        
+        .metadata-section {
+            display: table-cell;
+            width: 48%;
+            vertical-align: top;
+            padding: 15px;
+            background: linear-gradient(135deg, #f8f9fa 0%, #e9ecef 100%);
+            border-radius: 5px;
+        }
+        
+        .metadata-section:first-child {
+            margin-right: 4%;
+        }
+        
+        .metadata-section h3 {
+            font-size: 11pt;
+            color: #2c3e50;
+            border-bottom: 2px solid #3498db;
+            padding-bottom: 5px;
+            margin-bottom: 12px;
+            text-transform: uppercase;
+            letter-spacing: 0.5px;
+        }
+        
+        .metadata-section p {
+            margin: 3px 0;
+            font-size: 10pt;
+            line-height: 1.4;
+        }
+        
+        .metadata-section strong {
+            color: #34495e;
+            font-weight: 600;
+        }
+        
+        .company-name {
+            font-size: 13pt;
+            font-weight: 700;
+            color: #2c3e50;
+            margin-bottom: 8px;
+        }
+        
+        /* ==================== SUBJECT Y DATES ==================== */
+        .subject-box {
+            background: #ebf5fb;
+            border-left: 4px solid #3498db;
+            padding: 15px 20px;
+            margin: 25px 0;
+            border-radius: 3px;
+        }
+        
+        .subject-box strong {
+            color: #2c3e50;
+            font-weight: 600;
+        }
+        
+        .dates-info {
+            text-align: right;
+            font-size: 10pt;
+            color: #7f8c8d;
+            margin: 15px 0;
+        }
+        
+        .dates-info strong {
+            color: #34495e;
+        }
+        
+        /* ==================== INTRODUCCIÓN ==================== */
+        .intro {
+            margin: 30px 0;
+            text-align: justify;
+            white-space: pre-wrap;
+            font-size: 10.5pt;
+            line-height: 1.7;
+            padding: 20px;
+            background: #fdfefe;
+            border-left: 3px solid #16a085;
+            border-radius: 3px;
+        }
+        
+        /* ==================== TABLA DE ITEMS ==================== */
+        .items-section {
+            margin: 35px 0;
+        }
+        
+        .items-table {
+            width: 100%;
+            border-collapse: collapse;
+            margin: 15px 0;
+            font-size: 9.5pt;
+            box-shadow: 0 2px 4px rgba(0,0,0,0.05);
+        }
+        
+        .items-table thead {
+            background: linear-gradient(135deg, #2c3e50 0%, #34495e 100%);
+            color: white;
+        }
+        
+        .items-table th {
+            padding: 12px 8px;
+            text-align: left;
+            font-weight: 600;
+            text-transform: uppercase;
+            font-size: 8.5pt;
+            letter-spacing: 0.5px;
+        }
+        
+        .items-table tbody tr {
+            border-bottom: 1px solid #ecf0f1;
+            transition: background-color 0.2s;
+        }
+        
+        .items-table tbody tr:nth-child(even) {
+            background-color: #f8f9fa;
+        }
+        
+        .items-table tbody tr:hover {
+            background-color: #e8f4f8;
+        }
+        
+        .items-table td {
+            padding: 10px 8px;
+            vertical-align: top;
+        }
+        
+        .items-table td.number {
+            font-weight: 600;
+            color: #7f8c8d;
+        }
+        
+        .items-table td.description {
+            line-height: 1.4;
+        }
+        
+        /* ==================== TOTALES ==================== */
+        .totals-section {
+            margin: 30px 0 40px auto;
+            width: 45%;
+            float: right;
+        }
+        
+        .totals-table {
+            width: 100%;
+            font-size: 11pt;
+            border: 2px solid #ecf0f1;
+            border-radius: 5px;
+            overflow: hidden;
+        }
+        
+        .totals-table tr {
+            border-bottom: 1px solid #ecf0f1;
+        }
+        
+        .totals-table tr:last-child {
+            border-bottom: none;
+        }
+        
+        .totals-table td {
+            padding: 10px 15px;
+        }
+        
+        .totals-table td:first-child {
+            font-weight: 500;
+            color: #34495e;
+        }
+        
+        .totals-table td:last-child {
+            text-align: right;
+            font-family: 'Courier New', monospace;
+            font-weight: 600;
+        }
+        
+        .totals-table .subtotal-row {
+            background-color: #f8f9fa;
+        }
+        
+        .totals-table .iva-row {
+            background-color: #fff3cd;
+            font-style: italic;
+            font-size: 10pt;
+        }
+        
+        .totals-table .total-row {
+            background: linear-gradient(135deg, #2c3e50 0%, #34495e 100%);
+            color: white;
+            font-size: 13pt;
+            font-weight: 700;
+        }
+        
+        .iva-note {
+            font-size: 8.5pt;
+            color: #7f8c8d;
+            font-style: italic;
+        }
+        
+        /* ==================== TÉRMINOS Y CONDICIONES ==================== */
+        .terms-section {
+            clear: both;
+            margin-top: 50px;
+            padding: 25px;
+            background: linear-gradient(135deg, #fef5e7 0%, #fdebd0 100%);
+            border-left: 5px solid #f39c12;
+            border-radius: 5px;
+            font-size: 9pt;
+            line-height: 1.6;
+            page-break-inside: avoid;
+        }
+        
+        .terms-section h3 {
+            font-size: 12pt;
+            color: #d68910;
+            margin-bottom: 15px;
+            border-bottom: 2px solid #f39c12;
+            padding-bottom: 5px;
+        }
+        
+        .terms-section p {
+            margin: 8px 0;
+        }
+        
+        .terms-section strong {
+            color: #935116;
+        }
+        
+        /* ==================== FIRMA ==================== */
+        .signature-section {
+            margin-top: 70px;
+            text-align: center;
+            page-break-inside: avoid;
+        }
+        
+        .signature-image {
+            max-width: 200px;
+            max-height: 80px;
+            margin-bottom: 10px;
+        }
+        
+        .signature-line {
+            width: 320px;
+            border-top: 2px solid #2c3e50;
+            margin: 50px auto 15px;
+        }
+        
+        .signature-name {
+            font-size: 13pt;
+            font-weight: 700;
+            color: #2c3e50;
+            margin: 10px 0 5px;
+        }
+        
+        .signature-title {
+            font-size: 10pt;
+            color: #7f8c8d;
+            font-style: italic;
+            margin: 3px 0;
+        }
+        
+        .signature-company {
+            font-size: 11pt;
+            font-weight: 600;
+            color: #34495e;
+            margin-top: 8px;
+        }
+        
+        /* ==================== UTILIDADES ==================== */
+        .text-right {
+            text-align: right;
+        }
+        
+        .text-center {
+            text-align: center;
+        }
+        
+        .text-justify {
+            text-align: justify;
+        }
+        
+        .money {
+            font-family: 'Courier New', Courier, monospace;
+            font-weight: 600;
+        }
+        
+        .page-break {
+            page-break-after: always;
+        }
+        
+        /* ==================== FOOTER INFO ==================== */
+        .footer-info {
+            margin-top: 50px;
+            padding-top: 20px;
+            border-top: 1px solid #ecf0f1;
+            font-size: 8pt;
+            color: #95a5a6;
+            text-align: center;
+            line-height: 1.4;
+        }
+    </style>
+</head>
+<body>
+    <!-- ==================== HEADER ==================== -->
+    <div class="header">
+        <div class="header-left">
+            {% if issuer_logo %}
+            <img src="{{ issuer_logo }}" alt="Logo Empresa" class="header-logo">
+            {% else %}
+            <h1 style="margin: 0;">{{ proposal.issuer_company }}</h1>
+            {% endif %}
+        </div>
+        <div class="header-right">
+            {% if client_logo %}
+            <img src="{{ client_logo }}" alt="Logo Cliente" class="client-logo">
+            <br><br>
+            {% endif %}
+            <div class="proposal-title">PROPUESTA COMERCIAL</div>
+            <div class="proposal-number">{{ proposal.proposal_number }}</div>
+        </div>
+    </div>
+    
+    <!-- ==================== METADATA ==================== -->
+    <div class="metadata">
+        <div class="metadata-section">
+            <h3>Datos del Emisor</h3>
+            <p class="company-name">{{ proposal.issuer_company }}</p>
+            {% if proposal.issuer_contact_name %}
+            <p><strong>Contacto:</strong> {{ proposal.issuer_contact_name }}</p>
+            {% endif %}
+            {% if proposal.issuer_contact_title %}
+            <p><strong>Cargo:</strong> {{ proposal.issuer_contact_title }}</p>
+            {% endif %}
+            {% if proposal.issuer_email %}
+            <p><strong>Email:</strong> {{ proposal.issuer_email }}</p>
+            {% endif %}
+            {% if proposal.issuer_phone %}
+            <p><strong>Teléfono:</strong> {{ proposal.issuer_phone }}</p>
+            {% endif %}
+        </div>
+        
+        <div class="metadata-section">
+            <h3>Datos del Cliente</h3>
+            <p class="company-name">{{ proposal.recipient_company }}</p>
+            {% if proposal.recipient_contact_name %}
+            <p><strong>Atención:</strong> {{ proposal.recipient_contact_name }}</p>
+            {% endif %}
+            {% if proposal.recipient_contact_title %}
+            <p><strong>Cargo:</strong> {{ proposal.recipient_contact_title }}</p>
+            {% endif %}
+            {% if proposal.recipient_email %}
+            <p><strong>Email:</strong> {{ proposal.recipient_email }}</p>
+            {% endif %}
+            
+            <div class="dates-info" style="margin-top: 15px;">
+                <p><strong>Fecha de emisión:</strong> {{ proposal.issued_date }}</p>
+                {% if proposal.valid_until %}
+                <p><strong>Válida hasta:</strong> {{ proposal.valid_until }}</p>
+                {% endif %}
+            </div>
+        </div>
+    </div>
+    
+    <!-- ==================== ASUNTO ==================== -->
+    {% if proposal.subject %}
+    <div class="subject-box">
+        <strong>ASUNTO:</strong> {{ proposal.subject }}
+    </div>
+    {% endif %}
+    
+    <!-- ==================== INTRODUCCIÓN ==================== -->
+    <div class="intro">
+{{ proposal.custom_intro }}
+    </div>
+    
+    <!-- ==================== TABLA DE ITEMS ==================== -->
+    <div class="items-section">
+        <h2>DETALLE DE LA PROPUESTA</h2>
+        
+        <table class="items-table">
+            <thead>
+                <tr>
+                    <th style="width: 4%;">#</th>
+                    <th style="width: 12%;">SKU</th>
+                    <th style="width: 44%;">DESCRIPCIÓN</th>
+                    <th style="width: 10%; text-align: center;">CANTIDAD</th>
+                    <th style="width: 15%; text-align: right;">PRECIO UNIT.</th>
+                    <th style="width: 15%; text-align: right;">IMPORTE</th>
+                </tr>
+            </thead>
+            <tbody>
+                {% for line in lines %}
+                <tr>
+                    <td class="number text-center">{{ loop.index }}</td>
+                    <td>{{ line.sku or '-' }}</td>
+                    <td class="description">{{ line.description_final or line.description_original }}</td>
+                    <td class="text-center">{{ "%.0f"|format(line.quantity|float) }}</td>
+                    <td class="text-right money">${{ "{:,.2f}".format(line.final_price_unit|float) }}</td>
+                    <td class="text-right money">${{ "{:,.2f}".format((line.quantity|float) * (line.final_price_unit|float)) }}</td>
+                </tr>
+                {% endfor %}
+            </tbody>
+        </table>
+    </div>
+    
+    <!-- ==================== TOTALES ==================== -->
+    <div class="totals-section">
+        <table class="totals-table">
+            <tr class="subtotal-row">
+                <td>Subtotal:</td>
+                <td class="money">${{ "{:,.2f}".format(totals.subtotal) }}</td>
+            </tr>
+            <tr class="iva-row">
+                <td>
+                    IVA ({{ (totals.iva_rate * 100)|int }}%)
+                    {% if totals.iva_included %}
+                    <span class="iva-note">(incluido)</span>
+                    {% endif %}:
+                </td>
+                <td class="money">${{ "{:,.2f}".format(totals.iva) }}</td>
+            </tr>
+            <tr class="total-row">
+                <td>TOTAL:</td>
+                <td class="money">${{ "{:,.2f}".format(totals.total) }}</td>
+            </tr>
+        </table>
+        
+        {% if not totals.iva_included %}
+        <p style="margin-top: 10px; font-size: 9pt; color: #7f8c8d; font-style: italic; text-align: right;">
+            * IVA desglosado del precio
+        </p>
+        {% else %}
+        <p style="margin-top: 10px; font-size: 9pt; color: #7f8c8d; font-style: italic; text-align: right;">
+            * Precios con IVA incluido
+        </p>
+        {% endif %}
+    </div>
+    
+    <!-- ==================== TÉRMINOS Y CONDICIONES ==================== -->
+    {% if proposal.terms_and_conditions %}
+    <div class="terms-section">
+        <h3>TÉRMINOS Y CONDICIONES</h3>
+        <div style="white-space: pre-wrap;">{{ proposal.terms_and_conditions }}</div>
+    </div>
+    {% endif %}
+    
+    <!-- ==================== FIRMA ==================== -->
+    <div class="signature-section">
+        {% if proposal.signature_image_data %}
+        <img src="data:image/png;base64,{{ proposal.signature_image_data }}" alt="Firma" class="signature-image">
+        {% endif %}
+        
+        <div class="signature-line"></div>
+        
+        {% if proposal.signature_name %}
+        <div class="signature-name">{{ proposal.signature_name }}</div>
+        {% endif %}
+        
+        {% if proposal.signature_title %}
+        <div class="signature-title">{{ proposal.signature_title }}</div>
+        {% endif %}
+        
+        <div class="signature-company">{{ proposal.issuer_company }}</div>
+    </div>
+    
+    <!-- ==================== FOOTER ==================== -->
+    <div class="footer-info">
+        <p>Este documento es una propuesta comercial confidencial.</p>
+        <p>{{ proposal.issuer_company }} • {{ proposal.issued_date }}</p>
+    </div>
+</body>
+</html>

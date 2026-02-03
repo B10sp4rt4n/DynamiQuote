@@ -1,3 +1,12 @@
+<!--
+# WARNING:
+# - DO NOT update closed records
+# - DO NOT calculate totals outside integrated nodes
+# - DO NOT infer values not explicitly derived
+# - DO NOT merge proposal versions
+# - DO NOT bypass tenant isolation
+-->
+
 # 🧾 DynamiQuote - Cotizador Universal MVP
 
 Sistema de cotización inteligente con corrección automática de texto, análisis de márgenes y visualización de datos.

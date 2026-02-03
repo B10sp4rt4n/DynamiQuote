@@ -644,6 +644,317 @@ $1M - $1.5M (conservador)
 
 ---
 
+## 🧠 Pseudocódigo AUP — Sistema Completo
+
+**Motor Multitenant de Propuestas → Rentabilidad → Versionado Inmutable**
+
+**Nivel:** Arquitectural / AUP-safe
+**Objetivo:** cero ambigüedades, cero efectos colaterales
+
+### 🧩 Principios Innegociables (comentarios de sistema)
+```
+# PRINCIPIO 1: Todo vive bajo tenant_id
+# PRINCIPIO 2: Excel es input, no fuente de verdad
+# PRINCIPIO 3: Una fila = un nodo
+# PRINCIPIO 4: El total NO se captura, se deriva
+# PRINCIPIO 5: Cerrar = congelar
+# PRINCIPIO 6: Modificar = derivar nueva propuesta
+# PRINCIPIO 7: Rentabilidad evalúa, no altera cotización
+```
+
+**Copilot no debe violar ninguno.**
+
+### 🟣 Contexto Base (siempre al inicio)
+```
+SET CONTEXT tenant_id
+SET CONTEXT user_id
+VALIDATE tenant_is_active
+VALIDATE user_has_permission
+
+❌ Si falla → abortar
+❌ No continuar “a medias”
+```
+
+---
+
+### 1️⃣ Crear Propuesta (Raíz)
+```
+FUNCTION create_proposal(origin):
+    proposal_id = NEW UUID
+
+    INSERT INTO proposals:
+        proposal_id
+        tenant_id
+        origin
+        status = "open"
+        created_by = user_id
+
+    RETURN proposal_id
+
+🔒 No se crean items sin propuesta.
+```
+
+### 2️⃣ Importar Excel → Nodos Primarios
+```
+FUNCTION import_excel(proposal_id, excel_file):
+
+    rows = PARSE excel_file
+
+    item_counter = 1
+
+    FOR EACH row IN rows:
+
+        item_id = NEW UUID
+
+        subtotal_cost = row.quantity * row.cost_unit
+
+        INSERT INTO proposal_items:
+            item_id
+            tenant_id
+            proposal_id
+            item_number = item_counter
+            quantity = row.quantity
+            sku = row.sku
+            description = row.description
+            cost_unit = row.cost_unit
+            price_unit = NULL
+            subtotal_cost
+            subtotal_price = NULL
+            status = "open"
+            origin = "excel"
+
+        item_counter += 1
+
+    CALL recalculate_integrated_node(proposal_id)
+
+⚠️ Importante:
+NO hay precio aún
+NO se calcula utilidad
+NO se genera narrativa
+```
+
+### 3️⃣ Editar Nodo Individual (Controlado)
+```
+FUNCTION update_proposal_item(item_id, updates):
+
+    item = FETCH proposal_item BY item_id
+
+    IF item.status == "closed":
+        ABORT "Item is closed"
+
+    APPLY updates TO item:
+        quantity?
+        description?
+        price_unit?
+        component_type?
+
+    item.subtotal_cost = item.quantity * item.cost_unit
+
+    IF item.price_unit IS NOT NULL:
+        item.subtotal_price = item.quantity * item.price_unit
+
+    item.status = "modified"
+
+    SAVE item
+
+    CALL recalculate_integrated_node(item.proposal_id)
+
+❌ No toca otros ítems
+❌ No recalcula totales manualmente
+```
+
+### 4️⃣ Nodo Precio Integrado (Única Verdad)
+```
+FUNCTION recalculate_integrated_node(proposal_id):
+
+    items = FETCH proposal_items WHERE proposal_id AND status != "deleted"
+
+    total_cost = SUM(items.subtotal_cost)
+    total_price = SUM(items.subtotal_price WHERE NOT NULL)
+
+    IF total_price IS NULL:
+        gross_profit = NULL
+        margin_pct = NULL
+        health = "undefined"
+    ELSE:
+        gross_profit = total_price - total_cost
+        margin_pct = gross_profit / total_price
+        health = evaluate_health(margin_pct)
+
+    UPSERT proposal_integrated_node:
+        proposal_id
+        tenant_id
+        total_cost
+        total_price
+        gross_profit
+        margin_pct
+        health
+        status = "open"
+
+🔑 No inputs manuales
+🔑 Siempre derivado
+🔑 Siempre consistente
+```
+
+### 5️⃣ Cierre de Propuesta (Acto Formal)
+```
+FUNCTION close_proposal(proposal_id):
+
+    proposal = FETCH proposal
+
+    IF proposal.status == "closed":
+        ABORT "Already closed"
+
+    UPDATE proposal_items SET status = "closed"
+        WHERE proposal_id
+
+    UPDATE proposal_integrated_node SET status = "closed"
+
+    UPDATE proposals:
+        status = "closed"
+        closed_at = NOW
+
+    GENERATE hash_of_proposal
+    STORE audit_event
+
+🚫 Después de esto:
+No updates
+No deletes
+No recalculations
+```
+
+### 6️⃣ Derivar Nueva Propuesta (Versionado Limpio)
+```
+FUNCTION derive_proposal(base_proposal_id):
+
+    base = FETCH proposal WHERE status = "closed"
+
+    new_proposal_id = create_proposal(origin = "derived")
+
+    FOR EACH item IN base.proposal_items:
+
+        new_item_id = NEW UUID
+
+        INSERT proposal_items:
+            COPY ALL FIELDS
+            proposal_id = new_proposal_id
+            item_id = new_item_id
+            status = "open"
+
+    INSERT proposal_derivations:
+        base_proposal_id
+        derived_proposal_id = new_proposal_id
+
+    CALL recalculate_integrated_node(new_proposal_id)
+
+    RETURN new_proposal_id
+
+🧬 Mismos item_number
+🧬 Nuevos UUIDs
+🧬 Editable otra vez
+```
+
+### 7️⃣ Rentabilidad Post-Cotización (Opt-In)
+```
+FUNCTION add_project_expense(proposal_id, expense):
+
+    VALIDATE proposal.status == "closed"
+
+    INSERT project_expenses:
+        tenant_id
+        proposal_id
+        category
+        description
+        amount
+
+    CALL recalculate_profitability_node(proposal_id)
+```
+
+### 8️⃣ Nodo de Rentabilidad (Nueva Capa)
+```
+FUNCTION recalculate_profitability_node(proposal_id):
+
+    integrated = FETCH proposal_integrated_node
+    expenses = FETCH project_expenses
+
+    total_expenses = SUM(expenses.amount)
+
+    net_profit = integrated.gross_profit - total_expenses
+    net_margin_pct = net_profit / integrated.total_price
+
+    health = evaluate_net_health(net_margin_pct)
+
+    UPSERT proposal_profitability_node:
+        proposal_id
+        tenant_id
+        total_sales = integrated.total_price
+        total_cost = integrated.total_cost
+        total_expenses
+        net_profit
+        net_margin_pct
+        health
+
+❌ No altera cotización
+✔ Solo evalúa ejecución
+```
+
+### 9️⃣ Comparación entre Propuestas
+```
+FUNCTION compare_proposals(base_id, derived_id):
+
+    base_node = FETCH integrated_node(base_id)
+    derived_node = FETCH integrated_node(derived_id)
+
+    delta_price = derived.total_price - base.total_price
+    delta_margin = derived.margin_pct - base.margin_pct
+
+    RETURN comparison_object
+
+Drill-down:
+por item_number
+por cantidad
+por precio
+```
+
+### 🔟 Visualizaciones (Solo Lectura)
+```
+FUNCTION generate_charts(proposal_id):
+
+    READ proposal_items
+    READ integrated_node
+    READ profitability_node (if exists)
+
+    GENERATE:
+        pie_component_contribution
+        pie_cost_vs_profit
+        pie_net_distribution
+
+⚠️ Nunca recalculan
+⚠️ Nunca escriben DB
+```
+
+### 🧠 Cierre — Regla de Oro para Copilot
+```
+# WARNING:
+# - DO NOT update closed records
+# - DO NOT calculate totals outside integrated nodes
+# - DO NOT infer values not explicitly derived
+# - DO NOT merge proposal versions
+# - DO NOT bypass tenant isolation
+```
+
+### 🧭 Opinión Final (como diseñador)
+
+Este pseudocódigo:
+
+- resuelve el sistema completo
+- reduce errores humanos
+- evita “creatividad peligrosa” de Copilot
+- mantiene coherencia AUP
+- es implementable en FastAPI / Streamlit / backend puro
+
+---
+
 **Estado:** ✅ Production-Ready  
 **Valoración:** $1M - $1.5M  
 **Próximo hito:** 3 beta customers en 30 días  
