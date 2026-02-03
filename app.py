@@ -723,7 +723,7 @@ st.header("🔍 Comparador de Versiones")
 # Obtener histórico para selector
 hist_compare = pd.DataFrame(
     get_all_quotes(),
-    columns=["quote_id", "quote_group_id", "version", "parent_quote_id", "created_at", "status", "total_cost", "total_revenue", "gross_profit", "avg_margin"]
+    columns=["quote_id", "quote_group_id", "version", "parent_quote_id", "created_at", "status", "total_cost", "total_revenue", "gross_profit", "avg_margin", "playbook_name"]
 )
 
 if not hist_compare.empty:
