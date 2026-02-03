@@ -10,6 +10,7 @@ import os
 from aup_engine import (
     create_proposal,
     import_excel,
+    add_proposal_item,
     update_proposal_item,
     recalculate_integrated_node,
     close_proposal,
@@ -1847,6 +1848,39 @@ with tab_aup:
                         st.error(f"❌ Errores: {result.get('errors')}")
                 except Exception as exc:
                     st.error(f"❌ {exc}")
+
+        st.subheader("➕ Agregar item manual")
+        with st.form("add_item_form", clear_on_submit=True):
+            col1, col2 = st.columns(2)
+            with col1:
+                new_quantity = st.number_input("Cantidad", min_value=0.01, value=1.0, step=0.01)
+                new_cost_unit = st.number_input("Costo unitario", min_value=0.0, value=0.0, step=0.01)
+            with col2:
+                new_sku = st.text_input("SKU (opcional)")
+                new_component_type = st.text_input("Tipo componente (opcional)")
+            
+            new_description = st.text_area("Descripción", placeholder="Descripción del item...")
+            
+            submitted_add = st.form_submit_button("➕ Agregar item", type="primary")
+            
+            if submitted_add:
+                if not new_description or not new_description.strip():
+                    st.error("❌ La descripción es obligatoria")
+                else:
+                    try:
+                        result = add_proposal_item(
+                            proposal_id,
+                            new_quantity,
+                            new_description,
+                            new_cost_unit,
+                            sku=new_sku if new_sku else None,
+                            component_type=new_component_type if new_component_type else None,
+                            context=context
+                        )
+                        st.success(f"✅ Item #{result['item_number']} agregado")
+                        st.rerun()
+                    except Exception as exc:
+                        st.error(f"❌ {exc}")
 
         st.subheader("📦 Items de propuesta")
         items = aup_get_items(proposal_id, tenant_id)

@@ -294,6 +294,83 @@ def import_excel(proposal_id: str, excel_file: bytes, context: Dict[str, Any]) -
 # Items
 # =========================
 
+def add_proposal_item(
+    proposal_id: str,
+    quantity: float,
+    description: str,
+    cost_unit: float,
+    sku: Optional[str] = None,
+    component_type: Optional[str] = None,
+    context: Optional[Dict[str, Any]] = None
+) -> Dict[str, Any]:
+    """Agrega un item manualmente a una propuesta."""
+    tenant_id, _ = require_context(context)
+
+    if quantity <= 0:
+        raise ValueError("La cantidad debe ser mayor a 0")
+    if not description or not description.strip():
+        raise ValueError("La descripción es obligatoria")
+    if cost_unit < 0:
+        raise ValueError("El costo unitario no puede ser negativo")
+
+    with get_cursor() as cur:
+        _ensure_proposal_open(cur, proposal_id, tenant_id)
+
+        # Obtener el siguiente item_number
+        result = _fetchone(
+            cur,
+            "SELECT MAX(item_number) as max_num FROM proposal_items WHERE proposal_id = %s AND tenant_id = %s",
+            "SELECT MAX(item_number) as max_num FROM proposal_items WHERE proposal_id = ? AND tenant_id = ?",
+            (proposal_id, tenant_id),
+        )
+        item_number = (result.get("max_num") or 0) + 1
+
+        item_id = str(uuid.uuid4())
+        subtotal_cost = quantity * cost_unit
+        created_at = _now_iso()
+
+        _execute(
+            cur,
+            """
+            INSERT INTO proposal_items (
+                item_id, tenant_id, proposal_id, item_number, quantity, sku, description,
+                cost_unit, price_unit, subtotal_cost, subtotal_price, status, origin,
+                component_type, created_at
+            )
+            VALUES (%s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s)
+            """,
+            """
+            INSERT INTO proposal_items (
+                item_id, tenant_id, proposal_id, item_number, quantity, sku, description,
+                cost_unit, price_unit, subtotal_cost, subtotal_price, status, origin,
+                component_type, created_at
+            )
+            VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+            """,
+            (
+                item_id,
+                tenant_id,
+                proposal_id,
+                item_number,
+                quantity,
+                sku,
+                description.strip(),
+                cost_unit,
+                None,
+                subtotal_cost,
+                None,
+                "open",
+                "manual",
+                component_type,
+                created_at,
+            ),
+        )
+
+    recalculate_integrated_node(proposal_id, context)
+
+    return {"item_id": item_id, "item_number": item_number}
+
+
 def update_proposal_item(item_id: str, updates: Dict[str, Any], context: Dict[str, Any]) -> Dict[str, Any]:
     tenant_id, _ = require_context(context)
 
