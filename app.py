@@ -43,37 +43,79 @@ PLAYBOOKS = {
         "description": "Evaluación estándar para cotizaciones generales",
         "green": 0.35,
         "yellow": 0.25,
-        "red": 0.25
+        "red": 0.25,
+        "max_red_green": 0.1,  # Máximo 10% de líneas rojas para estado verde
+        "max_red_yellow": 0.3,  # Máximo 30% de líneas rojas para estado amarillo
+        "weights": {
+            "health": 0.30,   # 30% peso a salud general
+            "margin": 0.45,   # 45% peso a margen
+            "profit": 0.25    # 25% peso a utilidad
+        }
     },
     "MSP": {
         "description": "Managed Service Provider - Servicios recurrentes",
         "green": 0.30,
         "yellow": 0.20,
-        "red": 0.20
+        "red": 0.20,
+        "max_red_green": 0.05,  # MSP debe ser más conservador
+        "max_red_yellow": 0.20,
+        "weights": {
+            "health": 0.40,   # Mayor énfasis en salud para servicios recurrentes
+            "margin": 0.40,
+            "profit": 0.20
+        }
     },
     "SaaS": {
         "description": "Software as a Service - Productos digitales",
         "green": 0.40,
         "yellow": 0.30,
-        "red": 0.30
+        "red": 0.30,
+        "max_red_green": 0.15,  # Mayor tolerancia por escalabilidad
+        "max_red_yellow": 0.35,
+        "weights": {
+            "health": 0.25,
+            "margin": 0.50,   # Mayor énfasis en margen para productos digitales
+            "profit": 0.25
+        }
     },
     "Construcción": {
         "description": "Proyectos de construcción e infraestructura",
         "green": 0.25,
         "yellow": 0.18,
-        "red": 0.18
+        "red": 0.18,
+        "max_red_green": 0.08,
+        "max_red_yellow": 0.25,
+        "weights": {
+            "health": 0.35,
+            "margin": 0.30,
+            "profit": 0.35    # Mayor énfasis en profit total para proyectos grandes
+        }
     },
     "Gobierno": {
         "description": "Licitaciones y contratos gubernamentales",
         "green": 0.20,
         "yellow": 0.15,
-        "red": 0.15
+        "red": 0.15,
+        "max_red_green": 0.05,  # Gobierno requiere mayor precisión
+        "max_red_yellow": 0.15,
+        "weights": {
+            "health": 0.50,   # Mayor énfasis en cumplimiento y salud
+            "margin": 0.25,
+            "profit": 0.25
+        }
     },
     "Penetración": {
         "description": "Estrategia agresiva de entrada al mercado",
         "green": 0.15,
         "yellow": 0.10,
-        "red": 0.10
+        "red": 0.10,
+        "max_red_green": 0.20,  # Mayor tolerancia para estrategias agresivas
+        "max_red_yellow": 0.40,
+        "weights": {
+            "health": 0.20,
+            "margin": 0.30,
+            "profit": 0.50    # Prioridad a volumen de profit sobre margen
+        }
     }
 }
 
@@ -1010,7 +1052,10 @@ if not hist_compare.empty:
                 st.markdown("### 📦 Detalle por Componente")
                 
                 comp_components["Δ Absoluto"] = comp_components[f"v{v2}"] - comp_components[f"v{v1}"]
-                comp_components["Δ %"] = ((comp_components[f"v{v2}"] - comp_components[f"v{v1}"]) / comp_components[f"v{v1}"] * 100).replace([float('inf'), -float('inf')], 0).fillna(0)
+                
+                # Calcular Δ % manejando división por cero
+                denominador = comp_components[f"v{v1}"].replace(0, float('nan'))
+                comp_components["Δ %"] = ((comp_components[f"v{v2}"] - comp_components[f"v{v1}"]) / denominador * 100).replace([float('inf'), -float('inf')], 0).fillna(0)
                 
                 # Formatear para display
                 display_comp = comp_components.copy()
@@ -1713,6 +1758,10 @@ with tab_legacy:
         
         df = pd.DataFrame(st.session_state.lines)
         
+        # Asegurar que la columna quantity existe (para compatibilidad con líneas antiguas)
+        if "quantity" not in df.columns:
+            df["quantity"] = 1
+        
         # Convertir a numérico para evitar errores
         df["cost_unit"] = pd.to_numeric(df["cost_unit"], errors='coerce').fillna(0)
         df["final_price_unit"] = pd.to_numeric(df["final_price_unit"], errors='coerce').fillna(0)
@@ -1733,6 +1782,14 @@ with tab_legacy:
         colB.metric("Costo total", f"${round(total_cost,2)}")
         colC.metric("Utilidad bruta", f"${round(gross_profit,2)}")
         colD.metric("Margen bruto %", gross_margin_pct)
+
+        # Asegurar que columnas categóricas sean strings (compatibilidad con selectbox)
+        if "strategy" in df.columns:
+            df["strategy"] = df["strategy"].astype(str).fillna("penetration")
+        if "line_type" in df.columns:
+            df["line_type"] = df["line_type"].astype(str).fillna("product")
+        if "service_origin" in df.columns:
+            df["service_origin"] = df["service_origin"].astype(str).fillna("producto")
 
         # Preparar DataFrame para mostrar con formato
         display_df = df[[
@@ -1863,17 +1920,27 @@ with tab_legacy:
             ax2.set_title("Distribución financiera")
             st.pyplot(fig2)
             plt.close(fig2)  # Cerrar figura para liberar memoria
-            st.pyplot(fig2)
 
         # =========================
         # Cerrar propuesta
         # =========================
         st.subheader("✅ Cerrar y guardar propuesta")
         
-        # Selector de playbook antes de guardar
-        col_save_pb, col_save_btn = st.columns([2, 1])
+        # Opción para nueva oportunidad o continuar con versiones
+        col_new_opp, col_playbook = st.columns([1, 2])
         
-        with col_save_pb:
+        with col_new_opp:
+            new_opportunity = st.checkbox(
+                "🆕 Nueva oportunidad",
+                value=False,
+                help="Si está marcado, crea una nueva oportunidad. Si no, crea una nueva versión de la actual."
+            )
+            if new_opportunity:
+                st.caption("✨ Se creará oportunidad nueva")
+            else:
+                st.caption(f"📝 Versión actual: v{st.session_state.version}")
+        
+        with col_playbook:
             save_playbook = st.selectbox(
                 "📘 Playbook a aplicar",
                 list(PLAYBOOKS.keys()),
@@ -1882,9 +1949,7 @@ with tab_legacy:
             pb_save = PLAYBOOKS[save_playbook]
             st.caption(f"Verde ≥{pb_save['green']}% | Amarillo ≥{pb_save['yellow']}%")
 
-        with col_save_btn:
-            st.write("")  # Espaciado
-            save_button = st.button("Cerrar propuesta", type="primary")
+        save_button = st.button("💾 Guardar Cotización", type="primary", use_container_width=True)
 
         if save_button:
             # Verificar que hay líneas
@@ -1944,12 +2009,28 @@ with tab_legacy:
                     st.success(message)
                     # Limpiar cache de consultas para que se actualicen
                     st.cache_data.clear()
-                    # Reiniciar para nueva cotización
-                    st.session_state.lines = []
-                    st.session_state.quote_id = str(uuid.uuid4())
-                    st.session_state.quote_group_id = str(uuid.uuid4())
-                    st.session_state.version = 1
-                    st.session_state.parent_quote_id = None
+                    
+                    if new_opportunity:
+                        # Nueva oportunidad: reiniciar todo
+                        st.session_state.lines = []
+                        st.session_state.quote_id = str(uuid.uuid4())
+                        st.session_state.quote_group_id = str(uuid.uuid4())
+                        st.session_state.version = 1
+                        st.session_state.parent_quote_id = None
+                        st.info("🆕 Preparado para nueva oportunidad")
+                    else:
+                        # Nueva versión de la misma oportunidad
+                        current_group_id = st.session_state.quote_group_id
+                        current_version = st.session_state.version
+                        saved_quote_id = st.session_state.quote_id
+                        
+                        st.session_state.lines = []
+                        st.session_state.quote_id = str(uuid.uuid4())
+                        st.session_state.quote_group_id = current_group_id
+                        st.session_state.version = current_version + 1
+                        st.session_state.parent_quote_id = saved_quote_id
+                        st.info(f"📝 Preparado para versión v{current_version + 1}")
+                    
                     st.rerun()
                 else:
                     st.error(message)
