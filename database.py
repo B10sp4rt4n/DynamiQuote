@@ -625,7 +625,7 @@ def save_quote(quote_data: tuple, lines_data: list) -> tuple[bool, str]:
     Guarda cotización y sus líneas en una transacción atómica.
     
     Args:
-        quote_data: Tupla con datos de la cotización (11 campos: quote_id, quote_group_id, version, parent_quote_id, created_at, status, total_cost, total_revenue, gross_profit, avg_margin, playbook_name)
+        quote_data: Tupla con datos de la cotización (14 campos: quote_id, quote_group_id, version, parent_quote_id, created_at, status, total_cost, total_revenue, gross_profit, avg_margin, playbook_name, client_name, quoted_by, proposal_name)
         lines_data: Lista de tuplas con datos de líneas (17 campos cada una: incluye import_source, import_batch_id)
     
     Returns:
@@ -643,8 +643,8 @@ def save_quote(quote_data: tuple, lines_data: list) -> tuple[bool, str]:
                 print(f"[DEBUG] Guardando cotización en PostgreSQL: {quote_data[0]}")
                 cur.execute(
                     """INSERT INTO quotes 
-                       (quote_id, quote_group_id, version, parent_quote_id, created_at, status, total_cost, total_revenue, gross_profit, avg_margin, playbook_name)
-                       VALUES (%s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s)""",
+                       (quote_id, quote_group_id, version, parent_quote_id, created_at, status, total_cost, total_revenue, gross_profit, avg_margin, playbook_name, client_name, quoted_by, proposal_name)
+                       VALUES (%s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s)""",
                     quote_data
                 )
                 print(f"[DEBUG] Cotización guardada, insertando líneas...")
@@ -672,7 +672,7 @@ def save_quote(quote_data: tuple, lines_data: list) -> tuple[bool, str]:
             else:
                 print(f"[DEBUG] Guardando cotización en SQLite: {quote_data[0]}")
                 cur.execute(
-                    "INSERT INTO quotes VALUES (?,?,?,?,?,?,?,?,?,?,?)",
+                    "INSERT INTO quotes VALUES (?,?,?,?,?,?,?,?,?,?,?,?,?,?)",
                     quote_data
                 )
                 print(f"[DEBUG] Cotización guardada, insertando líneas...")
@@ -709,7 +709,7 @@ def get_all_quotes() -> list:
     try:
         with get_cursor() as cur:
             cur.execute("""
-                SELECT quote_id, quote_group_id, version, parent_quote_id, created_at, status, total_cost, total_revenue, gross_profit, avg_margin, playbook_name
+                SELECT quote_id, quote_group_id, version, parent_quote_id, created_at, status, total_cost, total_revenue, gross_profit, avg_margin, playbook_name, client_name, quoted_by, proposal_name
                 FROM quotes
                 ORDER BY quote_group_id, version DESC
             """)

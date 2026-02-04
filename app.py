@@ -4,7 +4,7 @@ import uuid
 from datetime import datetime, UTC
 import matplotlib.pyplot as plt
 from spellchecker import SpellChecker
-from database import init_database, save_quote, save_import_file, get_all_quotes, get_quote_lines, get_quote_lines_full, get_latest_version, load_versions_for_group, load_lines_for_quote, get_database_info, get_cursor, is_postgres
+from database import init_database, save_quote, save_import_file, get_all_quotes, get_quote_lines, get_quote_lines_full, get_latest_version, load_versions_for_group, load_lines_for_quote, get_database_info, get_cursor, is_postgres, get_connection
 from excel_import import import_excel_file, format_validation_report
 import os
 from aup_engine import (
@@ -717,6 +717,15 @@ if "lines" not in st.session_state:
 if "pending_line" not in st.session_state:
     st.session_state.pending_line = None
 
+if "client_name" not in st.session_state:
+    st.session_state.client_name = ""
+
+if "quoted_by" not in st.session_state:
+    st.session_state.quoted_by = ""
+
+if "proposal_name" not in st.session_state:
+    st.session_state.proposal_name = ""
+
 # =========================
 # Comparador de versiones
 # =========================
@@ -726,17 +735,35 @@ st.header("🔍 Comparador de Versiones")
 # Obtener histórico para selector
 hist_compare = pd.DataFrame(
     get_all_quotes(),
-    columns=["quote_id", "quote_group_id", "version", "parent_quote_id", "created_at", "status", "total_cost", "total_revenue", "gross_profit", "avg_margin", "playbook_name"]
+    columns=["quote_id", "quote_group_id", "version", "parent_quote_id", "created_at", "status", "total_cost", "total_revenue", "gross_profit", "avg_margin", "playbook_name", "client_name", "quoted_by", "proposal_name"]
 )
 
 if not hist_compare.empty:
     groups = hist_compare["quote_group_id"].unique()
     
     if len(groups) > 0:
+        # Crear diccionario con información descriptiva de cada grupo
+        group_info = {}
+        for group_id in groups:
+            group_quotes = hist_compare[hist_compare["quote_group_id"] == group_id]
+            first_quote = group_quotes.iloc[0]
+            versions_count = len(group_quotes)
+            latest_date = group_quotes["created_at"].max()
+            total_revenue = group_quotes.iloc[-1]["total_revenue"]  # Última versión
+            client_name = first_quote.get("client_name", "")
+            
+            group_info[group_id] = {
+                "client_name": client_name if client_name else "Sin nombre",
+                "versions": versions_count,
+                "date": pd.to_datetime(latest_date).strftime("%Y-%m-%d"),
+                "revenue": float(total_revenue),
+                "playbook": first_quote.get("playbook_name", "General")
+            }
+        
         selected_group = st.selectbox(
             "📂 Selecciona oportunidad",
             groups,
-            format_func=lambda x: f"Oportunidad {x[:8]}...",
+            format_func=lambda x: f"{group_info[x]['client_name']} | {group_info[x]['versions']}v | ${group_info[x]['revenue']:,.0f} | {group_info[x]['date']}",
             key="compare_group_selector"
         )
         
@@ -966,14 +993,18 @@ if not hist_compare.empty:
                     comp_components = pd.concat([c1, c2], axis=1).fillna(0)
                     comp_components.columns = [f"v{v1}", f"v{v2}"]
                     
-                    fig2, ax2 = plt.subplots(figsize=(6, 4))
-                    comp_components.plot(kind="bar", ax=ax2, rot=45, width=0.8)
-                    ax2.set_ylabel("Monto ($)")
-                    ax2.set_title("Componentes por Versión")
-                    ax2.legend()
-                    plt.tight_layout()
-                    st.pyplot(fig2)
-                    plt.close(fig2)  # Cerrar para liberar memoria
+                    # Validar que hay datos numéricos para graficar
+                    if comp_components.empty or comp_components.select_dtypes(include=[float, int]).empty:
+                        st.info("No hay datos de componentes para graficar")
+                    else:
+                        fig2, ax2 = plt.subplots(figsize=(6, 4))
+                        comp_components.plot(kind="bar", ax=ax2, rot=45, width=0.8)
+                        ax2.set_ylabel("Monto ($)")
+                        ax2.set_title("Componentes por Versión")
+                        ax2.legend()
+                        plt.tight_layout()
+                        st.pyplot(fig2)
+                        plt.close(fig2)  # Cerrar para liberar memoria
                 
                 # Tabla detallada de componentes
                 st.markdown("### 📦 Detalle por Componente")
@@ -1276,6 +1307,168 @@ if st.session_state.pending_line:
 # =========================
 with tab_legacy:
     st.header("📝 Cotizador Universal – MVP Funcional")
+    st.divider()
+    
+    # Información de la cotización
+    st.subheader("📋 Información de la Cotización")
+    
+    col_info1, col_info2 = st.columns(2)
+    
+    with col_info1:
+        # Nombre de la propuesta
+        proposal_name_input = st.text_input(
+            "Nombre de la Propuesta",
+            value=st.session_state.proposal_name,
+            placeholder="Ej: Implementación ERP 2026, Soporte Anual...",
+            help="Dale un nombre identificable a esta propuesta",
+            key="proposal_name_input"
+        )
+        
+        # Nombre del cliente
+        client_name_input = st.text_input(
+            "Cliente / Empresa",
+            value=st.session_state.client_name,
+            placeholder="Ej: Acme Corp, Juan Pérez...",
+            help="Para quién es esta cotización",
+            key="client_name_input"
+        )
+    
+    with col_info2:
+        # Quién cotiza
+        quoted_by_input = st.text_input(
+            "Cotizado por (User ID / Nombre)",
+            value=st.session_state.quoted_by,
+            placeholder="Ej: jperez, vendedor@empresa.com, Juan Pérez...",
+            help="Identificador de quién crea esta cotización",
+            key="quoted_by_input"
+        )
+        
+        # Asociar a propuesta existente
+        st.markdown("**¿Nueva propuesta o asociar a existente?**")
+        proposal_type = st.radio(
+            "Tipo",
+            ["Nueva propuesta", "Asociar a existente"],
+            horizontal=True,
+            help="Nueva: crea un nuevo grupo. Existente: nueva versión de propuesta anterior"
+        )
+    
+    # Actualizar session state
+    if proposal_name_input != st.session_state.proposal_name:
+        st.session_state.proposal_name = proposal_name_input
+    if client_name_input != st.session_state.client_name:
+        st.session_state.client_name = client_name_input
+    if quoted_by_input != st.session_state.quoted_by:
+        st.session_state.quoted_by = quoted_by_input
+    
+    # Si es asociar a existente, mostrar selector
+    if proposal_type == "Asociar a existente":
+        st.divider()
+        st.subheader("🔗 Asociar a Propuesta Existente")
+        
+        # Obtener propuestas disponibles agrupadas
+        all_quotes = get_all_quotes()
+        if all_quotes:
+            # Agrupar por proposal_name o client_name
+            quotes_df = pd.DataFrame(
+                all_quotes,
+                columns=["quote_id", "quote_group_id", "version", "parent_quote_id", "created_at", "status", "total_cost", "total_revenue", "gross_profit", "avg_margin", "playbook_name", "client_name", "quoted_by", "proposal_name"]
+            )
+            
+            # Crear opciones agrupadas
+            grouped = quotes_df.groupby("quote_group_id").agg({
+                "proposal_name": "first",
+                "client_name": "first",
+                "version": "max",
+                "total_revenue": "last",
+                "created_at": "max"
+            }).reset_index()
+            
+            if not grouped.empty:
+                proposal_options = {
+                    f"{row['proposal_name'] or 'Sin nombre'} - {row['client_name'] or 'Sin cliente'} (v{int(row['version'])}, ${row['total_revenue']:,.0f})": row['quote_group_id']
+                    for _, row in grouped.iterrows()
+                }
+                
+                selected_existing = st.selectbox(
+                    "Selecciona propuesta base",
+                    options=list(proposal_options.keys()),
+                    help="Se copiará toda la información y se creará una nueva versión"
+                )
+                
+                if st.button("📋 Copiar datos de esta propuesta", type="primary"):
+                    selected_group_id = proposal_options[selected_existing]
+                    
+                    # Obtener la última versión de ese grupo
+                    group_quotes = quotes_df[quotes_df["quote_group_id"] == selected_group_id]
+                    latest = group_quotes.iloc[0]  # Ya está ordenado desc
+                    latest_quote_id = latest["quote_id"]
+                    
+                    # Cargar líneas
+                    lines = get_quote_lines(latest_quote_id)
+                    
+                    if lines:
+                        # Obtener líneas completas con todos los campos
+                        quote_lines_raw = get_quote_lines_full(latest_quote_id)
+                        
+                        # Limpiar líneas actuales
+                        st.session_state.lines = []
+                        
+                        # Mapear campos
+                        columns = ["line_id", "quote_id", "sku", "quantity", "description_original", 
+                                  "description_final", "description_corrections", "line_type", 
+                                  "service_origin", "cost_unit", "final_price_unit", "margin_pct", 
+                                  "strategy", "warnings", "created_at", "import_source", "import_batch_id"]
+                        
+                        for row in quote_lines_raw:
+                            line_dict = dict(zip(columns, row))
+                            # Generar nuevos IDs
+                            line_dict['line_id'] = str(uuid.uuid4())
+                            line_dict['created_at'] = datetime.now(UTC).isoformat()
+                            line_dict['description_input'] = line_dict.get('description_original', '')
+                            line_dict['corrected_desc'] = line_dict.get('description_final', '')
+                            line_dict['corrections'] = line_dict.get('description_corrections', '').split(', ') if line_dict.get('description_corrections') else []
+                            
+                            st.session_state.lines.append(line_dict)
+                        
+                        # Configurar para nueva versión
+                        st.session_state.quote_id = str(uuid.uuid4())
+                        st.session_state.quote_group_id = selected_group_id  # Mismo grupo
+                        st.session_state.version = int(latest["version"]) + 1
+                        st.session_state.parent_quote_id = latest_quote_id
+                        
+                        # Copiar información
+                        st.session_state.proposal_name = latest["proposal_name"] or ""
+                        st.session_state.client_name = latest["client_name"] or ""
+                        st.session_state.quoted_by = latest["quoted_by"] or ""
+                        
+                        st.success(f"✅ {len(quote_lines_raw)} líneas copiadas. Nueva versión v{st.session_state.version} lista para edición.")
+                        st.rerun()
+                    else:
+                        st.warning("Esta propuesta no tiene líneas")
+                
+                # Mostrar tabla de datos de la propuesta seleccionada
+                st.divider()
+                st.markdown("**📊 Vista previa de la propuesta seleccionada:**")
+                
+                selected_group_id = proposal_options[selected_existing]
+                group_quotes = quotes_df[quotes_df["quote_group_id"] == selected_group_id]
+                latest = group_quotes.iloc[0]
+                
+                # Obtener líneas para mostrar
+                lines_preview = get_quote_lines(latest["quote_id"])
+                if lines_preview:
+                    preview_df = pd.DataFrame(
+                        lines_preview,
+                        columns=["SKU", "Descripción", "Tipo", "Origen", "Costo Unit.", "Precio Unit.", "Margen %", "Estrategia", "Advertencias"]
+                    )
+                    st.dataframe(preview_df, use_container_width=True)
+                else:
+                    st.info("Esta propuesta no tiene líneas todavía")
+            else:
+                st.info("No hay propuestas disponibles para asociar")
+        else:
+            st.info("No hay propuestas guardadas aún")
+    
     st.divider()
     
     # Opción para cargar desde propuesta anterior
@@ -1710,7 +1903,10 @@ with tab_legacy:
                     float(total_revenue),
                     float(gross_profit),
                     float(gross_margin_pct),
-                    save_playbook  # Agregar playbook seleccionado
+                    save_playbook,  # Agregar playbook seleccionado
+                    st.session_state.client_name or "Cliente sin nombre",  # Nombre de cliente
+                    st.session_state.quoted_by or "Sin asignar",  # Quién cotiza
+                    st.session_state.proposal_name or "Sin nombre"  # Nombre de propuesta
                 )
                 
                 lines_data = []
@@ -1887,7 +2083,11 @@ with tab_aup:
         st.subheader("📦 Items de propuesta")
         items = aup_get_items(proposal_id, tenant_id)
         if items:
-            st.dataframe(pd.DataFrame(items), width="stretch")
+            # Verificar que los items tengan las columnas necesarias
+            if items and isinstance(items, list) and len(items) > 0:
+                st.dataframe(pd.DataFrame(items), width="stretch")
+            else:
+                st.info("No hay items todavía")
 
             st.markdown("**Editar item (controlado)**")
             options = {f"#{i['item_number']} · {i.get('description','')}": i for i in items}
@@ -2089,7 +2289,7 @@ with tab_proposals:
         all_quotes = get_all_quotes()
         if all_quotes:
             quote_options = {
-                f"{q[0][:8]}... - {q[5]} - ${q[7]:,.2f}": q[0] 
+                f"{q[11] if q[11] else 'Sin nombre'} - {q[5]} - ${q[7]:,.2f}": q[0] 
                 for q in all_quotes
             }
             
@@ -2657,12 +2857,14 @@ with tab_db:
         # Convertir a DataFrame para agrupar
         all_quotes_df = pd.DataFrame(
             quotes_query,
-            columns=["ID", "Group ID", "Versión", "Parent ID", "Fecha", "Estado", "Costo Total", "Ingreso Total", "Utilidad Bruta", "Margen Promedio %", "Playbook"]
+            columns=["ID", "Group ID", "Versión", "Parent ID", "Fecha", "Estado", "Costo Total", "Ingreso Total", "Utilidad Bruta", "Margen Promedio %", "Playbook", "Cliente", "Cotizado por", "Nombre Propuesta"]
         )
         
         # Agrupar por Group ID
         for group_id, group_df in all_quotes_df.groupby("Group ID"):
-            with st.expander(f"🎯 Oportunidad {group_id[:8]}... ({len(group_df)} versiones)", expanded=False):
+            proposal_name = group_df.iloc[0]["Nombre Propuesta"] if group_df.iloc[0]["Nombre Propuesta"] else "Sin nombre"
+            client_name = group_df.iloc[0]["Cliente"] if group_df.iloc[0]["Cliente"] else "Sin cliente"
+            with st.expander(f"📋 {proposal_name} - {client_name} ({len(group_df)} versiones)", expanded=False):
                 for _, q in group_df.iterrows():
                     col1, col2, col3, col4, col5 = st.columns([1, 2, 2, 2, 2])
                     
@@ -2735,7 +2937,7 @@ with tab_db:
         st.subheader("📊 Vista Consolidada")
         quotes_df = pd.DataFrame(
             quotes_query,
-            columns=["ID", "Group ID", "Versión", "Parent ID", "Fecha", "Estado", "Costo Total", "Ingreso Total", "Utilidad Bruta", "Margen Promedio %", "Playbook"]
+            columns=["ID", "Group ID", "Versión", "Parent ID", "Fecha", "Estado", "Costo Total", "Ingreso Total", "Utilidad Bruta", "Margen Promedio %", "Playbook", "Cliente", "Cotizado por", "Nombre Propuesta"]
         )
         
         # Formatear fecha
@@ -2748,8 +2950,7 @@ with tab_db:
         quotes_df["Margen Promedio %"] = quotes_df["Margen Promedio %"].apply(lambda x: f"{x:.2f}%")
         
         # Mostrar solo columnas relevantes
-        display_df = quotes_df[["Group ID", "Versión", "Fecha", "Costo Total", "Ingreso Total", "Utilidad Bruta", "Margen Promedio %", "Playbook"]].copy()
-        display_df["Group ID"] = display_df["Group ID"].apply(lambda x: f"{x[:8]}...")
+        display_df = quotes_df[["Nombre Propuesta", "Cliente", "Cotizado por", "Versión", "Fecha", "Ingreso Total", "Margen Promedio %", "Playbook"]].copy()
         
         st.dataframe(display_df, width='stretch', hide_index=True)
         
@@ -2918,6 +3119,184 @@ with tab_db:
                 st.warning("⚠️ No se encontraron líneas para esta cotización")
         else:
             st.info("No hay propuestas guardadas aún")
+        
+        # =========================
+        # EXPORTAR Y GESTIÓN DE BASE DE DATOS
+        # =========================
+        st.divider()
+        st.subheader("🗂️ Gestión de Base de Datos")
+        
+        col1, col2 = st.columns(2)
+        
+        with col1:
+            st.markdown("### 📥 Exportar Datos")
+            st.info("💡 Descarga toda la información antes de borrar la base de datos")
+            
+            # Obtener todos los datos
+            all_quotes = get_all_quotes()
+            
+            if all_quotes:
+                # Preparar datos para exportación
+                quotes_data = []
+                for q in all_quotes:
+                    quotes_data.append({
+                        "ID": q[0],
+                        "Grupo": q[1],
+                        "Versión": q[2],
+                        "Cotización Padre": q[3],
+                        "Fecha Creación": q[4],
+                        "Estado": q[5],
+                        "Costo Total": q[6],
+                        "Ingreso Total": q[7],
+                        "Utilidad": q[8],
+                        "Margen Promedio": q[9],
+                        "Playbook": q[10],
+                        "Cliente": q[11],
+                        "Cotizado Por": q[12],
+                        "Nombre Propuesta": q[13]
+                    })
+                
+                quotes_df = pd.DataFrame(quotes_data)
+                
+                # Obtener líneas de cotización
+                all_lines_data = []
+                for q in all_quotes:
+                    quote_id = q[0]
+                    lines = get_quote_lines_full(quote_id)
+                    if lines:
+                        for line in lines:
+                            all_lines_data.append({
+                                "ID Línea": line[0],
+                                "ID Cotización": line[1],
+                                "Descripción": line[2],
+                                "Cantidad": line[3],
+                                "Precio Unitario": line[4],
+                                "Costo Unitario": line[5],
+                                "Precio Total": line[6],
+                                "Costo Total": line[7],
+                                "Utilidad": line[8],
+                                "Margen %": line[9],
+                                "Origen": line[10],
+                                "Playbook Matched": line[11],
+                                "Comentarios": line[12],
+                                "Salud": line[13],
+                                "Fue Corregido": line[14],
+                                "Texto Original": line[15],
+                                "Origen Importación": line[16] if len(line) > 16 else None,
+                                "Lote Importación": line[17] if len(line) > 17 else None
+                            })
+                
+                lines_df = pd.DataFrame(all_lines_data) if all_lines_data else pd.DataFrame()
+                
+                # Resumen de la exportación
+                st.metric("Total de Cotizaciones", len(quotes_df))
+                st.metric("Total de Líneas", len(lines_df))
+                
+                # Botones de descarga
+                st.markdown("#### Descargar archivos:")
+                
+                # CSV de cotizaciones
+                csv_quotes = quotes_df.to_csv(index=False).encode('utf-8')
+                st.download_button(
+                    label="📄 Descargar Cotizaciones (CSV)",
+                    data=csv_quotes,
+                    file_name=f"cotizaciones_{pd.Timestamp.now().strftime('%Y%m%d_%H%M%S')}.csv",
+                    mime="text/csv",
+                    use_container_width=True
+                )
+                
+                # CSV de líneas
+                if not lines_df.empty:
+                    csv_lines = lines_df.to_csv(index=False).encode('utf-8')
+                    st.download_button(
+                        label="📋 Descargar Líneas de Cotización (CSV)",
+                        data=csv_lines,
+                        file_name=f"lineas_cotizacion_{pd.Timestamp.now().strftime('%Y%m%d_%H%M%S')}.csv",
+                        mime="text/csv",
+                        use_container_width=True
+                    )
+                
+                # Excel con ambas hojas
+                try:
+                    import io
+                    output = io.BytesIO()
+                    with pd.ExcelWriter(output, engine='openpyxl') as writer:
+                        quotes_df.to_excel(writer, sheet_name='Cotizaciones', index=False)
+                        if not lines_df.empty:
+                            lines_df.to_excel(writer, sheet_name='Líneas', index=False)
+                    excel_data = output.getvalue()
+                    
+                    st.download_button(
+                        label="📊 Descargar Todo (Excel)",
+                        data=excel_data,
+                        file_name=f"base_datos_completa_{pd.Timestamp.now().strftime('%Y%m%d_%H%M%S')}.xlsx",
+                        mime="application/vnd.openxmlformats-officedocument.spreadsheetml.sheet",
+                        use_container_width=True
+                    )
+                except ImportError:
+                    st.warning("⚠️ Instala 'openpyxl' para exportar a Excel")
+                
+            else:
+                st.warning("⚠️ No hay datos para exportar")
+        
+        with col2:
+            st.markdown("### 🗑️ Borrar Base de Datos")
+            st.error("⚠️ **PRECAUCIÓN:** Esta acción es irreversible")
+            
+            if all_quotes:
+                st.warning(f"Se borrarán **{len(all_quotes)} cotizaciones** y todas sus líneas asociadas")
+                
+                # Checkbox de confirmación
+                confirmar_borrado = st.checkbox(
+                    "✅ Confirmo que he descargado la información y quiero borrar TODA la base de datos",
+                    key="confirmar_borrado_db"
+                )
+                
+                if confirmar_borrado:
+                    st.text_input(
+                        "Escribe 'BORRAR TODO' para confirmar:",
+                        key="texto_confirmacion_borrado"
+                    )
+                    
+                    if st.button("🗑️ BORRAR TODA LA BASE DE DATOS", type="primary", use_container_width=True):
+                        if st.session_state.get("texto_confirmacion_borrado", "") == "BORRAR TODO":
+                            with st.spinner("Borrando base de datos..."):
+                                try:
+                                    # Borrar todas las líneas primero (integridad referencial)
+                                    conn = get_connection()
+                                    cursor = conn.cursor()
+                                    
+                                    cursor.execute("DELETE FROM quote_lines")
+                                    deleted_lines = cursor.rowcount
+                                    
+                                    cursor.execute("DELETE FROM quotes")
+                                    deleted_quotes = cursor.rowcount
+                                    
+                                    conn.commit()
+                                    cursor.close()
+                                    conn.close()
+                                    
+                                    # Limpiar caché
+                                    st.cache_data.clear()
+                                    
+                                    st.success(f"✅ Base de datos borrada exitosamente\n\n"
+                                             f"- {deleted_quotes} cotizaciones eliminadas\n"
+                                             f"- {deleted_lines} líneas eliminadas")
+                                    
+                                    # Limpiar sesión
+                                    st.session_state.confirmar_borrado_db = False
+                                    st.session_state.texto_confirmacion_borrado = ""
+                                    
+                                    st.rerun()
+                                    
+                                except Exception as e:
+                                    st.error(f"❌ Error al borrar la base de datos: {str(e)}")
+                        else:
+                            st.error("❌ Debes escribir 'BORRAR TODO' para confirmar")
+                else:
+                    st.info("👆 Marca la casilla arriba para habilitar el borrado")
+            else:
+                st.info("✅ La base de datos ya está vacía")
 
 # =========================
 # FOOTER
