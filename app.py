@@ -1366,7 +1366,8 @@ with tab_legacy:
             value=st.session_state.proposal_name,
             placeholder="Ej: Implementación ERP 2026, Soporte Anual...",
             help="Dale un nombre identificable a esta propuesta",
-            key="proposal_name_input"
+            key="proposal_name_input",
+            on_change=lambda: setattr(st.session_state, 'proposal_name', st.session_state.get('proposal_name_input', ''))
         )
         
         # Nombre del cliente
@@ -1375,7 +1376,8 @@ with tab_legacy:
             value=st.session_state.client_name,
             placeholder="Ej: Acme Corp, Juan Pérez...",
             help="Para quién es esta cotización",
-            key="client_name_input"
+            key="client_name_input",
+            on_change=lambda: setattr(st.session_state, 'client_name', st.session_state.get('client_name_input', ''))
         )
     
     with col_info2:
@@ -1385,7 +1387,8 @@ with tab_legacy:
             value=st.session_state.quoted_by,
             placeholder="Ej: jperez, vendedor@empresa.com, Juan Pérez...",
             help="Identificador de quién crea esta cotización",
-            key="quoted_by_input"
+            key="quoted_by_input",
+            on_change=lambda: setattr(st.session_state, 'quoted_by', st.session_state.get('quoted_by_input', ''))
         )
         
         # Asociar a propuesta existente
@@ -1397,13 +1400,11 @@ with tab_legacy:
             help="Nueva: crea un nuevo grupo. Existente: nueva versión de propuesta anterior"
         )
     
-    # Actualizar session state
-    if proposal_name_input != st.session_state.proposal_name:
-        st.session_state.proposal_name = proposal_name_input
-    if client_name_input != st.session_state.client_name:
-        st.session_state.client_name = client_name_input
-    if quoted_by_input != st.session_state.quoted_by:
-        st.session_state.quoted_by = quoted_by_input
+    # Los inputs ya actualizan session_state con on_change callbacks
+    # Sincronizar valores finales antes de guardar
+    st.session_state.proposal_name = st.session_state.get('proposal_name_input', st.session_state.proposal_name)
+    st.session_state.client_name = st.session_state.get('client_name_input', st.session_state.client_name)
+    st.session_state.quoted_by = st.session_state.get('quoted_by_input', st.session_state.quoted_by)
     
     # Si es asociar a existente, mostrar selector
     if proposal_type == "Asociar a existente":
@@ -3421,10 +3422,19 @@ with tab_db:
                                     
                                 except Exception as e:
                                     if conn:
-                                        conn.rollback()
-                                        if cursor:
-                                            cursor.close()
-                                        conn.close()
+                                        try:
+                                            conn.rollback()
+                                        except:
+                                            pass  # Conexión ya cerrada
+                                        try:
+                                            if cursor:
+                                                cursor.close()
+                                        except:
+                                            pass
+                                        try:
+                                            conn.close()
+                                        except:
+                                            pass
                                     st.error(f"❌ Error al borrar la base de datos: {str(e)}")
                         else:
                             st.error("❌ Debes escribir 'BORRAR TODO' para confirmar")
