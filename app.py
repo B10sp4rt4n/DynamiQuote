@@ -759,14 +759,15 @@ if "lines" not in st.session_state:
 if "pending_line" not in st.session_state:
     st.session_state.pending_line = None
 
-if "client_name" not in st.session_state:
-    st.session_state.client_name = ""
+# Inicializar campos de información de cotización (no usar los mismos nombres que los keys de inputs)
+if "saved_client_name" not in st.session_state:
+    st.session_state.saved_client_name = ""
 
-if "quoted_by" not in st.session_state:
-    st.session_state.quoted_by = ""
+if "saved_quoted_by" not in st.session_state:
+    st.session_state.saved_quoted_by = ""
 
-if "proposal_name" not in st.session_state:
-    st.session_state.proposal_name = ""
+if "saved_proposal_name" not in st.session_state:
+    st.session_state.saved_proposal_name = ""
 
 # =========================
 # Comparador de versiones
@@ -1359,36 +1360,36 @@ with tab_legacy:
     
     col_info1, col_info2 = st.columns(2)
     
+    # DEBUG: Mostrar valores actuales
+    st.caption(f"🔍 DEBUG - session_state: proposal_name='{st.session_state.get('input_proposal_name', '')}' | client_name='{st.session_state.get('input_client_name', '')}' | quoted_by='{st.session_state.get('input_quoted_by', '')}'")
+    
     with col_info1:
         # Nombre de la propuesta
-        proposal_name_input = st.text_input(
+        proposal_name_value = st.text_input(
             "Nombre de la Propuesta",
-            value=st.session_state.proposal_name,
+            value=st.session_state.saved_proposal_name,
             placeholder="Ej: Implementación ERP 2026, Soporte Anual...",
             help="Dale un nombre identificable a esta propuesta",
-            key="proposal_name_input",
-            on_change=lambda: setattr(st.session_state, 'proposal_name', st.session_state.get('proposal_name_input', ''))
+            key="input_proposal_name"
         )
         
         # Nombre del cliente
-        client_name_input = st.text_input(
+        client_name_value = st.text_input(
             "Cliente / Empresa",
-            value=st.session_state.client_name,
+            value=st.session_state.saved_client_name,
             placeholder="Ej: Acme Corp, Juan Pérez...",
             help="Para quién es esta cotización",
-            key="client_name_input",
-            on_change=lambda: setattr(st.session_state, 'client_name', st.session_state.get('client_name_input', ''))
+            key="input_client_name"
         )
     
     with col_info2:
         # Quién cotiza
-        quoted_by_input = st.text_input(
+        quoted_by_value = st.text_input(
             "Cotizado por (User ID / Nombre)",
-            value=st.session_state.quoted_by,
+            value=st.session_state.saved_quoted_by,
             placeholder="Ej: jperez, vendedor@empresa.com, Juan Pérez...",
             help="Identificador de quién crea esta cotización",
-            key="quoted_by_input",
-            on_change=lambda: setattr(st.session_state, 'quoted_by', st.session_state.get('quoted_by_input', ''))
+            key="input_quoted_by"
         )
         
         # Asociar a propuesta existente
@@ -1399,12 +1400,6 @@ with tab_legacy:
             horizontal=True,
             help="Nueva: crea un nuevo grupo. Existente: nueva versión de propuesta anterior"
         )
-    
-    # Los inputs ya actualizan session_state con on_change callbacks
-    # Sincronizar valores finales antes de guardar
-    st.session_state.proposal_name = st.session_state.get('proposal_name_input', st.session_state.proposal_name)
-    st.session_state.client_name = st.session_state.get('client_name_input', st.session_state.client_name)
-    st.session_state.quoted_by = st.session_state.get('quoted_by_input', st.session_state.quoted_by)
     
     # Si es asociar a existente, mostrar selector
     if proposal_type == "Asociar a existente":
@@ -1483,9 +1478,9 @@ with tab_legacy:
                         st.session_state.parent_quote_id = latest_quote_id
                         
                         # Copiar información
-                        st.session_state.proposal_name = latest["proposal_name"] or ""
-                        st.session_state.client_name = latest["client_name"] or ""
-                        st.session_state.quoted_by = latest["quoted_by"] or ""
+                        st.session_state.saved_proposal_name = latest["proposal_name"] or ""
+                        st.session_state.saved_client_name = latest["client_name"] or ""
+                        st.session_state.saved_quoted_by = latest["quoted_by"] or ""
                         
                         st.success(f"✅ {len(quote_lines_raw)} líneas copiadas. Nueva versión v{st.session_state.version} lista para edición.")
                         st.rerun()
@@ -1957,6 +1952,19 @@ with tab_legacy:
             if not st.session_state.lines:
                 st.error("❌ No hay líneas para guardar")
             else:
+                # Capturar valores actuales de los inputs
+                current_proposal_name = st.session_state.get('input_proposal_name', '')
+                current_client_name = st.session_state.get('input_client_name', '')
+                current_quoted_by = st.session_state.get('input_quoted_by', '')
+                
+                # DEBUG: Mostrar valores antes de guardar
+                st.info(f"""
+                **DEBUG - Valores a guardar:**
+                - proposal_name: `{current_proposal_name}`
+                - client_name: `{current_client_name}`
+                - quoted_by: `{current_quoted_by}`
+                """)
+                
                 # Preparar datos para guardar directamente desde session_state.lines
                 quote_data = (
                     st.session_state.quote_id,
@@ -1970,9 +1978,9 @@ with tab_legacy:
                     float(gross_profit),
                     float(gross_margin_pct),
                     save_playbook,  # Agregar playbook seleccionado
-                    st.session_state.client_name or "Cliente sin nombre",  # Nombre de cliente
-                    st.session_state.quoted_by or "Sin asignar",  # Quién cotiza
-                    st.session_state.proposal_name or "Sin nombre"  # Nombre de propuesta
+                    current_client_name or "Cliente sin nombre",  # Nombre de cliente
+                    current_quoted_by or "Sin asignar",  # Quién cotiza
+                    current_proposal_name or "Sin nombre"  # Nombre de propuesta
                 )
                 
                 lines_data = []
@@ -2018,6 +2026,10 @@ with tab_legacy:
                         st.session_state.quote_group_id = str(uuid.uuid4())
                         st.session_state.version = 1
                         st.session_state.parent_quote_id = None
+                        # Limpiar campos de información
+                        st.session_state.saved_proposal_name = ""
+                        st.session_state.saved_client_name = ""
+                        st.session_state.saved_quoted_by = ""
                         st.info("🆕 Preparado para nueva oportunidad")
                     else:
                         # Nueva versión de la misma oportunidad
