@@ -7,12 +7,18 @@ import streamlit as st
 import requests
 from typing import List, Dict, Any
 import pandas as pd
+import sys
+import os
+
+# Agregar directorio raíz al path para importar aup_engine
+sys.path.insert(0, os.path.join(os.path.dirname(__file__), '../..'))
 
 # Importar lógica legacy (mantener durante migración)
 try:
     from aup_engine import calculate_item_node as legacy_calculate_item_node
     LEGACY_AVAILABLE = True
-except ImportError:
+except ImportError as e:
+    print(f"Warning: No se pudo importar aup_engine: {e}")
     LEGACY_AVAILABLE = False
     legacy_calculate_item_node = None
 

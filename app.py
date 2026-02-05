@@ -3351,47 +3351,80 @@ with tab_db:
                     if st.button("🗑️ BORRAR TODA LA BASE DE DATOS", type="primary", use_container_width=True):
                         if st.session_state.get("texto_confirmacion_borrado", "") == "BORRAR TODO":
                             with st.spinner("Borrando base de datos..."):
+                                conn = None
+                                cursor = None
                                 try:
-                                    # Borrar todas las tablas respetando integridad referencial
                                     conn = get_connection()
                                     cursor = conn.cursor()
                                     
-                                    # 1. Borrar propuestas formales (tienen FK a quotes)
-                                    cursor.execute("DELETE FROM formal_proposals")
-                                    deleted_proposals = cursor.rowcount
+                                    # Contar registros antes de borrar
+                                    deleted_counts = {}
                                     
-                                    # 2. Borrar tracking de importaciones (tienen FK a quotes)
-                                    cursor.execute("DELETE FROM import_tracking")
-                                    deleted_imports = cursor.rowcount
+                                    if is_postgres():
+                                        # Obtener conteos antes de borrar
+                                        tables = ["formal_proposals", "import_files", "quote_lines", "quotes"]
+                                        for table in tables:
+                                            try:
+                                                cursor.execute(f"SELECT COUNT(*) FROM {table}")
+                                                deleted_counts[table] = cursor.fetchone()[0]
+                                            except:
+                                                deleted_counts[table] = 0
+                                        
+                                        # Usar DELETE en orden inverso de dependencias
+                                        # formal_proposals depende de quotes, así que se borra primero
+                                        cursor.execute("DELETE FROM formal_proposals")
+                                        cursor.execute("DELETE FROM import_files")
+                                        cursor.execute("DELETE FROM quote_lines")
+                                        cursor.execute("DELETE FROM quotes")
+                                        
+                                        conn.commit()
+                                    else:
+                                        # SQLite - mismo enfoque
+                                        tables = [
+                                            ("formal_proposals", True),
+                                            ("import_files", True),
+                                            ("quote_lines", False),
+                                            ("quotes", False)
+                                        ]
+                                        
+                                        for table, optional in tables:
+                                            try:
+                                                cursor.execute(f"SELECT COUNT(*) FROM {table}")
+                                                deleted_counts[table] = cursor.fetchone()[0]
+                                                cursor.execute(f"DELETE FROM {table}")
+                                            except Exception:
+                                                if not optional:
+                                                    raise
+                                                deleted_counts[table] = 0
+                                        
+                                        conn.commit()
                                     
-                                    # 3. Borrar líneas de cotización (tienen FK a quotes)
-                                    cursor.execute("DELETE FROM quote_lines")
-                                    deleted_lines = cursor.rowcount
-                                    
-                                    # 4. Finalmente borrar cotizaciones
-                                    cursor.execute("DELETE FROM quotes")
-                                    deleted_quotes = cursor.rowcount
-                                    
-                                    conn.commit()
                                     cursor.close()
                                     conn.close()
                                     
-                                    # Limpiar caché
                                     st.cache_data.clear()
                                     
-                                    st.success(f"✅ Base de datos borrada exitosamente\n\n"
-                                             f"- {deleted_quotes} cotizaciones eliminadas\n"
-                                             f"- {deleted_lines} líneas eliminadas\n"
-                                             f"- {deleted_proposals} propuestas formales eliminadas\n"
-                                             f"- {deleted_imports} registros de importación eliminados")
+                                    mensaje = (
+                                        "✅ Base de datos borrada exitosamente\n\n"
+                                        f"- {deleted_counts.get('quotes', 0)} cotizaciones eliminadas\n"
+                                        f"- {deleted_counts.get('quote_lines', 0)} líneas eliminadas"
+                                    )
+                                    if deleted_counts.get("formal_proposals", 0) > 0:
+                                        mensaje += f"\n- {deleted_counts['formal_proposals']} propuestas formales eliminadas"
+                                    if deleted_counts.get("import_files", 0) > 0:
+                                        mensaje += f"\n- {deleted_counts['import_files']} archivos importados eliminados"
                                     
-                                    # Limpiar sesión
+                                    st.success(mensaje)
                                     st.session_state.confirmar_borrado_db = False
                                     st.session_state.texto_confirmacion_borrado = ""
-                                    
                                     st.rerun()
                                     
                                 except Exception as e:
+                                    if conn:
+                                        conn.rollback()
+                                        if cursor:
+                                            cursor.close()
+                                        conn.close()
                                     st.error(f"❌ Error al borrar la base de datos: {str(e)}")
                         else:
                             st.error("❌ Debes escribir 'BORRAR TODO' para confirmar")
