@@ -3037,11 +3037,20 @@ with tab_db:
         
         # Selector de propuesta para ver detalle
         st.subheader("🔍 Ver detalle completo de propuesta")
-        quote_ids = [q[0] for q in quotes_query]
+        # Crear diccionario para mapear quote_id a información legible
+        quote_options = {}
+        for q in quotes_query:
+            quote_id = q[0]
+            nombre = q[13] if q[13] else "Sin nombre"
+            cliente = q[11] if q[11] else "Sin cliente"
+            version = q[2]
+            fecha = pd.to_datetime(q[4]).strftime("%Y-%m-%d")
+            quote_options[quote_id] = f"{nombre} - {cliente} (v{version}) - {fecha}"
+        
         selected_quote = st.selectbox(
             "Selecciona una propuesta",
-            options=quote_ids,
-            format_func=lambda x: f"Propuesta {x[:8]}..."
+            options=list(quote_options.keys()),
+            format_func=lambda x: quote_options[x]
         )
         
         if selected_quote:
