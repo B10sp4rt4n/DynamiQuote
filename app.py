@@ -3352,13 +3352,23 @@ with tab_db:
                         if st.session_state.get("texto_confirmacion_borrado", "") == "BORRAR TODO":
                             with st.spinner("Borrando base de datos..."):
                                 try:
-                                    # Borrar todas las líneas primero (integridad referencial)
+                                    # Borrar todas las tablas respetando integridad referencial
                                     conn = get_connection()
                                     cursor = conn.cursor()
                                     
+                                    # 1. Borrar propuestas formales (tienen FK a quotes)
+                                    cursor.execute("DELETE FROM formal_proposals")
+                                    deleted_proposals = cursor.rowcount
+                                    
+                                    # 2. Borrar tracking de importaciones (tienen FK a quotes)
+                                    cursor.execute("DELETE FROM import_tracking")
+                                    deleted_imports = cursor.rowcount
+                                    
+                                    # 3. Borrar líneas de cotización (tienen FK a quotes)
                                     cursor.execute("DELETE FROM quote_lines")
                                     deleted_lines = cursor.rowcount
                                     
+                                    # 4. Finalmente borrar cotizaciones
                                     cursor.execute("DELETE FROM quotes")
                                     deleted_quotes = cursor.rowcount
                                     
@@ -3371,7 +3381,9 @@ with tab_db:
                                     
                                     st.success(f"✅ Base de datos borrada exitosamente\n\n"
                                              f"- {deleted_quotes} cotizaciones eliminadas\n"
-                                             f"- {deleted_lines} líneas eliminadas")
+                                             f"- {deleted_lines} líneas eliminadas\n"
+                                             f"- {deleted_proposals} propuestas formales eliminadas\n"
+                                             f"- {deleted_imports} registros de importación eliminados")
                                     
                                     # Limpiar sesión
                                     st.session_state.confirmar_borrado_db = False
