@@ -172,21 +172,22 @@ def test_health_general_playbook():
 
 def test_health_msp_playbook():
     """
-    Verifica que thresholds de MSP sean diferentes.
+    Verifica que thresholds de MSP sean diferentes a General.
     MSP: verde >= 0.30, amarillo >= 0.20
+    General: verde >= 0.35, amarillo >= 0.25
     """
-    # Margen 25% es amarillo en General, pero verde en MSP
+    # Margen 31% es amarillo en General, pero VERDE en MSP
     item = {
         "quantity": 1,
         "cost_unit": 100,
-        "price_unit": 133.33  # margen ≈ 0.25
+        "price_unit": 144.93  # margen = (144.93-100)/144.93 ≈ 0.31 = 31%
     }
     
     result_general = ProfitabilityCalculator.calculate_item_node(item, "General")
     result_msp = ProfitabilityCalculator.calculate_item_node(item, "MSP")
     
-    assert result_general["health"] == "yellow"  # 0.25 < 0.35
-    assert result_msp["health"] == "green"       # 0.25 >= 0.30 - FALLA
+    assert result_general["health"] == "yellow"  # 0.31 >= 0.25 y < 0.35
+    assert result_msp["health"] == "green"       # 0.31 >= 0.30 ✓
 
 
 def test_health_penetracion_playbook():

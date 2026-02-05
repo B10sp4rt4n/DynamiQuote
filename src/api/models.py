@@ -3,9 +3,8 @@ Modelos Pydantic para la API de DynamiQuote.
 Define contratos de datos entre frontend y backend.
 """
 
-from pydantic import BaseModel, Field, validator
+from pydantic import BaseModel, Field
 from typing import Optional, List
-from decimal import Decimal
 
 
 class ItemInput(BaseModel):
@@ -18,12 +17,6 @@ class ItemInput(BaseModel):
     quantity: float = Field(gt=0, description="Cantidad de unidades (debe ser > 0)")
     cost_unit: float = Field(ge=0, description="Costo unitario")
     price_unit: Optional[float] = Field(None, ge=0, description="Precio unitario (entrada)")
-    
-    @validator('quantity', 'cost_unit')
-    def validate_positive_numbers(cls, v, field):
-        if v < 0:
-            raise ValueError(f"{field.name} no puede ser negativo")
-        return v
 
 
 class ItemNode(BaseModel):
@@ -65,13 +58,6 @@ class BatchCalculateRequest(BaseModel):
     """
     items: List[ItemInput] = Field(..., min_length=1, max_length=1000)
     playbook_name: str = Field(default="General", description="Playbook a usar")
-    
-    @validator('playbook_name')
-    def validate_playbook(cls, v):
-        valid_playbooks = ["General", "MSP", "SaaS", "Construcción", "Gobierno", "Penetración"]
-        if v not in valid_playbooks:
-            raise ValueError(f"Playbook debe ser uno de: {valid_playbooks}")
-        return v
     
     class Config:
         json_schema_extra = {
@@ -139,3 +125,4 @@ class PlaybooksResponse(BaseModel):
     """Response con todos los playbooks disponibles."""
     playbooks: List[PlaybookInfo]
     total: int
+
