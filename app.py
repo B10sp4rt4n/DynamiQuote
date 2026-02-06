@@ -1368,42 +1368,47 @@ with tab_legacy:
     # Información de la cotización
     st.subheader("📋 Información de la Cotización")
     
-    col_info1, col_info2 = st.columns(2)
-    
-    with col_info1:
-        # Nombre de la propuesta
-        st.text_input(
+    # FORM para capturar todos los valores al mismo tiempo
+    with st.form("info_cotizacion_form", clear_on_submit=False):
+        proposal_name_form = st.text_input(
             "Nombre de la Propuesta",
+            value=st.session_state.get('saved_proposal_name', ''),
             placeholder="Ej: Implementación ERP 2026, Soporte Anual...",
-            help="Dale un nombre identificable a esta propuesta",
-            key="input_proposal_name"
+            help="Dale un nombre identificable a esta propuesta"
         )
         
-        # Nombre del cliente  
-        st.text_input(
-            "Cliente / Empresa",
-            placeholder="Ej: Acme Corp, Juan Pérez...",
-            help="Para quién es esta cotización",
-            key="input_client_name"
-        )
+        col_form1, col_form2 = st.columns(2)
+        with col_form1:
+            client_name_form = st.text_input(
+                "Cliente / Empresa",
+                value=st.session_state.get('saved_client_name', ''),
+                placeholder="Ej: Acme Corp, Juan Pérez...",
+                help="Para quién es esta cotización"
+            )
+        with col_form2:
+            quoted_by_form = st.text_input(
+                "Cotizado por (User ID / Nombre)",
+                value=st.session_state.get('saved_quoted_by', ''),
+                placeholder="Ej: jperez, vendedor@empresa.com, Juan Pérez...",
+                help="Identificador de quién crea esta cotización"
+            )
+        
+        info_submitted = st.form_submit_button("✅ Confirmar información")
+        
+        if info_submitted:
+            st.session_state.saved_proposal_name = proposal_name_form
+            st.session_state.saved_client_name = client_name_form
+            st.session_state.saved_quoted_by = quoted_by_form
+            st.success(f"✅ Info guardada: {proposal_name_form} | {client_name_form} | {quoted_by_form}")
     
-    with col_info2:
-        # Quién cotiza
-        st.text_input(
-            "Cotizado por (User ID / Nombre)",
-            placeholder="Ej: jperez, vendedor@empresa.com, Juan Pérez...",
-            help="Identificador de quién crea esta cotización",
-            key="input_quoted_by"
-        )
-        
-        # Asociar a propuesta existente
-        st.markdown("**¿Nueva propuesta o asociar a existente?**")
-        proposal_type = st.radio(
-            "Tipo",
-            ["Nueva propuesta", "Asociar a existente"],
-            horizontal=True,
-            help="Nueva: crea un nuevo grupo. Existente: nueva versión de propuesta anterior"
-        )
+    # Asociar a propuesta existente
+    st.markdown("**¿Nueva propuesta o asociar a existente?**")
+    proposal_type = st.radio(
+        "Tipo",
+        ["Nueva propuesta", "Asociar a existente"],
+        horizontal=True,
+        help="Nueva: crea un nuevo grupo. Existente: nueva versión de propuesta anterior"
+    )
     
     # Si es asociar a existente, mostrar selector
     if proposal_type == "Asociar a existente":
@@ -1481,10 +1486,10 @@ with tab_legacy:
                         st.session_state.version = int(latest["version"]) + 1
                         st.session_state.parent_quote_id = latest_quote_id
                         
-                        # Copiar información a los inputs
-                        st.session_state.input_proposal_name = latest["proposal_name"] or ""
-                        st.session_state.input_client_name = latest["client_name"] or ""
-                        st.session_state.input_quoted_by = latest["quoted_by"] or ""
+                        # Copiar información a los saved_* (para persistencia)
+                        st.session_state.saved_proposal_name = latest["proposal_name"] or ""
+                        st.session_state.saved_client_name = latest["client_name"] or ""
+                        st.session_state.saved_quoted_by = latest["quoted_by"] or ""
                         
                         st.success(f"✅ {len(quote_lines_raw)} líneas copiadas. Nueva versión v{st.session_state.version} lista para edición.")
                         st.rerun()
@@ -1949,17 +1954,30 @@ with tab_legacy:
             pb_save = PLAYBOOKS[save_playbook]
             st.caption(f"Verde ≥{pb_save['green']}% | Amarillo ≥{pb_save['yellow']}%")
 
+        # DEBUG PERMANENTE: Ver estado de session_state ANTES del botón
+        with st.expander("🔍 DEBUG: Estado de session_state (expandir para ver)", expanded=False):
+            st.write("**Claves field_/saved_/input_ en session_state:**")
+            for key in st.session_state:
+                if 'field_' in key or 'saved_' in key or 'input_' in key or 'proposal' in key.lower() or 'client' in key.lower() or 'quoted' in key.lower():
+                    st.write(f"- `{key}`: `{st.session_state[key]}`")
+
         save_button = st.button("💾 Guardar Cotización", type="primary", use_container_width=True)
 
         if save_button:
+            # DEBUG INMEDIATO: Ver session_state en el momento del click
+            st.warning("🔴 DEBUG AL MOMENTO DEL CLICK:")
+            for key in st.session_state:
+                if 'field_' in key or 'saved_' in key or 'input_' in key:
+                    st.write(f"**{key}** = `{st.session_state[key]}`")
+            
             # Verificar que hay líneas
             if not st.session_state.lines:
                 st.error("❌ No hay líneas para guardar")
             else:
-                # Capturar valores DIRECTAMENTE de los inputs (sin sincronización intermedia)
-                proposal_name_value = st.session_state.get('input_proposal_name', '') or ''
-                client_name_value = st.session_state.get('input_client_name', '') or ''
-                quoted_by_value = st.session_state.get('input_quoted_by', '') or ''
+                # Usar valores sincronizados directamente
+                proposal_name_value = st.session_state.get('saved_proposal_name', '') or ''
+                client_name_value = st.session_state.get('saved_client_name', '') or ''
+                quoted_by_value = st.session_state.get('saved_quoted_by', '') or ''
                 
                 # DEBUG: Mostrar valores antes de guardar
                 st.info(f"""
