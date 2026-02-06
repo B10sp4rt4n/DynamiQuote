@@ -4,8 +4,9 @@ import uuid
 from datetime import datetime, UTC
 import matplotlib.pyplot as plt
 from spellchecker import SpellChecker
-from database import init_database, save_quote, save_import_file, get_all_quotes, get_quote_lines, get_quote_lines_full, get_latest_version, load_versions_for_group, load_lines_for_quote, get_database_info, get_cursor, is_postgres, get_connection
+from database import init_database, save_quote, save_import_file, get_all_quotes, get_quote_lines, get_quote_lines_full, get_latest_version, load_versions_for_group, load_lines_for_quote, get_database_info, get_cursor, is_postgres, get_connection, save_logo, get_logos
 from excel_import import import_excel_file, format_validation_report
+from formal_proposal_generator import process_logo_upload
 import os
 from aup_engine import (
     create_proposal,
@@ -2631,10 +2632,6 @@ with tab_proposals:
                 )
                 
                 if uploaded_issuer_logo:
-                    from formal_proposal_generator import process_logo_upload
-                    import uuid
-                    from database import save_logo
-                    
                     try:
                         logo_data, logo_format = process_logo_upload(uploaded_issuer_logo)
                         logo_id = str(uuid.uuid4())
