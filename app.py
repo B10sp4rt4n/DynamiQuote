@@ -1374,32 +1374,26 @@ with tab_legacy:
         # Nombre de la propuesta
         st.text_input(
             "Nombre de la Propuesta",
-            value=st.session_state.saved_proposal_name,
             placeholder="Ej: Implementación ERP 2026, Soporte Anual...",
             help="Dale un nombre identificable a esta propuesta",
-            key="input_proposal_name",
-            on_change=lambda: setattr(st.session_state, 'saved_proposal_name', st.session_state.input_proposal_name)
+            key="input_proposal_name"
         )
         
         # Nombre del cliente  
         st.text_input(
             "Cliente / Empresa",
-            value=st.session_state.saved_client_name,
             placeholder="Ej: Acme Corp, Juan Pérez...",
             help="Para quién es esta cotización",
-            key="input_client_name",
-            on_change=lambda: setattr(st.session_state, 'saved_client_name', st.session_state.input_client_name)
+            key="input_client_name"
         )
     
     with col_info2:
         # Quién cotiza
         st.text_input(
             "Cotizado por (User ID / Nombre)",
-            value=st.session_state.saved_quoted_by,
             placeholder="Ej: jperez, vendedor@empresa.com, Juan Pérez...",
             help="Identificador de quién crea esta cotización",
-            key="input_quoted_by",
-            on_change=lambda: setattr(st.session_state, 'saved_quoted_by', st.session_state.input_quoted_by)
+            key="input_quoted_by"
         )
         
         # Asociar a propuesta existente
@@ -1964,17 +1958,17 @@ with tab_legacy:
             if not st.session_state.lines:
                 st.error("❌ No hay líneas para guardar")
             else:
-                # Sincronizar valores finales de los inputs a saved_*
-                st.session_state.saved_proposal_name = st.session_state.get('input_proposal_name', st.session_state.saved_proposal_name)
-                st.session_state.saved_client_name = st.session_state.get('input_client_name', st.session_state.saved_client_name)
-                st.session_state.saved_quoted_by = st.session_state.get('input_quoted_by', st.session_state.saved_quoted_by)
+                # Capturar valores DIRECTAMENTE de los inputs (sin sincronización intermedia)
+                proposal_name_value = st.session_state.get('input_proposal_name', '') or ''
+                client_name_value = st.session_state.get('input_client_name', '') or ''
+                quoted_by_value = st.session_state.get('input_quoted_by', '') or ''
                 
                 # DEBUG: Mostrar valores antes de guardar
                 st.info(f"""
                 **DEBUG - Valores a guardar:**
-                - proposal_name: `{st.session_state.saved_proposal_name}`
-                - client_name: `{st.session_state.saved_client_name}`
-                - quoted_by: `{st.session_state.saved_quoted_by}`
+                - proposal_name: `{proposal_name_value}`
+                - client_name: `{client_name_value}`
+                - quoted_by: `{quoted_by_value}`
                 """)
                 
                 # Preparar datos para guardar
@@ -1990,9 +1984,9 @@ with tab_legacy:
                     float(gross_profit),
                     float(gross_margin_pct),
                     save_playbook,
-                    st.session_state.saved_client_name or "Cliente sin nombre",
-                    st.session_state.saved_quoted_by or "Sin asignar",
-                    st.session_state.saved_proposal_name or "Sin nombre"
+                    client_name_value or "Cliente sin nombre",
+                    quoted_by_value or "Sin asignar",
+                    proposal_name_value or "Sin nombre"
                 )
                 
                 lines_data = []
