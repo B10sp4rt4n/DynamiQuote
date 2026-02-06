@@ -759,15 +759,25 @@ if "lines" not in st.session_state:
 if "pending_line" not in st.session_state:
     st.session_state.pending_line = None
 
-# Inicializar campos de información de cotización (no usar los mismos nombres que los keys de inputs)
+# Inicializar campos de información de cotización directamente con los keys de los inputs
+if "input_proposal_name" not in st.session_state:
+    st.session_state.input_proposal_name = ""
+
+if "input_client_name" not in st.session_state:
+    st.session_state.input_client_name = ""
+
+if "input_quoted_by" not in st.session_state:
+    st.session_state.input_quoted_by = ""
+
+# Inicializar variables de respaldo para persistencia
+if "saved_proposal_name" not in st.session_state:
+    st.session_state.saved_proposal_name = ""
+
 if "saved_client_name" not in st.session_state:
     st.session_state.saved_client_name = ""
 
 if "saved_quoted_by" not in st.session_state:
     st.session_state.saved_quoted_by = ""
-
-if "saved_proposal_name" not in st.session_state:
-    st.session_state.saved_proposal_name = ""
 
 # =========================
 # Comparador de versiones
@@ -1360,36 +1370,36 @@ with tab_legacy:
     
     col_info1, col_info2 = st.columns(2)
     
-    # DEBUG: Mostrar valores actuales
-    st.caption(f"🔍 DEBUG - session_state: proposal_name='{st.session_state.get('input_proposal_name', '')}' | client_name='{st.session_state.get('input_client_name', '')}' | quoted_by='{st.session_state.get('input_quoted_by', '')}'")
-    
     with col_info1:
         # Nombre de la propuesta
-        proposal_name_value = st.text_input(
+        st.text_input(
             "Nombre de la Propuesta",
             value=st.session_state.saved_proposal_name,
             placeholder="Ej: Implementación ERP 2026, Soporte Anual...",
             help="Dale un nombre identificable a esta propuesta",
-            key="input_proposal_name"
+            key="input_proposal_name",
+            on_change=lambda: setattr(st.session_state, 'saved_proposal_name', st.session_state.input_proposal_name)
         )
         
-        # Nombre del cliente
-        client_name_value = st.text_input(
+        # Nombre del cliente  
+        st.text_input(
             "Cliente / Empresa",
             value=st.session_state.saved_client_name,
             placeholder="Ej: Acme Corp, Juan Pérez...",
             help="Para quién es esta cotización",
-            key="input_client_name"
+            key="input_client_name",
+            on_change=lambda: setattr(st.session_state, 'saved_client_name', st.session_state.input_client_name)
         )
     
     with col_info2:
         # Quién cotiza
-        quoted_by_value = st.text_input(
+        st.text_input(
             "Cotizado por (User ID / Nombre)",
             value=st.session_state.saved_quoted_by,
             placeholder="Ej: jperez, vendedor@empresa.com, Juan Pérez...",
             help="Identificador de quién crea esta cotización",
-            key="input_quoted_by"
+            key="input_quoted_by",
+            on_change=lambda: setattr(st.session_state, 'saved_quoted_by', st.session_state.input_quoted_by)
         )
         
         # Asociar a propuesta existente
@@ -1477,10 +1487,10 @@ with tab_legacy:
                         st.session_state.version = int(latest["version"]) + 1
                         st.session_state.parent_quote_id = latest_quote_id
                         
-                        # Copiar información
-                        st.session_state.saved_proposal_name = latest["proposal_name"] or ""
-                        st.session_state.saved_client_name = latest["client_name"] or ""
-                        st.session_state.saved_quoted_by = latest["quoted_by"] or ""
+                        # Copiar información a los inputs
+                        st.session_state.input_proposal_name = latest["proposal_name"] or ""
+                        st.session_state.input_client_name = latest["client_name"] or ""
+                        st.session_state.input_quoted_by = latest["quoted_by"] or ""
                         
                         st.success(f"✅ {len(quote_lines_raw)} líneas copiadas. Nueva versión v{st.session_state.version} lista para edición.")
                         st.rerun()
@@ -1922,50 +1932,52 @@ with tab_legacy:
         # =========================
         st.subheader("✅ Cerrar y guardar propuesta")
         
-        # Opción para nueva oportunidad o continuar con versiones
-        col_new_opp, col_playbook = st.columns([1, 2])
-        
-        with col_new_opp:
-            new_opportunity = st.checkbox(
-                "🆕 Nueva oportunidad",
-                value=False,
-                help="Si está marcado, crea una nueva oportunidad. Si no, crea una nueva versión de la actual."
-            )
-            if new_opportunity:
-                st.caption("✨ Se creará oportunidad nueva")
-            else:
-                st.caption(f"📝 Versión actual: v{st.session_state.version}")
-        
-        with col_playbook:
-            save_playbook = st.selectbox(
-                "📘 Playbook a aplicar",
-                list(PLAYBOOKS.keys()),
-                help="El playbook determina cómo se evaluará esta cotización en comparaciones futuras"
-            )
-            pb_save = PLAYBOOKS[save_playbook]
-            st.caption(f"Verde ≥{pb_save['green']}% | Amarillo ≥{pb_save['yellow']}%")
+        # Usar form para capturar todos los valores correctamente
+        with st.form(key="save_quote_form"):
+            # Opción para nueva oportunidad o continuar con versiones
+            col_new_opp, col_playbook = st.columns([1, 2])
+            
+            with col_new_opp:
+                new_opportunity = st.checkbox(
+                    "🆕 Nueva oportunidad",
+                    value=False,
+                    help="Si está marcado, crea una nueva oportunidad. Si no, crea una nueva versión de la actual."
+                )
+                if new_opportunity:
+                    st.caption("✨ Se creará oportunidad nueva")
+                else:
+                    st.caption(f"📝 Versión actual: v{st.session_state.version}")
+            
+            with col_playbook:
+                save_playbook = st.selectbox(
+                    "📘 Playbook a aplicar",
+                    list(PLAYBOOKS.keys()),
+                    help="El playbook determina cómo se evaluará esta cotización en comparaciones futuras"
+                )
+                pb_save = PLAYBOOKS[save_playbook]
+                st.caption(f"Verde ≥{pb_save['green']}% | Amarillo ≥{pb_save['yellow']}%")
 
-        save_button = st.button("💾 Guardar Cotización", type="primary", use_container_width=True)
+            save_button = st.form_submit_button("💾 Guardar Cotización", type="primary", use_container_width=True)
 
         if save_button:
             # Verificar que hay líneas
             if not st.session_state.lines:
                 st.error("❌ No hay líneas para guardar")
             else:
-                # Capturar valores actuales de los inputs
-                current_proposal_name = st.session_state.get('input_proposal_name', '')
-                current_client_name = st.session_state.get('input_client_name', '')
-                current_quoted_by = st.session_state.get('input_quoted_by', '')
+                # Sincronizar valores finales de los inputs a saved_*
+                st.session_state.saved_proposal_name = st.session_state.get('input_proposal_name', st.session_state.saved_proposal_name)
+                st.session_state.saved_client_name = st.session_state.get('input_client_name', st.session_state.saved_client_name)
+                st.session_state.saved_quoted_by = st.session_state.get('input_quoted_by', st.session_state.saved_quoted_by)
                 
                 # DEBUG: Mostrar valores antes de guardar
                 st.info(f"""
                 **DEBUG - Valores a guardar:**
-                - proposal_name: `{current_proposal_name}`
-                - client_name: `{current_client_name}`
-                - quoted_by: `{current_quoted_by}`
+                - proposal_name: `{st.session_state.saved_proposal_name}`
+                - client_name: `{st.session_state.saved_client_name}`
+                - quoted_by: `{st.session_state.saved_quoted_by}`
                 """)
                 
-                # Preparar datos para guardar directamente desde session_state.lines
+                # Preparar datos para guardar
                 quote_data = (
                     st.session_state.quote_id,
                     st.session_state.quote_group_id,
@@ -1977,10 +1989,10 @@ with tab_legacy:
                     float(total_revenue),
                     float(gross_profit),
                     float(gross_margin_pct),
-                    save_playbook,  # Agregar playbook seleccionado
-                    current_client_name or "Cliente sin nombre",  # Nombre de cliente
-                    current_quoted_by or "Sin asignar",  # Quién cotiza
-                    current_proposal_name or "Sin nombre"  # Nombre de propuesta
+                    save_playbook,
+                    st.session_state.saved_client_name or "Cliente sin nombre",
+                    st.session_state.saved_quoted_by or "Sin asignar",
+                    st.session_state.saved_proposal_name or "Sin nombre"
                 )
                 
                 lines_data = []
@@ -2027,9 +2039,9 @@ with tab_legacy:
                         st.session_state.version = 1
                         st.session_state.parent_quote_id = None
                         # Limpiar campos de información
-                        st.session_state.saved_proposal_name = ""
-                        st.session_state.saved_client_name = ""
-                        st.session_state.saved_quoted_by = ""
+                        st.session_state.input_proposal_name = ""
+                        st.session_state.input_client_name = ""
+                        st.session_state.input_quoted_by = ""
                         st.info("🆕 Preparado para nueva oportunidad")
                     else:
                         # Nueva versión de la misma oportunidad
