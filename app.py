@@ -1926,32 +1926,30 @@ with tab_legacy:
         # =========================
         st.subheader("✅ Cerrar y guardar propuesta")
         
-        # Usar form para capturar todos los valores correctamente
-        with st.form(key="save_quote_form"):
-            # Opción para nueva oportunidad o continuar con versiones
-            col_new_opp, col_playbook = st.columns([1, 2])
-            
-            with col_new_opp:
-                new_opportunity = st.checkbox(
-                    "🆕 Nueva oportunidad",
-                    value=False,
-                    help="Si está marcado, crea una nueva oportunidad. Si no, crea una nueva versión de la actual."
-                )
-                if new_opportunity:
-                    st.caption("✨ Se creará oportunidad nueva")
-                else:
-                    st.caption(f"📝 Versión actual: v{st.session_state.version}")
-            
-            with col_playbook:
-                save_playbook = st.selectbox(
-                    "📘 Playbook a aplicar",
-                    list(PLAYBOOKS.keys()),
-                    help="El playbook determina cómo se evaluará esta cotización en comparaciones futuras"
-                )
-                pb_save = PLAYBOOKS[save_playbook]
-                st.caption(f"Verde ≥{pb_save['green']}% | Amarillo ≥{pb_save['yellow']}%")
+        # Opción para nueva oportunidad o continuar con versiones
+        col_new_opp, col_playbook = st.columns([1, 2])
+        
+        with col_new_opp:
+            new_opportunity = st.checkbox(
+                "🆕 Nueva oportunidad",
+                value=False,
+                help="Si está marcado, crea una nueva oportunidad. Si no, crea una nueva versión de la actual."
+            )
+            if new_opportunity:
+                st.caption("✨ Se creará oportunidad nueva")
+            else:
+                st.caption(f"📝 Versión actual: v{st.session_state.version}")
+        
+        with col_playbook:
+            save_playbook = st.selectbox(
+                "📘 Playbook a aplicar",
+                list(PLAYBOOKS.keys()),
+                help="El playbook determina cómo se evaluará esta cotización en comparaciones futuras"
+            )
+            pb_save = PLAYBOOKS[save_playbook]
+            st.caption(f"Verde ≥{pb_save['green']}% | Amarillo ≥{pb_save['yellow']}%")
 
-            save_button = st.form_submit_button("💾 Guardar Cotización", type="primary", use_container_width=True)
+        save_button = st.button("💾 Guardar Cotización", type="primary", use_container_width=True)
 
         if save_button:
             # Verificar que hay líneas
@@ -2032,11 +2030,8 @@ with tab_legacy:
                         st.session_state.quote_group_id = str(uuid.uuid4())
                         st.session_state.version = 1
                         st.session_state.parent_quote_id = None
-                        # Limpiar campos de información
-                        st.session_state.input_proposal_name = ""
-                        st.session_state.input_client_name = ""
-                        st.session_state.input_quoted_by = ""
                         st.info("🆕 Preparado para nueva oportunidad")
+                        st.rerun()
                     else:
                         # Nueva versión de la misma oportunidad
                         current_group_id = st.session_state.quote_group_id
