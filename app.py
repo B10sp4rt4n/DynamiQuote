@@ -1363,6 +1363,17 @@ if st.session_state.pending_line:
 # =========================
 with tab_legacy:
     st.header("📝 Cotizador Universal – MVP Funcional")
+    
+    # Mostrar banner si hay versión pendiente desde Base de Datos
+    if st.session_state.get('pending_new_version', False):
+        st.success(f"""
+        ✅ **Nueva versión cargada:** {st.session_state.get('pending_version_info', '')}
+        
+        Se copiaron **{len(st.session_state.lines)}** líneas. Modifica lo necesario y presiona "Guardar Cotización".
+        """)
+        # Limpiar flag después de mostrar
+        st.session_state.pending_new_version = False
+    
     st.divider()
     
     # Información de la cotización
@@ -1453,12 +1464,18 @@ with tab_legacy:
                     latest = group_quotes.iloc[0]  # Ya está ordenado desc
                     latest_quote_id = latest["quote_id"]
                     
+                    st.write(f"🔍 DEBUG: quote_id seleccionado: {latest_quote_id}")
+                    
                     # Cargar líneas
                     lines = get_quote_lines(latest_quote_id)
+                    
+                    st.write(f"🔍 DEBUG: get_quote_lines retornó {len(lines) if lines else 0} líneas")
                     
                     if lines:
                         # Obtener líneas completas con todos los campos
                         quote_lines_raw = get_quote_lines_full(latest_quote_id)
+                        
+                        st.write(f"🔍 DEBUG: get_quote_lines_full retornó {len(quote_lines_raw) if quote_lines_raw else 0} líneas")
                         
                         # Limpiar líneas actuales
                         st.session_state.lines = []
@@ -1477,8 +1494,11 @@ with tab_legacy:
                             line_dict['description_input'] = line_dict.get('description_original', '')
                             line_dict['corrected_desc'] = line_dict.get('description_final', '')
                             line_dict['corrections'] = line_dict.get('description_corrections', '').split(', ') if line_dict.get('description_corrections') else []
+                            line_dict['quantity'] = line_dict.get('quantity', 1)  # Default quantity
                             
                             st.session_state.lines.append(line_dict)
+                        
+                        st.write(f"🔍 DEBUG: st.session_state.lines ahora tiene {len(st.session_state.lines)} líneas")
                         
                         # Configurar para nueva versión
                         st.session_state.quote_id = str(uuid.uuid4())
@@ -1486,12 +1506,18 @@ with tab_legacy:
                         st.session_state.version = int(latest["version"]) + 1
                         st.session_state.parent_quote_id = latest_quote_id
                         
+                        st.write(f"🔍 DEBUG: Configurado para versión {st.session_state.version}")
+                        
                         # Copiar información a los saved_* (para persistencia)
                         st.session_state.saved_proposal_name = latest["proposal_name"] or ""
                         st.session_state.saved_client_name = latest["client_name"] or ""
                         st.session_state.saved_quoted_by = latest["quoted_by"] or ""
                         
                         st.success(f"✅ {len(quote_lines_raw)} líneas copiadas. Nueva versión v{st.session_state.version} lista para edición.")
+                        st.info("⏳ Recargando página en 2 segundos...")
+                        
+                        import time
+                        time.sleep(2)
                         st.rerun()
                     else:
                         st.warning("Esta propuesta no tiene líneas")
@@ -2958,6 +2984,17 @@ with tab_proposals:
 # =========================
 with tab_db:
     st.header("📚 Base de Datos de Propuestas")
+    
+    # Mostrar indicador si hay versión pendiente
+    if st.session_state.get('lines') and len(st.session_state.lines) > 0:
+        version_info = st.session_state.get('pending_version_info', '')
+        if version_info:
+            st.info(f"""
+            📋 **Tienes {len(st.session_state.lines)} líneas cargadas** ({version_info})
+            
+            👉 **Ve al tab "📝 Cotizador Legacy"** para editar y guardar la nueva versión.
+            """)
+    
     st.divider()
     
     # Obtener propuestas cerradas
@@ -2999,28 +3036,36 @@ with tab_db:
                             # Cargar líneas de esta versión
                             lines_full = get_quote_lines_full(q['ID'])
                             
+                            st.write(f"DEBUG: lines_full tiene {len(lines_full) if lines_full else 0} líneas")
+                            
                             if lines_full:
                                 # Preparar nuevas líneas con nuevos IDs
                                 new_lines = []
                                 for line in lines_full:
-                                    new_lines.append({
-                                        "line_id": str(uuid.uuid4()),  # Nuevo ID
-                                        "sku": line[2],
-                                        "description_original": line[3],
-                                        "description_input": line[3],
-                                        "description_final": line[4],
-                                        "description_corrections": line[5],
-                                        "corrected_desc": line[4],
-                                        "corrections": line[5].split(", ") if line[5] else [],
-                                        "line_type": line[6],
-                                        "service_origin": line[7],
-                                        "cost_unit": line[8],
-                                        "final_price_unit": line[9],
-                                        "margin_pct": line[10],
-                                        "strategy": line[11],
-                                        "warnings": line[12],
-                                        "created_at": datetime.now(UTC).isoformat()
-                                    })
+                                    try:
+                                        new_lines.append({
+                                            "line_id": str(uuid.uuid4()),  # Nuevo ID
+                                            "sku": line[2],
+                                            "description_original": line[3],
+                                            "description_input": line[3],
+                                            "description_final": line[4],
+                                            "description_corrections": line[5],
+                                            "corrected_desc": line[4],
+                                            "corrections": line[5].split(", ") if line[5] else [],
+                                            "line_type": line[6],
+                                            "service_origin": line[7],
+                                            "cost_unit": line[8],
+                                            "final_price_unit": line[9],
+                                            "margin_pct": line[10],
+                                            "strategy": line[11],
+                                            "warnings": line[12],
+                                            "created_at": datetime.now(UTC).isoformat()
+                                        })
+                                    except Exception as e:
+                                        st.error(f"Error procesando línea: {e}")
+                                        st.write(f"Línea problemática: {line}")
+                                
+                                st.write(f"DEBUG: new_lines tiene {len(new_lines)} líneas preparadas")
                                 
                                 # Configurar nueva versión
                                 st.session_state.quote_group_id = q['Group ID']
@@ -3028,8 +3073,23 @@ with tab_db:
                                 st.session_state.parent_quote_id = q['ID']
                                 st.session_state.quote_id = str(uuid.uuid4())
                                 st.session_state.lines = new_lines
-                                st.success(f"✅ Versión {int(q['Versión']) + 1} creada. Modifica las líneas y guarda.")
+                                
+                                # Copiar info de la propuesta original
+                                st.session_state.saved_proposal_name = proposal_name
+                                st.session_state.saved_client_name = client_name
+                                
+                                # Marcar que hay versión pendiente
+                                st.session_state.pending_new_version = True
+                                st.session_state.pending_version_info = f"v{int(q['Versión']) + 1} de '{proposal_name}'"
+                                
+                                st.success(f"✅ Configurado para v{int(q['Versión']) + 1} con {len(new_lines)} líneas")
+                                st.write("Haciendo rerun en 2 segundos...")
+                                
+                                import time
+                                time.sleep(2)
                                 st.rerun()
+                            else:
+                                st.warning("Esta versión no tiene líneas para copiar")
                     
                     # Mostrar líneas de esta versión
                     with st.container():

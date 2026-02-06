@@ -13,7 +13,7 @@ from typing import Dict, Any, Optional
 import matplotlib
 matplotlib.use('Agg')  # Backend sin GUI
 import matplotlib.pyplot as plt
-from jinja2 import Template
+from jinja2 import Template, Environment, BaseLoader
 import uuid
 
 # Intentar importar WeasyPrint (opcional)
@@ -331,9 +331,12 @@ def generate_pdf_report(data: Dict[str, Any], branding: Optional[Dict[str, str]]
     with open(styles_path, 'r', encoding='utf-8') as f:
         styles_content = f.read()
     
+    # Crear Environment de Jinja2 y registrar filtro
+    env = Environment(loader=BaseLoader())
+    env.filters['format_money'] = format_money
+    
     # Renderizar template con Jinja2
-    template = Template(template_content)
-    template.globals['format_money'] = format_money
+    template = env.from_string(template_content)
     
     html_content = template.render(
         data=data,
