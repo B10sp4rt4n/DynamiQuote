@@ -6,4 +6,7 @@ __pycache__/
 venv/
 .env
 .DS_Store
-.streamlit/
+
+# Streamlit - ignore secrets but keep config
+.streamlit/secrets.toml
+.streamlit/credentials.toml

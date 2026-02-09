@@ -1,0 +1,9 @@
+# System packages required for WeasyPrint PDF generation
+# Note: These may not be available in Streamlit Community Cloud
+# If PDF generation fails, the app will still work without it
+libcairo2
+libpango-1.0-0
+libpangocairo-1.0-0
+libgdk-pixbuf2.0-0
+libffi-dev
+shared-mime-info
