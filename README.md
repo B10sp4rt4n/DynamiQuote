@@ -102,15 +102,67 @@ DynamiQuote/
 
 ## Deploy en Producción
 
-### Streamlit Cloud
+### Streamlit Cloud (Recomendado)
+
+La aplicación está configurada para funcionar en Streamlit Community Cloud:
+
 ```bash
-# Push tu código a GitHub
+# 1. Push tu código a GitHub
 git push origin main
 
-# En Streamlit Cloud:
-# 1. Conecta tu repo
-# 2. Agrega DATABASE_URL en secrets
+# 2. En Streamlit Cloud (share.streamlit.io):
+#    - Conecta tu repositorio GitHub
+#    - Selecciona la rama (main o feature/api-first-validation)
+#    - El archivo debe ser: app.py
+#    - Configura los secrets en Settings > Secrets:
+
+DATABASE_URL = "postgresql://user:password@ep-xxxxx.region.aws.neon.tech/dbname?sslmode=require"
+# Opcional: OPENAI_API_KEY para corrección inteligente
+
 # 3. Deploy automático
+```
+
+**Características disponibles en Streamlit Cloud:**
+- ✅ Cotizador completo con corrección ortográfica
+- ✅ Análisis financiero y visualizaciones  
+- ✅ Base de datos PostgreSQL (Neon)
+- ✅ Importación de Excel
+- ✅ Propuestas formales
+- ⚠️ Generación PDF (limitada - ver nota abajo)
+
+**Nota sobre PDFs:** WeasyPrint requiere dependencias del sistema (cairo, pango) que pueden no estar disponibles en Streamlit Community Cloud. La app funcionará completamente sin PDFs. Para soporte completo de PDF, usa Docker o deploy local.
+
+**Archivos de configuración:**
+- `requirements.txt` - Dependencias Python (WeasyPrint es opcional)
+- `packages.txt` - Paquetes del sistema para WeasyPrint (intentará instalar)
+- `.streamlit/config.toml` - Configuración UI y tema
+
+### Docker (Para soporte completo de PDF)
+
+```dockerfile
+FROM python:3.11-slim
+
+# Instalar dependencias del sistema para WeasyPrint
+RUN apt-get update && apt-get install -y \
+    libcairo2 \
+    libpango-1.0-0 \
+    libpangocairo-1.0-0 \
+    libgdk-pixbuf2.0-0 \
+    libffi-dev \
+    shared-mime-info \
+    && rm -rf /var/lib/apt/lists/*
+
+WORKDIR /app
+COPY requirements.txt .
+
+# Instalar WeasyPrint en Docker
+RUN pip install weasyprint>=68.0
+RUN pip install -r requirements.txt
+
+COPY . .
+
+EXPOSE 8501
+CMD ["streamlit", "run", "app.py", "--server.port=8501", "--server.address=0.0.0.0"]
 ```
 
 ### Railway / Render
