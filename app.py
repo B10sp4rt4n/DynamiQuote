@@ -1,3 +1,4 @@
+# DynamiQuote - Build: 2026-02-09-23:05 - Line 1391 Fix Attempt #3
 import streamlit as st
 import pandas as pd
 import uuid
@@ -1388,7 +1389,7 @@ with tab_legacy:
             value=st.session_state.get('saved_proposal_name', ''),
             placeholder="Ej: Implementación ERP 2026, Soporte Anual...",
             help="Dale un nombre identificable a esta propuesta"
-        )
+        )  # FIX: Line 1391 fixed on 2026-02-09-23:05
 
         col_form1, col_form2 = st.columns(2)
         with col_form1:
