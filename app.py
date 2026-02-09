@@ -1388,7 +1388,7 @@ with tab_legacy:
             placeholder="Ej: Implementación ERP 2026, Soporte Anual...",
             help="Dale un nombre identificable a esta propuesta"
         )
-        
+
         col_form1, col_form2 = st.columns(2)
         with col_form1:
             client_name_form = st.text_input(

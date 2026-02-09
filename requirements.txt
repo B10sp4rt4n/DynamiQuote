@@ -17,3 +17,11 @@ requests>=2.31.0
 # Testing Dependencies
 pytest>=7.4.0
 pytest-asyncio>=0.21.0
+
+## Additional dependencies required for running on Streamlit Cloud
+# - Pillow: reemplazo de PIL usado para manipular imágenes
+# - openpyxl: motor recomendado para que pandas lea archivos Excel (.xlsx)
+# Note: WeasyPrint needs system libraries (cairo, pango, gdk-pixbuf). Streamlit Community Cloud
+# does NOT provide those system packages; see README or use a Docker deploy for full WeasyPrint support.
+Pillow>=9.0.0
+openpyxl>=3.1.0
