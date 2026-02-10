@@ -1087,8 +1087,14 @@ if not hist_compare.empty:
                     comp_components.columns = [f"v{v1}", f"v{v2}"]
 
                     # Validar que hay datos numéricos para graficar
-                    if comp_components.empty or len(comp_components) == 0:
-                        st.info("ℹ️ No hay líneas para agrupar por origen de servicio.")
+                    has_numeric_data = (
+                        not comp_components.empty and 
+                        len(comp_components) > 0 and
+                        comp_components.select_dtypes(include=[float, int]).sum().sum() > 0
+                    )
+                    
+                    if not has_numeric_data:
+                        st.info("ℹ️ No hay datos numéricos de origen de servicio para graficar.")
                     else:
                         fig2, ax2 = plt.subplots(figsize=(6, 4))
                         comp_components.plot(kind="bar", ax=ax2, rot=45, width=0.8)
@@ -1103,8 +1109,8 @@ if not hist_compare.empty:
                 st.markdown("### 📦 Detalle por Origen/Tipo de Servicio")
                 st.caption("El 'Origen' se refiere al campo 'service_origin' de cada línea (ej: Interno, Externo, Proveedor A, etc.)")
                 
-                # Solo mostrar tabla si hay datos
-                if not comp_components.empty:
+                # Solo mostrar tabla si hay datos numéricos válidos
+                if has_numeric_data:
                     comp_components["Δ Absoluto"] = comp_components[f"v{v2}"] - comp_components[f"v{v1}"]
 
                     # Calcular Δ % manejando división por cero
@@ -1120,7 +1126,7 @@ if not hist_compare.empty:
 
                     st.dataframe(display_comp, width="stretch")
                 else:
-                    st.info("ℹ️ No hay datos de origen para comparar. Las líneas no tienen el campo 'service_origin' completado.")
+                    st.info("ℹ️ No hay datos de origen para comparar. Las líneas no tienen precios válidos en el campo 'final_price_unit'.")
 
                 # ===== NARRATIVA AUTOMÁTICA =====
                 st.markdown("### 📝 Narrativa Automática")
