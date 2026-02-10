@@ -1548,10 +1548,25 @@ with tab_legacy:
                             # Generar nuevos IDs
                             line_dict['line_id'] = str(uuid.uuid4())
                             line_dict['created_at'] = datetime.now(UTC).isoformat()
-                            line_dict['description_input'] = line_dict.get('description_original', '')
-                            line_dict['corrected_desc'] = line_dict.get('description_final', '')
+                            line_dict['description_input'] = str(line_dict.get('description_original', ''))
+                            line_dict['corrected_desc'] = str(line_dict.get('description_final', ''))
                             line_dict['corrections'] = line_dict.get('description_corrections', '').split(', ') if line_dict.get('description_corrections') else []
-                            line_dict['quantity'] = line_dict.get('quantity', 1)  # Default quantity
+                            
+                            # IMPORTANTE: Convertir tipos numpy a tipos nativos de Python
+                            line_dict['quantity'] = float(line_dict.get('quantity', 1))
+                            line_dict['sku'] = str(line_dict.get('sku', ''))
+                            line_dict['description_original'] = str(line_dict.get('description_original', ''))
+                            line_dict['description_final'] = str(line_dict.get('description_final', ''))
+                            line_dict['description_corrections'] = str(line_dict.get('description_corrections', ''))
+                            line_dict['line_type'] = str(line_dict.get('line_type', ''))
+                            line_dict['service_origin'] = str(line_dict.get('service_origin', ''))
+                            line_dict['cost_unit'] = float(line_dict.get('cost_unit', 0))
+                            line_dict['final_price_unit'] = float(line_dict.get('final_price_unit', 0))
+                            line_dict['margin_pct'] = float(line_dict.get('margin_pct', 0)) if line_dict.get('margin_pct') is not None else 0.0
+                            line_dict['strategy'] = str(line_dict.get('strategy', ''))
+                            line_dict['warnings'] = str(line_dict.get('warnings', ''))
+                            line_dict['import_source'] = str(line_dict.get('import_source', 'manual'))
+                            line_dict['import_batch_id'] = str(line_dict.get('import_batch_id', '')) if line_dict.get('import_batch_id') else None
 
                             st.session_state.lines.append(line_dict)
 
@@ -2080,7 +2095,7 @@ with tab_legacy:
                 quote_data = (
                     st.session_state.quote_id,
                     st.session_state.quote_group_id,
-                    st.session_state.version,
+                    int(st.session_state.version),  # Convertir a int nativo de Python
                     st.session_state.parent_quote_id,
                     datetime.now(UTC).isoformat(),
                     "CLOSED",
@@ -2101,7 +2116,7 @@ with tab_legacy:
                             str(line["line_id"]),
                             str(st.session_state.quote_id),
                             str(line["sku"]),
-                            float(line.get("quantity", 1.0)),
+                            float(line.get("quantity", 1.0)),  # Ya está en float
                             str(line["description_original"]),
                             str(line["description_final"]),
                             str(line["description_corrections"]),
@@ -2120,6 +2135,11 @@ with tab_legacy:
                     except Exception as e:
                         st.error(f"❌ Error preparando línea {idx+1}: {e}")
                         st.write(f"Línea con error: {line}")
+                        st.write(f"Tipo de error: {type(e).__name__}")
+                        # DEBUG: Mostrar tipos de cada campo
+                        st.write("**Tipos de datos en la línea:**")
+                        for key, value in line.items():
+                            st.write(f"- {key}: {type(value).__name__} = {value}")
                         raise
 
                 # Guardar usando función segura
@@ -3106,27 +3126,31 @@ with tab_db:
                                 new_lines = []
                                 for line in lines_full:
                                     try:
+                                        # IMPORTANTE: Convertir tipos numpy a tipos nativos de Python
                                         new_lines.append({
                                             "line_id": str(uuid.uuid4()),  # Nuevo ID
-                                            "sku": line[2],
-                                            "description_original": line[3],
-                                            "description_input": line[3],
-                                            "description_final": line[4],
-                                            "description_corrections": line[5],
-                                            "corrected_desc": line[4],
-                                            "corrections": line[5].split(", ") if line[5] else [],
-                                            "line_type": line[6],
-                                            "service_origin": line[7],
-                                            "cost_unit": line[8],
-                                            "final_price_unit": line[9],
-                                            "margin_pct": line[10],
-                                            "strategy": line[11],
-                                            "warnings": line[12],
+                                            "sku": str(line[2]),
+                                            "description_original": str(line[4]),  # Usar index 4 (description_original)
+                                            "description_input": str(line[4]),
+                                            "description_final": str(line[5]),  # Usar index 5 (description_final)
+                                            "description_corrections": str(line[6]) if line[6] else "",  # Usar index 6
+                                            "corrected_desc": str(line[5]),
+                                            "corrections": str(line[6]).split(", ") if line[6] else [],
+                                            "quantity": float(line[3]) if line[3] is not None else 1.0,  # Usar index 3 (quantity)
+                                            "line_type": str(line[7]),
+                                            "service_origin": str(line[8]),
+                                            "cost_unit": float(line[9]),
+                                            "final_price_unit": float(line[10]),
+                                            "margin_pct": float(line[11]) if line[11] is not None else 0.0,
+                                            "strategy": str(line[12]),
+                                            "warnings": str(line[13]),
                                             "created_at": datetime.now(UTC).isoformat()
                                         })
                                     except Exception as e:
                                         st.error(f"Error procesando línea: {e}")
                                         st.write(f"Línea problemática: {line}")
+                                        st.write(f"Longitud de línea: {len(line)}")
+                                        st.write(f"Índices: {list(enumerate(line))}")
 
                                 st.write(f"DEBUG: new_lines tiene {len(new_lines)} líneas preparadas")
 
