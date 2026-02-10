@@ -20,12 +20,20 @@ from typing import Dict, Any, Optional, List, Tuple
 import pandas as pd
 from jinja2 import Template
 
-# Importar WeasyPrint si está disponible
+# Importar ReportLab para generación de PDF
 try:
-    from weasyprint import HTML, CSS
-    WEASYPRINT_AVAILABLE = True
+    from reportlab.lib import colors
+    from reportlab.lib.pagesizes import letter
+    from reportlab.lib.styles import getSampleStyleSheet, ParagraphStyle
+    from reportlab.lib.units import inch
+    from reportlab.platypus import SimpleDocTemplate, Table, TableStyle, Paragraph, Spacer, Image, PageBreak
+    from reportlab.lib.enums import TA_CENTER, TA_RIGHT, TA_LEFT, TA_JUSTIFY
+    REPORTLAB_AVAILABLE = True
 except ImportError:
-    WEASYPRINT_AVAILABLE = False
+    REPORTLAB_AVAILABLE = False
+
+# Mantener compatibilidad con código existente
+WEASYPRINT_AVAILABLE = REPORTLAB_AVAILABLE
 
 
 # =========================
@@ -393,18 +401,18 @@ def generate_proposal_pdf(
     template_path: str = None
 ) -> Tuple[bool, bytes, str]:
     """
-    Genera PDF de la propuesta formal.
+    Genera PDF de la propuesta formal usando ReportLab.
     
     Args:
         proposal_data: Datos completos de la propuesta
         quote_lines: Líneas de cotización
-        template_path: Ruta al template HTML (opcional)
+        template_path: No usado (mantiene compatibilidad API)
         
     Returns:
         Tupla (success: bool, pdf_data: bytes, error_message: str)
     """
-    if not WEASYPRINT_AVAILABLE:
-        return False, b"", "WeasyPrint no está instalado"
+    if not REPORTLAB_AVAILABLE:
+        return False, b"", "ReportLab no está instalado"
     
     try:
         # Calcular totales con moneda
@@ -416,49 +424,284 @@ def generate_proposal_pdf(
             proposal_data.get('currency_symbol', '$')
         )
         
-        # Preparar logos en base64
+        # Crear buffer para PDF
+        buffer = io.BytesIO()
+        
+        # Crear documento
+        doc = SimpleDocTemplate(
+            buffer,
+            pagesize=letter,
+            rightMargin=0.75*inch,
+            leftMargin=0.75*inch,
+            topMargin=0.75*inch,
+            bottomMargin=0.75*inch
+        )
+        
+        # Estilos
+        styles = getSampleStyleSheet()
+        
+        # Estilos personalizados
+        title_style = ParagraphStyle(
+            'CustomTitle',
+            parent=styles['Heading1'],
+            fontSize=16,
+            textColor=colors.HexColor('#2c3e50'),
+            spaceAfter=12,
+            alignment=TA_CENTER
+        )
+        
+        heading_style = ParagraphStyle(
+            'CustomHeading',
+            parent=styles['Heading2'],
+            fontSize=12,
+            textColor=colors.HexColor('#2c3e50'),
+            spaceAfter=10,
+            spaceBefore=10,
+            borderWidth=1,
+            borderColor=colors.HexColor('#3498db'),
+            borderPadding=5
+        )
+        
+        body_style = ParagraphStyle(
+            'CustomBody',
+            parent=styles['BodyText'],
+            fontSize=10,
+            alignment=TA_JUSTIFY,
+            spaceAfter=10
+        )
+        
+        small_style = ParagraphStyle(
+            'Small',
+            parent=styles['Normal'],
+            fontSize=8,
+            textColor=colors.grey
+        )
+        
+        # Contenido del documento
+        story = []
+        
+        # Header con logos (si existen)
+        header_data = []
         from database import get_logo_data
         
-        issuer_logo_base64 = ""
+        # Logo emisor
+        issuer_logo = None
         if proposal_data.get('issuer_logo_id'):
             success, logo_data, logo_format = get_logo_data(proposal_data['issuer_logo_id'])
             if success:
-                issuer_logo_base64 = logo_to_base64(logo_data, logo_format)
+                try:
+                    img_buffer = io.BytesIO(bytes(logo_data) if isinstance(logo_data, memoryview) else logo_data)
+                    issuer_logo = Image(img_buffer, width=2*inch, height=0.8*inch, kind='proportional')
+                except:
+                    pass
         
-        client_logo_base64 = ""
+        if issuer_logo:
+            header_data.append(issuer_logo)
+        else:
+            header_data.append(Paragraph(f"<b>{proposal_data['issuer_company']}</b>", styles['Heading1']))
+        
+        # Logo cliente (si existe)
+        client_logo = None
         if proposal_data.get('client_logo_id'):
             success, logo_data, logo_format = get_logo_data(proposal_data['client_logo_id'])
             if success:
-                client_logo_base64 = logo_to_base64(logo_data, logo_format)
+                try:
+                    img_buffer = io.BytesIO(bytes(logo_data) if isinstance(logo_data, memoryview) else logo_data)
+                    client_logo = Image(img_buffer, width=2*inch, height=0.8*inch, kind='proportional')
+                except:
+                    pass
         
-        # Cargar template
-        if template_path and os.path.exists(template_path):
-            with open(template_path, 'r', encoding='utf-8') as f:
-                template_str = f.read()
+        if client_logo:
+            header_data.append(client_logo)
         else:
-            # Usar template embebido
-            template_str = get_embedded_template()
+            header_data.append(Paragraph("", styles['Normal']))
         
-        # Renderizar HTML
-        template = Template(template_str)
-        html_content = template.render(
-            proposal=proposal_data,
-            lines=quote_lines,
-            totals=totals,
-            issuer_logo=issuer_logo_base64,
-            client_logo=client_logo_base64
+        # Tabla de header
+        header_table = Table([header_data], colWidths=[3.5*inch, 3.5*inch])
+        header_table.setStyle(TableStyle([
+            ('ALIGN', (0, 0), (0, 0), 'LEFT'),
+            ('ALIGN', (1, 0), (1, 0), 'RIGHT'),
+            ('VALIGN', (0, 0), (-1, -1), 'MIDDLE'),
+        ]))
+        story.append(header_table)
+        story.append(Spacer(1, 0.3*inch))
+        
+        # Número de propuesta
+        story.append(Paragraph(
+            f"<b>PROPUESTA COMERCIAL</b><br/>{proposal_data['proposal_number']}",
+            title_style
+        ))
+        story.append(Spacer(1, 0.2*inch))
+        
+        # Metadata en dos columnas
+        metadata_data = [
+            [
+                Paragraph("<b>DATOS DEL EMISOR</b>", heading_style),
+                Paragraph("<b>DATOS DEL CLIENTE</b>", heading_style)
+            ],
+            [
+                Paragraph(
+                    f"<b>{proposal_data['issuer_company']}</b><br/>"
+                    f"{proposal_data.get('issuer_contact_name', '')}<br/>"
+                    f"{proposal_data.get('issuer_contact_title', '')}<br/>"
+                    f"{proposal_data.get('issuer_email', '')}<br/>"
+                    f"{proposal_data.get('issuer_phone', '')}",
+                    body_style
+                ),
+                Paragraph(
+                    f"<b>{proposal_data['recipient_company']}</b><br/>"
+                    f"{proposal_data.get('recipient_contact_name', '')}<br/>"
+                    f"{proposal_data.get('recipient_contact_title', '')}<br/>"
+                    f"{proposal_data.get('recipient_email', '')}<br/><br/>"
+                    f"<b>Fecha:</b> {proposal_data['issued_date']}<br/>"
+                    f"<b>Válida hasta:</b> {proposal_data.get('valid_until', 'N/A')}",
+                    body_style
+                )
+            ]
+        ]
+        
+        metadata_table = Table(metadata_data, colWidths=[3.5*inch, 3.5*inch])
+        metadata_table.setStyle(TableStyle([
+            ('VALIGN', (0, 0), (-1, -1), 'TOP'),
+            ('LEFTPADDING', (0, 0), (-1, -1), 5),
+            ('RIGHTPADDING', (0, 0), (-1, -1), 5),
+        ]))
+        story.append(metadata_table)
+        story.append(Spacer(1, 0.2*inch))
+        
+        # Asunto
+        if proposal_data.get('subject'):
+            story.append(Paragraph(f"<b>Asunto:</b> {proposal_data['subject']}", body_style))
+            story.append(Spacer(1, 0.1*inch))
+        
+        # Introducción
+        intro_lines = proposal_data.get('custom_intro', '').split('\n')
+        for line in intro_lines:
+            if line.strip():
+                story.append(Paragraph(line, body_style))
+        story.append(Spacer(1, 0.2*inch))
+        
+        # Título de detalle
+        story.append(Paragraph("<b>DETALLE DE LA PROPUESTA</b>", heading_style))
+        story.append(Spacer(1, 0.1*inch))
+        
+        # Tabla de items
+        table_data = [
+            ['#', 'SKU', 'DESCRIPCIÓN', 'CANT.', 'PRECIO UNIT.', 'IMPORTE']
+        ]
+        
+        for idx, line in enumerate(quote_lines, 1):
+            quantity = float(line.get('quantity', 1))
+            unit_price = float(line.get('final_price_unit', 0))
+            total_price = quantity * unit_price
+            
+            table_data.append([
+                str(idx),
+                str(line.get('sku', '-'))[:15],
+                str(line.get('description_final') or line.get('description_original', ''))[:80],
+                f"{int(quantity)}",
+                f"{totals['currency_symbol']}{unit_price:,.2f}",
+                f"{totals['currency_symbol']}{total_price:,.2f}"
+            ])
+        
+        items_table = Table(
+            table_data,
+            colWidths=[0.4*inch, 0.9*inch, 3.2*inch, 0.6*inch, 1*inch, 1*inch]
         )
         
+        items_table.setStyle(TableStyle([
+            # Header
+            ('BACKGROUND', (0, 0), (-1, 0), colors.HexColor('#2c3e50')),
+            ('TEXTCOLOR', (0, 0), (-1, 0), colors.whitesmoke),
+            ('ALIGN', (0, 0), (-1, 0), 'CENTER'),
+            ('FONTNAME', (0, 0), (-1, 0), 'Helvetica-Bold'),
+            ('FONTSIZE', (0, 0), (-1, 0), 9),
+            ('BOTTOMPADDING', (0, 0), (-1, 0), 8),
+            
+            # Body
+            ('FONTNAME', (0, 1), (-1, -1), 'Helvetica'),
+            ('FONTSIZE', (0, 1), (-1, -1), 8),
+            ('ALIGN', (0, 1), (0, -1), 'CENTER'),  # #
+            ('ALIGN', (3, 1), (3, -1), 'CENTER'),  # CANT
+            ('ALIGN', (4, 1), (-1, -1), 'RIGHT'),  # Precios
+            ('VALIGN', (0, 0), (-1, -1), 'MIDDLE'),
+            
+            # Grid
+            ('GRID', (0, 0), (-1, -1), 0.5, colors.grey),
+            ('ROWBACKGROUNDS', (0, 1), (-1, -1), [colors.white, colors.HexColor('#f5f5f5')]),
+        ]))
+        
+        story.append(items_table)
+        story.append(Spacer(1, 0.2*inch))
+        
+        # Totales
+        totals_data = [
+            ['', f"Moneda: {totals['currency']} ({totals['currency_symbol']})"],
+            ['Subtotal:', f"{totals['currency_symbol']}{totals['subtotal']:,.2f} {totals['currency']}"],
+            [f"IVA ({int(totals['iva_rate']*100)}%):", f"{totals['currency_symbol']}{totals['iva']:,.2f} {totals['currency']}"],
+            ['TOTAL:', f"{totals['currency_symbol']}{totals['total']:,.2f} {totals['currency']}"]
+        ]
+        
+        totals_table = Table(totals_data, colWidths=[2*inch, 2*inch])
+        totals_table.setStyle(TableStyle([
+            ('ALIGN', (0, 0), (0, -1), 'RIGHT'),
+            ('ALIGN', (1, 0), (1, -1), 'RIGHT'),
+            ('FONTNAME', (0, 0), (-1, 0), 'Helvetica'),
+            ('FONTSIZE', (0, 0), (-1, 0), 8),
+            ('TEXTCOLOR', (0, 0), (-1, 0), colors.grey),
+            ('FONTNAME', (0, 1), (-1, 2), 'Helvetica'),
+            ('FONTSIZE', (0, 1), (-1, 2), 10),
+            ('FONTNAME', (0, 3), (-1, 3), 'Helvetica-Bold'),
+            ('FONTSIZE', (0, 3), (-1, 3), 12),
+            ('LINEABOVE', (0, 3), (-1, 3), 2, colors.HexColor('#2c3e50')),
+            ('LINEBELOW', (0, 3), (-1, 3), 2, colors.HexColor('#2c3e50')),
+        ]))
+        
+        # Alinear totales a la derecha
+        totals_container = Table([[totals_table]], colWidths=[7*inch])
+        totals_container.setStyle(TableStyle([
+            ('ALIGN', (0, 0), (0, 0), 'RIGHT'),
+        ]))
+        story.append(totals_container)
+        story.append(Spacer(1, 0.3*inch))
+        
+        # Términos y condiciones
+        if proposal_data.get('terms_and_conditions'):
+            story.append(Paragraph("<b>TÉRMINOS Y CONDICIONES</b>", heading_style))
+            terms_lines = proposal_data['terms_and_conditions'].split('\n')
+            for line in terms_lines:
+                if line.strip():
+                    story.append(Paragraph(line, small_style))
+            story.append(Spacer(1, 0.3*inch))
+        
+        # Firma
+        story.append(Spacer(1, 0.5*inch))
+        signature_style = ParagraphStyle(
+            'Signature',
+            parent=styles['Normal'],
+            fontSize=11,
+            alignment=TA_CENTER
+        )
+        
+        story.append(Paragraph("_" * 50, signature_style))
+        story.append(Spacer(1, 0.1*inch))
+        story.append(Paragraph(f"<b>{proposal_data['issuer_company']}</b>", signature_style))
+        if proposal_data.get('signature_name'):
+            story.append(Paragraph(proposal_data['signature_name'], signature_style))
+        if proposal_data.get('signature_title'):
+            story.append(Paragraph(proposal_data['signature_title'], signature_style))
+        
         # Generar PDF
-        pdf_file = HTML(string=html_content).write_pdf()
+        doc.build(story)
         
-        # Calcular número de páginas (aproximado)
-        total_pages = max(1, len(quote_lines) // 20 + 1)
+        pdf_data = buffer.getvalue()
+        buffer.close()
         
-        return True, pdf_file, ""
+        return True, pdf_data, ""
     
     except Exception as e:
-        return False, b"", str(e)
+        import traceback
+        return False, b"", f"{str(e)}\n{traceback.format_exc()}"
 
 
 def get_embedded_template() -> str:
