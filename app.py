@@ -284,6 +284,14 @@ def generate_comparison_narrative(q1, q2, df1, df2, playbook_name="General"):
     narrative_exec = []
     narrative_detail = []
     
+    # Asegurar que ambos dataframes tienen quantity y calcular totales
+    for df in [df1, df2]:
+        if "quantity" not in df.columns:
+            df["quantity"] = 1
+        df["quantity"] = pd.to_numeric(df["quantity"], errors='coerce').fillna(1).astype(int)
+        df["total_price"] = df["final_price_unit"] * df["quantity"]
+        df["total_cost"] = df["cost_unit"] * df["quantity"]
+    
     # Obtener configuración del playbook
     pb = PLAYBOOKS.get(playbook_name, PLAYBOOKS["General"])
     
@@ -356,8 +364,8 @@ def generate_comparison_narrative(q1, q2, df1, df2, playbook_name="General"):
         )
     
     # --- Análisis por componente
-    comp1 = df1.groupby("service_origin")["final_price_unit"].sum()
-    comp2 = df2.groupby("service_origin")["final_price_unit"].sum()
+    comp1 = df1.groupby("service_origin")["total_price"].sum()
+    comp2 = df2.groupby("service_origin")["total_price"].sum()
     
     comp_delta = (comp2 - comp1).fillna(comp2).fillna(0)
     
@@ -718,6 +726,15 @@ if not hist_compare.empty:
                 with col_metrics4:
                     l1 = load_lines_for_quote(q1["quote_id"])
                     l2 = load_lines_for_quote(q2["quote_id"])
+                    
+                    # Asegurar que tienen quantity y calcular totales
+                    for df in [l1, l2]:
+                        if "quantity" not in df.columns:
+                            df["quantity"] = 1
+                        df["quantity"] = pd.to_numeric(df["quantity"], errors='coerce').fillna(1).astype(int)
+                        df["total_price"] = df["final_price_unit"] * df["quantity"]
+                        df["total_cost"] = df["cost_unit"] * df["quantity"]
+                    
                     delta_lines = len(l2) - len(l1)
                     st.metric(
                         "Líneas",
@@ -788,17 +805,22 @@ if not hist_compare.empty:
                     if skus_added:
                         for sku in skus_added:
                             line = l2[l2["sku"] == sku].iloc[0]
-                            st.caption(f"  • {sku}: ${float(line['final_price_unit']):,.2f}")
+                            qty = int(line.get('quantity', 1))
+                            st.caption(f"  • {sku}: ${float(line['final_price_unit']):,.2f} x {qty} = ${float(line['total_price']):,.2f}")
                 
                 with col_changes2:
                     st.metric("➖ Líneas Eliminadas", len(skus_removed))
                     if skus_removed:
                         for sku in skus_removed:
                             line = l1[l1["sku"] == sku].iloc[0]
-                            st.caption(f"  • {sku}: ${float(line['final_price_unit']):,.2f}")
+                            qty = int(line.get('quantity', 1))
+                            st.caption(f"  • {sku}: ${float(line['final_price_unit']):,.2f} x {qty} = ${float(line['total_price']):,.2f}")
                 
                 with col_changes3:
-                    st.metric("🔄 Líneas Modificadas", len([s for s in skus_common if float(l1[l1["sku"]==s]["final_price_unit"].iloc[0]) != float(l2[l2["sku"]==s]["final_price_unit"].iloc[0])]))
+                    modified_lines = [s for s in skus_common if 
+                                     float(l1[l1["sku"]==s]["total_price"].iloc[0]) != float(l2[l2["sku"]==s]["total_price"].iloc[0]) or
+                                     float(l1[l1["sku"]==s]["quantity"].iloc[0]) != float(l2[l2["sku"]==s]["quantity"].iloc[0])]
+                    st.metric("🔄 Líneas Modificadas", len(modified_lines))
                 
                 # ===== NIVEL C: Visualizaciones =====
                 st.markdown("### 📊 Visualizaciones")
@@ -836,8 +858,8 @@ if not hist_compare.empty:
                     st.markdown("**Aportación por Componente**")
                     
                     # Agrupar por componente
-                    c1 = l1.groupby("service_origin")["final_price_unit"].sum()
-                    c2 = l2.groupby("service_origin")["final_price_unit"].sum()
+                    c1 = l1.groupby("service_origin")["total_price"].sum()
+                    c2 = l2.groupby("service_origin")["total_price"].sum()
                     
                     comp_components = pd.concat([c1, c2], axis=1).fillna(0)
                     comp_components.columns = [f"v{v1}", f"v{v2}"]
@@ -1388,8 +1410,7 @@ with st.expander("📥 O importa múltiples líneas desde Excel", expanded=False
                     
                     st.success(f"✅ {len(import_result['lines'])} líneas importadas correctamente")
                     st.rerun()
-            session_state.edited_import_data = None
-                    st.
+            
             with col_cancel:
                 if st.button("❌ Cancelar Import", width="stretch"):
                     st.rerun()
@@ -1509,7 +1530,11 @@ if st.session_state.lines:
     df["cost_unit"] = pd.to_numeric(df["cost_unit"], errors='coerce').fillna(0)
     df["final_price_unit"] = pd.to_numeric(df["final_price_unit"], errors='coerce').fillna(0)
     df["margin_pct"] = pd.to_numeric(df["margin_pct"], errors='coerce').fillna(0)
-    df["quantity"] = pd.to_numeric(df.get("quantity", 1), errors='coerce').fillna(1).astype(int)
+    
+    # Asegurar que quantity existe con valor por defecto
+    if "quantity" not in df.columns:
+        df["quantity"] = 1
+    df["quantity"] = pd.to_numeric(df["quantity"], errors='coerce').fillna(1).astype(int)
     
     # Calcular totales considerando cantidad
     df["total_cost"] = df["cost_unit"] * df["quantity"]
