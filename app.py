@@ -1398,13 +1398,6 @@ if st.session_state.pending_line:
 with tab_legacy:
     st.header("📝 Cotizador Universal – MVP Funcional")
 
-    # DEBUG: Mostrar estado al entrar al tab
-    with st.expander("🔍 DEBUG: Estado al cargar tab Legacy", expanded=False):
-        st.write(f"**version:** {st.session_state.version}")
-        st.write(f"**quote_group_id:** {st.session_state.quote_group_id}")
-        st.write(f"**parent_quote_id:** {st.session_state.parent_quote_id}")
-        st.write(f"**Cantidad de líneas:** {len(st.session_state.lines)}")
-
     # Mostrar banner si hay versión pendiente desde Base de Datos
     if st.session_state.get('pending_new_version', False):
         st.success(f"""
@@ -1507,6 +1500,20 @@ with tab_legacy:
                 next_version = current_max_version + 1
                 
                 st.info(f"📋 Esta propuesta tiene {len(group_quotes)} versión(es). Al copiar, se creará la **versión {next_version}**")
+
+                # DEBUG: Mostrar estado actual antes de copiar
+                with st.expander("🔍 DEBUG: Estado actual antes de copiar", expanded=False):
+                    st.write(f"**Estado actual de session_state:**")
+                    st.write(f"- version: {st.session_state.version}")
+                    st.write(f"- quote_group_id: {st.session_state.quote_group_id}")
+                    st.write(f"- parent_quote_id: {st.session_state.parent_quote_id}")
+                    st.write(f"- Cantidad de líneas cargadas: {len(st.session_state.lines)}")
+                    st.write(f"")
+                    st.write(f"**Propuesta seleccionada:**")
+                    st.write(f"- group_id seleccionado: {selected_group_id}")
+                    st.write(f"- Versiones en este grupo: {group_quotes['version'].tolist()}")
+                    st.write(f"- Max versión: {current_max_version}")
+                    st.write(f"- Próxima versión que se creará: {next_version}")
 
                 if st.button("📋 Copiar datos de esta propuesta", type="primary"):
                     latest = group_quotes.iloc[0]  # Ya está ordenado desc
