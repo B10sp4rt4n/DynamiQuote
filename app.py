@@ -1,4 +1,4 @@
-# DynamiQuote - Build: 2026-02-09-23:05 - Line 1391 Fix Attempt #3
+# DynamiQuote - Build: 2026-02-10-05:30 - PDF Generation with ReportLab
 import streamlit as st
 import pandas as pd
 import uuid
@@ -2522,8 +2522,18 @@ with tab_proposals:
     - 💰 Gestión de IVA (integrado o desglosado)
     - 📋 Términos y condiciones editables
     - ✍️ Firma digital
-    - 📄 PDF profesional listo para envío
+    - 📄 **PDF profesional generado con ReportLab** (actualizado 2026-02-10)
     """)
+    
+    # Verificar disponibilidad de generación de PDFs
+    try:
+        from formal_proposal_generator import REPORTLAB_AVAILABLE
+        if REPORTLAB_AVAILABLE:
+            st.success("✅ Sistema de generación de PDFs: **Activo y listo**")
+        else:
+            st.error("❌ ReportLab no está disponible. Los PDFs no se pueden generar.")
+    except Exception as e:
+        st.warning(f"⚠️ No se pudo verificar el sistema de PDFs: {e}")
 
     st.divider()
 
