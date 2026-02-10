@@ -304,6 +304,9 @@ def calculate_totals(
     Returns:
         Diccionario con subtotal, iva, total, moneda
     """
+    # Convertir a float para evitar errores con decimal.Decimal
+    iva_rate = float(iva_rate)
+    
     subtotal = sum(
         float(line.get('quantity', 0)) * float(line.get('final_price_unit', 0))
         for line in lines
