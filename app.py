@@ -1285,12 +1285,15 @@ if not hist_compare.empty:
                 elif len(skus_removed) > len(skus_added):
                     insights.append(f"📉 **Simplificación:** Se eliminaron {len(skus_removed)} líneas vs {len(skus_added)} agregadas")
 
-                # Origen que más cambió
-                if not comp_components.empty:
-                    max_change = comp_components["Δ Absoluto"].abs().idxmax()
-                    max_change_value = comp_components.loc[max_change, "Δ Absoluto"]
-                    if abs(max_change_value) > 0:
-                        insights.append(f"🎯 **Origen clave:** '{max_change}' cambió ${abs(max_change_value):,.2f}")
+                # Origen que más cambió (solo si hay datos válidos procesados)
+                if not comp_components.empty and "Δ Absoluto" in comp_components.columns:
+                    try:
+                        max_change = comp_components["Δ Absoluto"].abs().idxmax()
+                        max_change_value = comp_components.loc[max_change, "Δ Absoluto"]
+                        if abs(max_change_value) > 0:
+                            insights.append(f"🎯 **Origen clave:** '{max_change}' cambió ${abs(max_change_value):,.2f}")
+                    except Exception:
+                        pass  # Si hay error, simplemente no agregar el insight
 
                 for insight in insights:
                     st.markdown(insight)
