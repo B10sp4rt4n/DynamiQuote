@@ -3219,6 +3219,12 @@ with tab_db:
                     ]
                 )
 
+                # Convertir columnas numéricas a tipo numérico
+                lines_complete_df["Cantidad"] = pd.to_numeric(lines_complete_df["Cantidad"], errors='coerce').fillna(1.0)
+                lines_complete_df["Costo Unit."] = pd.to_numeric(lines_complete_df["Costo Unit."], errors='coerce').fillna(0.0)
+                lines_complete_df["Precio Unit."] = pd.to_numeric(lines_complete_df["Precio Unit."], errors='coerce').fillna(0.0)
+                lines_complete_df["Margen %"] = pd.to_numeric(lines_complete_df["Margen %"], errors='coerce').fillna(0.0)
+
                 # Calcular subtotales
                 lines_complete_df["Subtotal Costo"] = lines_complete_df["Costo Unit."] * lines_complete_df["Cantidad"]
                 lines_complete_df["Subtotal Precio"] = lines_complete_df["Precio Unit."] * lines_complete_df["Cantidad"]
