@@ -2972,7 +2972,12 @@ with tab_proposals:
             else:
                 with st.spinner("🎨 Generando propuesta formal..."):
                     try:
-                        from formal_proposal_generator import create_formal_proposal
+                        from formal_proposal_generator import create_formal_proposal, WEASYPRINT_AVAILABLE
+                        
+                        # Verificar disponibilidad de WeasyPrint
+                        if not WEASYPRINT_AVAILABLE:
+                            st.error("❌ WeasyPrint no está disponible. Los PDFs no se pueden generar. Verifica que las dependencias del sistema estén instaladas.")
+                            st.stop()
 
                         # Preparar datos
                         issuer_data = {
