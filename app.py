@@ -3076,7 +3076,7 @@ with tab_proposals:
         st.divider()
         st.subheader("📚 Propuestas Generadas")
 
-        from database import get_formal_proposals, get_formal_proposal
+        from database import get_formal_proposals, get_formal_proposal, get_quote_lines_full
 
         all_proposals = get_formal_proposals()
 
@@ -3089,21 +3089,100 @@ with tab_proposals:
                     col2.write(f"**Cliente:** {prop['recipient_company']}")
                     col3.write(f"**Estado:** {prop['status']}")
 
-                    # Descargar PDF
                     proposal_full = get_formal_proposal(prop['proposal_doc_id'])
+
+                    # Intentar descargar PDF guardado
+                    pdf_data_available = False
                     if proposal_full and proposal_full.get('pdf_file_data'):
-                        # Convertir memoryview a bytes si es necesario
                         pdf_data = proposal_full['pdf_file_data']
                         if isinstance(pdf_data, memoryview):
                             pdf_data = bytes(pdf_data)
+                        if len(pdf_data) > 0:
+                            pdf_data_available = True
+                            st.download_button(
+                                label="📥 Descargar PDF",
+                                data=pdf_data,
+                                file_name=f"{prop['proposal_number']}.pdf",
+                                mime="application/pdf",
+                                key=f"download_{prop['proposal_doc_id']}"
+                            )
 
-                        st.download_button(
-                            label="📥 Descargar PDF",
-                            data=pdf_data,
-                            file_name=f"{prop['proposal_number']}.pdf",
-                            mime="application/pdf",
-                            key=f"download_{prop['proposal_doc_id']}"
-                        )
+                    # Botón para regenerar PDF (siempre disponible)
+                    if st.button(
+                        "🔄 Regenerar PDF" if pdf_data_available else "📄 Generar PDF",
+                        key=f"regen_{prop['proposal_doc_id']}",
+                        use_container_width=True
+                    ):
+                        if proposal_full:
+                            with st.spinner("Generando PDF..."):
+                                try:
+                                    from formal_proposal_generator import generate_proposal_pdf, REPORTLAB_AVAILABLE
+                                    if not REPORTLAB_AVAILABLE:
+                                        st.error("❌ ReportLab no está disponible")
+                                    else:
+                                        # Obtener líneas de cotización
+                                        quote_id = proposal_full.get('quote_id')
+                                        if quote_id:
+                                            quote_lines_raw = get_quote_lines_full(quote_id)
+                                            columns = ["line_id", "quote_id", "sku", "quantity", "description_original", "description_final",
+                                                      "description_corrections", "line_type", "service_origin", "cost_unit",
+                                                      "final_price_unit", "margin_pct", "strategy", "warnings", "created_at",
+                                                      "import_source", "import_batch_id"]
+                                            quote_lines = []
+                                            for row in quote_lines_raw:
+                                                line_dict = dict(zip(columns, row))
+                                                if not line_dict.get('quantity') or line_dict['quantity'] <= 0:
+                                                    line_dict['quantity'] = 1
+                                                quote_lines.append(line_dict)
+
+                                            # Preparar datos de propuesta para PDF
+                                            pdf_proposal_data = {
+                                                'proposal_number': proposal_full.get('proposal_number', ''),
+                                                'issued_date': proposal_full.get('issued_date', ''),
+                                                'valid_until': proposal_full.get('valid_until', ''),
+                                                'issuer_company': proposal_full.get('issuer_company', ''),
+                                                'issuer_contact_name': proposal_full.get('issuer_contact_name', ''),
+                                                'issuer_contact_title': proposal_full.get('issuer_contact_title', ''),
+                                                'issuer_email': proposal_full.get('issuer_email', ''),
+                                                'issuer_phone': proposal_full.get('issuer_phone', ''),
+                                                'recipient_company': proposal_full.get('recipient_company', ''),
+                                                'recipient_contact_name': proposal_full.get('recipient_contact_name', ''),
+                                                'recipient_contact_title': proposal_full.get('recipient_contact_title', ''),
+                                                'recipient_email': proposal_full.get('recipient_email', ''),
+                                                'subject': proposal_full.get('subject', ''),
+                                                'custom_intro': proposal_full.get('custom_intro', ''),
+                                                'terms_and_conditions': proposal_full.get('terms_and_conditions', ''),
+                                                'signature_name': proposal_full.get('signature_name', ''),
+                                                'signature_title': proposal_full.get('signature_title', ''),
+                                                'issuer_logo_id': proposal_full.get('issuer_logo_id'),
+                                                'client_logo_id': proposal_full.get('client_logo_id'),
+                                                'iva_rate': proposal_full.get('iva_rate', 0.16),
+                                                'iva_included': proposal_full.get('iva_included', False),
+                                                'currency': proposal_full.get('currency', 'MXN'),
+                                                'currency_symbol': proposal_full.get('currency_symbol', '$'),
+                                            }
+
+                                            success, new_pdf_data, error = generate_proposal_pdf(pdf_proposal_data, quote_lines)
+
+                                            if success and new_pdf_data:
+                                                st.success(f"✅ PDF regenerado ({len(new_pdf_data)} bytes)")
+                                                st.download_button(
+                                                    label="📥 Descargar PDF Regenerado",
+                                                    data=new_pdf_data,
+                                                    file_name=f"{prop['proposal_number']}.pdf",
+                                                    mime="application/pdf",
+                                                    key=f"regen_download_{prop['proposal_doc_id']}"
+                                                )
+                                            else:
+                                                st.error(f"❌ Error generando PDF: {error}")
+                                        else:
+                                            st.error("❌ No se encontró la cotización asociada a esta propuesta")
+                                except Exception as e:
+                                    st.error(f"❌ Error: {e}")
+                                    import traceback
+                                    st.code(traceback.format_exc())
+                        else:
+                            st.error("❌ No se pudieron obtener los datos de la propuesta")
         else:
             st.info("No hay propuestas formales generadas aún")
 
