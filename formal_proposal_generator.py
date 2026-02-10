@@ -717,8 +717,21 @@ def generate_proposal_pdf(
         if proposal_data.get('signature_title'):
             story.append(Paragraph(proposal_data['signature_title'], signature_style))
         
-        # Generar PDF
-        doc.build(story)
+        # Función para agregar número de página
+        def add_page_number(canvas, doc):
+            """
+            Agrega número de página en el pie de cada página.
+            """
+            page_num = canvas.getPageNumber()
+            text = f"Página {page_num}"
+            canvas.saveState()
+            canvas.setFont('Helvetica', 9)
+            canvas.setFillColor(colors.grey)
+            canvas.drawRightString(7.5*inch, 0.5*inch, text)
+            canvas.restoreState()
+        
+        # Generar PDF con numeración de páginas
+        doc.build(story, onFirstPage=add_page_number, onLaterPages=add_page_number)
         
         pdf_data = buffer.getvalue()
         buffer.close()
