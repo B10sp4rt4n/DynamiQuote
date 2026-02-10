@@ -1094,18 +1094,17 @@ if not hist_compare.empty:
                 
                 # Solo mostrar tabla si hay datos
                 if not comp_components.empty:
+                    comp_components["Δ Absoluto"] = comp_components[f"v{v2}"] - comp_components[f"v{v1}"]
 
-                comp_components["Δ Absoluto"] = comp_components[f"v{v2}"] - comp_components[f"v{v1}"]
+                    # Calcular Δ % manejando división por cero
+                    denominador = comp_components[f"v{v1}"].replace(0, float('nan'))
+                    comp_components["Δ %"] = ((comp_components[f"v{v2}"] - comp_components[f"v{v1}"]) / denominador * 100).replace([float('inf'), -float('inf')], 0).fillna(0)
 
-                # Calcular Δ % manejando división por cero
-                denominador = comp_components[f"v{v1}"].replace(0, float('nan'))
-                comp_components["Δ %"] = ((comp_components[f"v{v2}"] - comp_components[f"v{v1}"]) / denominador * 100).replace([float('inf'), -float('inf')], 0).fillna(0)
-
-                # Formatear para display
-                display_comp = comp_components.copy()
-                display_comp[f"v{v1}"] = display_comp[f"v{v1}"].apply(lambda x: f"${x:,.2f}")
-                display_comp[f"v{v2}"] = display_comp[f"v{v2}"].apply(lambda x: f"${x:,.2f}")
-                display_comp["Δ Absoluto"] = display_comp["Δ Absoluto"].apply(lambda x: f"${x:,.2f}")
+                    # Formatear para display
+                    display_comp = comp_components.copy()
+                    display_comp[f"v{v1}"] = display_comp[f"v{v1}"].apply(lambda x: f"${x:,.2f}")
+                    display_comp[f"v{v2}"] = display_comp[f"v{v2}"].apply(lambda x: f"${x:,.2f}")
+                    display_comp["Δ Absoluto"] = display_comp["Δ Absoluto"].apply(lambda x: f"${x:,.2f}")
                     display_comp["Δ %"] = display_comp["Δ %"].apply(lambda x: f"{x:+.1f}%")
 
                     st.dataframe(display_comp, width="stretch")
