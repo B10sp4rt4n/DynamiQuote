@@ -736,6 +736,12 @@ if not success:
     st.error(message)
     st.stop()
 
+# Ejecutar migraciones automáticamente
+from database import run_migrations
+migration_success, migration_message = run_migrations()
+if not migration_success:
+    st.warning(f"⚠️ Algunas migraciones no se ejecutaron correctamente: {migration_message}")
+
 # Mostrar info de base de datos
 db_info = get_database_info()
 st.sidebar.markdown(f"{db_info['icon']} **Base de datos:** {db_info['type']}")

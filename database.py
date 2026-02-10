@@ -1141,3 +1141,50 @@ def get_formal_proposal(proposal_doc_id: str) -> dict:
         st.error(f"Error obteniendo propuesta: {e}")
         return {}
 
+
+def run_migrations():
+    """
+    Ejecuta todas las migraciones de base de datos necesarias.
+    Esta función se llama automáticamente al iniciar la aplicación.
+    
+    Returns:
+        tuple: (success: bool, message: str)
+    """
+    print("🔄 Ejecutando migraciones de base de datos...")
+    
+    migration_results = []
+    
+    try:
+        # Importar y ejecutar cada migración
+        migrations = [
+            ("client_name", "migrate_add_client_name"),
+            ("quoted_by_and_proposal_name", "migrate_add_quoted_by_and_proposal_name"),
+            ("quantity", "migrate_add_quantity_to_quote_lines"),
+            ("formal_proposals", "migrate_add_formal_proposals"),
+        ]
+        
+        for name, module_name in migrations:
+            try:
+                print(f"  📦 Ejecutando migración: {name}")
+                module = __import__(module_name)
+                if hasattr(module, 'migrate'):
+                    success = module.migrate()
+                    if success:
+                        migration_results.append(f"✅ {name}")
+                    else:
+                        migration_results.append(f"⚠️ {name} (falló)")
+                else:
+                    migration_results.append(f"⚠️ {name} (sin función migrate)")
+            except Exception as e:
+                print(f"  ⚠️ Error en migración {name}: {e}")
+                migration_results.append(f"⚠️ {name} (error: {str(e)[:50]})")
+        
+        print("✅ Proceso de migraciones completado")
+        summary = "\n".join(migration_results)
+        return True, f"Migraciones ejecutadas:\n{summary}"
+        
+    except Exception as e:
+        error_msg = f"Error ejecutando migraciones: {e}"
+        print(f"❌ {error_msg}")
+        return False, error_msg
+
