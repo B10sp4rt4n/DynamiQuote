@@ -76,19 +76,35 @@ No requiere configuración. La aplicación creará automáticamente `quotes_mvp.
 
 La aplicación crea automáticamente dos tablas:
 - `quotes` - Encabezados de cotizaciones
-- `quote_lines` - Líneas de detalle
+- `quote_lines` - Líneas de detalle (con sistema de cantidad y recálculo automático)
+
+## Características Avanzadas
+
+### Sistema de Cantidad y Cálculo Automático
+Cada línea de cotización es un nodo con atributos que se recalculan automáticamente:
+- **Cantidad**: Número de unidades
+- **Precio unitario**: Precio por unidad
+- **Costo unitario**: Costo por unidad
+- **Margen %**: Porcentaje de margen bruto
+
+Cuando cambias cualquier atributo, los demás se ajustan automáticamente. Ver [QUANTITY_SYSTEM.md](QUANTITY_SYSTEM.md) para detalles completos.
 
 ## Estructura del Proyecto
 
 ```
 DynamiQuote/
-├── app.py                  # Aplicación principal
-├── database.py             # Capa de abstracción de BD
-├── migrate_to_neon.py      # Script de migración
-├── requirements.txt        # Dependencias
-├── .env.example            # Ejemplo de configuración
-├── CODE_REVIEW.md          # Análisis de código
-└── POTENTIAL_ANALYSIS.md   # Análisis de mercado
+├── app.py                      # Aplicación principal
+├── database.py                 # Capa de abstracción de BD
+├── line_calculations.py        # Cálculos automáticos de líneas
+├── excel_import.py             # Importación desde Excel
+├── migrate_to_neon.py          # Script de migración a Neon
+├── migrate_add_quantity.py     # Script para agregar campo cantidad
+├── requirements.txt            # Dependencias
+├── .env.example                # Ejemplo de configuración
+├── CODE_REVIEW.md              # Análisis de código
+├── QUANTITY_SYSTEM.md          # Documentación del sistema de cantidad
+├── VERSIONING_SYSTEM.md        # Documentación del sistema de versiones
+└── POTENTIAL_ANALYSIS.md       # Análisis de mercado
 ```
 
 ## Deploy en Producción
