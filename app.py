@@ -3076,9 +3076,29 @@ with tab_proposals:
         st.divider()
         st.subheader("📚 Propuestas Generadas")
 
-        from database import get_formal_proposals, get_formal_proposal, get_quote_lines_full
+        from database import get_formal_proposals, get_formal_proposal, get_quote_lines_full, mark_proposal_as_delivered
 
-        all_proposals = get_formal_proposals()
+        # Filtro por estado
+        col_filter1, col_filter2 = st.columns([1, 3])
+        with col_filter1:
+            status_filter_option = st.selectbox(
+                "Filtrar por estado:",
+                options=["Todas", "Borrador", "Entregadas"],
+                index=0,
+                key="proposal_status_filter"
+            )
+        
+        # Convertir a valor de BD
+        status_filter_value = None
+        if status_filter_option == "Borrador":
+            status_filter_value = "draft"
+        elif status_filter_option == "Entregadas":
+            status_filter_value = "delivered"
+        
+        with col_filter2:
+            st.write("")  # Espaciador
+        
+        all_proposals = get_formal_proposals(status_filter=status_filter_value)
 
         if all_proposals:
             # Controles de paginación
@@ -3140,19 +3160,63 @@ with tab_proposals:
                     # Mostrar detalles
                     st.markdown("---")
                     
+                    # Estado con badge visual
+                    is_delivered = proposal_full.get('delivery_hash') is not None
+                    
+                    if is_delivered:
+                        st.success("✅ PROPUESTA ENTREGADA - Inmutable")
+                        
+                        # Información de entrega
+                        col_d1, col_d2, col_d3, col_d4 = st.columns(4)
+                        with col_d1:
+                            st.write("**Consecutivo:**")
+                            st.code(proposal_full.get('delivery_number', 'N/A'))
+                        with col_d2:
+                            st.write("**Fecha Entrega:**")
+                            delivered_at = proposal_full.get('delivered_at', 'N/A')
+                            if delivered_at != 'N/A':
+                                # Formatear fecha si es datetime
+                                try:
+                                    from datetime import datetime
+                                    if isinstance(delivered_at, str):
+                                        dt = datetime.fromisoformat(delivered_at.replace('Z', '+00:00'))
+                                        delivered_at = dt.strftime('%Y-%m-%d %H:%M')
+                                except:
+                                    pass
+                            st.code(delivered_at)
+                        with col_d3:
+                            st.write("**Entregada por:**")
+                            st.code(proposal_full.get('delivered_by', 'N/A'))
+                        with col_d4:
+                            st.write("**Hash Verificación:**")
+                            st.code(proposal_full.get('delivery_hash', 'N/A')[:8])
+                        
+                        st.divider()
+                    else:
+                        st.warning("⚠️ Borrador - Puede ser marcada como entregada")
+                    
                     col1, col2, col3 = st.columns(3)
                     with col1:
-                        st.write("**Fecha:**")
+                        st.write("**Fecha Emisión:**")
                         st.info(str(proposal_full['issued_date']))
                     with col2:
                         st.write("**Cliente:**")
                         st.info(str(proposal_full['recipient_company']))
                     with col3:
-                        st.write("**Estado:**")
-                        st.info(str(proposal_full['status']))
+                        st.write("**Número:**")
+                        st.info(str(proposal_full['proposal_number']))
                     
                     # Botones de acción
-                    col_btn1, col_btn2 = st.columns(2)
+                    if is_delivered:
+                        # Propuesta entregada: solo permitir regenerar PDF
+                        st.markdown("---")
+                        st.write("📄 **Opciones disponibles (propuesta inmutable):**")
+                        col_btn1, col_btn2, col_btn3 = st.columns(3)
+                    else:
+                        # Propuesta borrador: permitir marcar como entregada + PDF
+                        st.markdown("---")
+                        st.write("⚙️ **Acciones disponibles:**")
+                        col_btn1, col_btn2, col_btn3 = st.columns(3)
                     
                     # Intentar descargar PDF guardado
                     pdf_data_available = False
@@ -3164,7 +3228,7 @@ with tab_proposals:
                             pdf_data_available = True
                             with col_btn1:
                                 st.download_button(
-                                    label="📥 Descargar PDF Guardado",
+                                    label="📥 Descargar PDF",
                                     data=pdf_data,
                                     file_name=f"{proposal_full['proposal_number']}.pdf",
                                     mime="application/pdf",
@@ -3172,12 +3236,13 @@ with tab_proposals:
                                     use_container_width=True
                                 )
                     
-                    # Botón para regenerar PDF
+                    # Botón para regenerar PDF (siempre disponible)
                     with col_btn2:
                         if st.button(
-                            "🔄 Regenerar PDF" if pdf_data_available else "📄 Generar PDF",
+                            "🔄 Regenerar PDF",
                             key=f"regen_{selected_proposal_id}",
-                            use_container_width=True
+                            use_container_width=True,
+                            help="Genera un nuevo PDF con los datos actuales (sin modificar la propuesta)"
                         ):
                             with st.spinner("Generando PDF..."):
                                 try:
@@ -3246,6 +3311,42 @@ with tab_proposals:
                                     st.error(f"❌ Error: {e}")
                                     import traceback
                                     st.code(traceback.format_exc())
+                    
+                    # Botón para marcar como entregada (solo si es draft)
+                    if not is_delivered:
+                        with col_btn3:
+                            if st.button(
+                                "✅ Marcar como Entregada",
+                                key=f"deliver_{selected_proposal_id}",
+                                use_container_width=True,
+                                type="primary",
+                                help="Marca la propuesta como entregada (inmutable)"
+                            ):
+                                # Confirmar con el usuario
+                                if 'confirm_delivery' not in st.session_state:
+                                    st.session_state.confirm_delivery = selected_proposal_id
+                                    st.warning("⚠️ **¿Estás seguro?** Esta acción es irreversible. La propuesta se marcará como entregada y será inmutable.")
+                                    
+                        # Confirmar entrega
+                        if st.session_state.get('confirm_delivery') == selected_proposal_id:
+                            col_confirm1, col_confirm2 = st.columns(2)
+                            with col_confirm1:
+                                if st.button("✅ Sí, marcar como entregada", key=f"confirm_yes_{selected_proposal_id}"):
+                                    # Obtener usuario actual (puedes usar st.session_state si tienes login)
+                                    current_user = st.session_state.get('user_name', 'system')
+                                    
+                                    success, message = mark_proposal_as_delivered(selected_proposal_id, current_user)
+                                    if success:
+                                        st.success(message)
+                                        del st.session_state.confirm_delivery
+                                        st.rerun()
+                                    else:
+                                        st.error(message)
+                            
+                            with col_confirm2:
+                                if st.button("❌ Cancelar", key=f"confirm_no_{selected_proposal_id}"):
+                                    del st.session_state.confirm_delivery
+                                    st.rerun()
         else:
             st.info("No hay propuestas formales generadas aún")
 

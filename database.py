@@ -1082,42 +1082,48 @@ def save_formal_proposal(proposal_data: dict) -> tuple[bool, str]:
         return False, f"❌ Error guardando propuesta: {e}"
 
 
-def get_formal_proposals(quote_id: str = None) -> list:
+def get_formal_proposals(quote_id: str = None, status_filter: str = None) -> list:
     """
     Obtiene lista de propuestas formales.
     
     Args:
         quote_id: Filtrar por cotización. None para todas.
+        status_filter: Filtrar por estado ('draft', 'delivered'). None para todos.
         
     Returns:
         Lista de diccionarios con propuestas
     """
     try:
         with get_cursor() as cur:
+            # Construir query con filtros
+            base_query = """
+                SELECT proposal_doc_id, quote_id, proposal_number, issued_date, 
+                       recipient_company, status, created_at, delivery_number,
+                       delivery_hash, delivered_at, delivered_by
+                FROM formal_proposals 
+            """
+            
+            conditions = []
+            params = []
+            
             if quote_id:
-                if is_postgres():
-                    cur.execute(
-                        """SELECT proposal_doc_id, quote_id, proposal_number, issued_date, 
-                           recipient_company, status, created_at 
-                           FROM formal_proposals WHERE quote_id = %s ORDER BY created_at DESC""",
-                        (quote_id,)
-                    )
-                else:
-                    cur.execute(
-                        """SELECT proposal_doc_id, quote_id, proposal_number, issued_date, 
-                           recipient_company, status, created_at 
-                           FROM formal_proposals WHERE quote_id = ? ORDER BY created_at DESC""",
-                        (quote_id,)
-                    )
-            else:
-                cur.execute(
-                    """SELECT proposal_doc_id, quote_id, proposal_number, issued_date, 
-                       recipient_company, status, created_at 
-                       FROM formal_proposals ORDER BY created_at DESC"""
-                )
+                conditions.append("quote_id = %s" if is_postgres() else "quote_id = ?")
+                params.append(quote_id)
+            
+            if status_filter:
+                conditions.append("status = %s" if is_postgres() else "status = ?")
+                params.append(status_filter)
+            
+            if conditions:
+                base_query += " WHERE " + " AND ".join(conditions)
+            
+            base_query += " ORDER BY created_at DESC"
+            
+            cur.execute(base_query, tuple(params) if params else ())
             
             columns = ["proposal_doc_id", "quote_id", "proposal_number", "issued_date", 
-                      "recipient_company", "status", "created_at"]
+                      "recipient_company", "status", "created_at", "delivery_number",
+                      "delivery_hash", "delivered_at", "delivered_by"]
             results = []
             for row in cur.fetchall():
                 results.append(dict(zip(columns, row)))
@@ -1154,6 +1160,144 @@ def get_formal_proposal(proposal_doc_id: str) -> dict:
         return {}
 
 
+def generate_delivery_number() -> str:
+    """
+    Genera el próximo número consecutivo de entrega.
+    Formato: ENTREGA-YYYY-NNNN (ej: ENTREGA-2026-0001)
+    
+    Returns:
+        Número de entrega único
+    """
+    from datetime import datetime, UTC
+    try:
+        with get_cursor() as cur:
+            year = datetime.now(UTC).year
+            
+            if is_postgres():
+                cur.execute("""
+                    SELECT delivery_number FROM formal_proposals 
+                    WHERE delivery_number LIKE %s 
+                    ORDER BY delivery_number DESC LIMIT 1
+                """, (f"ENTREGA-{year}-%",))
+            else:
+                cur.execute("""
+                    SELECT delivery_number FROM formal_proposals 
+                    WHERE delivery_number LIKE ? 
+                    ORDER BY delivery_number DESC LIMIT 1
+                """, (f"ENTREGA-{year}-%",))
+            
+            result = cur.fetchone()
+            if result and result[0]:
+                # Extraer el número secuencial del último
+                last_number = int(result[0].split('-')[-1])
+                next_number = last_number + 1
+            else:
+                next_number = 1
+            
+            return f"ENTREGA-{year}-{next_number:04d}"
+    except Exception as e:
+        print(f"Error generando delivery_number: {e}")
+        from datetime import datetime, UTC
+        import uuid
+        # Fallback: usar timestamp
+        return f"ENTREGA-{datetime.now(UTC).year}-{str(uuid.uuid4())[:4].upper()}"
+
+
+def generate_delivery_hash(proposal_doc_id: str) -> str:
+    """
+    Genera un hash único e inmutable para una propuesta entregada.
+    
+    Args:
+        proposal_doc_id: ID de la propuesta
+        
+    Returns:
+        Hash SHA256 de 16 caracteres
+    """
+    import hashlib
+    from datetime import datetime, UTC
+    
+    # Combinar proposal_doc_id + timestamp + salt
+    timestamp = datetime.now(UTC).isoformat()
+    salt = "DynamiQuote-Delivery-2026"
+    data = f"{proposal_doc_id}{timestamp}{salt}"
+    
+    hash_obj = hashlib.sha256(data.encode('utf-8'))
+    return hash_obj.hexdigest()[:16].upper()
+
+
+def mark_proposal_as_delivered(proposal_doc_id: str, delivered_by: str) -> tuple[bool, str]:
+    """
+    Marca una propuesta como entregada.
+    Genera delivery_number, delivery_hash, y marca delivered_at.
+    El estado se vuelve inmutable.
+    
+    Args:
+        proposal_doc_id: ID de la propuesta
+        delivered_by: Usuario que marca como entregada
+        
+    Returns:
+        Tupla (success: bool, message: str)
+    """
+    from datetime import datetime, UTC
+    
+    try:
+        with get_cursor() as cur:
+            # Verificar que la propuesta existe y es draft
+            if is_postgres():
+                cur.execute("""
+                    SELECT status, delivery_hash FROM formal_proposals 
+                    WHERE proposal_doc_id = %s
+                """, (proposal_doc_id,))
+            else:
+                cur.execute("""
+                    SELECT status, delivery_hash FROM formal_proposals 
+                    WHERE proposal_doc_id = ?
+                """, (proposal_doc_id,))
+            
+            result = cur.fetchone()
+            if not result:
+                return False, "❌ Propuesta no encontrada"
+            
+            current_status, existing_hash = result
+            
+            if existing_hash:
+                return False, "❌ Esta propuesta ya fue entregada y es inmutable"
+            
+            # Generar datos de entrega
+            delivery_number = generate_delivery_number()
+            delivery_hash = generate_delivery_hash(proposal_doc_id)
+            delivered_at = datetime.now(UTC).isoformat()
+            
+            # Actualizar propuesta
+            if is_postgres():
+                cur.execute("""
+                    UPDATE formal_proposals 
+                    SET status = 'delivered',
+                        delivery_number = %s,
+                        delivery_hash = %s,
+                        delivered_at = %s,
+                        delivered_by = %s,
+                        updated_at = %s
+                    WHERE proposal_doc_id = %s
+                """, (delivery_number, delivery_hash, delivered_at, delivered_by, delivered_at, proposal_doc_id))
+            else:
+                cur.execute("""
+                    UPDATE formal_proposals 
+                    SET status = 'delivered',
+                        delivery_number = ?,
+                        delivery_hash = ?,
+                        delivered_at = ?,
+                        delivered_by = ?,
+                        updated_at = ?
+                    WHERE proposal_doc_id = ?
+                """, (delivery_number, delivery_hash, delivered_at, delivered_by, delivered_at, proposal_doc_id))
+            
+            return True, f"✅ Propuesta marcada como entregada: {delivery_number}"
+            
+    except Exception as e:
+        return False, f"❌ Error marcando como entregada: {e}"
+
+
 def run_migrations():
     """
     Ejecuta todas las migraciones de base de datos necesarias.
@@ -1173,6 +1317,7 @@ def run_migrations():
             ("quoted_by_and_proposal_name", "migrate_add_quoted_by_and_proposal_name"),
             ("quantity", "migrate_add_quantity_to_quote_lines"),
             ("formal_proposals", "migrate_add_formal_proposals"),
+            ("delivery_hash", "migrate_add_delivery_hash"),
         ]
         
         for name, module_name in migrations:
