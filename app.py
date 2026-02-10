@@ -6,6 +6,7 @@ import matplotlib.pyplot as plt
 from spellchecker import SpellChecker
 from database import init_database, save_quote, save_import_file, get_all_quotes, get_quote_lines, get_quote_lines_full, get_latest_version, load_versions_for_group, load_lines_for_quote, get_database_info
 from excel_import import import_excel_file, format_validation_report
+from line_calculations import calculate_from_price_and_cost, calculate_from_cost_and_margin
 import os
 
 # =========================
@@ -283,6 +284,14 @@ def generate_comparison_narrative(q1, q2, df1, df2, playbook_name="General"):
     narrative_exec = []
     narrative_detail = []
     
+    # Asegurar que ambos dataframes tienen quantity y calcular totales
+    for df in [df1, df2]:
+        if "quantity" not in df.columns:
+            df["quantity"] = 1
+        df["quantity"] = pd.to_numeric(df["quantity"], errors='coerce').fillna(1).astype(int)
+        df["total_price"] = df["final_price_unit"] * df["quantity"]
+        df["total_cost"] = df["cost_unit"] * df["quantity"]
+    
     # Obtener configuración del playbook
     pb = PLAYBOOKS.get(playbook_name, PLAYBOOKS["General"])
     
@@ -355,8 +364,8 @@ def generate_comparison_narrative(q1, q2, df1, df2, playbook_name="General"):
         )
     
     # --- Análisis por componente
-    comp1 = df1.groupby("service_origin")["final_price_unit"].sum()
-    comp2 = df2.groupby("service_origin")["final_price_unit"].sum()
+    comp1 = df1.groupby("service_origin")["total_price"].sum()
+    comp2 = df2.groupby("service_origin")["total_price"].sum()
     
     comp_delta = (comp2 - comp1).fillna(comp2).fillna(0)
     
@@ -717,6 +726,15 @@ if not hist_compare.empty:
                 with col_metrics4:
                     l1 = load_lines_for_quote(q1["quote_id"])
                     l2 = load_lines_for_quote(q2["quote_id"])
+                    
+                    # Asegurar que tienen quantity y calcular totales
+                    for df in [l1, l2]:
+                        if "quantity" not in df.columns:
+                            df["quantity"] = 1
+                        df["quantity"] = pd.to_numeric(df["quantity"], errors='coerce').fillna(1).astype(int)
+                        df["total_price"] = df["final_price_unit"] * df["quantity"]
+                        df["total_cost"] = df["cost_unit"] * df["quantity"]
+                    
                     delta_lines = len(l2) - len(l1)
                     st.metric(
                         "Líneas",
@@ -787,17 +805,22 @@ if not hist_compare.empty:
                     if skus_added:
                         for sku in skus_added:
                             line = l2[l2["sku"] == sku].iloc[0]
-                            st.caption(f"  • {sku}: ${float(line['final_price_unit']):,.2f}")
+                            qty = int(line.get('quantity', 1))
+                            st.caption(f"  • {sku}: ${float(line['final_price_unit']):,.2f} x {qty} = ${float(line['total_price']):,.2f}")
                 
                 with col_changes2:
                     st.metric("➖ Líneas Eliminadas", len(skus_removed))
                     if skus_removed:
                         for sku in skus_removed:
                             line = l1[l1["sku"] == sku].iloc[0]
-                            st.caption(f"  • {sku}: ${float(line['final_price_unit']):,.2f}")
+                            qty = int(line.get('quantity', 1))
+                            st.caption(f"  • {sku}: ${float(line['final_price_unit']):,.2f} x {qty} = ${float(line['total_price']):,.2f}")
                 
                 with col_changes3:
-                    st.metric("🔄 Líneas Modificadas", len([s for s in skus_common if float(l1[l1["sku"]==s]["final_price_unit"].iloc[0]) != float(l2[l2["sku"]==s]["final_price_unit"].iloc[0])]))
+                    modified_lines = [s for s in skus_common if 
+                                     float(l1[l1["sku"]==s]["total_price"].iloc[0]) != float(l2[l2["sku"]==s]["total_price"].iloc[0]) or
+                                     float(l1[l1["sku"]==s]["quantity"].iloc[0]) != float(l2[l2["sku"]==s]["quantity"].iloc[0])]
+                    st.metric("🔄 Líneas Modificadas", len(modified_lines))
                 
                 # ===== NIVEL C: Visualizaciones =====
                 st.markdown("### 📊 Visualizaciones")
@@ -835,8 +858,8 @@ if not hist_compare.empty:
                     st.markdown("**Aportación por Componente**")
                     
                     # Agrupar por componente
-                    c1 = l1.groupby("service_origin")["final_price_unit"].sum()
-                    c2 = l2.groupby("service_origin")["final_price_unit"].sum()
+                    c1 = l1.groupby("service_origin")["total_price"].sum()
+                    c2 = l2.groupby("service_origin")["total_price"].sum()
                     
                     comp_components = pd.concat([c1, c2], axis=1).fillna(0)
                     comp_components.columns = [f"v{v1}", f"v{v2}"]
@@ -1387,8 +1410,7 @@ with st.expander("📥 O importa múltiples líneas desde Excel", expanded=False
                     
                     st.success(f"✅ {len(import_result['lines'])} líneas importadas correctamente")
                     st.rerun()
-            session_state.edited_import_data = None
-                    st.
+            
             with col_cancel:
                 if st.button("❌ Cancelar Import", width="stretch"):
                     st.rerun()
@@ -1412,6 +1434,7 @@ with st.form("add_line", clear_on_submit=True):
         price = st.number_input("Precio unitario", min_value=0.0, step=0.01)
 
     with col3:
+        quantity = st.number_input("Cantidad", min_value=1, value=1, step=1)
         margin_target = st.number_input("Margen objetivo % (opcional)", min_value=0.0, max_value=99.0, step=0.1)
         strategy = st.selectbox("Estrategia", ["penetration", "defense", "upsell", "renewal"])
 
@@ -1436,19 +1459,31 @@ if submit:
     # Corrección de descripción
     corrected_desc, corrections = suggest_description_fix(description_input)
     
-    # Cálculos
+    # Cálculos usando las funciones de line_calculations
     warnings = []
     margin_pct = None
     final_price = price
+    final_cost = cost
 
-    if cost > 0 and price > 0:
-        margin_pct = round(((price - cost) / price) * 100, 2)
-    elif cost > 0 and margin_target > 0:
-        final_price = round(cost / (1 - margin_target / 100), 2)
-        margin_pct = round(margin_target, 2)
-        warnings.append("Precio sugerido a partir de margen objetivo")
-    else:
-        st.error("Debes ingresar costo + precio o costo + margen")
+    try:
+        if cost > 0 and price > 0:
+            # Calcular margen a partir de precio y costo
+            calculated = calculate_from_price_and_cost(price, cost, quantity)
+            margin_pct = calculated["margin_pct"]
+            final_price = calculated["price_unit"]
+            final_cost = calculated["cost_unit"]
+        elif cost > 0 and margin_target > 0:
+            # Calcular precio a partir de costo y margen
+            calculated = calculate_from_cost_and_margin(cost, margin_target, quantity)
+            final_price = calculated["price_unit"]
+            final_cost = calculated["cost_unit"]
+            margin_pct = calculated["margin_pct"]
+            warnings.append("Precio sugerido a partir de margen objetivo")
+        else:
+            st.error("Debes ingresar costo + precio o costo + margen")
+            st.stop()
+    except ValueError as e:
+        st.error(f"❌ Error en cálculo: {e}")
         st.stop()
     
     # Preparar línea
@@ -1463,9 +1498,10 @@ if submit:
         "corrections": corrections,
         "line_type": line_type,
         "service_origin": service_origin,
-        "cost_unit": cost,
+        "cost_unit": final_cost,
         "final_price_unit": final_price,
         "margin_pct": margin_pct,
+        "quantity": quantity,
         "strategy": strategy,
         "warnings": ", ".join(warnings),
         "created_at": datetime.now(UTC).isoformat()
@@ -1494,16 +1530,25 @@ if st.session_state.lines:
     df["cost_unit"] = pd.to_numeric(df["cost_unit"], errors='coerce').fillna(0)
     df["final_price_unit"] = pd.to_numeric(df["final_price_unit"], errors='coerce').fillna(0)
     df["margin_pct"] = pd.to_numeric(df["margin_pct"], errors='coerce').fillna(0)
+    
+    # Asegurar que quantity existe con valor por defecto
+    if "quantity" not in df.columns:
+        df["quantity"] = 1
+    df["quantity"] = pd.to_numeric(df["quantity"], errors='coerce').fillna(1).astype(int)
+    
+    # Calcular totales considerando cantidad
+    df["total_cost"] = df["cost_unit"] * df["quantity"]
+    df["total_price"] = df["final_price_unit"] * df["quantity"]
 
-    total_cost = df["cost_unit"].sum()
-    total_revenue = df["final_price_unit"].sum()
+    total_cost = df["total_cost"].sum()
+    total_revenue = df["total_price"].sum()
     gross_profit = total_revenue - total_cost
     gross_margin_pct = round((gross_profit / total_revenue * 100) if total_revenue > 0 else 0, 2)
 
     colA, colB, colC, colD = st.columns(4)
-    colA.metric("Ingreso total", f"${round(total_revenue,2)}")
-    colB.metric("Costo total", f"${round(total_cost,2)}")
-    colC.metric("Utilidad bruta", f"${round(gross_profit,2)}")
+    colA.metric("Ingreso total", f"${total_revenue:,.2f}")
+    colB.metric("Costo total", f"${total_cost:,.2f}")
+    colC.metric("Utilidad bruta", f"${gross_profit:,.2f}")
     colD.metric("Margen bruto %", gross_margin_pct)
 
     st.dataframe(
@@ -1512,10 +1557,13 @@ if st.session_state.lines:
             "description_final",
             "line_type",
             "service_origin",
-            "strategy",
+            "quantity",
             "cost_unit",
             "final_price_unit",
             "margin_pct",
+            "total_cost",
+            "total_price",
+            "strategy",
             "warnings"
         ]],
         width='stretch'
@@ -1530,10 +1578,10 @@ if st.session_state.lines:
 
     with col_graph1:
         st.markdown("**Aportación por componente**")
-        comp_df = df.groupby("service_origin")["final_price_unit"].sum().reset_index()
+        comp_df = df.groupby("service_origin")["total_price"].sum().reset_index()
         fig1, ax1 = plt.subplots(figsize=(6, 4))
         ax1.pie(
-            comp_df["final_price_unit"],
+            comp_df["total_price"],
             labels=comp_df["service_origin"],
             autopct="%1.1f%%",
             startangle=90
@@ -1605,6 +1653,7 @@ if st.session_state.lines:
                 float(row["cost_unit"]),
                 float(row["final_price_unit"]),
                 float(row["margin_pct"]) if row["margin_pct"] is not None else None,
+                int(row.get("quantity", 1)),
                 str(row["strategy"]),
                 str(row["warnings"]),
                 str(row["created_at"]),
@@ -1691,8 +1740,9 @@ if quotes_query:
                                     "cost_unit": line[8],
                                     "final_price_unit": line[9],
                                     "margin_pct": line[10],
-                                    "strategy": line[11],
-                                    "warnings": line[12],
+                                    "quantity": int(line[11]) if line[11] is not None else 1,
+                                    "strategy": line[12],
+                                    "warnings": line[13],
                                     "created_at": datetime.now(UTC).isoformat()
                                 })
                             
@@ -1712,7 +1762,7 @@ if quotes_query:
                     if lines:
                         lines_df = pd.DataFrame(
                             lines,
-                            columns=["SKU", "Descripción", "Tipo", "Origen", "Costo Unit.", "Precio Unit.", "Margen %", "Estrategia", "Advertencias"]
+                            columns=["SKU", "Descripción", "Tipo", "Origen", "Costo Unit.", "Precio Unit.", "Margen %", "Cantidad", "Estrategia", "Advertencias"]
                         )
                         st.dataframe(lines_df, hide_index=True, width="stretch")
                 
