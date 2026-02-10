@@ -584,11 +584,23 @@ def generate_proposal_pdf(
                 story.append(Paragraph(line, body_style))
         story.append(Spacer(1, 0.2*inch))
         
+        # ===== NUEVA PÁGINA PARA DETALLES =====
+        story.append(PageBreak())
+        
         # Título de detalle
         story.append(Paragraph("<b>DETALLE DE LA PROPUESTA</b>", heading_style))
         story.append(Spacer(1, 0.1*inch))
         
-        # Tabla de items
+        # Tabla de items con celdas multilínea
+        # Estilo para descripciones multilínea
+        desc_style = ParagraphStyle(
+            'Description',
+            parent=styles['Normal'],
+            fontSize=8,
+            leading=10,
+            alignment=TA_LEFT
+        )
+        
         table_data = [
             ['#', 'SKU', 'DESCRIPCIÓN', 'CANT.', 'PRECIO UNIT.', 'IMPORTE']
         ]
@@ -598,10 +610,14 @@ def generate_proposal_pdf(
             unit_price = float(line.get('final_price_unit', 0))
             total_price = quantity * unit_price
             
+            # Descripción como Paragraph para multilínea
+            description = str(line.get('description_final') or line.get('description_original', ''))
+            desc_paragraph = Paragraph(description, desc_style)
+            
             table_data.append([
                 str(idx),
                 str(line.get('sku', '-'))[:15],
-                str(line.get('description_final') or line.get('description_original', ''))[:80],
+                desc_paragraph,  # Ahora es Paragraph, no string
                 f"{int(quantity)}",
                 f"{totals['currency_symbol']}{unit_price:,.2f}",
                 f"{totals['currency_symbol']}{total_price:,.2f}"
@@ -609,7 +625,8 @@ def generate_proposal_pdf(
         
         items_table = Table(
             table_data,
-            colWidths=[0.4*inch, 0.9*inch, 3.2*inch, 0.6*inch, 1*inch, 1*inch]
+            colWidths=[0.4*inch, 0.9*inch, 3.5*inch, 0.6*inch, 1*inch, 1*inch],
+            repeatRows=1  # Repetir header en páginas siguientes
         )
         
         items_table.setStyle(TableStyle([
@@ -627,11 +644,17 @@ def generate_proposal_pdf(
             ('ALIGN', (0, 1), (0, -1), 'CENTER'),  # #
             ('ALIGN', (3, 1), (3, -1), 'CENTER'),  # CANT
             ('ALIGN', (4, 1), (-1, -1), 'RIGHT'),  # Precios
-            ('VALIGN', (0, 0), (-1, -1), 'MIDDLE'),
+            ('VALIGN', (0, 0), (-1, -1), 'TOP'),  # Alinear arriba para multilínea
             
             # Grid
             ('GRID', (0, 0), (-1, -1), 0.5, colors.grey),
             ('ROWBACKGROUNDS', (0, 1), (-1, -1), [colors.white, colors.HexColor('#f5f5f5')]),
+            
+            # Padding para que el texto no se encime
+            ('TOPPADDING', (0, 1), (-1, -1), 6),
+            ('BOTTOMPADDING', (0, 1), (-1, -1), 6),
+            ('LEFTPADDING', (0, 0), (-1, -1), 4),
+            ('RIGHTPADDING', (0, 0), (-1, -1), 4),
         ]))
         
         story.append(items_table)
