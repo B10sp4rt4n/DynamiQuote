@@ -1292,7 +1292,12 @@ st.subheader("➕ Agregar línea")
 # Mostrar información de versión actual
 version_info = f"📝 Oportunidad: {st.session_state.quote_group_id[:8]}... | Versión: {st.session_state.version}"
 if st.session_state.parent_quote_id:
-    version_info += f" (basada en versión anterior)"
+    version_info += f" (basada en versión anterior: {st.session_state.parent_quote_id[:8]}...)"
+    
+# Agregar debug temporal para ver qué está pasando
+if st.session_state.version > 1 or st.session_state.parent_quote_id:
+    version_info += f" | 🔍 DEBUG: version={st.session_state.version}, parent={st.session_state.parent_quote_id[:8] if st.session_state.parent_quote_id else 'None'}..."
+    
 st.info(version_info)
 
 # Mostrar errores persistentes de OpenAI si existen
@@ -1393,6 +1398,13 @@ if st.session_state.pending_line:
 with tab_legacy:
     st.header("📝 Cotizador Universal – MVP Funcional")
 
+    # DEBUG: Mostrar estado al entrar al tab
+    with st.expander("🔍 DEBUG: Estado al cargar tab Legacy", expanded=False):
+        st.write(f"**version:** {st.session_state.version}")
+        st.write(f"**quote_group_id:** {st.session_state.quote_group_id}")
+        st.write(f"**parent_quote_id:** {st.session_state.parent_quote_id}")
+        st.write(f"**Cantidad de líneas:** {len(st.session_state.lines)}")
+
     # Mostrar banner si hay versión pendiente desde Base de Datos
     if st.session_state.get('pending_new_version', False):
         st.success(f"""
@@ -1463,6 +1475,9 @@ with tab_legacy:
                 all_quotes,
                 columns=["quote_id", "quote_group_id", "version", "parent_quote_id", "created_at", "status", "total_cost", "total_revenue", "gross_profit", "avg_margin", "playbook_name", "client_name", "quoted_by", "proposal_name"]
             )
+            
+            # IMPORTANTE: Ordenar por version DESC dentro de cada grupo para asegurar que iloc[0] sea la versión más alta
+            quotes_df = quotes_df.sort_values(by=["quote_group_id", "version"], ascending=[True, False])
 
             # Crear opciones agrupadas
             grouped = quotes_df.groupby("quote_group_id").agg({
@@ -1485,15 +1500,21 @@ with tab_legacy:
                     help="Se copiará toda la información y se creará una nueva versión"
                 )
 
-                if st.button("📋 Copiar datos de esta propuesta", type="primary"):
-                    selected_group_id = proposal_options[selected_existing]
+                # Mostrar información de la propuesta seleccionada y versión que se creará
+                selected_group_id = proposal_options[selected_existing]
+                group_quotes = quotes_df[quotes_df["quote_group_id"] == selected_group_id]
+                current_max_version = group_quotes['version'].max()
+                next_version = current_max_version + 1
+                
+                st.info(f"📋 Esta propuesta tiene {len(group_quotes)} versión(es). Al copiar, se creará la **versión {next_version}**")
 
-                    # Obtener la última versión de ese grupo
-                    group_quotes = quotes_df[quotes_df["quote_group_id"] == selected_group_id]
+                if st.button("📋 Copiar datos de esta propuesta", type="primary"):
                     latest = group_quotes.iloc[0]  # Ya está ordenado desc
                     latest_quote_id = latest["quote_id"]
 
                     st.write(f"🔍 DEBUG: quote_id seleccionado: {latest_quote_id}")
+                    st.write(f"🔍 DEBUG: Versión de la propuesta seleccionada: {latest['version']}")
+                    st.write(f"🔍 DEBUG: Total de versiones en el grupo: {len(group_quotes)}")
 
                     # Cargar líneas
                     lines = get_quote_lines(latest_quote_id)
@@ -1532,22 +1553,32 @@ with tab_legacy:
                         # Configurar para nueva versión
                         st.session_state.quote_id = str(uuid.uuid4())
                         st.session_state.quote_group_id = selected_group_id  # Mismo grupo
-                        st.session_state.version = int(latest["version"]) + 1
+                        
+                        # IMPORTANTE: Limpiar caché antes de cargar versiones para obtener datos frescos
+                        st.cache_data.clear()
+                        
+                        # Calcular la siguiente versión correctamente: MAX(versiones) + 1
+                        all_versions_for_group = load_versions_for_group(selected_group_id)
+                        st.write(f"🔍 DEBUG: Versiones encontradas para el grupo: {all_versions_for_group['version'].tolist() if not all_versions_for_group.empty else []}")
+                        max_version = all_versions_for_group["version"].max() if not all_versions_for_group.empty else 0
+                        st.write(f"🔍 DEBUG: Max versión encontrada: {max_version}")
+                        st.session_state.version = max_version + 1
+                        st.write(f"🔍 DEBUG: Nueva versión configurada en session_state: {st.session_state.version}")
+                        
                         st.session_state.parent_quote_id = latest_quote_id
 
-                        st.write(f"🔍 DEBUG: Configurado para versión {st.session_state.version}")
+                        st.write(f"🔍 DEBUG: FINAL - st.session_state.version = {st.session_state.version}")
+                        st.write(f"🔍 DEBUG: FINAL - st.session_state.quote_group_id = {st.session_state.quote_group_id}")
+                        st.write(f"🔍 DEBUG: FINAL - st.session_state.parent_quote_id = {st.session_state.parent_quote_id}")
 
                         # Copiar información a los saved_* (para persistencia)
                         st.session_state.saved_proposal_name = latest["proposal_name"] or ""
                         st.session_state.saved_client_name = latest["client_name"] or ""
                         st.session_state.saved_quoted_by = latest["quoted_by"] or ""
 
-                        st.success(f"✅ {len(quote_lines_raw)} líneas copiadas. Nueva versión v{st.session_state.version} lista para edición.")
-                        st.info("⏳ Recargando página en 2 segundos...")
-
-                        import time
-                        time.sleep(2)
-                        st.rerun()
+                        st.success(f"✅ {len(quote_lines_raw)} líneas copiadas para nueva versión v{st.session_state.version}")
+                        st.warning(f"⚠️ VERIFICACIÓN: La versión actual en session_state es: **v{st.session_state.version}**")
+                        st.info(f"👉 Baja a la sección '➕ Agregar línea' para ver las {len(quote_lines_raw)} líneas cargadas, o ve a '✅ Cerrar y guardar propuesta' para guardarla directamente.")
                     else:
                         st.warning("Esta propuesta no tiene líneas")
 
@@ -1555,12 +1586,8 @@ with tab_legacy:
                 st.divider()
                 st.markdown("**📊 Vista previa de la propuesta seleccionada:**")
 
-                selected_group_id = proposal_options[selected_existing]
-                group_quotes = quotes_df[quotes_df["quote_group_id"] == selected_group_id]
-                latest = group_quotes.iloc[0]
-
-                # Obtener líneas para mostrar
-                lines_preview = get_quote_lines(latest["quote_id"])
+                # Obtener líneas para mostrar (usando la variable ya calculada)
+                lines_preview = get_quote_lines(latest["quote_id"] if 'latest' in locals() else group_quotes.iloc[0]["quote_id"])
                 if lines_preview:
                     preview_df = pd.DataFrame(
                         lines_preview,
@@ -2108,15 +2135,19 @@ with tab_legacy:
                     else:
                         # Nueva versión de la misma oportunidad
                         current_group_id = st.session_state.quote_group_id
-                        current_version = st.session_state.version
                         saved_quote_id = st.session_state.quote_id
+
+                        # Calcular la siguiente versión correctamente: MAX(versiones) + 1
+                        all_versions_for_group = load_versions_for_group(current_group_id)
+                        max_version = all_versions_for_group["version"].max() if not all_versions_for_group.empty else 0
+                        next_version = max_version + 1
 
                         st.session_state.lines = []
                         st.session_state.quote_id = str(uuid.uuid4())
                         st.session_state.quote_group_id = current_group_id
-                        st.session_state.version = current_version + 1
+                        st.session_state.version = next_version
                         st.session_state.parent_quote_id = saved_quote_id
-                        st.info(f"📝 Preparado para versión v{current_version + 1}")
+                        st.info(f"📝 Preparado para versión v{next_version}")
 
                     st.rerun()
                 else:
@@ -3094,7 +3125,13 @@ with tab_db:
 
                                 # Configurar nueva versión
                                 st.session_state.quote_group_id = q['Group ID']
-                                st.session_state.version = int(q['Versión']) + 1
+                                
+                                # Calcular la siguiente versión correctamente: MAX(versiones) + 1
+                                all_versions_for_group = load_versions_for_group(q['Group ID'])
+                                max_version = all_versions_for_group["version"].max() if not all_versions_for_group.empty else 0
+                                next_version = max_version + 1
+                                
+                                st.session_state.version = next_version
                                 st.session_state.parent_quote_id = q['ID']
                                 st.session_state.quote_id = str(uuid.uuid4())
                                 st.session_state.lines = new_lines
@@ -3105,9 +3142,9 @@ with tab_db:
 
                                 # Marcar que hay versión pendiente
                                 st.session_state.pending_new_version = True
-                                st.session_state.pending_version_info = f"v{int(q['Versión']) + 1} de '{proposal_name}'"
+                                st.session_state.pending_version_info = f"v{next_version} de '{proposal_name}'"
 
-                                st.success(f"✅ Configurado para v{int(q['Versión']) + 1} con {len(new_lines)} líneas")
+                                st.success(f"✅ Configurado para v{next_version} con {len(new_lines)} líneas")
                                 st.write("Haciendo rerun en 2 segundos...")
 
                                 import time
