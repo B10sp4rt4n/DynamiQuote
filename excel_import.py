@@ -215,13 +215,14 @@ def convert_to_quote_lines(valid_data: List[Dict], import_batch_id: str,
             "cost_unit": costo,
             "final_price_unit": precio,
             "margin_pct": margen,
+            "quantity": int(data["cantidad"]),
             "strategy": "penetration",
             "warnings": " | ".join(calc_warnings),
             "created_at": datetime.now(UTC).isoformat(),
             "import_source": "excel",
             "import_batch_id": import_batch_id,
             # Metadata adicional para preview
-            "_cantidad": data["cantidad"],  # No se persiste, solo para cálculos
+            "_cantidad": data["cantidad"],  # Mantener para compatibilidad con UI
             "_row_num": item["row_num"]
         }
         

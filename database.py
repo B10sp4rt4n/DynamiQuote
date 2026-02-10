@@ -163,6 +163,7 @@ def init_database():
             cost_unit DECIMAL(10,2),
             final_price_unit DECIMAL(10,2),
             margin_pct DECIMAL(5,2),
+            quantity INTEGER DEFAULT 1,
             strategy TEXT,
             warnings TEXT,
             created_at TIMESTAMP,
@@ -213,6 +214,7 @@ def init_database():
             cost_unit REAL,
             final_price_unit REAL,
             margin_pct REAL,
+            quantity INTEGER DEFAULT 1,
             strategy TEXT,
             warnings TEXT,
             created_at TEXT,
@@ -288,7 +290,7 @@ def save_quote(quote_data: tuple, lines_data: list) -> tuple[bool, str]:
     
     Args:
         quote_data: Tupla con datos de la cotización (11 campos: quote_id, quote_group_id, version, parent_quote_id, created_at, status, total_cost, total_revenue, gross_profit, avg_margin, playbook_name)
-        lines_data: Lista de tuplas con datos de líneas (16 campos cada una: incluye import_source, import_batch_id)
+        lines_data: Lista de tuplas con datos de líneas (17 campos cada una: incluye quantity, import_source, import_batch_id)
     
     Returns:
         Tupla (success: bool, message: str)
@@ -310,9 +312,9 @@ def save_quote(quote_data: tuple, lines_data: list) -> tuple[bool, str]:
                         """INSERT INTO quote_lines 
                            (line_id, quote_id, sku, description_original, description_final,
                             description_corrections, line_type, service_origin, cost_unit,
-                            final_price_unit, margin_pct, strategy, warnings, created_at,
+                            final_price_unit, margin_pct, quantity, strategy, warnings, created_at,
                             import_source, import_batch_id)
-                           VALUES (%s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s)""",
+                           VALUES (%s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s)""",
                         line
                     )
             else:
@@ -323,7 +325,7 @@ def save_quote(quote_data: tuple, lines_data: list) -> tuple[bool, str]:
                 
                 for line in lines_data:
                     cur.execute(
-                        "INSERT INTO quote_lines VALUES (?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?)",
+                        "INSERT INTO quote_lines VALUES (?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?)",
                         line
                     )
         
@@ -358,14 +360,14 @@ def get_quote_lines(quote_id: str) -> list:
             if is_postgres():
                 cur.execute("""
                     SELECT sku, description_final, line_type, service_origin, 
-                           cost_unit, final_price_unit, margin_pct, strategy, warnings
+                           cost_unit, final_price_unit, margin_pct, quantity, strategy, warnings
                     FROM quote_lines
                     WHERE quote_id = %s
                 """, (quote_id,))
             else:
                 cur.execute("""
                     SELECT sku, description_final, line_type, service_origin, 
-                           cost_unit, final_price_unit, margin_pct, strategy, warnings
+                           cost_unit, final_price_unit, margin_pct, quantity, strategy, warnings
                     FROM quote_lines
                     WHERE quote_id = ?
                 """, (quote_id,))
@@ -383,7 +385,7 @@ def get_quote_lines_full(quote_id: str) -> list:
                 cur.execute("""
                     SELECT line_id, quote_id, sku, description_original, description_final, 
                            description_corrections, line_type, service_origin, cost_unit, 
-                           final_price_unit, margin_pct, strategy, warnings, created_at
+                           final_price_unit, margin_pct, quantity, strategy, warnings, created_at
                     FROM quote_lines
                     WHERE quote_id = %s
                 """, (quote_id,))
@@ -391,7 +393,7 @@ def get_quote_lines_full(quote_id: str) -> list:
                 cur.execute("""
                     SELECT line_id, quote_id, sku, description_original, description_final, 
                            description_corrections, line_type, service_origin, cost_unit, 
-                           final_price_unit, margin_pct, strategy, warnings, created_at
+                           final_price_unit, margin_pct, quantity, strategy, warnings, created_at
                     FROM quote_lines
                     WHERE quote_id = ?
                 """, (quote_id,))
@@ -459,7 +461,7 @@ def load_lines_for_quote(quote_id: str):
                 cur.execute("""
                     SELECT line_id, quote_id, sku, description_original, description_final,
                            description_corrections, line_type, service_origin, cost_unit,
-                           final_price_unit, margin_pct, strategy, warnings, created_at,
+                           final_price_unit, margin_pct, quantity, strategy, warnings, created_at,
                            import_source, import_batch_id
                     FROM quote_lines
                     WHERE quote_id = %s
@@ -468,7 +470,7 @@ def load_lines_for_quote(quote_id: str):
                 cur.execute("""
                     SELECT line_id, quote_id, sku, description_original, description_final,
                            description_corrections, line_type, service_origin, cost_unit,
-                           final_price_unit, margin_pct, strategy, warnings, created_at,
+                           final_price_unit, margin_pct, quantity, strategy, warnings, created_at,
                            import_source, import_batch_id
                     FROM quote_lines
                     WHERE quote_id = ?
@@ -476,7 +478,7 @@ def load_lines_for_quote(quote_id: str):
             
             columns = ["line_id", "quote_id", "sku", "description_original", "description_final",
                       "description_corrections", "line_type", "service_origin", "cost_unit",
-                      "final_price_unit", "margin_pct", "strategy", "warnings", "created_at",
+                      "final_price_unit", "margin_pct", "quantity", "strategy", "warnings", "created_at",
                       "import_source", "import_batch_id"]
             return pd.DataFrame(cur.fetchall(), columns=columns)
     except Exception as e:
