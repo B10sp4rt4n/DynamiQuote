@@ -3385,105 +3385,94 @@ with tab_db:
         for group_id, group_df in all_quotes_df.groupby("Group ID"):
             proposal_name = group_df.iloc[0]["Nombre Propuesta"] if group_df.iloc[0]["Nombre Propuesta"] else "Sin nombre"
             client_name = group_df.iloc[0]["Cliente"] if group_df.iloc[0]["Cliente"] else "Sin cliente"
+            
             with st.expander(f"📋 {proposal_name} - {client_name} ({len(group_df)} versiones)", expanded=False):
-                for _, q in group_df.iterrows():
-                    col1, col2, col3, col4, col5 = st.columns([1, 2, 2, 2, 2])
-
-                    with col1:
-                        st.markdown(f"**v{int(q['Versión'])}**")
-
-                    with col2:
-                        fecha = pd.to_datetime(q['Fecha']).strftime("%Y-%m-%d %H:%M")
-                        st.caption(f"📅 {fecha}")
-
-                    with col3:
-                        st.metric("Ingreso", f"${q['Ingreso Total']:,.2f}")
-
-                    with col4:
-                        st.metric("Margen", f"{q['Margen Promedio %']:.2f}%")
-
-                    with col5:
-                        if st.button("➕ Nueva versión", key=f"new_v_{q['ID']}"):
-                            # Cargar líneas de esta versión
-                            lines_full = get_quote_lines_full(q['ID'])
-
-                            st.write(f"DEBUG: lines_full tiene {len(lines_full) if lines_full else 0} líneas")
-
-                            if lines_full:
-                                # Preparar nuevas líneas con nuevos IDs
-                                new_lines = []
-                                for line in lines_full:
-                                    try:
-                                        # IMPORTANTE: Convertir tipos numpy a tipos nativos de Python
-                                        new_lines.append({
-                                            "line_id": str(uuid.uuid4()),  # Nuevo ID
-                                            "sku": str(line[2]),
-                                            "description_original": str(line[4]),  # Usar index 4 (description_original)
-                                            "description_input": str(line[4]),
-                                            "description_final": str(line[5]),  # Usar index 5 (description_final)
-                                            "description_corrections": str(line[6]) if line[6] else "",  # Usar index 6
-                                            "corrected_desc": str(line[5]),
-                                            "corrections": str(line[6]).split(", ") if line[6] else [],
-                                            "quantity": float(line[3]) if line[3] is not None else 1.0,  # Usar index 3 (quantity)
-                                            "line_type": str(line[7]),
-                                            "service_origin": str(line[8]),
-                                            "cost_unit": float(line[9]),
-                                            "final_price_unit": float(line[10]),
-                                            "margin_pct": float(line[11]) if line[11] is not None else 0.0,
-                                            "strategy": str(line[12]),
-                                            "warnings": str(line[13]),
-                                            "created_at": datetime.now(UTC).isoformat()
-                                        })
-                                    except Exception as e:
-                                        st.error(f"Error procesando línea: {e}")
-                                        st.write(f"Línea problemática: {line}")
-                                        st.write(f"Longitud de línea: {len(line)}")
-                                        st.write(f"Índices: {list(enumerate(line))}")
-
-                                st.write(f"DEBUG: new_lines tiene {len(new_lines)} líneas preparadas")
-
-                                # Configurar nueva versión
-                                st.session_state.quote_group_id = q['Group ID']
-                                
-                                # Calcular la siguiente versión correctamente: MAX(versiones) + 1
-                                all_versions_for_group = load_versions_for_group(q['Group ID'])
-                                max_version = all_versions_for_group["version"].max() if not all_versions_for_group.empty else 0
-                                next_version = max_version + 1
-                                
-                                st.session_state.version = next_version
-                                st.session_state.parent_quote_id = q['ID']
-                                st.session_state.quote_id = str(uuid.uuid4())
-                                st.session_state.lines = new_lines
-
-                                # Copiar info de la propuesta original
-                                st.session_state.saved_proposal_name = proposal_name
-                                st.session_state.saved_client_name = client_name
-
-                                # Marcar que hay versión pendiente
-                                st.session_state.pending_new_version = True
-                                st.session_state.pending_version_info = f"v{next_version} de '{proposal_name}'"
-
-                                st.success(f"✅ Configurado para v{next_version} con {len(new_lines)} líneas")
-                                st.write("Haciendo rerun en 2 segundos...")
-
-                                import time
-                                time.sleep(2)
-                                st.rerun()
-                            else:
-                                st.warning("Esta versión no tiene líneas para copiar")
-
-                    # Mostrar líneas de esta versión
-                    with st.container():
-                        st.caption(f"📋 Líneas de v{int(q['Versión'])}")
-                        lines = get_quote_lines(q['ID'])
-                        if lines:
-                            lines_df = pd.DataFrame(
-                                lines,
-                                columns=["SKU", "Descripción", "Tipo", "Origen", "Costo Unit.", "Precio Unit.", "Margen %", "Estrategia", "Advertencias"]
-                            )
-                            st.dataframe(lines_df, hide_index=True, width="stretch")
-
-                    st.divider()
+                # Crear diccionario de versiones para el selector
+                version_options = {}
+                for idx, row in group_df.iterrows():
+                    version_num = int(row['Versión'])
+                    fecha = pd.to_datetime(row['Fecha']).strftime("%Y-%m-%d %H:%M")
+                    version_options[row['ID']] = f"v{version_num} - {fecha}"
+                
+                # Selector de versión
+                col_select, col_page = st.columns([3, 1])
+                
+                with col_select:
+                    selected_version_id = st.selectbox(
+                        "Seleccionar versión",
+                        options=list(version_options.keys()),
+                        format_func=lambda x: version_options[x],
+                        key=f"version_select_{group_id}"
+                    )
+                
+                with col_page:
+                    rows_per_page = st.selectbox(
+                        "Líneas por página",
+                        options=[10, 20, 50, 100],
+                        index=0,
+                        key=f"page_size_{group_id}"
+                    )
+                
+                # Obtener datos de la versión seleccionada
+                selected_row = group_df[group_df['ID'] == selected_version_id].iloc[0]
+                
+                # Mostrar KPIs de la versión seleccionada
+                st.markdown("#### 📊 Resumen de KPIs")
+                col1, col2, col3, col4, col5 = st.columns(5)
+                
+                with col1:
+                    fecha = pd.to_datetime(selected_row['Fecha']).strftime("%Y-%m-%d %H:%M")
+                    st.metric("Fecha", fecha[:10])
+                    st.caption(fecha[11:])
+                
+                with col2:
+                    st.metric("Ingreso Total", f"${selected_row['Ingreso Total']:,.2f}")
+                
+                with col3:
+                    st.metric("Utilidad Bruta", f"${selected_row['Utilidad Bruta']:,.2f}")
+                
+                with col4:
+                    st.metric("Margen", f"{selected_row['Margen Promedio %']:.2f}%")
+                
+                with col5:
+                    st.metric("Costo Total", f"${selected_row['Costo Total']:,.2f}")
+                
+                st.divider()
+                
+                # Mostrar líneas de la versión seleccionada con paginado
+                lines = get_quote_lines(selected_version_id)
+                if lines:
+                    lines_df = pd.DataFrame(
+                        lines,
+                        columns=["SKU", "Descripción", "Tipo", "Origen", "Costo Unit.", "Precio Unit.", "Margen %", "Estrategia", "Advertencias"]
+                    )
+                    
+                    total_lines = len(lines_df)
+                    st.caption(f"📋 Líneas de cotización: {total_lines} total")
+                    
+                    # Calcular paginación
+                    total_pages = (total_lines - 1) // rows_per_page + 1
+                    
+                    if total_pages > 1:
+                        page_number = st.selectbox(
+                            "Página",
+                            options=range(1, total_pages + 1),
+                            key=f"page_num_{selected_version_id}"
+                        )
+                        
+                        start_idx = (page_number - 1) * rows_per_page
+                        end_idx = min(start_idx + rows_per_page, total_lines)
+                        
+                        st.caption(f"Mostrando líneas {start_idx + 1} a {end_idx} de {total_lines}")
+                        paginated_df = lines_df.iloc[start_idx:end_idx]
+                    else:
+                        paginated_df = lines_df
+                    
+                    st.dataframe(paginated_df, hide_index=True, use_container_width=True)
+                else:
+                    st.info("No hay líneas para esta versión")
+                
+                st.divider()
 
         st.divider()
 
