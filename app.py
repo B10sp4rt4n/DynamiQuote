@@ -3141,9 +3141,15 @@ with tab_proposals:
                     st.markdown("---")
                     
                     col1, col2, col3 = st.columns(3)
-                    col1.metric("Fecha", proposal_full['issued_date'])
-                    col2.metric("Cliente", proposal_full['recipient_company'])
-                    col3.metric("Estado", proposal_full['status'])
+                    with col1:
+                        st.write("**Fecha:**")
+                        st.info(str(proposal_full['issued_date']))
+                    with col2:
+                        st.write("**Cliente:**")
+                        st.info(str(proposal_full['recipient_company']))
+                    with col3:
+                        st.write("**Estado:**")
+                        st.info(str(proposal_full['status']))
                     
                     # Botones de acción
                     col_btn1, col_btn2 = st.columns(2)
