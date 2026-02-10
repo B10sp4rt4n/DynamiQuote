@@ -27,11 +27,23 @@ def get_database_url() -> Optional[str]:
     """
     # Prioridad 1: Streamlit Cloud (secrets.toml)
     try:
-        if hasattr(st, 'secrets') and 'DATABASE_URL' in st.secrets:
-            print("✅ Usando DATABASE_URL de Streamlit Cloud Secrets")
-            return st.secrets['DATABASE_URL']
-    except Exception:
-        pass
+        # Verificar si estamos en Streamlit y si secrets está disponible
+        if hasattr(st, 'secrets'):
+            print("🔍 DEBUG: st.secrets está disponible")
+            secrets_keys = list(st.secrets.keys()) if hasattr(st.secrets, 'keys') else []
+            print(f"🔍 DEBUG: Keys en secrets: {secrets_keys}")
+            
+            if 'DATABASE_URL' in st.secrets:
+                db_url = st.secrets['DATABASE_URL']
+                print(f"✅ Usando DATABASE_URL de Streamlit Cloud Secrets")
+                print(f"🔍 DEBUG: URL encontrada (primeros 30 chars): {db_url[:30]}...")
+                return db_url
+            else:
+                print("⚠️ WARNING: DATABASE_URL no encontrada en st.secrets")
+        else:
+            print("⚠️ WARNING: st.secrets no está disponible")
+    except Exception as e:
+        print(f"❌ ERROR al leer st.secrets: {e}")
     
     # Prioridad 2: Archivo .env local
     load_dotenv()

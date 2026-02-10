@@ -72,18 +72,69 @@ Si Streamlit Cloud sigue reportando error en línea 1391 con "st.", significa qu
 - `.streamlit/config.toml` - Configuración UI y tema
 - `.streamlit/cache_buster.txt` - Forzar invalidación de caché
 
-## 🔑 Secrets requeridos
+## 🔑 Configuración de Secrets (DATABASE_URL)
 
-En Streamlit Cloud Settings → Secrets:
+**⚠️ IMPORTANTE**: Si ves que la app usa SQLite en lugar de PostgreSQL, los secrets no están configurados.
+
+### Paso 1: Acceder a la configuración de Secrets
+
+1. Ve a tu app en Streamlit Cloud: https://share.streamlit.io/
+2. Click en tu app **dynamiquote-xxx**
+3. Click en el botón **"Manage app"** (esquina inferior derecha)
+4. En el menú lateral, click en **"⚙️ Settings"**
+5. Scroll hasta encontrar la sección **"Secrets"**
+
+### Paso 2: Configurar DATABASE_URL
+
+En el editor de secrets, pega:
 
 ```toml
-DATABASE_URL = "postgresql://user:password@host/db?sslmode=require"
-# Opcional:
-# OPENAI_API_KEY = "sk-..."
+# Neon PostgreSQL Database
+DATABASE_URL = "postgresql://neondb_owner:npg_y7QFVB3tYafI@ep-falling-wind-ah1tb7pk-pooler.c-3.us-east-1.aws.neon.tech/neondb?sslmode=require"
+
+# Opcional: OpenAI API Key (para corrección inteligente de descripciones)
+# OPENAI_API_KEY = "sk-proj-xxxxxxxxxxxxxxxxxxxxxxxxxxxxx"
 ```
+
+### Paso 3: Guardar y Reboot
+
+1. Click en **"Save"** (botón verde)
+2. Click en **"Reboot app"** para aplicar los cambios
+3. Espera 30-60 segundos
+
+### Paso 4: Verificar conexión
+
+Cuando la app cargue:
+
+1. En la **sidebar izquierda** deberías ver:
+   ```
+   ☁️ Base de datos: PostgreSQL (Neon)
+   Conexión: Cloud
+   ```
+
+2. Expande **"🔍 Debug Info"** en la sidebar para ver:
+   - ✅ DATABASE_URL encontrada
+   - Lista de secrets configurados
+
+### 🐛 Troubleshooting
+
+**Problema**: App sigue usando SQLite después de configurar secrets
+
+**Solución**:
+1. Verifica que guardaste los secrets (botón "Save")
+2. Haz **Reboot app** (no solo refresh)
+3. Espera al menos 30 segundos
+4. Si persiste, haz **Clear cache** + **Reboot app**
+
+**Problema**: Error "Unable to connect to database"
+
+**Solución**:
+1. Verifica que la URL de Neon es correcta (incluye `?sslmode=require`)
+2. Verifica que la base de datos Neon está activa (no en sleep mode)
+3. Revisa los logs en Streamlit Cloud para ver el error exacto
 
 ---
 
-**Última actualización**: 2026-02-09 23:05 UTC  
-**Build**: 115d8c7  
-**Estado**: ✅ Archivo correcto, caché de Streamlit Cloud necesita invalidación
+**Última actualización**: 2026-02-10 UTC  
+**Build**: 1e341c5  
+**Estado**: ✅ Archivo correcto, secrets requeridos para PostgreSQL

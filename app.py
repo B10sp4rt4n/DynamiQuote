@@ -747,6 +747,26 @@ db_info = get_database_info()
 st.sidebar.markdown(f"{db_info['icon']} **Base de datos:** {db_info['type']}")
 st.sidebar.caption(f"Conexión: {db_info['connection']}")
 
+# Debug info en sidebar (expandible)
+with st.sidebar.expander("🔍 Debug Info", expanded=False):
+    st.caption("**Secrets disponibles:**")
+    if hasattr(st, 'secrets'):
+        secrets_keys = list(st.secrets.keys()) if hasattr(st.secrets, 'keys') else []
+        if secrets_keys:
+            st.code(", ".join(secrets_keys))
+        else:
+            st.warning("No hay secrets configurados")
+        
+        if 'DATABASE_URL' in st.secrets:
+            db_url = st.secrets['DATABASE_URL']
+            st.success(f"✅ DATABASE_URL encontrada")
+            st.caption(f"Inicia con: {db_url[:30]}...")
+        else:
+            st.error("❌ DATABASE_URL NO encontrada en secrets")
+            st.info("Configura en: Manage app > Settings > Secrets")
+    else:
+        st.warning("st.secrets no está disponible")
+
 # =========================
 # Session state
 # =========================
