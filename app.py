@@ -449,6 +449,12 @@ def generate_comparison_narrative(q1, q2, df1, df2, playbook_name="General"):
     Returns:
         Dict con narrativa ejecutiva y detallada
     """
+    # Asegurar que service_origin tenga un valor por defecto
+    df1 = df1.copy()
+    df2 = df2.copy()
+    df1["service_origin"] = df1["service_origin"].fillna("Sin especificar").replace("", "Sin especificar")
+    df2["service_origin"] = df2["service_origin"].fillna("Sin especificar").replace("", "Sin especificar")
+    
     narrative_exec = []
     narrative_detail = []
 
@@ -950,6 +956,11 @@ if not hist_compare.empty:
                 with col_metrics4:
                     l1 = load_lines_for_quote(q1["quote_id"])
                     l2 = load_lines_for_quote(q2["quote_id"])
+                    
+                    # Asegurar que service_origin tenga un valor por defecto
+                    l1["service_origin"] = l1["service_origin"].fillna("Sin especificar").replace("", "Sin especificar")
+                    l2["service_origin"] = l2["service_origin"].fillna("Sin especificar").replace("", "Sin especificar")
+                    
                     delta_lines = len(l2) - len(l1)
                     st.metric(
                         "Líneas",
@@ -1076,8 +1087,8 @@ if not hist_compare.empty:
                     comp_components.columns = [f"v{v1}", f"v{v2}"]
 
                     # Validar que hay datos numéricos para graficar
-                    if comp_components.empty or comp_components.select_dtypes(include=[float, int]).empty:
-                        st.info("ℹ️ No hay datos de 'Origen de Servicio' para graficar. Asegúrate de que las líneas tengan el campo 'service_origin' completado.")
+                    if comp_components.empty or len(comp_components) == 0:
+                        st.info("ℹ️ No hay líneas para agrupar por origen de servicio.")
                     else:
                         fig2, ax2 = plt.subplots(figsize=(6, 4))
                         comp_components.plot(kind="bar", ax=ax2, rot=45, width=0.8)
@@ -1904,7 +1915,7 @@ with tab_legacy:
         if "line_type" in df.columns:
             df["line_type"] = df["line_type"].astype(str).fillna("product")
         if "service_origin" in df.columns:
-            df["service_origin"] = df["service_origin"].astype(str).fillna("producto")
+            df["service_origin"] = df["service_origin"].astype(str).fillna("Sin especificar").replace("", "Sin especificar")
 
         # Preparar DataFrame para mostrar con formato
         display_df = df[[
