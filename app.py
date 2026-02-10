@@ -523,7 +523,7 @@ def generate_comparison_narrative(q1, q2, df1, df2, playbook_name="General"):
             f"La salud se mantuvo en nivel {health_v1.upper()}."
         )
 
-    # --- Análisis por componente
+    # --- Análisis por origen de servicio
     comp1 = df1.groupby("service_origin")["final_price_unit"].sum()
     comp2 = df2.groupby("service_origin")["final_price_unit"].sum()
 
@@ -537,7 +537,7 @@ def generate_comparison_narrative(q1, q2, df1, df2, playbook_name="General"):
 
         direction = "incrementó" if value > 0 else "redujo"
         narrative_detail.append(
-            f"El componente '{main_component}' {direction} su aportación en ${round(abs(value), 2):,.2f}."
+            f"El origen/tipo de servicio '{main_component}' {direction} su aportación en ${round(abs(value), 2):,.2f}."
         )
 
     # --- Cambios en número de líneas
@@ -1066,9 +1066,9 @@ if not hist_compare.empty:
                     plt.close(fig1)  # Cerrar para liberar memoria
 
                 with col_chart2:
-                    st.markdown("**Aportación por Componente**")
+                    st.markdown("**Aportación por Origen/Tipo de Servicio**")
 
-                    # Agrupar por componente
+                    # Agrupar por origen de servicio (Componente = service_origin)
                     c1 = l1.groupby("service_origin")["final_price_unit"].sum()
                     c2 = l2.groupby("service_origin")["final_price_unit"].sum()
 
@@ -1077,19 +1077,23 @@ if not hist_compare.empty:
 
                     # Validar que hay datos numéricos para graficar
                     if comp_components.empty or comp_components.select_dtypes(include=[float, int]).empty:
-                        st.info("No hay datos de componentes para graficar")
+                        st.info("ℹ️ No hay datos de 'Origen de Servicio' para graficar. Asegúrate de que las líneas tengan el campo 'service_origin' completado.")
                     else:
                         fig2, ax2 = plt.subplots(figsize=(6, 4))
                         comp_components.plot(kind="bar", ax=ax2, rot=45, width=0.8)
                         ax2.set_ylabel("Monto ($)")
-                        ax2.set_title("Componentes por Versión")
+                        ax2.set_title("Origen/Tipo de Servicio por Versión")
                         ax2.legend()
                         plt.tight_layout()
                         st.pyplot(fig2)
                         plt.close(fig2)  # Cerrar para liberar memoria
 
                 # Tabla detallada de componentes
-                st.markdown("### 📦 Detalle por Componente")
+                st.markdown("### 📦 Detalle por Origen/Tipo de Servicio")
+                st.caption("El 'Origen' se refiere al campo 'service_origin' de cada línea (ej: Interno, Externo, Proveedor A, etc.)")
+                
+                # Solo mostrar tabla si hay datos
+                if not comp_components.empty:
 
                 comp_components["Δ Absoluto"] = comp_components[f"v{v2}"] - comp_components[f"v{v1}"]
 
@@ -1102,9 +1106,11 @@ if not hist_compare.empty:
                 display_comp[f"v{v1}"] = display_comp[f"v{v1}"].apply(lambda x: f"${x:,.2f}")
                 display_comp[f"v{v2}"] = display_comp[f"v{v2}"].apply(lambda x: f"${x:,.2f}")
                 display_comp["Δ Absoluto"] = display_comp["Δ Absoluto"].apply(lambda x: f"${x:,.2f}")
-                display_comp["Δ %"] = display_comp["Δ %"].apply(lambda x: f"{x:+.1f}%")
+                    display_comp["Δ %"] = display_comp["Δ %"].apply(lambda x: f"{x:+.1f}%")
 
-                st.dataframe(display_comp, width="stretch")
+                    st.dataframe(display_comp, width="stretch")
+                else:
+                    st.info("ℹ️ No hay datos de origen para comparar. Las líneas no tienen el campo 'service_origin' completado.")
 
                 # ===== NARRATIVA AUTOMÁTICA =====
                 st.markdown("### 📝 Narrativa Automática")
@@ -1263,12 +1269,12 @@ if not hist_compare.empty:
                 elif len(skus_removed) > len(skus_added):
                     insights.append(f"📉 **Simplificación:** Se eliminaron {len(skus_removed)} líneas vs {len(skus_added)} agregadas")
 
-                # Componente que más cambió
+                # Origen que más cambió
                 if not comp_components.empty:
                     max_change = comp_components["Δ Absoluto"].abs().idxmax()
                     max_change_value = comp_components.loc[max_change, "Δ Absoluto"]
                     if abs(max_change_value) > 0:
-                        insights.append(f"🎯 **Componente clave:** '{max_change}' cambió ${abs(max_change_value):,.2f}")
+                        insights.append(f"🎯 **Origen clave:** '{max_change}' cambió ${abs(max_change_value):,.2f}")
 
                 for insight in insights:
                     st.markdown(insight)
@@ -1780,8 +1786,9 @@ with tab_legacy:
 
             with col2:
                 service_origin = st.selectbox(
-                    "Origen / componente",
-                    ["producto", "refacciones", "póliza", "implementación", "soporte", "capacitación", "otro"]
+                    "Origen del servicio",
+                    ["producto", "refacciones", "póliza", "implementación", "soporte", "capacitación", "otro"],
+                    help="Origen o tipo del servicio/producto (para análisis de composición)"
                 )
                 cost = st.number_input("Costo unitario", min_value=0.0, step=0.01)
                 price = st.number_input("Precio unitario", min_value=0.0, step=0.01)
@@ -2003,7 +2010,7 @@ with tab_legacy:
         col_graph1, col_graph2 = st.columns(2)
 
         with col_graph1:
-            st.markdown("**Aportación por componente**")
+            st.markdown("**Aportación por Origen de Servicio**")
             comp_df = df.groupby("service_origin")["subtotal_price"].sum().reset_index()
             fig1, ax1 = plt.subplots(figsize=(6, 4))
             ax1.pie(
@@ -2012,7 +2019,7 @@ with tab_legacy:
                 autopct="%1.1f%%",
                 startangle=90
             )
-            ax1.set_title("Aportación total por componente")
+            ax1.set_title("Aportación total por origen de servicio")
             plt.tight_layout()
             st.pyplot(fig1)
             plt.close(fig1)  # Cerrar figura para liberar memoria
@@ -2281,7 +2288,7 @@ with tab_aup:
                 new_cost_unit = st.number_input("Costo unitario", min_value=0.0, value=0.0, step=0.01)
             with col2:
                 new_sku = st.text_input("SKU (opcional)")
-                new_component_type = st.text_input("Tipo componente (opcional)")
+                new_component_type = st.text_input("Tipo/Origen (opcional)", help="Ej: Interno, Externo, Proveedor A")
 
             new_description = st.text_area("Descripción", placeholder="Descripción del item...")
 
@@ -2328,7 +2335,11 @@ with tab_aup:
                     min_value=0.0,
                     value=float(selected_item.get("price_unit") or 0.0),
                 )
-                component_type = st.text_input("Tipo de componente", value=selected_item.get("component_type") or "")
+                component_type = st.text_input(
+                    "Tipo/Origen del servicio", 
+                    value=selected_item.get("component_type") or "",
+                    help="Ej: Interno, Externo, Proveedor A"
+                )
                 submitted = st.form_submit_button("Actualizar item")
 
             if submitted:
@@ -2442,7 +2453,7 @@ with tab_aup:
             col_g1, col_g2, col_g3 = st.columns(3)
 
             with col_g1:
-                st.markdown("**Aportación por componente**")
+                st.markdown("**Aportación por Origen de Servicio**")
                 comp_data = charts.get("pie_component_contribution", {})
                 if comp_data:
                     fig, ax = plt.subplots(figsize=(4, 4))
@@ -3353,8 +3364,9 @@ with tab_db:
                 col_stat4.metric("Importadas", imported)
                 col_stat5.metric("Manuales", manual)
 
-                # === ANÁLISIS POR COMPONENTE ===
-                st.markdown("### 🔍 Análisis por Componente")
+                # === ANÁLISIS POR ORIGEN DE SERVICIO ===
+                st.markdown("### 🔍 Análisis por Origen de Servicio")
+                st.caption("El 'Origen de Servicio' es el campo 'service_origin' de cada línea (ej: Interno, Externo, Proveedor A, etc.)")
 
                 # Agrupar por origen de servicio
                 origen_analysis = {}
@@ -3384,7 +3396,7 @@ with tab_db:
                     margen = (utilidad / stats["precio_total"] * 100) if stats["precio_total"] > 0 else 0
 
                     origen_df_data.append({
-                        "Componente": origen,
+                        "Origen/Tipo": origen,
                         "Líneas": stats["lineas"],
                         "Cantidad Total": stats["cantidad"],
                         "Costo Total": f"${stats['costo_total']:,.2f}",
