@@ -3081,39 +3081,98 @@ with tab_proposals:
         all_proposals = get_formal_proposals()
 
         if all_proposals:
-            for prop in all_proposals:
-                with st.expander(f"📄 {prop['proposal_number']} - {prop['recipient_company']} ({prop['status']})"):
+            # Controles de paginación
+            col1, col2, col3 = st.columns([2, 1, 1])
+            
+            with col1:
+                st.write(f"**Total: {len(all_proposals)} propuestas**")
+            
+            with col2:
+                items_per_page = st.selectbox(
+                    "Mostrar por página:",
+                    options=[10, 20, 50, len(all_proposals)],
+                    format_func=lambda x: "Todas" if x == len(all_proposals) else str(x),
+                    key="proposals_per_page"
+                )
+            
+            with col3:
+                # Calcular número de páginas
+                total_pages = (len(all_proposals) - 1) // items_per_page + 1
+                if 'proposals_page' not in st.session_state:
+                    st.session_state.proposals_page = 1
+                
+                current_page = st.number_input(
+                    f"Página (de {total_pages}):",
+                    min_value=1,
+                    max_value=total_pages,
+                    value=st.session_state.proposals_page,
+                    key="proposals_page_input"
+                )
+                st.session_state.proposals_page = current_page
+            
+            # Calcular índices de paginación
+            start_idx = (current_page - 1) * items_per_page
+            end_idx = min(start_idx + items_per_page, len(all_proposals))
+            paginated_proposals = all_proposals[start_idx:end_idx]
+            
+            st.write(f"Mostrando {start_idx + 1} - {end_idx} de {len(all_proposals)}")
+            st.divider()
+            
+            # Selector dropdown de propuesta
+            proposal_options = {
+                f"{prop['proposal_number']} - {prop['recipient_company']} ({prop['issued_date']})": prop['proposal_doc_id']
+                for prop in paginated_proposals
+            }
+            
+            selected_proposal_label = st.selectbox(
+                "Selecciona una propuesta:",
+                options=list(proposal_options.keys()),
+                key="selected_proposal_dropdown"
+            )
+            
+            if selected_proposal_label:
+                selected_proposal_id = proposal_options[selected_proposal_label]
+                
+                # Obtener propuesta completa
+                proposal_full = get_formal_proposal(selected_proposal_id)
+                
+                if proposal_full:
+                    # Mostrar detalles
+                    st.markdown("---")
+                    
                     col1, col2, col3 = st.columns(3)
-
-                    col1.write(f"**Fecha:** {prop['issued_date']}")
-                    col2.write(f"**Cliente:** {prop['recipient_company']}")
-                    col3.write(f"**Estado:** {prop['status']}")
-
-                    proposal_full = get_formal_proposal(prop['proposal_doc_id'])
-
+                    col1.metric("Fecha", proposal_full['issued_date'])
+                    col2.metric("Cliente", proposal_full['recipient_company'])
+                    col3.metric("Estado", proposal_full['status'])
+                    
+                    # Botones de acción
+                    col_btn1, col_btn2 = st.columns(2)
+                    
                     # Intentar descargar PDF guardado
                     pdf_data_available = False
-                    if proposal_full and proposal_full.get('pdf_file_data'):
+                    if proposal_full.get('pdf_file_data'):
                         pdf_data = proposal_full['pdf_file_data']
                         if isinstance(pdf_data, memoryview):
                             pdf_data = bytes(pdf_data)
                         if len(pdf_data) > 0:
                             pdf_data_available = True
-                            st.download_button(
-                                label="📥 Descargar PDF",
-                                data=pdf_data,
-                                file_name=f"{prop['proposal_number']}.pdf",
-                                mime="application/pdf",
-                                key=f"download_{prop['proposal_doc_id']}"
-                            )
-
-                    # Botón para regenerar PDF (siempre disponible)
-                    if st.button(
-                        "🔄 Regenerar PDF" if pdf_data_available else "📄 Generar PDF",
-                        key=f"regen_{prop['proposal_doc_id']}",
-                        use_container_width=True
-                    ):
-                        if proposal_full:
+                            with col_btn1:
+                                st.download_button(
+                                    label="📥 Descargar PDF Guardado",
+                                    data=pdf_data,
+                                    file_name=f"{proposal_full['proposal_number']}.pdf",
+                                    mime="application/pdf",
+                                    key=f"download_{selected_proposal_id}",
+                                    use_container_width=True
+                                )
+                    
+                    # Botón para regenerar PDF
+                    with col_btn2:
+                        if st.button(
+                            "🔄 Regenerar PDF" if pdf_data_available else "📄 Generar PDF",
+                            key=f"regen_{selected_proposal_id}",
+                            use_container_width=True
+                        ):
                             with st.spinner("Generando PDF..."):
                                 try:
                                     from formal_proposal_generator import generate_proposal_pdf, REPORTLAB_AVAILABLE
@@ -3169,9 +3228,9 @@ with tab_proposals:
                                                 st.download_button(
                                                     label="📥 Descargar PDF Regenerado",
                                                     data=new_pdf_data,
-                                                    file_name=f"{prop['proposal_number']}.pdf",
+                                                    file_name=f"{proposal_full['proposal_number']}.pdf",
                                                     mime="application/pdf",
-                                                    key=f"regen_download_{prop['proposal_doc_id']}"
+                                                    key=f"regen_download_{selected_proposal_id}_new"
                                                 )
                                             else:
                                                 st.error(f"❌ Error generando PDF: {error}")
@@ -3181,8 +3240,6 @@ with tab_proposals:
                                     st.error(f"❌ Error: {e}")
                                     import traceback
                                     st.code(traceback.format_exc())
-                        else:
-                            st.error("❌ No se pudieron obtener los datos de la propuesta")
         else:
             st.info("No hay propuestas formales generadas aún")
 
