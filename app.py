@@ -1546,9 +1546,9 @@ if st.session_state.lines:
     gross_margin_pct = round((gross_profit / total_revenue * 100) if total_revenue > 0 else 0, 2)
 
     colA, colB, colC, colD = st.columns(4)
-    colA.metric("Ingreso total", f"${round(total_revenue,2):,.2f}")
-    colB.metric("Costo total", f"${round(total_cost,2):,.2f}")
-    colC.metric("Utilidad bruta", f"${round(gross_profit,2):,.2f}")
+    colA.metric("Ingreso total", f"${total_revenue:,.2f}")
+    colB.metric("Costo total", f"${total_cost:,.2f}")
+    colC.metric("Utilidad bruta", f"${gross_profit:,.2f}")
     colD.metric("Margen bruto %", gross_margin_pct)
 
     st.dataframe(

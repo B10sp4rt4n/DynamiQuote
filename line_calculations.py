@@ -88,9 +88,6 @@ def calculate_from_cost_and_margin(cost_unit, margin_pct, quantity=1):
     if margin_pct < 0 or margin_pct >= 100:
         raise ValueError("El margen debe estar entre 0 y 99.99%")
     
-    if margin_pct >= 100:
-        raise ValueError("El margen no puede ser 100% o mayor")
-    
     price_unit = cost_unit / (1 - margin_pct / 100)
     
     return {
