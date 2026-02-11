@@ -1644,6 +1644,9 @@ with tab_legacy:
                         st.session_state.saved_proposal_name = latest["proposal_name"] or ""
                         st.session_state.saved_client_name = latest["client_name"] or ""
                         st.session_state.saved_quoted_by = latest["quoted_by"] or ""
+                        
+                        # Sincronizar líneas cargadas con QuoteState
+                        sync_legacy_to_quote_state()
 
                         st.success(f"✅ {len(quote_lines_raw)} líneas copiadas para nueva versión v{st.session_state.version}")
                         st.warning(f"⚠️ VERIFICACIÓN: La versión actual en session_state es: **v{st.session_state.version}**")
@@ -1723,6 +1726,9 @@ with tab_legacy:
                             st.session_state.quote_group_id = str(uuid.uuid4())
                             st.session_state.version = 1
                             st.session_state.parent_quote_id = None
+                            
+                            # Sincronizar líneas cargadas con QuoteState
+                            sync_legacy_to_quote_state()
 
                             st.success(f"✅ Cargadas {len(quote_lines_raw)} líneas desde {existing_proposal['proposal_number']}")
                             st.rerun()
