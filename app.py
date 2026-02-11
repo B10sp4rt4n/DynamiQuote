@@ -786,7 +786,7 @@ st.sidebar.caption(f"Conexión: {db_info['connection']}")
 # Debug info en sidebar (expandible)
 with st.sidebar.expander("🔍 Debug Info", expanded=False):
     st.caption("**Secrets disponibles:**")
-    if hasattr(st, 'secrets'):
+    try:
         secrets_keys = list(st.secrets.keys()) if hasattr(st.secrets, 'keys') else []
         if secrets_keys:
             st.code(", ".join(secrets_keys))
@@ -800,8 +800,9 @@ with st.sidebar.expander("🔍 Debug Info", expanded=False):
         else:
             st.error("❌ DATABASE_URL NO encontrada en secrets")
             st.info("Configura en: Manage app > Settings > Secrets")
-    else:
-        st.warning("st.secrets no está disponible")
+    except Exception as e:
+        st.warning(f"No se pudieron leer secrets: {type(e).__name__}")
+        st.info("Modo desarrollo: usando configuración por defecto")
 
 # =========================
 # Session state - Gestor Centralizado
