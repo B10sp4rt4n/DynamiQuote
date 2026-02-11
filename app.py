@@ -24,6 +24,7 @@ from aup_engine import (
     compare_proposals,
     generate_charts_data,
 )
+from quote import QuoteState, ValidationError, calculate_margin, calculate_price_from_margin
 
 # =========================
 # Configuración de Performance
@@ -274,6 +275,35 @@ def suggest_description_fix(text):
         return suggest_description_fix_ai(text, api_key)
     else:
         return suggest_description_fix_basic(text)
+
+# =========================
+# Quote State Helpers (Migración)
+# =========================
+
+def sync_quote_state_to_legacy():
+    """
+    Sincronizar QuoteState a st.session_state (compatibilidad legacy).
+    TODO: Eliminar cuando se complete la migración.
+    """
+    quote_state = st.session_state.quote_state
+    st.session_state.lines = quote_state.lines.copy()
+    st.session_state.quote_id = quote_state.quote_id
+    st.session_state.quote_group_id = quote_state.quote_group_id
+    st.session_state.version = quote_state.version
+    st.session_state.parent_quote_id = quote_state.parent_quote_id
+
+
+def sync_legacy_to_quote_state():
+    """
+    Sincronizar st.session_state a QuoteState (compatibilidad legacy).
+    TODO: Eliminar cuando se complete la migración.
+    """
+    quote_state = st.session_state.quote_state
+    quote_state.lines = st.session_state.lines.copy()
+    quote_state.quote_id = st.session_state.quote_id
+    quote_state.quote_group_id = st.session_state.quote_group_id
+    quote_state.version = st.session_state.version
+    quote_state.parent_quote_id = st.session_state.parent_quote_id
 
 # =========================
 # Helpers de lectura AUP
@@ -774,45 +804,37 @@ with st.sidebar.expander("🔍 Debug Info", expanded=False):
         st.warning("st.secrets no está disponible")
 
 # =========================
-# Session state
+# Session state - Gestor Centralizado
 # =========================
-if "quote_id" not in st.session_state:
-    st.session_state.quote_id = str(uuid.uuid4())
+# Inicializar QuoteState (gestor centralizado de cotizaciones)
+if "quote_state" not in st.session_state:
+    st.session_state.quote_state = QuoteState()
 
-if "quote_group_id" not in st.session_state:
-    st.session_state.quote_group_id = str(uuid.uuid4())
+# Acceso rápido al estado
+quote_state = st.session_state.quote_state
 
-if "version" not in st.session_state:
-    st.session_state.version = 1
-
-if "parent_quote_id" not in st.session_state:
-    st.session_state.parent_quote_id = None
-
+# Mantener compatibilidad con código legacy (temporal durante migración)
+# TODO: Eliminar estas referencias cuando se complete la migración
 if "lines" not in st.session_state:
     st.session_state.lines = []
-
 if "pending_line" not in st.session_state:
     st.session_state.pending_line = None
+if "quote_id" not in st.session_state:
+    st.session_state.quote_id = quote_state.quote_id
+if "quote_group_id" not in st.session_state:
+    st.session_state.quote_group_id = quote_state.quote_group_id
+if "version" not in st.session_state:
+    st.session_state.version = quote_state.version
+if "parent_quote_id" not in st.session_state:
+    st.session_state.parent_quote_id = quote_state.parent_quote_id
 
-# Inicializar campos de información de cotización directamente con los keys de los inputs
-if "input_proposal_name" not in st.session_state:
-    st.session_state.input_proposal_name = ""
-
-if "input_client_name" not in st.session_state:
-    st.session_state.input_client_name = ""
-
-if "input_quoted_by" not in st.session_state:
-    st.session_state.input_quoted_by = ""
-
-# Inicializar variables de respaldo para persistencia
+# Metadata fields (temporal - migrar a quote_state.metadata)
 if "saved_proposal_name" not in st.session_state:
-    st.session_state.saved_proposal_name = ""
-
+    st.session_state.saved_proposal_name = quote_state.metadata.get("proposal_name", "")
 if "saved_client_name" not in st.session_state:
-    st.session_state.saved_client_name = ""
-
+    st.session_state.saved_client_name = quote_state.metadata.get("client_name", "")
 if "saved_quoted_by" not in st.session_state:
-    st.session_state.saved_quoted_by = ""
+    st.session_state.saved_quoted_by = quote_state.metadata.get("quoted_by", "")
 
 # =========================
 # Comparador de versiones
@@ -1765,23 +1787,32 @@ with tab_legacy:
                 cancel_btn = st.form_submit_button("❌ Cancelar")
 
             if confirm_btn:
-                if not edit_description or not edit_description.strip():
-                    st.error("❌ La descripción no puede estar vacía")
-                elif not edit_sku or not edit_sku.strip():
-                    st.error("❌ El SKU no puede estar vacío")
-                else:
-                    # Verificar si el SKU editado ya existe
-                    existing_skus = [line["sku"] for line in st.session_state.lines]
-                    if edit_sku != pending["sku"] and edit_sku in existing_skus:
-                        st.error(f"❌ El SKU '{edit_sku}' ya existe en esta cotización")
+                try:
+                    if not edit_description or not edit_description.strip():
+                        st.error("❌ La descripción no puede estar vacía")
+                    elif not edit_sku or not edit_sku.strip():
+                        st.error("❌ El SKU no puede estar vacío")
                     else:
                         # Actualizar datos editados
                         pending["sku"] = edit_sku
                         pending["description_final"] = edit_description
-                        st.session_state.lines.append(pending)
+                        pending["description"] = edit_description  # Para validación
+                        
+                        # Usar QuoteState para agregar (con validación)
+                        quote_state = st.session_state.quote_state
+                        added_line = quote_state.add_line(pending)
+                        
+                        # Sincronizar con legacy
+                        sync_quote_state_to_legacy()
+                        
                         st.session_state.pending_line = None
-                        st.success("✅ Línea consolidada exitosamente")
+                        st.success(f"✅ Línea consolidada: {added_line['sku']}")
                         st.rerun()
+                        
+                except ValidationError as e:
+                    st.error(f"❌ {e}")
+                except Exception as e:
+                    st.error(f"❌ Error: {e}")
 
             if cancel_btn:
                 st.session_state.pending_line = None
@@ -1820,69 +1851,57 @@ with tab_legacy:
 
         # Procesar submit fuera del formulario
         if submit:
-            # Validaciones
-            if not sku or not sku.strip():
-                st.error("❌ SKU es obligatorio")
-                st.stop()
-
-            if not description_input or not description_input.strip():
-                st.error("❌ Descripción es obligatoria")
-                st.stop()
-
-            # Verificar SKU duplicado
-            existing_skus = [line["sku"] for line in st.session_state.lines]
-            if sku in existing_skus:
-                st.warning(f"⚠️ El SKU '{sku}' ya existe en esta cotización")
-
-            # Corrección de descripción
-            corrected_desc, corrections = suggest_description_fix(description_input)
-
-            # Cálculos
-            warnings = []
-            margin_pct = None
-            final_price = price
-
-            if cost > 0 and price > 0:
-                margin_pct = round(((price - cost) / price) * 100, 2)
-            elif cost > 0 and margin_target > 0:
-                final_price = round(cost / (1 - margin_target / 100), 2)
-                margin_pct = round(margin_target, 2)
-                warnings.append("Precio sugerido a partir de margen objetivo")
-            else:
-                st.error("Debes ingresar costo + precio o costo + margen")
-                st.stop()
-
-            # Preparar línea
-            new_line = {
-                "line_id": str(uuid.uuid4()),
-                "sku": sku,
-                "quantity": quantity,
-                "description_original": description_input,
-                "description_input": description_input,
-                "description_final": None,  # Se definirá después
-                "description_corrections": ", ".join(corrections),
-                "corrected_desc": corrected_desc,
-                "corrections": corrections,
-                "line_type": line_type,
-                "service_origin": service_origin,
-                "cost_unit": cost,
-                "final_price_unit": final_price,
-                "margin_pct": margin_pct,
-                "strategy": strategy,
-                "warnings": ", ".join(warnings),
-                "created_at": datetime.now(UTC).isoformat()
-            }
-
-            # Si hay correcciones, guardar como pendiente
-            if corrections:
-                st.session_state.pending_line = new_line
-                st.rerun()
-            else:
-                # Sin correcciones, agregar directamente
-                new_line["description_final"] = description_input
-                st.session_state.lines.append(new_line)
-                st.success("✅ Línea agregada correctamente")
-                st.rerun()
+            try:
+                # Preparar datos de la línea
+                line_data = {
+                    "sku": sku,
+                    "description": description_input,
+                    "quantity": quantity,
+                    "line_type": line_type,
+                    "service_origin": service_origin,
+                    "cost_unit": cost,
+                    "strategy": strategy
+                }
+                
+                # Determinar precio o margen
+                if price > 0:
+                    line_data["final_price_unit"] = price
+                elif margin_target > 0:
+                    line_data["margin_target"] = margin_target
+                    # QuoteState calculará el precio automáticamente
+                else:
+                    st.error("❌ Debes ingresar precio unitario o margen objetivo")
+                    st.stop()
+                
+                # Corrección de descripción (si está habilitada)
+                corrected_desc, corrections = suggest_description_fix(description_input)
+                line_data["description_original"] = description_input
+                line_data["corrected_desc"] = corrected_desc
+                line_data["corrections"] = corrections
+                line_data["description_corrections"] = ", ".join(corrections)
+                
+                # Si hay correcciones, guardar como pendiente
+                if corrections:
+                    st.session_state.pending_line = line_data
+                    st.rerun()
+                else:
+                    # Sin correcciones, agregar línea con QuoteState
+                    line_data["description_final"] = description_input
+                    
+                    # Usar QuoteState para agregar (con validación automática)
+                    quote_state = st.session_state.quote_state
+                    added_line = quote_state.add_line(line_data)
+                    
+                    # Sincronizar con legacy (temporal)
+                    sync_quote_state_to_legacy()
+                    
+                    st.success(f"✅ Línea agregada: {added_line['sku']}")
+                    st.rerun()
+                    
+            except ValidationError as e:
+                st.error(f"❌ {e}")
+            except Exception as e:
+                st.error(f"❌ Error agregando línea: {e}")
 
     # Mostrar cotización si hay líneas
     if not st.session_state.lines:
@@ -1907,16 +1926,21 @@ with tab_legacy:
         df["subtotal_cost"] = df["cost_unit"] * df["quantity"]
         df["subtotal_price"] = df["final_price_unit"] * df["quantity"]
 
-        total_cost = df["subtotal_cost"].sum()
-        total_revenue = df["subtotal_price"].sum()
-        gross_profit = total_revenue - total_cost
-        gross_margin_pct = round((gross_profit / total_revenue * 100) if total_revenue > 0 else 0, 2)
+        # Usar QuoteState para cálculos (más confiable)
+        quote_state = st.session_state.quote_state
+        sync_legacy_to_quote_state()  # Sincronizar antes de calcular
+        totals = quote_state.calculate_totals()
+        
+        total_revenue = totals["total_revenue"]
+        total_cost = totals["total_cost"]
+        gross_profit = totals["gross_profit"]
+        gross_margin_pct = totals["avg_margin_pct"]
 
         colA, colB, colC, colD = st.columns(4)
         colA.metric("Ingreso total", f"${round(total_revenue,2)}")
         colB.metric("Costo total", f"${round(total_cost,2)}")
         colC.metric("Utilidad bruta", f"${round(gross_profit,2)}")
-        colD.metric("Margen bruto %", gross_margin_pct)
+        colD.metric("Margen bruto %", f"{gross_margin_pct:.2f}%")
 
         # Asegurar que columnas categóricas sean strings (compatibilidad con selectbox)
         if "strategy" in df.columns:
@@ -1973,27 +1997,34 @@ with tab_legacy:
         # Aplicar cambios si hay ediciones
         if not edited_df.equals(display_df):
             if st.button("💾 Aplicar Cambios", type="primary"):
-                # Recalcular con los nuevos valores
+                quote_state = st.session_state.quote_state
+                errors = []
+                
+                # Actualizar cada línea usando QuoteState
                 for idx in range(len(edited_df)):
-                    # Actualizar valores en session_state.lines
-                    st.session_state.lines[idx]["sku"] = edited_df.iloc[idx]["SKU"]
-                    st.session_state.lines[idx]["description_final"] = edited_df.iloc[idx]["Descripción"]
-                    st.session_state.lines[idx]["quantity"] = float(edited_df.iloc[idx]["Cant."])
-                    st.session_state.lines[idx]["line_type"] = edited_df.iloc[idx]["Tipo"]
-                    st.session_state.lines[idx]["service_origin"] = edited_df.iloc[idx]["Origen"]
-                    st.session_state.lines[idx]["strategy"] = edited_df.iloc[idx]["Estrategia"]
-                    st.session_state.lines[idx]["cost_unit"] = float(edited_df.iloc[idx]["Costo Unit."])
-                    st.session_state.lines[idx]["final_price_unit"] = float(edited_df.iloc[idx]["Precio Unit."])
-
-                    # Recalcular margen
-                    costo = float(edited_df.iloc[idx]["Costo Unit."])
-                    precio = float(edited_df.iloc[idx]["Precio Unit."])
-                    if precio > 0:
-                        margen = round(((precio - costo) / precio) * 100, 2)
-                        st.session_state.lines[idx]["margin_pct"] = margen
-
-                st.success("✅ Cambios aplicados correctamente")
-                st.rerun()
+                    try:
+                        updated_data = {
+                            "sku": edited_df.iloc[idx]["SKU"],
+                            "description": edited_df.iloc[idx]["Descripción"],
+                            "quantity": float(edited_df.iloc[idx]["Cant."]),
+                            "line_type": edited_df.iloc[idx]["Tipo"],
+                            "service_origin": edited_df.iloc[idx]["Origen"],
+                            "strategy": edited_df.iloc[idx]["Estrategia"],
+                            "cost_unit": float(edited_df.iloc[idx]["Costo Unit."]),
+                            "price_unit": float(edited_df.iloc[idx]["Precio Unit."]),
+                        }
+                        quote_state.update_line(idx, updated_data)
+                    except ValidationError as e:
+                        errors.append(f"Línea {idx+1}: {e}")
+                
+                # Sincronizar de vuelta a legacy
+                sync_quote_state_to_legacy()
+                
+                if errors:
+                    st.error("❌ Errores en actualización:\n" + "\n".join(errors))
+                else:
+                    st.success("✅ Cambios aplicados correctamente")
+                    st.rerun()
 
         # Botones de gestión de líneas
         col_delete, col_clear = st.columns(2)
@@ -2006,9 +2037,11 @@ with tab_legacy:
             )
 
             if delete_indices and st.button("🗑️ Eliminar Líneas Seleccionadas", type="secondary"):
+                quote_state = st.session_state.quote_state
                 # Eliminar en orden inverso para evitar problemas de índice
                 for idx in sorted(delete_indices, reverse=True):
-                    st.session_state.lines.pop(idx)
+                    quote_state.remove_line(idx)
+                sync_quote_state_to_legacy()
                 st.success(f"✅ {len(delete_indices)} línea(s) eliminada(s)")
                 st.rerun()
 
@@ -2017,7 +2050,9 @@ with tab_legacy:
             st.write("")  # Espaciado
             if st.button("🔄 Limpiar Todo", type="secondary"):
                 if st.session_state.lines:
-                    st.session_state.lines = []
+                    quote_state = st.session_state.quote_state
+                    quote_state.clear_lines()
+                    sync_quote_state_to_legacy()
                     st.success("✅ Cotización limpiada")
                     st.rerun()
 
