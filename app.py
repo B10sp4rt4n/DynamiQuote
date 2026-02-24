@@ -70,6 +70,144 @@ def cleanup_session_state():
 # UI Helpers para Búsqueda de Cotizaciones
 # =========================
 
+def render_advanced_quote_search(key: str, title: str = "🔍 Buscador de Cotizaciones"):
+    """
+    Renderiza un buscador avanzado de cotizaciones con filtros y búsqueda en tiempo real.
+    
+    Args:
+        key: Key única para el widget
+        title: Título del buscador
+        
+    Returns:
+        quote_group_id seleccionado o None
+    """
+    st.subheader(title)
+    
+    # Buscador principal
+    col_search, col_filters = st.columns([3, 1])
+    
+    with col_search:
+        search_query = st.text_input(
+            "Buscar por cliente, propuesta, cotizado por...",
+            key=f"{key}_advanced_search",
+            placeholder="Ej: Acme Corp, Proyecto Alpha, Juan Pérez...",
+            help="Busca en: Cliente, Propuesta, Cotizado por. La búsqueda es inteligente y encuentra coincidencias parciales."
+        )
+    
+    with col_filters:
+        show_filters = st.checkbox("Filtros avanzados", key=f"{key}_show_filters", value=False)
+    
+    # Filtros avanzados (colapsables)
+    date_from = None
+    date_to = None
+    min_amount = None
+    max_amount = None
+    selected_status = None
+    
+    if show_filters:
+        with st.expander("🔧 Filtros Avanzados", expanded=True):
+            col1, col2 = st.columns(2)
+            
+            with col1:
+                st.caption("**Rango de Fechas**")
+                date_from = st.date_input("Desde", key=f"{key}_date_from", value=None)
+                date_to = st.date_input("Hasta", key=f"{key}_date_to", value=None)
+            
+            with col2:
+                st.caption("**Rango de Montos**")
+                min_amount = st.number_input("Monto mínimo", key=f"{key}_min_amount", min_value=0.0, value=0.0, step=1000.0)
+                max_amount = st.number_input("Monto máximo", key=f"{key}_max_amount", min_value=0.0, value=0.0, step=1000.0)
+                if max_amount == 0.0:
+                    max_amount = None
+            
+            selected_status = st.multiselect(
+                "Estados",
+                options=["draft", "sent", "approved", "rejected", "closed"],
+                key=f"{key}_status_filter"
+            )
+    
+    # Realizar búsqueda
+    if search_query and search_query.strip():
+        results = search_quotes(search_query, limit=50)
+    else:
+        st.caption("💡 Mostrando cotizaciones recientes")
+        results = get_recent_quotes(limit=30)
+    
+    if not results:
+        st.info("💭 No se encontraron resultados. Intenta con otros términos de búsqueda.")
+        return None
+    
+    # Convertir a DataFrame
+    results_df = pd.DataFrame(
+        results,
+        columns=["quote_id", "quote_group_id", "version", "parent_quote_id", 
+                "created_at", "status", "total_cost", "total_revenue", 
+                "gross_profit", "avg_margin", "playbook_name", "client_name", 
+                "quoted_by", "proposal_name"]
+    )
+    
+    # Aplicar filtros
+    if date_from:
+        results_df = results_df[pd.to_datetime(results_df["created_at"]).dt.date >= date_from]
+    if date_to:
+        results_df = results_df[pd.to_datetime(results_df["created_at"]).dt.date <= date_to]
+    if min_amount and min_amount > 0:
+        results_df = results_df[results_df["total_revenue"] >= min_amount]
+    if max_amount:
+        results_df = results_df[results_df["total_revenue"] <= max_amount]
+    if selected_status:
+        results_df = results_df[results_df["status"].isin(selected_status)]
+    
+    if results_df.empty:
+        st.warning("⚠️ Los filtros eliminaron todos los resultados. Ajusta los criterios.")
+        return None
+    
+    # Mostrar contador de resultados
+    st.caption(f"📊 **{len(results_df)} resultados encontrados**")
+    
+    # Vista de resultados con tarjetas
+    selected_group_id = None
+    
+    for idx, row in results_df.iterrows():
+        with st.container():
+            col1, col2, col3, col4, col5 = st.columns([2, 2, 1, 1, 1])
+            
+            with col1:
+                client = row["client_name"] if row["client_name"] else "Sin cliente"
+                proposal = row["proposal_name"] if row["proposal_name"] else "Sin nombre"
+                st.markdown(f"**{client}**")
+                st.caption(f"📋 {proposal}")
+            
+            with col2:
+                quoted_by = row["quoted_by"] if row["quoted_by"] else "N/A"
+                date = pd.to_datetime(row["created_at"]).strftime("%Y-%m-%d")
+                st.caption(f"👤 {quoted_by}")
+                st.caption(f"📅 {date}")
+            
+            with col3:
+                revenue = row["total_revenue"]
+                st.metric("Total", f"${revenue:,.0f}", label_visibility="collapsed")
+            
+            with col4:
+                margin = row["avg_margin"]
+                delta_color = "normal" if margin >= 25 else "inverse"
+                st.metric("Margen", f"{margin:.1f}%", label_visibility="collapsed", delta_color=delta_color)
+            
+            with col5:
+                if st.button("Seleccionar", key=f"{key}_select_{row['quote_group_id']}", type="primary", use_container_width=True):
+                    selected_group_id = row["quote_group_id"]
+                    st.session_state[f"{key}_selected_group"] = selected_group_id
+                    st.rerun()
+            
+            st.divider()
+    
+    # Retornar selección guardada
+    if f"{key}_selected_group" in st.session_state:
+        return st.session_state[f"{key}_selected_group"]
+    
+    return selected_group_id
+
+
 def render_quote_search_selector(key: str, label: str = "Buscar cotización", show_recent: bool = True):
     """
     Renderiza un selector de cotizaciones con búsqueda optimizada.
@@ -301,7 +439,64 @@ with st.sidebar:
 st.title("🧾 DynamiQuote – Motor Multitenant de Propuestas")
 
 # =========================
-# Tabs principais
+# Búsqueda Global (Siempre Visible)
+# =========================
+with st.expander("🔍 **Búsqueda Rápida de Cotizaciones y Propuestas**", expanded=False):
+    st.caption("Encuentra rápidamente cualquier cotización o propuesta escribiendo su nombre, cliente, o quien la cotizó.")
+    
+    col_quick_search, col_quick_btn = st.columns([4, 1])
+    
+    with col_quick_search:
+        quick_search = st.text_input(
+            "Buscar",
+            key="global_quick_search",
+            placeholder="Ej: Acme Corp, Proyecto Alpha, Juan Pérez, 50000...",
+            label_visibility="collapsed"
+        )
+    
+    with col_quick_btn:
+        quick_search_btn = st.button("🔍 Buscar", key="global_search_btn", use_container_width=True)
+    
+    if quick_search and quick_search.strip():
+        with st.spinner("Buscando..."):
+            quick_results = search_quotes(quick_search, limit=10)
+            
+            if quick_results:
+                st.success(f"✅ {len(quick_results)} resultados encontrados")
+                
+                # Mostrar resultados en tarjetas compactas
+                for result in quick_results:
+                    quote_id, group_id, version, parent_id, created_at, status, total_cost, total_revenue, gross_profit, avg_margin, playbook, client, quoted_by, proposal = result
+                    
+                    with st.container():
+                        col1, col2, col3, col4 = st.columns([3, 2, 1, 1])
+                        
+                        with col1:
+                            st.markdown(f"**{client or 'Sin cliente'}** - {proposal or 'Sin nombre'}")
+                            st.caption(f"👤 {quoted_by or 'N/A'} | 📅 {pd.to_datetime(created_at).strftime('%Y-%m-%d')}")
+                        
+                        with col2:
+                            st.caption(f"💰 ${total_revenue:,.0f}")
+                            st.caption(f"📊 Margen: {avg_margin:.1f}%")
+                        
+                        with col3:
+                            st.caption(f"v{version}")
+                            st.caption(f"🏷️ {status}")
+                        
+                        with col4:
+                            # Botones de acción rápida
+                            if st.button("Ver", key=f"global_view_{group_id}", use_container_width=True, type="secondary"):
+                                st.session_state['selected_quote_group'] = group_id
+                                st.info(f"💡 Cotización {client or 'Sin cliente'} seleccionada. Ve al tab correspondiente para verla.")
+                        
+                        st.divider()
+            else:
+                st.warning("⚠️ No se encontraron resultados. Intenta con otros términos.")
+
+st.divider()
+
+# =========================
+# Tabs principales
 # =========================
 tab_aup, tab_legacy, tab_proposals, tab_db = st.tabs(["🧠 Motor AUP", "📝 Cotizador Legacy", "📄 Propuestas Formales", "📚 Base de Datos"])
 
@@ -953,12 +1148,15 @@ if "saved_quoted_by" not in st.session_state:
 st.divider()
 st.header("🔍 Comparador de Versiones")
 
-# Usar búsqueda optimizada en lugar de cargar todas las cotizaciones
-selected_group = render_quote_search_selector(
-    key="comparador",
-    label="🔍 Buscar cotización para comparar versiones",
-    show_recent=True
-)
+st.info("💡 **Tip:** También puedes usar el buscador global arriba (debajo del título) para encontrar rápidamente cualquier cotización.")
+
+# Usar búsqueda avanzada
+with st.expander("🔍 Buscar Cotización para Comparar", expanded=True):
+    selected_group = render_quote_search_selector(
+        key="comparador",
+        label="Buscar por cliente, propuesta o quien cotizó",
+        show_recent=True
+    )
 
 if selected_group:
     # Cargar versiones del grupo seleccionado
