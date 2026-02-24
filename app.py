@@ -3575,7 +3575,7 @@ with tab_db:
         # Vista consolidada (anterior)
         st.subheader("📊 Vista Consolidada")
         quotes_df = pd.DataFrame(
-            quotes_query,
+            quotes_summary,
             columns=["ID", "Group ID", "Versión", "Parent ID", "Fecha", "Estado", "Costo Total", "Ingreso Total", "Utilidad Bruta", "Margen Promedio %", "Playbook", "Cliente", "Cotizado por", "Nombre Propuesta"]
         )
 
@@ -3597,7 +3597,7 @@ with tab_db:
         st.subheader("🔍 Ver detalle completo de propuesta")
         # Crear diccionario para mapear quote_id a información legible
         quote_options = {}
-        for q in quotes_query:
+        for q in quotes_summary:
             quote_id = q[0]
             nombre = q[13] if q[13] else "Sin nombre"
             cliente = q[11] if q[11] else "Sin cliente"
@@ -3613,7 +3613,7 @@ with tab_db:
 
         if selected_quote:
             # Obtener información completa de la cotización
-            selected_quote_info = next((q for q in quotes_query if q[0] == selected_quote), None)
+            selected_quote_info = next((q for q in quotes_summary if q[0] == selected_quote), None)
 
             if selected_quote_info:
                 st.divider()
