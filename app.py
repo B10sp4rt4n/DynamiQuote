@@ -5,7 +5,7 @@ import uuid
 from datetime import datetime, UTC
 import matplotlib.pyplot as plt
 from spellchecker import SpellChecker
-from database import init_database, save_quote, save_import_file, get_all_quotes, get_quote_lines, get_quote_lines_full, get_latest_version, load_versions_for_group, load_lines_for_quote, get_database_info, get_cursor, is_postgres, get_connection, save_logo, get_logos, search_quotes, get_recent_quotes, get_quote_groups_summary, get_quote_by_group_id
+from database import init_database, save_quote, save_import_file, get_all_quotes, get_quote_lines, get_quote_lines_full, get_latest_version, load_versions_for_group, load_lines_for_quote, get_database_info, get_cursor, is_postgres, get_connection, save_logo, get_logos, search_quotes, get_recent_quotes, get_quote_groups_summary, get_quote_by_group_id, clear_search_caches
 from excel_import import import_excel_file, format_validation_report
 from formal_proposal_generator import process_logo_upload
 import os
@@ -36,6 +36,35 @@ plt.ioff()
 def get_spell_checker():
     """Cache del corrector ortográfico para evitar recargas."""
     return SpellChecker(language='es')
+
+# =========================
+# Helpers de Performance
+# =========================
+
+def cleanup_session_state():
+    """
+    Limpia datos innecesarios del session_state para liberar memoria.
+    Solo mantiene los datos esenciales para la operación actual.
+    """
+    # Lista de claves que DEBEN mantenerse
+    essential_keys = {
+        'quote_id', 'quote_group_id', 'version', 'parent_quote_id', 'lines',
+        'pending_line', 'input_proposal_name', 'input_client_name', 'input_quoted_by',
+        'saved_proposal_name', 'saved_client_name', 'saved_quoted_by',
+        'openai_enabled', 'openai_api_key'
+    }
+    
+    # Limpiar claves que no sean esenciales
+    keys_to_remove = [k for k in st.session_state.keys() if k not in essential_keys]
+    
+    for key in keys_to_remove:
+        # Solo eliminar si no es usado recientemente
+        if key.startswith('compare_') or key.startswith('version_select_') or key.startswith('page_'):
+            try:
+                del st.session_state[key]
+            except:
+                pass
+
 
 # =========================
 # UI Helpers para Búsqueda de Cotizaciones
@@ -2231,8 +2260,11 @@ with tab_legacy:
 
                 if success:
                     st.success(message)
-                    # Limpiar cache de consultas para que se actualicen
-                    st.cache_data.clear()
+                    # Limpiar solo cachés de búsqueda (más eficiente que limpiar todo)
+                    clear_search_caches()
+                    
+                    # Limpiar session_state de datos innecesarios
+                    cleanup_session_state()
 
                     if new_opportunity:
                         # Nueva oportunidad: reiniciar todo

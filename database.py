@@ -1,6 +1,15 @@
 """
 Módulo de gestión de base de datos para DynamiQuote.
 Soporta tanto PostgreSQL (Neon) como SQLite para desarrollo local.
+
+ESTRATEGIA DE PERFORMANCE:
+- Búsquedas SIN caché: search_quotes(), get_recent_quotes() - cada búsqueda es única
+- Cachés BREVES (5-10s): Datos que cambian frecuentemente
+- Solo cachear lo que se reutiliza: get_quote_lines() para una cotización específica
+- Límites estrictos: máximo 20-50 registros por consulta
+- Limpieza automática: clear_search_caches() después de guardar/editar
+
+REGLA: Si los datos pueden cambiar o cada llamado es diferente, NO cachear.
 """
 
 import os
@@ -741,11 +750,33 @@ def get_all_quotes() -> list:
 # Funciones de Búsqueda Optimizadas
 # =========================
 
-@st.cache_data(ttl=60)
+def clear_search_caches():
+    """
+    Limpia todos los cachés de búsqueda y consultas.
+    Llamar después de guardar/editar/eliminar cotizaciones.
+    """
+    try:
+        # Limpiar cachés de funciones específicas
+        if hasattr(get_quote_lines, 'clear'):
+            get_quote_lines.clear()
+        if hasattr(get_quote_lines_full, 'clear'):
+            get_quote_lines_full.clear()
+        if hasattr(load_versions_for_group, 'clear'):
+            load_versions_for_group.clear()
+        if hasattr(load_lines_for_quote, 'clear'):
+            load_lines_for_quote.clear()
+        if hasattr(get_all_quotes, 'clear'):
+            get_all_quotes.clear()
+    except Exception as e:
+        print(f"⚠️ Error limpiando cachés: {e}")
+
+
 def search_quotes(query: str, limit: int = 20) -> list:
     """
     Busca cotizaciones por texto en client_name o proposal_name.
     Retorna solo la última versión de cada grupo que coincida.
+    
+    NO CACHEADA: Cada búsqueda es diferente, cachear acumula datos en memoria.
     
     Args:
         query: Texto a buscar (case-insensitive)
@@ -800,10 +831,11 @@ def search_quotes(query: str, limit: int = 20) -> list:
         return []
 
 
-@st.cache_data(ttl=60)
 def get_recent_quotes(limit: int = 20) -> list:
     """
     Obtiene las cotizaciones más recientes (última versión de cada grupo).
+    
+    NO CACHEADA: Datos cambian frecuentemente, mejor traer frescos.
     
     Args:
         limit: Número máximo de resultados (default: 20)
@@ -847,11 +879,12 @@ def get_recent_quotes(limit: int = 20) -> list:
         return []
 
 
-@st.cache_data(ttl=60)
 def get_quote_groups_summary(limit: int = 100) -> list:
     """
     Obtiene un resumen de grupos de cotizaciones (1 fila por grupo).
     Incluye información de la última versión y conteo de versiones.
+    
+    NO CACHEADA: Datos dinámicos que cambian con cada operación.
     
     Args:
         limit: Número máximo de grupos (default: 100)
@@ -957,10 +990,11 @@ def get_quote_groups_summary(limit: int = 100) -> list:
         return []
 
 
-@st.cache_data(ttl=60)
 def get_quote_by_group_id(quote_group_id: str) -> dict:
     """
     Obtiene información de un grupo de cotizaciones específico.
+    
+    NO CACHEADA: Búsqueda puntual, no vale la pena cachear.
     
     Args:
         quote_group_id: ID del grupo
@@ -1027,7 +1061,7 @@ def get_quote_by_group_id(quote_group_id: str) -> dict:
         return None
 
 
-@st.cache_data(ttl=60)  # Cache por 1 minuto
+@st.cache_data(ttl=10)  # Cache breve: 10 segundos
 def get_quote_lines(quote_id: str) -> list:
     """Obtiene las líneas de una cotización específica."""
     try:
@@ -1052,7 +1086,7 @@ def get_quote_lines(quote_id: str) -> list:
         return []
 
 
-@st.cache_data(ttl=60)  # Cache por 1 minuto
+@st.cache_data(ttl=10)  # Cache breve: 10 segundos
 def get_quote_lines_full(quote_id: str) -> list:
     """Obtiene todas las líneas de una cotización con todos los campos."""
     try:
@@ -1100,7 +1134,7 @@ def get_latest_version(quote_group_id: str) -> int:
         return 0
 
 
-@st.cache_data(ttl=60)  # Cache por 1 minuto
+@st.cache_data(ttl=5)  # Cache muy breve: 5 segundos
 def load_versions_for_group(quote_group_id: str):
     """Carga todas las versiones de una oportunidad."""
     try:
@@ -1134,7 +1168,7 @@ def load_versions_for_group(quote_group_id: str):
         return pd.DataFrame()
 
 
-@st.cache_data(ttl=60)  # Cache por 1 minuto  
+@st.cache_data(ttl=10)  # Cache breve: 10 segundos
 def load_lines_for_quote(quote_id: str):
     """Carga todas las líneas de una cotización para comparación."""
     try:
