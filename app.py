@@ -3659,21 +3659,65 @@ with tab_db:
 
     st.divider()
 
-    # Mostrar resumen de oportunidades usando búsqueda optimizada
+    # Mostrar resumen de oportunidades - SOLO BAJO DEMANDA
     st.subheader("🗂️ Oportunidades y Versiones")
     
-    # Usar búsqueda si el usuario quiere filtrar
-    search_term = st.text_input(
-        "🔍 Buscar oportunidad",
-        placeholder="Nombre de cliente o propuesta...",
-        key="db_search"
-    )
+    st.info("💡 Selecciona cómo quieres ver las cotizaciones. No se carga nada automáticamente para mejor rendimiento.")
     
-    if search_term and search_term.strip():
-        quotes_summary = search_quotes(search_term, limit=50)
-    else:
-        quotes_summary = get_recent_quotes(limit=50)
+    # Opciones de visualización
+    col_option1, col_option2 = st.columns(2)
     
+    with col_option1:
+        st.markdown("##### 🔍 Búsqueda Específica")
+        search_term = st.text_input(
+            "Buscar por nombre, cliente, cotizante...",
+            placeholder="Ej: DIF, Juan, Protección de Cómputo",
+            key="db_search"
+        )
+        
+        col_search1, col_search2 = st.columns(2)
+        with col_search1:
+            search_limit = st.selectbox(
+                "Máximo resultados:",
+                options=[10, 20, 50, 100],
+                index=1,
+                key="db_search_limit"
+            )
+        with col_search2:
+            do_search = st.button("🔍 Buscar", key="do_search_btn", type="primary", use_container_width=True)
+    
+    with col_option2:
+        st.markdown("##### 📅 Ver Recientes")
+        col_recent1, col_recent2 = st.columns(2)
+        with col_recent1:
+            recent_limit = st.selectbox(
+                "Cantidad:",
+                options=[5, 10, 20, 30, 50],
+                index=1,
+                key="db_recent_limit"
+            )
+        with col_recent2:
+            show_recent = st.button("📋 Ver Recientes", key="show_recent_btn", use_container_width=True)
+    
+    # Determinar qué mostrar
+    quotes_summary = None
+    
+    if do_search and search_term and search_term.strip():
+        with st.spinner(f"Buscando '{search_term}'..."):
+            quotes_summary = search_quotes(search_term, limit=search_limit)
+            if quotes_summary:
+                st.success(f"✅ Encontradas {len(quotes_summary)} cotizaciones")
+            else:
+                st.warning("No se encontraron cotizaciones con ese criterio")
+    elif show_recent:
+        with st.spinner(f"Cargando últimas {recent_limit} cotizaciones..."):
+            quotes_summary = get_recent_quotes(limit=recent_limit)
+            if quotes_summary:
+                st.success(f"✅ Mostrando {len(quotes_summary)} cotizaciones recientes")
+    
+    st.divider()
+    
+    # Mostrar resultados solo si hay datos cargados
     if quotes_summary:
         # Convertir a DataFrame
         all_quotes_df = pd.DataFrame(
@@ -4004,6 +4048,16 @@ with tab_db:
                 st.warning("⚠️ No se encontraron líneas para esta cotización")
         else:
             st.info("No hay propuestas guardadas aún")
+    else:
+        # No hay datos cargados
+        st.markdown("---")
+        st.markdown("""
+        <div style='text-align: center; padding: 2rem; background-color: rgba(128, 128, 128, 0.1); border-radius: 10px;'>
+            <h3>📂 No hay datos cargados</h3>
+            <p>Selecciona una opción arriba para buscar cotizaciones específicas o ver las más recientes</p>
+            <p style='font-size: 0.9em; color: #888;'>💡 Esto mejora el rendimiento al no cargar toda la base automáticamente</p>
+        </div>
+        """, unsafe_allow_html=True)
 
         # =========================
         # EXPORTAR Y GESTIÓN DE BASE DE DATOS
