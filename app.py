@@ -498,7 +498,13 @@ st.divider()
 # =========================
 # Tabs principales
 # =========================
-tab_aup, tab_legacy, tab_proposals, tab_db = st.tabs(["🧠 Motor AUP", "📝 Cotizador Legacy", "📄 Propuestas Formales", "📚 Base de Datos"])
+tab_aup, tab_legacy, tab_comparator, tab_proposals, tab_db = st.tabs([
+    "🧠 Motor AUP", 
+    "📝 Cotizador Legacy", 
+    "⚖️ Comparador", 
+    "📄 Propuestas Formales", 
+    "📚 Base de Datos"
+])
 
 # =========================
 # Spellchecker Básico
@@ -1141,478 +1147,6 @@ if "saved_client_name" not in st.session_state:
 
 if "saved_quoted_by" not in st.session_state:
     st.session_state.saved_quoted_by = ""
-
-# =========================
-# Comparador de versiones
-# =========================
-st.divider()
-st.header("🔍 Comparador de Versiones")
-
-st.info("💡 **Tip:** También puedes usar el buscador global arriba (debajo del título) para encontrar rápidamente cualquier cotización.")
-
-# Usar búsqueda avanzada
-with st.expander("🔍 Buscar Cotización para Comparar", expanded=True):
-    selected_group = render_quote_search_selector(
-        key="comparador",
-        label="Buscar por cliente, propuesta o quien cotizó",
-        show_recent=True
-    )
-
-if selected_group:
-    # Cargar versiones del grupo seleccionado
-    versions_df = load_versions_for_group(selected_group)
-
-    if len(versions_df) >= 2:
-        col1, col2, col3 = st.columns([2, 2, 1])
-
-        with col1:
-            v1 = st.selectbox(
-                "Versión base",
-                versions_df["version"].tolist(),
-                key="v1_selector"
-            )
-
-        with col2:
-            v2 = st.selectbox(
-                "Versión a comparar",
-                versions_df["version"].tolist(),
-                index=len(versions_df)-1,
-                key="v2_selector"
-            )
-
-        with col3:
-            if st.button("🔄 Comparar", type="primary", width="stretch"):
-                if v1 == v2:
-                    st.warning("⚠️ Selecciona versiones distintas")
-                else:
-                    st.session_state.compare = {
-                        "group": selected_group,
-                        "v1": int(v1),
-                        "v2": int(v2)
-                    }
-                    st.rerun()
-
-        # Motor de comparación
-        if "compare" in st.session_state and st.session_state.compare["group"] == selected_group:
-            g = st.session_state.compare["group"]
-            v1 = st.session_state.compare["v1"]
-            v2 = st.session_state.compare["v2"]
-
-            st.divider()
-            st.subheader(f"📊 Análisis Comparativo: v{v1} → v{v2}")
-
-            # ===== SELECTOR DE PLAYBOOK =====
-            st.markdown("### 📘 Playbook / Contexto de Industria")
-
-            col_playbook, col_playbook_desc = st.columns([1, 2])
-
-            with col_playbook:
-                selected_playbook = st.selectbox(
-                    "Selecciona playbook",
-                    list(PLAYBOOKS.keys()),
-                    help="El playbook ajusta umbrales de salud y pesos de decisión según el contexto de negocio"
-                )
-
-            with col_playbook_desc:
-                pb_desc = PLAYBOOKS[selected_playbook]["description"]
-                pb_green = PLAYBOOKS[selected_playbook]["green"]
-                pb_yellow = PLAYBOOKS[selected_playbook]["yellow"]
-                st.info(f"**{selected_playbook}:** {pb_desc}  \n📊 Verde ≥{pb_green}% | Amarillo ≥{pb_yellow}%")
-
-            st.divider()
-
-            # Cargar datos de versiones
-            versions = load_versions_for_group(g)
-            q1 = versions[versions["version"] == v1].iloc[0]
-            q2 = versions[versions["version"] == v2].iloc[0]
-
-            # ===== NIVEL A: Resumen Ejecutivo =====
-            st.markdown("### 📈 Resumen Ejecutivo")
-
-            col_metrics1, col_metrics2, col_metrics3, col_metrics4 = st.columns(4)
-
-            with col_metrics1:
-                delta_revenue = float(q2["total_revenue"] - q1["total_revenue"])
-                st.metric(
-                    "Ingreso Total",
-                    f"${float(q2['total_revenue']):,.2f}",
-                    f"${delta_revenue:,.2f}",
-                    delta_color="normal"
-                )
-
-            with col_metrics2:
-                delta_profit = float(q2["gross_profit"] - q1["gross_profit"])
-                st.metric(
-                    "Utilidad Bruta",
-                    f"${float(q2['gross_profit']):,.2f}",
-                    f"${delta_profit:,.2f}",
-                    delta_color="normal"
-                )
-
-            with col_metrics3:
-                delta_margin = float(q2["avg_margin"] - q1["avg_margin"])
-                st.metric(
-                    "Margen Promedio",
-                    f"{float(q2['avg_margin']):.2f}%",
-                    f"{delta_margin:+.2f}pp",
-                    delta_color="normal"
-                )
-
-            with col_metrics4:
-                l1 = load_lines_for_quote(q1["quote_id"])
-                l2 = load_lines_for_quote(q2["quote_id"])
-                
-                # Asegurar que service_origin tenga un valor por defecto
-                l1["service_origin"] = l1["service_origin"].fillna("Sin especificar").replace("", "Sin especificar")
-                l2["service_origin"] = l2["service_origin"].fillna("Sin especificar").replace("", "Sin especificar")
-                
-                delta_lines = len(l2) - len(l1)
-                st.metric(
-                    "Líneas",
-                    len(l2),
-                    f"{delta_lines:+d}",
-                    delta_color="off"
-                )
-
-            # ===== NIVEL B: Diferencias Clave =====
-                st.markdown("### 🎯 Diferencias Clave")
-
-                # Tabla comparativa
-                comp_df = pd.DataFrame([
-                    {
-                        "Métrica": "💰 Ingreso Total",
-                        f"v{v1}": f"${float(q1['total_revenue']):,.2f}",
-                        f"v{v2}": f"${float(q2['total_revenue']):,.2f}",
-                        "Δ Absoluto": f"${delta_revenue:,.2f}",
-                        "Δ %": f"{(delta_revenue/float(q1['total_revenue'])*100):+.1f}%" if float(q1['total_revenue']) > 0 else "N/A"
-                    },
-                    {
-                        "Métrica": "💵 Costo Total",
-                        f"v{v1}": f"${float(q1['total_cost']):,.2f}",
-                        f"v{v2}": f"${float(q2['total_cost']):,.2f}",
-                        "Δ Absoluto": f"${float(q2['total_cost'] - q1['total_cost']):,.2f}",
-                        "Δ %": f"{((float(q2['total_cost']) - float(q1['total_cost']))/float(q1['total_cost'])*100):+.1f}%" if float(q1['total_cost']) > 0 else "N/A"
-                    },
-                    {
-                        "Métrica": "✅ Utilidad Bruta",
-                        f"v{v1}": f"${float(q1['gross_profit']):,.2f}",
-                        f"v{v2}": f"${float(q2['gross_profit']):,.2f}",
-                        "Δ Absoluto": f"${delta_profit:,.2f}",
-                        "Δ %": f"{(delta_profit/float(q1['gross_profit'])*100):+.1f}%" if float(q1['gross_profit']) > 0 else "N/A"
-                    },
-                    {
-                        "Métrica": "📊 Margen Promedio",
-                        f"v{v1}": f"{float(q1['avg_margin']):.2f}%",
-                        f"v{v2}": f"{float(q2['avg_margin']):.2f}%",
-                        "Δ Absoluto": f"{delta_margin:+.2f}pp",
-                        "Δ %": f"{(delta_margin/float(q1['avg_margin'])*100):+.1f}%" if float(q1['avg_margin']) > 0 else "N/A"
-                    },
-                    {
-                        "Métrica": "📋 Número de Líneas",
-                        f"v{v1}": str(len(l1)),
-                        f"v{v2}": str(len(l2)),
-                        "Δ Absoluto": f"{delta_lines:+d}",
-                        "Δ %": f"{(delta_lines/len(l1)*100):+.1f}%" if len(l1) > 0 else "N/A"
-                    }
-                ])
-
-                st.dataframe(comp_df, width="stretch", hide_index=True)
-
-                # Análisis de líneas
-                st.markdown("### 📦 Análisis de Líneas")
-
-                # Detectar cambios en SKUs
-                skus_v1 = set(l1["sku"].tolist())
-                skus_v2 = set(l2["sku"].tolist())
-
-                skus_added = skus_v2 - skus_v1
-                skus_removed = skus_v1 - skus_v2
-                skus_common = skus_v1 & skus_v2
-
-                col_changes1, col_changes2, col_changes3 = st.columns(3)
-
-                with col_changes1:
-                    st.metric("➕ Líneas Agregadas", len(skus_added))
-                    if skus_added:
-                        for sku in skus_added:
-                            line = l2[l2["sku"] == sku].iloc[0]
-                            st.caption(f"  • {sku}: ${float(line['final_price_unit']):,.2f}")
-
-                with col_changes2:
-                    st.metric("➖ Líneas Eliminadas", len(skus_removed))
-                    if skus_removed:
-                        for sku in skus_removed:
-                            line = l1[l1["sku"] == sku].iloc[0]
-                            st.caption(f"  • {sku}: ${float(line['final_price_unit']):,.2f}")
-
-                with col_changes3:
-                    st.metric("🔄 Líneas Modificadas", len([s for s in skus_common if float(l1[l1["sku"]==s]["final_price_unit"].iloc[0]) != float(l2[l2["sku"]==s]["final_price_unit"].iloc[0])]))
-
-                # ===== NIVEL C: Visualizaciones =====
-                st.markdown("### 📊 Visualizaciones")
-
-                col_chart1, col_chart2 = st.columns(2)
-
-                with col_chart1:
-                    st.markdown("**Ingreso vs Utilidad**")
-                    fig1, (ax1a, ax1b) = plt.subplots(1, 2, figsize=(8, 4))
-
-                    # Gráfico de pastel para v1
-                    ax1a.pie(
-                        [float(q1["total_cost"]), float(q1["gross_profit"])],
-                        labels=["Costo", "Utilidad"],
-                        autopct="%1.1f%%",
-                        startangle=90,
-                        colors=["#ff7f0e", "#2ca02c"]
-                    )
-                    ax1a.set_title(f"v{v1}: ${float(q1['total_revenue']):,.0f}")
-
-                    # Gráfico de pastel para v2
-                    ax1b.pie(
-                        [float(q2["total_cost"]), float(q2["gross_profit"])],
-                        labels=["Costo", "Utilidad"],
-                        autopct="%1.1f%%",
-                        startangle=90,
-                        colors=["#ff7f0e", "#2ca02c"]
-                    )
-                    ax1b.set_title(f"v{v2}: ${float(q2['total_revenue']):,.0f}")
-
-                    plt.tight_layout()
-                    st.pyplot(fig1)
-                    plt.close(fig1)  # Cerrar para liberar memoria
-
-                with col_chart2:
-                    st.markdown("**Aportación por Origen/Tipo de Servicio**")
-
-                    # Agrupar por origen de servicio (Componente = service_origin)
-                    c1 = l1.groupby("service_origin")["final_price_unit"].sum()
-                    c2 = l2.groupby("service_origin")["final_price_unit"].sum()
-
-                    comp_components = pd.concat([c1, c2], axis=1).fillna(0)
-                    comp_components.columns = [f"v{v1}", f"v{v2}"]
-
-                    # Validar que hay datos numéricos para graficar
-                    has_numeric_data = (
-                        not comp_components.empty and 
-                        len(comp_components) > 0 and
-                        comp_components.select_dtypes(include=[float, int]).sum().sum() > 0
-                    )
-                    
-                    if not has_numeric_data:
-                        st.info("ℹ️ No hay datos numéricos de origen de servicio para graficar.")
-                    else:
-                        fig2, ax2 = plt.subplots(figsize=(6, 4))
-                        comp_components.plot(kind="bar", ax=ax2, rot=45, width=0.8)
-                        ax2.set_ylabel("Monto ($)")
-                        ax2.set_title("Origen/Tipo de Servicio por Versión")
-                        ax2.legend()
-                        plt.tight_layout()
-                        st.pyplot(fig2)
-                        plt.close(fig2)  # Cerrar para liberar memoria
-
-                # Tabla detallada de componentes
-                st.markdown("### 📦 Detalle por Origen/Tipo de Servicio")
-                st.caption("El 'Origen' se refiere al campo 'service_origin' de cada línea (ej: Interno, Externo, Proveedor A, etc.)")
-                
-                # Solo mostrar tabla si hay datos numéricos válidos
-                if has_numeric_data:
-                    comp_components["Δ Absoluto"] = comp_components[f"v{v2}"] - comp_components[f"v{v1}"]
-
-                    # Calcular Δ % manejando división por cero
-                    denominador = comp_components[f"v{v1}"].replace(0, float('nan'))
-                    comp_components["Δ %"] = ((comp_components[f"v{v2}"] - comp_components[f"v{v1}"]) / denominador * 100).replace([float('inf'), -float('inf')], 0).fillna(0)
-
-                    # Formatear para display
-                    display_comp = comp_components.copy()
-                    display_comp[f"v{v1}"] = display_comp[f"v{v1}"].apply(lambda x: f"${x:,.2f}")
-                    display_comp[f"v{v2}"] = display_comp[f"v{v2}"].apply(lambda x: f"${x:,.2f}")
-                    display_comp["Δ Absoluto"] = display_comp["Δ Absoluto"].apply(lambda x: f"${x:,.2f}")
-                    display_comp["Δ %"] = display_comp["Δ %"].apply(lambda x: f"{x:+.1f}%")
-
-                    st.dataframe(display_comp, width="stretch")
-                else:
-                    st.info("ℹ️ No hay datos de origen para comparar. Las líneas no tienen precios válidos en el campo 'final_price_unit'.")
-
-                # ===== NARRATIVA AUTOMÁTICA =====
-                st.markdown("### 📝 Narrativa Automática")
-
-                # Generar narrativa estructurada con playbook
-                narrative = generate_comparison_narrative(
-                    q1=q1,
-                    q2=q2,
-                    df1=l1,
-                    df2=l2,
-                    playbook_name=selected_playbook
-                )
-
-                # Mostrar narrativa ejecutiva
-                st.info(f"**Resumen Ejecutivo:** {narrative['executive']}")
-
-                # Mostrar detalle técnico
-                if narrative["detail"]:
-                    with st.expander("📋 Ver detalle técnico", expanded=False):
-                        st.write(narrative["detail"])
-
-                # Indicadores de salud
-                col_health1, col_health2 = st.columns(2)
-
-                with col_health1:
-                    health_color = {"verde": "🟢", "amarillo": "🟡", "rojo": "🔴"}
-                    st.caption(f"Salud v{v1}: {health_color[narrative['health_v1']]} {narrative['health_v1'].upper()}")
-
-                with col_health2:
-                    st.caption(f"Salud v{v2}: {health_color[narrative['health_v2']]} {narrative['health_v2'].upper()}")
-
-                st.divider()
-
-                # ===== REFORMULACIÓN CON IA =====
-                st.markdown("### 🎯 Reformular Narrativa con IA")
-                st.caption("La IA reformula el lenguaje según la audiencia, sin cambiar cifras ni recomendaciones.")
-
-                col_audience, col_button = st.columns([3, 1])
-
-                with col_audience:
-                    audience = st.selectbox(
-                        "Selecciona audiencia",
-                        [
-                            "Cliente ejecutivo",
-                            "Comité financiero",
-                            "Uso interno (ventas)"
-                        ],
-                        key="audience_selector",
-                        help="La IA ajustará el tono y claridad según la audiencia seleccionada"
-                    )
-
-                with col_button:
-                    generate_ai = st.button("✨ Generar", type="primary", width="stretch", key="generate_ai_narrative")
-
-                # Generar narrativa reformulada si se presiona el botón
-                if generate_ai:
-                    ai_text = ai_rewrite_narrative(
-                        audience=audience,
-                        executive=narrative["executive"],
-                        detail=narrative["detail"]
-                    )
-
-                    st.markdown("#### 🧠 Narrativa Reformulada")
-                    st.success(ai_text)
-
-                    # Botón para copiar al portapapeles
-                    st.caption("💡 Tip: Copia este texto para emails, reportes o presentaciones.")
-
-                st.divider()
-
-                # ===== EXPORTACIÓN PDF EJECUTIVO =====
-                st.markdown("### 📄 Exportación Ejecutiva")
-                st.caption("Genera un reporte PDF profesional con el análisis completo.")
-
-                col_pdf1, col_pdf2 = st.columns([2, 1])
-
-                with col_pdf1:
-                    pdf_branding_name = st.text_input(
-                        "Nombre de la empresa (opcional)",
-                        value="DynamiQuote",
-                        help="Aparecerá en el encabezado y portada del PDF"
-                    )
-
-                with col_pdf2:
-                    st.write("")  # Espaciado
-                    generate_pdf = st.button("📥 Descargar PDF", type="primary", width="stretch", key="generate_pdf_btn")
-
-                if generate_pdf:
-                    try:
-                        # Importar módulo de PDF
-                        from pdf_generator import prepare_report_data, generate_pdf_report, WEASYPRINT_AVAILABLE
-
-                        if not WEASYPRINT_AVAILABLE:
-                            st.error("⚠️ WeasyPrint no está instalado. Ejecutar: `pip install weasyprint`")
-                        else:
-                            with st.spinner("Generando PDF ejecutivo..."):
-                                # Preparar datos estructurados
-                                report_data = prepare_report_data(
-                                    q1=q1,
-                                    q2=q2,
-                                    df1=l1,
-                                    df2=l2,
-                                    narrative=narrative,
-                                    playbook_name=selected_playbook,
-                                    playbook_config=PLAYBOOKS[selected_playbook]
-                                )
-
-                                # Configurar branding
-                                branding = {
-                                    'logo_url': None,  # Futuro: permitir subir logo
-                                    'primary_color': '#4F46E5',
-                                    'secondary_color': '#F59E0B',
-                                    'company_name': pdf_branding_name
-                                }
-
-                                # Generar PDF
-                                pdf_bytes = generate_pdf_report(report_data, branding)
-
-                                # Botón de descarga
-                                st.download_button(
-                                    label="⬇️ Descargar Reporte PDF",
-                                    data=pdf_bytes,
-                                    file_name=f"analisis_comparativo_v{v1}_v{v2}_{datetime.now().strftime('%Y%m%d')}.pdf",
-                                    mime="application/pdf",
-                                    width="stretch"
-                                )
-
-                                st.success("✅ PDF generado exitosamente. Haz click en 'Descargar Reporte PDF' arriba.")
-
-                    except ImportError as e:
-                        st.error(f"⚠️ Error de importación: {e}. Asegúrate de tener todos los requisitos instalados.")
-                    except Exception as e:
-                        st.error(f"❌ Error generando PDF: {e}")
-                        import traceback
-                        with st.expander("Ver detalles del error"):
-                            st.code(traceback.format_exc())
-
-                st.divider()
-
-                # Insight automático
-                st.markdown("### 💡 Insight Rápido")
-
-                insights = []
-
-                if delta_revenue > 0 and delta_margin > 0:
-                    insights.append("✅ **Versión superior:** Mayor ingreso Y mejor margen")
-                elif delta_revenue > 0 and delta_margin < 0:
-                    insights.append("⚠️ **Crecimiento agresivo:** Más ingreso pero sacrificó margen")
-                elif delta_revenue < 0 and delta_margin > 0:
-                    insights.append("🎯 **Optimización:** Menos ingreso pero margen mejoró")
-                else:
-                    insights.append("❌ **Deterioro:** Menos ingreso Y peor margen")
-
-                if len(skus_added) > len(skus_removed):
-                    insights.append(f"📈 **Expansión:** Se agregaron {len(skus_added)} líneas vs {len(skus_removed)} eliminadas")
-                elif len(skus_removed) > len(skus_added):
-                    insights.append(f"📉 **Simplificación:** Se eliminaron {len(skus_removed)} líneas vs {len(skus_added)} agregadas")
-
-                # Origen que más cambió (solo si hay datos válidos procesados)
-                if not comp_components.empty and "Δ Absoluto" in comp_components.columns:
-                    try:
-                        max_change = comp_components["Δ Absoluto"].abs().idxmax()
-                        max_change_value = comp_components.loc[max_change, "Δ Absoluto"]
-                        if abs(max_change_value) > 0:
-                            insights.append(f"🎯 **Origen clave:** '{max_change}' cambió ${abs(max_change_value):,.2f}")
-                    except Exception:
-                        pass  # Si hay error, simplemente no agregar el insight
-
-                for insight in insights:
-                    st.markdown(insight)
-
-        elif len(versions_df) == 1:
-            st.info("📝 Esta oportunidad solo tiene 1 versión. Crea una nueva versión para comparar.")
-        else:
-            st.info("📝 No hay versiones disponibles para esta oportunidad.")
-    else:
-        st.info("📝 No hay oportunidades guardadas aún.")
-else:
-    st.info("📝 No hay datos para comparar. Crea y guarda cotizaciones primero.")
-
-st.divider()
 
 # =========================
 # Formulario
@@ -2792,6 +2326,339 @@ with tab_aup:
             st.caption(f"Visualizaciones no disponibles: {exc}")
     else:
         st.info("Crea una propuesta para comenzar")
+
+# =========================
+# TAB: COMPARADOR
+# =========================
+with tab_comparator:
+    st.header("⚖️ Comparador de Cotizaciones")
+    st.divider()
+    
+    st.info("💡 Selecciona DOS cotizaciones cualesquiera para compararlas (pueden ser versiones distintas, clientes diferentes, etc.)")
+    
+    # Dos columnas para seleccionar las cotizaciones
+    col_q1, col_q2 = st.columns(2)
+    
+    with col_q1:
+        st.markdown("### 📄 Primera Cotización")
+        quote_1_id = render_quote_search_selector(
+            key="comparador_q1",
+            label="Buscar cotización base",
+            show_recent=True
+        )
+    
+    with col_q2:
+        st.markdown("### 📄 Segunda Cotización")
+        quote_2_id = render_quote_search_selector(
+            key="comparador_q2",
+            label="Buscar cotización a comparar",
+            show_recent=True
+        )
+    
+    st.divider()
+    
+    # Botón para comparar
+    if quote_1_id and quote_2_id:
+        col_btn1, col_btn2, col_btn3 = st.columns([2, 1, 2])
+        with col_btn2:
+            if st.button("🔄 Comparar Ambas", type="primary", use_container_width=True):
+                if quote_1_id == quote_2_id:
+                    st.warning("⚠️ Selecciona dos cotizaciones diferentes")
+                else:
+                    st.session_state.compare_quotes = {
+                        "q1_id": quote_1_id,
+                        "q2_id": quote_2_id
+                    }
+                    st.rerun()
+    
+    # Motor de comparación
+    if "compare_quotes" in st.session_state:
+        q1_id = st.session_state.compare_quotes["q1_id"]
+        q2_id = st.session_state.compare_quotes["q2_id"]
+        
+        # Cargar datos de ambas cotizaciones
+        from database import get_quote_by_id
+        
+        q1_data = get_quote_by_id(q1_id)
+        q2_data = get_quote_by_id(q2_id)
+        
+        if q1_data and q2_data:
+            st.success(f"✅ Comparando: **{q1_data.get('proposal_name', 'Sin nombre')}** vs **{q2_data.get('proposal_name', 'Sin nombre')}**")
+            st.divider()
+            
+            # ===== SELECTOR DE PLAYBOOK =====
+            st.markdown("### 📘 Playbook / Contexto de Industria")
+            
+            col_playbook, col_playbook_desc = st.columns([1, 2])
+            
+            with col_playbook:
+                selected_playbook = st.selectbox(
+                    "Selecciona playbook",
+                    list(PLAYBOOKS.keys()),
+                    key="comparador_playbook",
+                    help="El playbook ajusta umbrales de salud y pesos de decisión según el contexto de negocio"
+                )
+            
+            with col_playbook_desc:
+                pb_desc = PLAYBOOKS[selected_playbook]["description"]
+                pb_green = PLAYBOOKS[selected_playbook]["green"]
+                pb_yellow = PLAYBOOKS[selected_playbook]["yellow"]
+                st.info(f"**{selected_playbook}:** {pb_desc}  \n📊 Verde ≥{pb_green}% | Amarillo ≥{pb_yellow}%")
+            
+            st.divider()
+            
+            # Convertir a formato similar al de versiones
+            q1 = pd.Series({
+                "quote_id": q1_id,
+                "quote_group_id": q1_data.get("quote_group_id", ""),
+                "version": q1_data.get("version", 1),
+                "total_revenue": q1_data.get("total_revenue", 0),
+                "total_cost": q1_data.get("total_cost", 0),
+                "gross_profit": q1_data.get("gross_profit", 0),
+                "avg_margin": q1_data.get("avg_margin", 0),
+                "client_name": q1_data.get("client_name", ""),
+                "proposal_name": q1_data.get("proposal_name", ""),
+                "quoted_by": q1_data.get("quoted_by", ""),
+                "created_at": q1_data.get("created_at", "")
+            })
+            
+            q2 = pd.Series({
+                "quote_id": q2_id,
+                "quote_group_id": q2_data.get("quote_group_id", ""),
+                "version": q2_data.get("version", 1),
+                "total_revenue": q2_data.get("total_revenue", 0),
+                "total_cost": q2_data.get("total_cost", 0),
+                "gross_profit": q2_data.get("gross_profit", 0),
+                "avg_margin": q2_data.get("avg_margin", 0),
+                "client_name": q2_data.get("client_name", ""),
+                "proposal_name": q2_data.get("proposal_name", ""),
+                "quoted_by": q2_data.get("quoted_by", ""),
+                "created_at": q2_data.get("created_at", "")
+            })
+            
+            # ===== NIVEL A: Resumen Ejecutivo =====
+            st.markdown("### 📈 Resumen Ejecutivo")
+            
+            col_info1, col_info2 = st.columns(2)
+            
+            with col_info1:
+                st.markdown(f"**Cotización 1:**")
+                st.caption(f"Cliente: {q1['client_name'] or 'Sin especificar'}")
+                st.caption(f"Propuesta: {q1['proposal_name'] or 'Sin nombre'}")
+                st.caption(f"Cotizado por: {q1['quoted_by'] or 'Sin especificar'}")
+                st.caption(f"Versión: v{q1['version']}")
+            
+            with col_info2:
+                st.markdown(f"**Cotización 2:**")
+                st.caption(f"Cliente: {q2['client_name'] or 'Sin especificar'}")
+                st.caption(f"Propuesta: {q2['proposal_name'] or 'Sin nombre'}")
+                st.caption(f"Cotizado por: {q2['quoted_by'] or 'Sin especificar'}")
+                st.caption(f"Versión: v{q2['version']}")
+            
+            st.divider()
+            
+            col_metrics1, col_metrics2, col_metrics3, col_metrics4 = st.columns(4)
+            
+            with col_metrics1:
+                delta_revenue = float(q2["total_revenue"] - q1["total_revenue"])
+                st.metric(
+                    "Ingreso Total",
+                    f"${float(q2['total_revenue']):,.2f}",
+                    f"${delta_revenue:,.2f}",
+                    delta_color="normal"
+                )
+                st.caption(f"Q1: ${float(q1['total_revenue']):,.2f}")
+            
+            with col_metrics2:
+                delta_profit = float(q2["gross_profit"] - q1["gross_profit"])
+                st.metric(
+                    "Utilidad Bruta",
+                    f"${float(q2['gross_profit']):,.2f}",
+                    f"${delta_profit:,.2f}",
+                    delta_color="normal"
+                )
+                st.caption(f"Q1: ${float(q1['gross_profit']):,.2f}")
+            
+            with col_metrics3:
+                delta_cost = float(q2["total_cost"] - q1["total_cost"])
+                st.metric(
+                    "Costo Total",
+                    f"${float(q2['total_cost']):,.2f}",
+                    f"${delta_cost:,.2f}",
+                    delta_color="inverse"
+                )
+                st.caption(f"Q1: ${float(q1['total_cost']):,.2f}")
+            
+            with col_metrics4:
+                delta_margin = float(q2["avg_margin"] - q1["avg_margin"])
+                st.metric(
+                    "Margen Promedio",
+                    f"{float(q2['avg_margin']):.2f}%",
+                    f"{delta_margin:.2f}%",
+                    delta_color="normal"
+                )
+                st.caption(f"Q1: {float(q1['avg_margin']):.2f}%")
+            
+            # ===== NIVEL B: Análisis por componente de origen =====
+            st.divider()
+            st.markdown("### 🔍 Análisis por Componente de Origen")
+            
+            l1_all = load_lines_for_quote(q1["quote_id"])
+            l2_all = load_lines_for_quote(q2["quote_id"])
+            
+            l1 = pd.DataFrame(l1_all, columns=["sku", "description", "service_origin", "quantity", "unit_cost", "unit_price", "margin", "line_type"])
+            l2 = pd.DataFrame(l2_all, columns=["sku", "description", "service_origin", "quantity", "unit_cost", "unit_price", "margin", "line_type"])
+            
+            # Calcular totales por origen
+            def calculate_origin_totals(df):
+                df = df.copy()
+                df["quantity"] = pd.to_numeric(df["quantity"], errors="coerce").fillna(1.0)
+                df["unit_cost"] = pd.to_numeric(df["unit_cost"], errors="coerce").fillna(0.0)
+                df["unit_price"] = pd.to_numeric(df["unit_price"], errors="coerce").fillna(0.0)
+                df["cost_total"] = df["quantity"] * df["unit_cost"]
+                df["revenue_total"] = df["quantity"] * df["unit_price"]
+                
+                grouped = df.groupby("service_origin", as_index=False).agg({
+                    "cost_total": "sum",
+                    "revenue_total": "sum"
+                })
+                grouped.columns = ["Origen", "Costo", "Ingreso"]
+                grouped["Utilidad"] = grouped["Ingreso"] - grouped["Costo"]
+                return grouped
+            
+            comp_v1 = calculate_origin_totals(l1)
+            comp_v2 = calculate_origin_totals(l2)
+            
+            # Merge para comparar
+            comp_merged = pd.merge(
+                comp_v1,
+                comp_v2,
+                on="Origen",
+                how="outer",
+                suffixes=(" Q1", " Q2")
+            ).fillna(0)
+            
+            comp_merged["Δ Absoluto"] = comp_merged["Ingreso Q2"] - comp_merged["Ingreso Q1"]
+            comp_merged["Δ Relativo %"] = ((comp_merged["Ingreso Q2"] - comp_merged["Ingreso Q1"]) / comp_merged["Ingreso Q1"] * 100).replace([float('inf'), -float('inf')], 0).fillna(0)
+            
+            # Formatear para visualización
+            comp_components = comp_merged.copy()
+            for col in ["Costo Q1", "Ingreso Q1", "Utilidad Q1", "Costo Q2", "Ingreso Q2", "Utilidad Q2", "Δ Absoluto"]:
+                if col in comp_components.columns:
+                    comp_components[col] = comp_components[col].apply(lambda x: f"${x:,.2f}")
+            
+            if "Δ Relativo %" in comp_components.columns:
+                comp_components["Δ Relativo %"] = comp_components["Δ Relativo %"].apply(lambda x: f"{x:.2f}%")
+            
+            st.dataframe(comp_components, use_container_width=True, hide_index=True)
+            
+            # ===== NIVEL C: Cambios de SKU =====
+            st.divider()
+            st.markdown("### 📦 Cambios en SKUs")
+            
+            skus_v1 = set(l1["sku"].tolist())
+            skus_v2 = set(l2["sku"].tolist())
+            
+            skus_added = skus_v2 - skus_v1
+            skus_removed = skus_v1 - skus_v2
+            skus_common = skus_v1 & skus_v2
+            
+            col_sku1, col_sku2, col_sku3 = st.columns(3)
+            
+            with col_sku1:
+                st.metric("SKUs solo en Q2", len(skus_added))
+                if skus_added:
+                    with st.expander("Ver SKUs"):
+                        for sku in skus_added:
+                            st.caption(f"✅ {sku}")
+            
+            with col_sku2:
+                st.metric("SKUs solo en Q1", len(skus_removed))
+                if skus_removed:
+                    with st.expander("Ver SKUs"):
+                        for sku in skus_removed:
+                            st.caption(f"❌ {sku}")
+            
+            with col_sku3:
+                st.metric("SKUs en común", len(skus_common))
+            
+            # ===== NIVEL D: Sistema Narrativo Inteligente =====
+            st.divider()
+            st.markdown("### 📖 Narrativa Inteligente")
+            
+            narrative = generate_narrative(
+                q1=q1,
+                q2=q2,
+                l1=l1,
+                l2=l2,
+                playbook_name=selected_playbook,
+                playbook_config=PLAYBOOKS[selected_playbook]
+            )
+            
+            # Mostrar resumen ejecutivo
+            st.markdown("#### 📌 Resumen Ejecutivo")
+            st.success(narrative["executive"])
+            
+            # Mostrar detalle técnico
+            if narrative["detail"]:
+                with st.expander("📋 Ver detalle técnico", expanded=False):
+                    st.write(narrative["detail"])
+            
+            # Indicadores de salud
+            col_health1, col_health2 = st.columns(2)
+            
+            with col_health1:
+                health_color = {"verde": "🟢", "amarillo": "🟡", "rojo": "🔴"}
+                st.caption(f"Salud Q1: {health_color[narrative['health_v1']]} {narrative['health_v1'].upper()}")
+            
+            with col_health2:
+                st.caption(f"Salud Q2: {health_color[narrative['health_v2']]} {narrative['health_v2'].upper()}")
+            
+            st.divider()
+            
+            # Insight automático
+            st.markdown("### 💡 Insight Rápido")
+            
+            insights = []
+            
+            if delta_revenue > 0 and delta_margin > 0:
+                insights.append("✅ **Q2 superior:** Mayor ingreso Y mejor margen")
+            elif delta_revenue > 0 and delta_margin < 0:
+                insights.append("⚠️ **Crecimiento agresivo en Q2:** Más ingreso pero sacrificó margen")
+            elif delta_revenue < 0 and delta_margin > 0:
+                insights.append("🎯 **Q2 optimizada:** Menos ingreso pero margen mejoró")
+            else:
+                insights.append("❌ **Q2 deteriorada:** Menos ingreso Y peor margen")
+            
+            if len(skus_added) > len(skus_removed):
+                insights.append(f"📈 **Q2 más amplia:** {len(skus_added)} SKUs nuevos vs {len(skus_removed)} eliminados")
+            elif len(skus_removed) > len(skus_added):
+                insights.append(f"📉 **Q2 más simple:** {len(skus_removed)} SKUs eliminados vs {len(skus_added)} nuevos")
+            
+            # Origen que más cambió
+            if not comp_components.empty and "Δ Absoluto" in comp_components.columns:
+                try:
+                    # Necesitamos los valores numéricos originales, no los formateados
+                    max_change_idx = comp_merged["Δ Absoluto"].abs().idxmax()
+                    max_change_origen = comp_merged.loc[max_change_idx, "Origen"]
+                    max_change_value = comp_merged.loc[max_change_idx, "Δ Absoluto"]
+                    if abs(max_change_value) > 0:
+                        insights.append(f"🎯 **Origen clave:** '{max_change_origen}' cambió ${abs(max_change_value):,.2f}")
+                except Exception:
+                    pass
+            
+            for insight in insights:
+                st.markdown(insight)
+        else:
+            st.error("❌ No se pudieron cargar las cotizaciones seleccionadas")
+    else:
+        st.markdown("""
+        <div style='text-align: center; padding: 3rem; background-color: rgba(128, 128, 128, 0.05); border-radius: 10px;'>
+            <h3>📊 Listo para comparar</h3>
+            <p>Selecciona dos cotizaciones arriba y presiona "🔄 Comparar Ambas"</p>
+            <p style='font-size: 0.9em; color: #888;'>💡 Puedes comparar versiones del mismo cliente, propuestas de clientes diferentes, o cualquier combinación</p>
+        </div>
+        """, unsafe_allow_html=True)
 
 # =========================
 # TAB: PROPUESTAS FORMALES

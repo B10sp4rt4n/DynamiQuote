@@ -1067,6 +1067,87 @@ def get_quote_by_group_id(quote_group_id: str) -> dict:
         return None
 
 
+def get_quote_by_id(quote_id: str) -> dict:
+    """
+    Obtiene información completa de una cotización específica por su ID.
+    
+    NO CACHEADA: Búsqueda puntual, no vale la pena cachear.
+    
+    Args:
+        quote_id: ID único de la cotización
+        
+    Returns:
+        Diccionario con información completa de la cotización o None si no existe
+    """
+    try:
+        with get_cursor() as cur:
+            if is_postgres():
+                cur.execute("""
+                    SELECT 
+                        quote_id,
+                        quote_group_id,
+                        version,
+                        parent_quote_id,
+                        created_at,
+                        status,
+                        total_cost,
+                        total_revenue,
+                        gross_profit,
+                        avg_margin,
+                        playbook_name,
+                        client_name,
+                        quoted_by,
+                        proposal_name
+                    FROM quotes
+                    WHERE quote_id = %s
+                    LIMIT 1
+                """, (quote_id,))
+            else:
+                cur.execute("""
+                    SELECT 
+                        quote_id,
+                        quote_group_id,
+                        version,
+                        parent_quote_id,
+                        created_at,
+                        status,
+                        total_cost,
+                        total_revenue,
+                        gross_profit,
+                        avg_margin,
+                        playbook_name,
+                        client_name,
+                        quoted_by,
+                        proposal_name
+                    FROM quotes
+                    WHERE quote_id = ?
+                    LIMIT 1
+                """, (quote_id,))
+            
+            row = cur.fetchone()
+            if row:
+                return {
+                    "quote_id": row[0],
+                    "quote_group_id": row[1],
+                    "version": row[2],
+                    "parent_quote_id": row[3],
+                    "created_at": row[4],
+                    "status": row[5],
+                    "total_cost": row[6],
+                    "total_revenue": row[7],
+                    "gross_profit": row[8],
+                    "avg_margin": row[9],
+                    "playbook_name": row[10],
+                    "client_name": row[11] or "Sin especificar",
+                    "quoted_by": row[12] or "Sin especificar",
+                    "proposal_name": row[13] or "Sin nombre"
+                }
+            return None
+    except Exception as e:
+        st.error(f"Error obteniendo cotización: {e}")
+        return None
+
+
 @st.cache_data(ttl=10)  # Cache breve: 10 segundos
 def get_quote_lines(quote_id: str) -> list:
     """Obtiene las líneas de una cotización específica."""
