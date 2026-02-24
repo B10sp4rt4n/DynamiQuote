@@ -5,7 +5,7 @@ import uuid
 from datetime import datetime, UTC
 import matplotlib.pyplot as plt
 from spellchecker import SpellChecker
-from database import init_database, save_quote, save_import_file, get_all_quotes, get_quote_lines, get_quote_lines_full, get_latest_version, load_versions_for_group, load_lines_for_quote, get_database_info, get_cursor, is_postgres, get_connection, save_logo, get_logos
+from database import init_database, save_quote, save_import_file, get_all_quotes, get_quote_lines, get_quote_lines_full, get_latest_version, load_versions_for_group, load_lines_for_quote, get_database_info, get_cursor, is_postgres, get_connection, save_logo, get_logos, search_quotes, get_recent_quotes, get_quote_groups_summary, get_quote_by_group_id
 from excel_import import import_excel_file, format_validation_report
 from formal_proposal_generator import process_logo_upload
 import os
@@ -36,6 +36,110 @@ plt.ioff()
 def get_spell_checker():
     """Cache del corrector ortográfico para evitar recargas."""
     return SpellChecker(language='es')
+
+# =========================
+# UI Helpers para Búsqueda de Cotizaciones
+# =========================
+
+def render_quote_search_selector(key: str, label: str = "Buscar cotización", show_recent: bool = True):
+    """
+    Renderiza un selector de cotizaciones con búsqueda optimizada.
+    
+    Args:
+        key: Key única para el widget
+        label: Etiqueta del campo de búsqueda
+        show_recent: Si es True, muestra las cotizaciones recientes si no hay búsqueda
+        
+    Returns:
+        quote_group_id seleccionado o None
+    """
+    col_search, col_btn = st.columns([4, 1])
+    
+    with col_search:
+        search_query = st.text_input(
+            label,
+            key=f"{key}_search",
+            placeholder="Escribe nombre de cliente o propuesta...",
+            help="Busca por nombre de cliente o propuesta"
+        )
+    
+    with col_btn:
+        st.write("")  # Spacer
+        search_clicked = st.button("🔍 Buscar", key=f"{key}_btn")
+    
+    # Realizar búsqueda
+    if search_query and search_query.strip():
+        results = search_quotes(search_query, limit=20)
+    elif show_recent:
+        st.caption("💡 Mostrando cotizaciones recientes")
+        results = get_recent_quotes(limit=20)
+    else:
+        return None
+    
+    if not results:
+        st.warning("No se encontraron cotizaciones")
+        return None
+    
+    # Convertir a DataFrame para mejor visualización
+    results_df = pd.DataFrame(
+        results,
+        columns=["quote_id", "quote_group_id", "version", "parent_quote_id", 
+                "created_at", "status", "total_cost", "total_revenue", 
+                "gross_profit", "avg_margin", "playbook_name", "client_name", 
+                "quoted_by", "proposal_name"]
+    )
+    
+    # Crear opciones de selección descriptivas
+    options = {}
+    for _, row in results_df.iterrows():
+        client = row["client_name"] if row["client_name"] else "Sin nombre"
+        proposal = row["proposal_name"] if row["proposal_name"] else "Sin nombre"
+        revenue = row["total_revenue"]
+        margin = row["avg_margin"]
+        date = pd.to_datetime(row["created_at"]).strftime("%Y-%m-%d")
+        
+        display_text = f"{client} - {proposal} | ${revenue:,.0f} | {margin:.1f}% | {date}"
+        options[display_text] = row["quote_group_id"]
+    
+    if not options:
+        return None
+    
+    selected = st.selectbox(
+        f"Selecciona una cotización ({len(options)} resultados)",
+        options=list(options.keys()),
+        key=f"{key}_selector"
+    )
+    
+    if selected:
+        return options[selected]
+    
+    return None
+
+
+def render_quote_card(quote_data: dict):
+    """
+    Renderiza una tarjeta con información de una cotización.
+    
+    Args:
+        quote_data: Diccionario con datos de la cotización
+    """
+    col1, col2, col3, col4 = st.columns(4)
+    
+    with col1:
+        st.metric("Cliente", quote_data.get("client_name", "Sin nombre"))
+    
+    with col2:
+        revenue = quote_data.get("total_revenue", 0)
+        st.metric("Total", f"${revenue:,.2f}")
+    
+    with col3:
+        margin = quote_data.get("avg_margin", 0)
+        st.metric("Margen", f"{margin:.1f}%")
+    
+    with col4:
+        version = quote_data.get("version", 1)
+        st.metric("Versión", f"v{version}")
+
 
 # =========================
 # Playbooks de Evaluación
@@ -820,156 +924,130 @@ if "saved_quoted_by" not in st.session_state:
 st.divider()
 st.header("🔍 Comparador de Versiones")
 
-# Obtener histórico para selector
-hist_compare = pd.DataFrame(
-    get_all_quotes(),
-    columns=["quote_id", "quote_group_id", "version", "parent_quote_id", "created_at", "status", "total_cost", "total_revenue", "gross_profit", "avg_margin", "playbook_name", "client_name", "quoted_by", "proposal_name"]
+# Usar búsqueda optimizada en lugar de cargar todas las cotizaciones
+selected_group = render_quote_search_selector(
+    key="comparador",
+    label="🔍 Buscar cotización para comparar versiones",
+    show_recent=True
 )
 
-if not hist_compare.empty:
-    groups = hist_compare["quote_group_id"].unique()
+if selected_group:
+    # Cargar versiones del grupo seleccionado
+    versions_df = load_versions_for_group(selected_group)
 
-    if len(groups) > 0:
-        # Crear diccionario con información descriptiva de cada grupo
-        group_info = {}
-        for group_id in groups:
-            group_quotes = hist_compare[hist_compare["quote_group_id"] == group_id]
-            first_quote = group_quotes.iloc[0]
-            versions_count = len(group_quotes)
-            latest_date = group_quotes["created_at"].max()
-            total_revenue = group_quotes.iloc[-1]["total_revenue"]  # Última versión
-            client_name = first_quote.get("client_name", "")
+    if len(versions_df) >= 2:
+        col1, col2, col3 = st.columns([2, 2, 1])
 
-            group_info[group_id] = {
-                "client_name": client_name if client_name else "Sin nombre",
-                "versions": versions_count,
-                "date": pd.to_datetime(latest_date).strftime("%Y-%m-%d"),
-                "revenue": float(total_revenue),
-                "playbook": first_quote.get("playbook_name", "General")
-            }
+        with col1:
+            v1 = st.selectbox(
+                "Versión base",
+                versions_df["version"].tolist(),
+                key="v1_selector"
+            )
 
-        selected_group = st.selectbox(
-            "📂 Selecciona oportunidad",
-            groups,
-            format_func=lambda x: f"{group_info[x]['client_name']} | {group_info[x]['versions']}v | ${group_info[x]['revenue']:,.0f} | {group_info[x]['date']}",
-            key="compare_group_selector"
-        )
+        with col2:
+            v2 = st.selectbox(
+                "Versión a comparar",
+                versions_df["version"].tolist(),
+                index=len(versions_df)-1,
+                key="v2_selector"
+            )
 
-        versions_df = load_versions_for_group(selected_group)
+        with col3:
+            if st.button("🔄 Comparar", type="primary", width="stretch"):
+                if v1 == v2:
+                    st.warning("⚠️ Selecciona versiones distintas")
+                else:
+                    st.session_state.compare = {
+                        "group": selected_group,
+                        "v1": int(v1),
+                        "v2": int(v2)
+                    }
+                    st.rerun()
 
-        if len(versions_df) >= 2:
-            col1, col2, col3 = st.columns([2, 2, 1])
+        # Motor de comparación
+        if "compare" in st.session_state and st.session_state.compare["group"] == selected_group:
+            g = st.session_state.compare["group"]
+            v1 = st.session_state.compare["v1"]
+            v2 = st.session_state.compare["v2"]
 
-            with col1:
-                v1 = st.selectbox(
-                    "Versión base",
-                    versions_df["version"].tolist(),
-                    key="v1_selector"
+            st.divider()
+            st.subheader(f"📊 Análisis Comparativo: v{v1} → v{v2}")
+
+            # ===== SELECTOR DE PLAYBOOK =====
+            st.markdown("### 📘 Playbook / Contexto de Industria")
+
+            col_playbook, col_playbook_desc = st.columns([1, 2])
+
+            with col_playbook:
+                selected_playbook = st.selectbox(
+                    "Selecciona playbook",
+                    list(PLAYBOOKS.keys()),
+                    help="El playbook ajusta umbrales de salud y pesos de decisión según el contexto de negocio"
                 )
 
-            with col2:
-                v2 = st.selectbox(
-                    "Versión a comparar",
-                    versions_df["version"].tolist(),
-                    index=len(versions_df)-1,
-                    key="v2_selector"
+            with col_playbook_desc:
+                pb_desc = PLAYBOOKS[selected_playbook]["description"]
+                pb_green = PLAYBOOKS[selected_playbook]["green"]
+                pb_yellow = PLAYBOOKS[selected_playbook]["yellow"]
+                st.info(f"**{selected_playbook}:** {pb_desc}  \n📊 Verde ≥{pb_green}% | Amarillo ≥{pb_yellow}%")
+
+            st.divider()
+
+            # Cargar datos de versiones
+            versions = load_versions_for_group(g)
+            q1 = versions[versions["version"] == v1].iloc[0]
+            q2 = versions[versions["version"] == v2].iloc[0]
+
+            # ===== NIVEL A: Resumen Ejecutivo =====
+            st.markdown("### 📈 Resumen Ejecutivo")
+
+            col_metrics1, col_metrics2, col_metrics3, col_metrics4 = st.columns(4)
+
+            with col_metrics1:
+                delta_revenue = float(q2["total_revenue"] - q1["total_revenue"])
+                st.metric(
+                    "Ingreso Total",
+                    f"${float(q2['total_revenue']):,.2f}",
+                    f"${delta_revenue:,.2f}",
+                    delta_color="normal"
                 )
 
-            with col3:
-                if st.button("🔄 Comparar", type="primary", width="stretch"):
-                    if v1 == v2:
-                        st.warning("⚠️ Selecciona versiones distintas")
-                    else:
-                        st.session_state.compare = {
-                            "group": selected_group,
-                            "v1": int(v1),
-                            "v2": int(v2)
-                        }
-                        st.rerun()
+            with col_metrics2:
+                delta_profit = float(q2["gross_profit"] - q1["gross_profit"])
+                st.metric(
+                    "Utilidad Bruta",
+                    f"${float(q2['gross_profit']):,.2f}",
+                    f"${delta_profit:,.2f}",
+                    delta_color="normal"
+                )
 
-            # Motor de comparación
-            if "compare" in st.session_state and st.session_state.compare["group"] == selected_group:
-                g = st.session_state.compare["group"]
-                v1 = st.session_state.compare["v1"]
-                v2 = st.session_state.compare["v2"]
+            with col_metrics3:
+                delta_margin = float(q2["avg_margin"] - q1["avg_margin"])
+                st.metric(
+                    "Margen Promedio",
+                    f"{float(q2['avg_margin']):.2f}%",
+                    f"{delta_margin:+.2f}pp",
+                    delta_color="normal"
+                )
 
-                st.divider()
-                st.subheader(f"📊 Análisis Comparativo: v{v1} → v{v2}")
+            with col_metrics4:
+                l1 = load_lines_for_quote(q1["quote_id"])
+                l2 = load_lines_for_quote(q2["quote_id"])
+                
+                # Asegurar que service_origin tenga un valor por defecto
+                l1["service_origin"] = l1["service_origin"].fillna("Sin especificar").replace("", "Sin especificar")
+                l2["service_origin"] = l2["service_origin"].fillna("Sin especificar").replace("", "Sin especificar")
+                
+                delta_lines = len(l2) - len(l1)
+                st.metric(
+                    "Líneas",
+                    len(l2),
+                    f"{delta_lines:+d}",
+                    delta_color="off"
+                )
 
-                # ===== SELECTOR DE PLAYBOOK =====
-                st.markdown("### 📘 Playbook / Contexto de Industria")
-
-                col_playbook, col_playbook_desc = st.columns([1, 2])
-
-                with col_playbook:
-                    selected_playbook = st.selectbox(
-                        "Selecciona playbook",
-                        list(PLAYBOOKS.keys()),
-                        help="El playbook ajusta umbrales de salud y pesos de decisión según el contexto de negocio"
-                    )
-
-                with col_playbook_desc:
-                    pb_desc = PLAYBOOKS[selected_playbook]["description"]
-                    pb_green = PLAYBOOKS[selected_playbook]["green"]
-                    pb_yellow = PLAYBOOKS[selected_playbook]["yellow"]
-                    st.info(f"**{selected_playbook}:** {pb_desc}  \n📊 Verde ≥{pb_green}% | Amarillo ≥{pb_yellow}%")
-
-                st.divider()
-
-                # Cargar datos de versiones
-                versions = load_versions_for_group(g)
-                q1 = versions[versions["version"] == v1].iloc[0]
-                q2 = versions[versions["version"] == v2].iloc[0]
-
-                # ===== NIVEL A: Resumen Ejecutivo =====
-                st.markdown("### 📈 Resumen Ejecutivo")
-
-                col_metrics1, col_metrics2, col_metrics3, col_metrics4 = st.columns(4)
-
-                with col_metrics1:
-                    delta_revenue = float(q2["total_revenue"] - q1["total_revenue"])
-                    st.metric(
-                        "Ingreso Total",
-                        f"${float(q2['total_revenue']):,.2f}",
-                        f"${delta_revenue:,.2f}",
-                        delta_color="normal"
-                    )
-
-                with col_metrics2:
-                    delta_profit = float(q2["gross_profit"] - q1["gross_profit"])
-                    st.metric(
-                        "Utilidad Bruta",
-                        f"${float(q2['gross_profit']):,.2f}",
-                        f"${delta_profit:,.2f}",
-                        delta_color="normal"
-                    )
-
-                with col_metrics3:
-                    delta_margin = float(q2["avg_margin"] - q1["avg_margin"])
-                    st.metric(
-                        "Margen Promedio",
-                        f"{float(q2['avg_margin']):.2f}%",
-                        f"{delta_margin:+.2f}pp",
-                        delta_color="normal"
-                    )
-
-                with col_metrics4:
-                    l1 = load_lines_for_quote(q1["quote_id"])
-                    l2 = load_lines_for_quote(q2["quote_id"])
-                    
-                    # Asegurar que service_origin tenga un valor por defecto
-                    l1["service_origin"] = l1["service_origin"].fillna("Sin especificar").replace("", "Sin especificar")
-                    l2["service_origin"] = l2["service_origin"].fillna("Sin especificar").replace("", "Sin especificar")
-                    
-                    delta_lines = len(l2) - len(l1)
-                    st.metric(
-                        "Líneas",
-                        len(l2),
-                        f"{delta_lines:+d}",
-                        delta_color="off"
-                    )
-
-                # ===== NIVEL B: Diferencias Clave =====
+            # ===== NIVEL B: Diferencias Clave =====
                 st.markdown("### 🎯 Diferencias Clave")
 
                 # Tabla comparativa
@@ -1485,46 +1563,27 @@ with tab_legacy:
         st.divider()
         st.subheader("🔗 Asociar a Propuesta Existente")
 
-        # Obtener propuestas disponibles agrupadas
-        all_quotes = get_all_quotes()
-        if all_quotes:
-            # Agrupar por proposal_name o client_name
-            quotes_df = pd.DataFrame(
-                all_quotes,
-                columns=["quote_id", "quote_group_id", "version", "parent_quote_id", "created_at", "status", "total_cost", "total_revenue", "gross_profit", "avg_margin", "playbook_name", "client_name", "quoted_by", "proposal_name"]
-            )
+        # Usar búsqueda optimizada
+        selected_group_id = render_quote_search_selector(
+            key="asociar_existente",
+            label="🔍 Buscar propuesta base",
+            show_recent=True
+        )
+
+        if selected_group_id:
+            # Cargar información del grupo seleccionado
+            group_data = get_quote_by_group_id(selected_group_id)
             
-            # IMPORTANTE: Ordenar por version DESC dentro de cada grupo para asegurar que iloc[0] sea la versión más alta
-            quotes_df = quotes_df.sort_values(by=["quote_group_id", "version"], ascending=[True, False])
-
-            # Crear opciones agrupadas
-            grouped = quotes_df.groupby("quote_group_id").agg({
-                "proposal_name": "first",
-                "client_name": "first",
-                "version": "max",
-                "total_revenue": "last",
-                "created_at": "max"
-            }).reset_index()
-
-            if not grouped.empty:
-                proposal_options = {
-                    f"{row['proposal_name'] or 'Sin nombre'} - {row['client_name'] or 'Sin cliente'} (v{int(row['version'])}, ${row['total_revenue']:,.0f})": row['quote_group_id']
-                    for _, row in grouped.iterrows()
-                }
-
-                selected_existing = st.selectbox(
-                    "Selecciona propuesta base",
-                    options=list(proposal_options.keys()),
-                    help="Se copiará toda la información y se creará una nueva versión"
-                )
-
-                # Mostrar información de la propuesta seleccionada y versión que se creará
-                selected_group_id = proposal_options[selected_existing]
-                group_quotes = quotes_df[quotes_df["quote_group_id"] == selected_group_id]
-                current_max_version = group_quotes['version'].max()
+            if group_data:
+                # Mostrar información de la propuesta
+                st.success(f"✅ Propuesta seleccionada: {group_data['client_name']} - {group_data['proposal_name']}")
+                
+                # Cargar todas las versiones del grupo para mostrar info
+                versions_df = load_versions_for_group(selected_group_id)
+                current_max_version = versions_df['version'].max() if not versions_df.empty else 1
                 next_version = current_max_version + 1
                 
-                st.info(f"📋 Esta propuesta tiene {len(group_quotes)} versión(es). Al copiar, se creará la **versión {next_version}**")
+                st.info(f"📋 Esta propuesta tiene {len(versions_df)} versión(es). Al copiar, se creará la **versión {next_version}**")
 
                 # DEBUG: Mostrar estado actual antes de copiar
                 with st.expander("🔍 DEBUG: Estado actual antes de copiar", expanded=False):
@@ -1536,17 +1595,16 @@ with tab_legacy:
                     st.write(f"")
                     st.write(f"**Propuesta seleccionada:**")
                     st.write(f"- group_id seleccionado: {selected_group_id}")
-                    st.write(f"- Versiones en este grupo: {group_quotes['version'].tolist()}")
+                    st.write(f"- Versiones en este grupo: {versions_df['version'].tolist() if not versions_df.empty else []}")
                     st.write(f"- Max versión: {current_max_version}")
                     st.write(f"- Próxima versión que se creará: {next_version}")
 
                 if st.button("📋 Copiar datos de esta propuesta", type="primary"):
-                    latest = group_quotes.iloc[0]  # Ya está ordenado desc
-                    latest_quote_id = latest["quote_id"]
+                    latest_quote_id = group_data["quote_id"]
 
                     st.write(f"🔍 DEBUG: quote_id seleccionado: {latest_quote_id}")
-                    st.write(f"🔍 DEBUG: Versión de la propuesta seleccionada: {latest['version']}")
-                    st.write(f"🔍 DEBUG: Total de versiones en el grupo: {len(group_quotes)}")
+                    st.write(f"🔍 DEBUG: Versión de la propuesta seleccionada: {group_data['version']}")
+                    st.write(f"🔍 DEBUG: Total de versiones en el grupo: {len(versions_df)}")
 
                     # Cargar líneas
                     lines = get_quote_lines(latest_quote_id)
@@ -2551,30 +2609,33 @@ with tab_proposals:
     existing_proposal = None
 
     if origin_type == "Cotización Legacy":
-        # Obtener cotizaciones disponibles
-        all_quotes = get_all_quotes()
-        if all_quotes:
-            quote_options = {
-                f"{q[11] if q[11] else 'Sin nombre'} - {q[5]} - ${q[7]:,.2f}": q[0] 
-                for q in all_quotes
-            }
-
-            selected_quote = st.selectbox(
-                "Selecciona una cotización",
-                options=list(quote_options.keys())
-            )
-
-            if selected_quote:
-                source_id = quote_options[selected_quote]
-                source_data = [q for q in all_quotes if q[0] == source_id][0]
-
+        # Usar búsqueda optimizada
+        selected_group_id = render_quote_search_selector(
+            key="propuesta_formal_legacy",
+            label="🔍 Buscar cotización legacy",
+            show_recent=True
+        )
+        
+        if selected_group_id:
+            # Obtener información del grupo
+            group_data = get_quote_by_group_id(selected_group_id)
+            if group_data:
+                source_id = group_data["quote_id"]
+                
                 # Mostrar resumen
                 col1, col2, col3 = st.columns(3)
-                col1.metric("Total", f"${source_data[7]:,.2f}")
-                col2.metric("Margen", f"{source_data[9]:.1f}%")
-                col3.metric("Estado", source_data[5])
-        else:
-            st.warning("No hay cotizaciones disponibles")
+                col1.metric("Total", f"${group_data['total_revenue']:,.2f}")
+                col2.metric("Margen", f"{group_data['avg_margin']:.1f}%")
+                col3.metric("Estado", group_data['status'])
+                
+                # Guardar para uso posterior
+                source_data = (
+                    source_id, group_data['quote_group_id'], group_data['version'],
+                    None, group_data['created_at'], group_data['status'],
+                    0, group_data['total_revenue'], 0, group_data['avg_margin'],
+                    group_data['playbook_name'], group_data['client_name'],
+                    "", group_data['proposal_name']
+                )
 
     elif origin_type == "Propuesta Anterior (Nueva Versión)":
         # Obtener propuestas disponibles
@@ -3368,21 +3429,56 @@ with tab_db:
 
     st.divider()
 
-    # Obtener propuestas cerradas
-    quotes_query = get_all_quotes()
-
-    if quotes_query:
-        # Agrupar por quote_group_id para mostrar versiones
-        st.subheader("🗂️ Oportunidades y Versiones")
-
-        # Convertir a DataFrame para agrupar
+    # Mostrar resumen de oportunidades usando búsqueda optimizada
+    st.subheader("🗂️ Oportunidades y Versiones")
+    
+    # Usar búsqueda si el usuario quiere filtrar
+    search_term = st.text_input(
+        "🔍 Buscar oportunidad",
+        placeholder="Nombre de cliente o propuesta...",
+        key="db_search"
+    )
+    
+    if search_term and search_term.strip():
+        quotes_summary = search_quotes(search_term, limit=50)
+    else:
+        quotes_summary = get_recent_quotes(limit=50)
+    
+    if quotes_summary:
+        # Convertir a DataFrame
         all_quotes_df = pd.DataFrame(
-            quotes_query,
+            quotes_summary,
             columns=["ID", "Group ID", "Versión", "Parent ID", "Fecha", "Estado", "Costo Total", "Ingreso Total", "Utilidad Bruta", "Margen Promedio %", "Playbook", "Cliente", "Cotizado por", "Nombre Propuesta"]
         )
-
-        # Agrupar por Group ID
-        for group_id, group_df in all_quotes_df.groupby("Group ID"):
+        
+        st.caption(f"📊 Mostrando {len(all_quotes_df)} cotizaciones")
+        
+        # Agrupar por Group ID para mostrar versiones por oportunidad
+        for group_id in all_quotes_df["Group ID"].unique():
+            # Para cada grupo, cargar todas sus versiones
+            versions_df = load_versions_for_group(group_id)
+            
+            if versions_df.empty:
+                continue
+            
+            # Renombrar columnas para consistencia
+            group_df = versions_df.rename(columns={
+                "quote_id": "ID",
+                "quote_group_id": "Group ID",
+                "version": "Versión",
+                "parent_quote_id": "Parent ID",
+                "created_at": "Fecha",
+                "status": "Estado",
+                "total_cost": "Costo Total",
+                "total_revenue": "Ingreso Total",
+                "gross_profit": "Utilidad Bruta",
+                "avg_margin": "Margen Promedio %",
+                "playbook_name": "Playbook",
+                "client_name": "Cliente",
+                "quoted_by": "Cotizado por",
+                "proposal_name": "Nombre Propuesta"
+            })
+            
             proposal_name = group_df.iloc[0]["Nombre Propuesta"] if group_df.iloc[0]["Nombre Propuesta"] else "Sin nombre"
             client_name = group_df.iloc[0]["Cliente"] if group_df.iloc[0]["Cliente"] else "Sin cliente"
             
@@ -3690,8 +3786,9 @@ with tab_db:
         with col1:
             st.markdown("### 📥 Exportar Datos")
             st.info("💡 Descarga toda la información antes de borrar la base de datos")
+            st.warning("⚠️ Esta operación carga TODA la base de datos. Puede ser lenta con muchos registros.")
 
-            # Obtener todos los datos
+            # Obtener todos los datos (este es el único caso donde necesitamos TODO)
             all_quotes = get_all_quotes()
 
             if all_quotes:

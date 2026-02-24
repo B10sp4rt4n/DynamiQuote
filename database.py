@@ -717,7 +717,13 @@ def save_quote(quote_data: tuple, lines_data: list) -> tuple[bool, str]:
 
 @st.cache_data(ttl=30)  # Cache por 30 segundos
 def get_all_quotes() -> list:
-    """Obtiene todas las cotizaciones ordenadas por grupo y versión."""
+    """
+    ⚠️ DEPRECATED: Esta función carga TODAS las cotizaciones y causa problemas de performance.
+    Usar en su lugar:
+    - search_quotes(query, limit) para búsquedas
+    - get_recent_quotes(limit) para las más recientes
+    - get_quote_groups_summary(limit) para resumen de grupos
+    """
     try:
         with get_cursor() as cur:
             cur.execute("""
@@ -729,6 +735,296 @@ def get_all_quotes() -> list:
     except Exception as e:
         st.error(f"Error obteniendo cotizaciones: {e}")
         return []
+
+
+# =========================
+# Funciones de Búsqueda Optimizadas
+# =========================
+
+@st.cache_data(ttl=60)
+def search_quotes(query: str, limit: int = 20) -> list:
+    """
+    Busca cotizaciones por texto en client_name o proposal_name.
+    Retorna solo la última versión de cada grupo que coincida.
+    
+    Args:
+        query: Texto a buscar (case-insensitive)
+        limit: Número máximo de resultados (default: 20)
+        
+    Returns:
+        Lista de tuplas con datos de cotizaciones
+    """
+    if not query or query.strip() == "":
+        return get_recent_quotes(limit)
+    
+    try:
+        with get_cursor() as cur:
+            search_pattern = f"%{query}%"
+            
+            if is_postgres():
+                cur.execute("""
+                    SELECT DISTINCT ON (quote_group_id)
+                        quote_id, quote_group_id, version, parent_quote_id, 
+                        created_at, status, total_cost, total_revenue, 
+                        gross_profit, avg_margin, playbook_name, client_name, 
+                        quoted_by, proposal_name
+                    FROM quotes
+                    WHERE LOWER(client_name) LIKE LOWER(%s) 
+                       OR LOWER(proposal_name) LIKE LOWER(%s)
+                    ORDER BY quote_group_id, version DESC, created_at DESC
+                    LIMIT %s
+                """, (search_pattern, search_pattern, limit))
+            else:
+                # SQLite: usar subconsulta para obtener solo la última versión
+                cur.execute("""
+                    SELECT q.quote_id, q.quote_group_id, q.version, q.parent_quote_id,
+                           q.created_at, q.status, q.total_cost, q.total_revenue,
+                           q.gross_profit, q.avg_margin, q.playbook_name, q.client_name,
+                           q.quoted_by, q.proposal_name
+                    FROM quotes q
+                    INNER JOIN (
+                        SELECT quote_group_id, MAX(version) as max_version
+                        FROM quotes
+                        WHERE LOWER(client_name) LIKE LOWER(?)
+                           OR LOWER(proposal_name) LIKE LOWER(?)
+                        GROUP BY quote_group_id
+                    ) latest ON q.quote_group_id = latest.quote_group_id 
+                            AND q.version = latest.max_version
+                    ORDER BY q.created_at DESC
+                    LIMIT ?
+                """, (search_pattern, search_pattern, limit))
+            
+            return cur.fetchall()
+    except Exception as e:
+        st.error(f"Error en búsqueda: {e}")
+        return []
+
+
+@st.cache_data(ttl=60)
+def get_recent_quotes(limit: int = 20) -> list:
+    """
+    Obtiene las cotizaciones más recientes (última versión de cada grupo).
+    
+    Args:
+        limit: Número máximo de resultados (default: 20)
+        
+    Returns:
+        Lista de tuplas con datos de cotizaciones
+    """
+    try:
+        with get_cursor() as cur:
+            if is_postgres():
+                cur.execute("""
+                    SELECT DISTINCT ON (quote_group_id)
+                        quote_id, quote_group_id, version, parent_quote_id,
+                        created_at, status, total_cost, total_revenue,
+                        gross_profit, avg_margin, playbook_name, client_name,
+                        quoted_by, proposal_name
+                    FROM quotes
+                    ORDER BY quote_group_id, version DESC, created_at DESC
+                    LIMIT %s
+                """, (limit,))
+            else:
+                cur.execute("""
+                    SELECT q.quote_id, q.quote_group_id, q.version, q.parent_quote_id,
+                           q.created_at, q.status, q.total_cost, q.total_revenue,
+                           q.gross_profit, q.avg_margin, q.playbook_name, q.client_name,
+                           q.quoted_by, q.proposal_name
+                    FROM quotes q
+                    INNER JOIN (
+                        SELECT quote_group_id, MAX(version) as max_version
+                        FROM quotes
+                        GROUP BY quote_group_id
+                    ) latest ON q.quote_group_id = latest.quote_group_id 
+                            AND q.version = latest.max_version
+                    ORDER BY q.created_at DESC
+                    LIMIT ?
+                """, (limit,))
+            
+            return cur.fetchall()
+    except Exception as e:
+        st.error(f"Error obteniendo cotizaciones recientes: {e}")
+        return []
+
+
+@st.cache_data(ttl=60)
+def get_quote_groups_summary(limit: int = 100) -> list:
+    """
+    Obtiene un resumen de grupos de cotizaciones (1 fila por grupo).
+    Incluye información de la última versión y conteo de versiones.
+    
+    Args:
+        limit: Número máximo de grupos (default: 100)
+        
+    Returns:
+        Lista de diccionarios con información resumida
+    """
+    try:
+        with get_cursor() as cur:
+            if is_postgres():
+                cur.execute("""
+                    WITH latest_versions AS (
+                        SELECT DISTINCT ON (quote_group_id)
+                            quote_group_id,
+                            quote_id,
+                            version,
+                            created_at,
+                            status,
+                            total_revenue,
+                            avg_margin,
+                            client_name,
+                            proposal_name,
+                            playbook_name
+                        FROM quotes
+                        ORDER BY quote_group_id, version DESC
+                    ),
+                    version_counts AS (
+                        SELECT quote_group_id, COUNT(*) as version_count
+                        FROM quotes
+                        GROUP BY quote_group_id
+                    )
+                    SELECT 
+                        lv.quote_group_id,
+                        lv.quote_id,
+                        lv.version,
+                        vc.version_count,
+                        lv.created_at,
+                        lv.status,
+                        lv.total_revenue,
+                        lv.avg_margin,
+                        lv.client_name,
+                        lv.proposal_name,
+                        lv.playbook_name
+                    FROM latest_versions lv
+                    JOIN version_counts vc ON lv.quote_group_id = vc.quote_group_id
+                    ORDER BY lv.created_at DESC
+                    LIMIT %s
+                """, (limit,))
+            else:
+                cur.execute("""
+                    SELECT 
+                        latest.quote_group_id,
+                        latest.quote_id,
+                        latest.version,
+                        counts.version_count,
+                        latest.created_at,
+                        latest.status,
+                        latest.total_revenue,
+                        latest.avg_margin,
+                        latest.client_name,
+                        latest.proposal_name,
+                        latest.playbook_name
+                    FROM (
+                        SELECT q.*
+                        FROM quotes q
+                        INNER JOIN (
+                            SELECT quote_group_id, MAX(version) as max_version
+                            FROM quotes
+                            GROUP BY quote_group_id
+                        ) m ON q.quote_group_id = m.quote_group_id 
+                           AND q.version = m.max_version
+                    ) latest
+                    JOIN (
+                        SELECT quote_group_id, COUNT(*) as version_count
+                        FROM quotes
+                        GROUP BY quote_group_id
+                    ) counts ON latest.quote_group_id = counts.quote_group_id
+                    ORDER BY latest.created_at DESC
+                    LIMIT ?
+                """, (limit,))
+            
+            results = cur.fetchall()
+            
+            # Convertir a lista de diccionarios para facilitar uso
+            return [
+                {
+                    "quote_group_id": row[0],
+                    "quote_id": row[1],
+                    "version": row[2],
+                    "version_count": row[3],
+                    "created_at": row[4],
+                    "status": row[5],
+                    "total_revenue": row[6],
+                    "avg_margin": row[7],
+                    "client_name": row[8] or "Sin nombre",
+                    "proposal_name": row[9] or "Sin nombre",
+                    "playbook_name": row[10]
+                }
+                for row in results
+            ]
+    except Exception as e:
+        st.error(f"Error obteniendo resumen de grupos: {e}")
+        return []
+
+
+@st.cache_data(ttl=60)
+def get_quote_by_group_id(quote_group_id: str) -> dict:
+    """
+    Obtiene información de un grupo de cotizaciones específico.
+    
+    Args:
+        quote_group_id: ID del grupo
+        
+    Returns:
+        Diccionario con información del grupo o None si no existe
+    """
+    try:
+        with get_cursor() as cur:
+            if is_postgres():
+                cur.execute("""
+                    SELECT 
+                        quote_group_id,
+                        quote_id,
+                        version,
+                        created_at,
+                        status,
+                        total_revenue,
+                        avg_margin,
+                        client_name,
+                        proposal_name,
+                        playbook_name
+                    FROM quotes
+                    WHERE quote_group_id = %s
+                    ORDER BY version DESC
+                    LIMIT 1
+                """, (quote_group_id,))
+            else:
+                cur.execute("""
+                    SELECT 
+                        quote_group_id,
+                        quote_id,
+                        version,
+                        created_at,
+                        status,
+                        total_revenue,
+                        avg_margin,
+                        client_name,
+                        proposal_name,
+                        playbook_name
+                    FROM quotes
+                    WHERE quote_group_id = ?
+                    ORDER BY version DESC
+                    LIMIT 1
+                """, (quote_group_id,))
+            
+            row = cur.fetchone()
+            if row:
+                return {
+                    "quote_group_id": row[0],
+                    "quote_id": row[1],
+                    "version": row[2],
+                    "created_at": row[3],
+                    "status": row[4],
+                    "total_revenue": row[5],
+                    "avg_margin": row[6],
+                    "client_name": row[7] or "Sin nombre",
+                    "proposal_name": row[8] or "Sin nombre",
+                    "playbook_name": row[9]
+                }
+            return None
+    except Exception as e:
+        st.error(f"Error obteniendo grupo: {e}")
+        return None
 
 
 @st.cache_data(ttl=60)  # Cache por 1 minuto
@@ -813,7 +1109,8 @@ def load_versions_for_group(quote_group_id: str):
             if is_postgres():
                 cur.execute("""
                     SELECT quote_id, quote_group_id, version, parent_quote_id, created_at, 
-                           status, total_cost, total_revenue, gross_profit, avg_margin
+                           status, total_cost, total_revenue, gross_profit, avg_margin,
+                           playbook_name, client_name, quoted_by, proposal_name
                     FROM quotes
                     WHERE quote_group_id = %s
                     ORDER BY version ASC
@@ -821,14 +1118,16 @@ def load_versions_for_group(quote_group_id: str):
             else:
                 cur.execute("""
                     SELECT quote_id, quote_group_id, version, parent_quote_id, created_at, 
-                           status, total_cost, total_revenue, gross_profit, avg_margin
+                           status, total_cost, total_revenue, gross_profit, avg_margin,
+                           playbook_name, client_name, quoted_by, proposal_name
                     FROM quotes
                     WHERE quote_group_id = ?
                     ORDER BY version ASC
                 """, (quote_group_id,))
             
             columns = ["quote_id", "quote_group_id", "version", "parent_quote_id", "created_at",
-                      "status", "total_cost", "total_revenue", "gross_profit", "avg_margin"]
+                      "status", "total_cost", "total_revenue", "gross_profit", "avg_margin",
+                      "playbook_name", "client_name", "quoted_by", "proposal_name"]
             return pd.DataFrame(cur.fetchall(), columns=columns)
     except Exception as e:
         st.error(f"Error cargando versiones: {e}")
