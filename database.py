@@ -2,14 +2,26 @@
 Módulo de gestión de base de datos para DynamiQuote.
 Soporta tanto PostgreSQL (Neon) como SQLite para desarrollo local.
 
-ESTRATEGIA DE PERFORMANCE:
-- Búsquedas SIN caché: search_quotes(), get_recent_quotes() - cada búsqueda es única
-- Cachés BREVES (5-10s): Datos que cambian frecuentemente
-- Solo cachear lo que se reutiliza: get_quote_lines() para una cotización específica
-- Límites estrictos: máximo 20-50 registros por consulta
-- Limpieza automática: clear_search_caches() después de guardar/editar
+ARQUITECTURA DE CONSULTAS (Sin Caché):
+━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
+La BD se consulta BAJO DEMANDA - Sin mantener datos en memoria.
 
-REGLA: Si los datos pueden cambiar o cada llamado es diferente, NO cachear.
+✅ CONSULTAS PRINCIPALES:
+  - search_quotes(query, limit)      → Búsquedas filtradas (default: 20)
+  - get_recent_quotes(limit)         → Últimas cotizaciones (default: 20)
+  - get_quote_groups_summary(limit)  → Resumen grupos (default: 100)
+  - get_quote_lines(quote_id)        → Líneas de una cotización específica
+  - load_lines_for_quote(quote_id)   → DataFrame para comparación
+
+✅ EXPORTACIÓN COMPLETA:
+  - get_all_quotes()                 → Solo para exportar BD completa
+  
+✅ RECURSOS CACHEADOS:
+  - get_connection()                 → Conexión singleton (@st.cache_resource)
+  
+❌ NO usar @st.cache_data en consultas: Acumula datos en memoria innecesariamente.
+
+REGLA: La BD es fuente de verdad. Consultar cuando se necesite, no precachear.
 """
 
 import os
@@ -724,11 +736,12 @@ def save_quote(quote_data: tuple, lines_data: list) -> tuple[bool, str]:
         return False, f"❌ Error al guardar: {error_msg}"
 
 
-@st.cache_data(ttl=30)  # Cache por 30 segundos
 def get_all_quotes() -> list:
     """
-    ⚠️ DEPRECATED: Esta función carga TODAS las cotizaciones y causa problemas de performance.
-    Usar en su lugar:
+    ⚠️ SOLO para exportación completa de BD - No usar para consultas regulares.
+    Esta función NO usa cache y carga TODAS las cotizaciones.
+    
+    Usar en su lugar para consultas:
     - search_quotes(query, limit) para búsquedas
     - get_recent_quotes(limit) para las más recientes
     - get_quote_groups_summary(limit) para resumen de grupos
@@ -1167,9 +1180,8 @@ def get_quote_by_id(quote_id: str) -> dict:
         return None
 
 
-@st.cache_data(ttl=10)  # Cache breve: 10 segundos
 def get_quote_lines(quote_id: str) -> list:
-    """Obtiene las líneas de una cotización específica."""
+    """Obtiene las líneas de una cotización específica (consulta bajo demanda, sin cache)."""
     try:
         with get_cursor() as cur:
             if is_postgres():
@@ -1192,9 +1204,8 @@ def get_quote_lines(quote_id: str) -> list:
         return []
 
 
-@st.cache_data(ttl=10)  # Cache breve: 10 segundos
 def get_quote_lines_full(quote_id: str) -> list:
-    """Obtiene todas las líneas de una cotización con todos los campos."""
+    """Obtiene todas las líneas de una cotización con todos los campos (consulta bajo demanda, sin cache)."""
     try:
         with get_cursor() as cur:
             if is_postgres():
@@ -1240,9 +1251,8 @@ def get_latest_version(quote_group_id: str) -> int:
         return 0
 
 
-@st.cache_data(ttl=5)  # Cache muy breve: 5 segundos
 def load_versions_for_group(quote_group_id: str):
-    """Carga todas las versiones de una oportunidad."""
+    """Carga todas las versiones de una oportunidad (consulta bajo demanda, sin cache)."""
     try:
         import pandas as pd
         with get_cursor() as cur:
@@ -1274,9 +1284,8 @@ def load_versions_for_group(quote_group_id: str):
         return pd.DataFrame()
 
 
-@st.cache_data(ttl=10)  # Cache breve: 10 segundos
 def load_lines_for_quote(quote_id: str):
-    """Carga todas las líneas de una cotización para comparación."""
+    """Carga todas las líneas de una cotización para comparación (consulta bajo demanda, sin cache)."""
     try:
         import pandas as pd
         with get_cursor() as cur:
