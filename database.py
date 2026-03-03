@@ -1282,7 +1282,7 @@ def load_lines_for_quote(quote_id: str):
         with get_cursor() as cur:
             if is_postgres():
                 cur.execute("""
-                    SELECT line_id, quote_id, sku, description_original, description_final,
+                    SELECT line_id, quote_id, sku, quantity, description_original, description_final,
                            description_corrections, line_type, service_origin, cost_unit,
                            final_price_unit, margin_pct, strategy, warnings, created_at,
                            import_source, import_batch_id
@@ -1291,7 +1291,7 @@ def load_lines_for_quote(quote_id: str):
                 """, (quote_id,))
             else:
                 cur.execute("""
-                    SELECT line_id, quote_id, sku, description_original, description_final,
+                    SELECT line_id, quote_id, sku, quantity, description_original, description_final,
                            description_corrections, line_type, service_origin, cost_unit,
                            final_price_unit, margin_pct, strategy, warnings, created_at,
                            import_source, import_batch_id
@@ -1299,7 +1299,7 @@ def load_lines_for_quote(quote_id: str):
                     WHERE quote_id = ?
                 """, (quote_id,))
             
-            columns = ["line_id", "quote_id", "sku", "description_original", "description_final",
+            columns = ["line_id", "quote_id", "sku", "quantity", "description_original", "description_final",
                       "description_corrections", "line_type", "service_origin", "cost_unit",
                       "final_price_unit", "margin_pct", "strategy", "warnings", "created_at",
                       "import_source", "import_batch_id"]
