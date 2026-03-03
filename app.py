@@ -1147,114 +1147,6 @@ if "saved_quoted_by" not in st.session_state:
     st.session_state.saved_quoted_by = ""
 
 # =========================
-# Formulario
-# =========================
-st.subheader("➕ Agregar línea")
-
-# Mostrar información de versión actual
-version_info = f"📝 Oportunidad: {st.session_state.quote_group_id[:8]}... | Versión: {st.session_state.version}"
-if st.session_state.parent_quote_id:
-    version_info += f" (basada en versión anterior: {st.session_state.parent_quote_id[:8]}...)"
-    
-# Agregar debug temporal para ver qué está pasando
-if st.session_state.version > 1 or st.session_state.parent_quote_id:
-    version_info += f" | 🔍 DEBUG: version={st.session_state.version}, parent={st.session_state.parent_quote_id[:8] if st.session_state.parent_quote_id else 'None'}..."
-    
-st.info(version_info)
-
-# Mostrar errores persistentes de OpenAI si existen
-if 'ai_error' in st.session_state:
-    error_container = st.container()
-    with error_container:
-        col1, col2 = st.columns([4, 1])
-        with col1:
-            st.error(st.session_state.ai_error)
-        with col2:
-            if st.button("❌ Cerrar", key="dismiss_error"):
-                del st.session_state.ai_error
-                st.rerun()
-
-# Si hay una línea pendiente de confirmación (con correcciones)
-if st.session_state.pending_line:
-    st.warning("🔍 Se detectaron posibles errores ortográficos en la descripción")
-
-    pending = st.session_state.pending_line
-    col1, col2 = st.columns(2)
-    with col1:
-        st.markdown("**📝 Original:**")
-        st.info(pending["description_input"])
-    with col2:
-        st.markdown("**✨ Sugerencia:**")
-        st.success(pending["corrected_desc"])
-
-    st.markdown("**🔧 Cambios detectados:**")
-    for correction in pending["corrections"]:
-        st.caption(f"  • {correction}")
-
-    st.divider()
-    st.subheader("✏️ Editar antes de consolidar")
-
-    with st.form("confirm_line"):
-        # SKU editable
-        edit_sku = st.text_input(
-            "SKU (editable)",
-            value=pending["sku"],
-            help="Puedes modificar el SKU antes de agregar la línea"
-        )
-
-        # Descripción editable - permitir elegir qué versión usar como base
-        desc_option = st.radio(
-            "Selecciona la base para la descripción:",
-            ["Usar versión corregida", "Usar versión original"],
-            horizontal=True
-        )
-
-        if desc_option == "Usar versión corregida":
-            default_desc = pending["corrected_desc"]
-        else:
-            default_desc = pending["description_input"]
-
-        edit_description = st.text_area(
-            "Descripción final (editable)",
-            value=default_desc,
-            height=100,
-            help="Puedes modificar la descripción antes de agregar la línea"
-        )
-
-        col_a, col_b, col_c = st.columns([2, 2, 1])
-        with col_a:
-            confirm_btn = st.form_submit_button("✅ Consolidar línea", type="primary")
-        with col_b:
-            cancel_btn = st.form_submit_button("❌ Cancelar")
-
-        if confirm_btn:
-            if not edit_description or not edit_description.strip():
-                st.error("❌ La descripción no puede estar vacía")
-            elif not edit_sku or not edit_sku.strip():
-                st.error("❌ El SKU no puede estar vacío")
-            else:
-                # Verificar si el SKU editado ya existe
-                existing_skus = [line["sku"] for line in st.session_state.lines]
-                if edit_sku != pending["sku"] and edit_sku in existing_skus:
-                    st.error(f"❌ El SKU '{edit_sku}' ya existe en esta cotización")
-                else:
-                    # Actualizar datos editados
-                    pending["sku"] = edit_sku
-                    pending["description_final"] = edit_description
-                    st.session_state.lines.append(pending)
-                    st.session_state.pending_line = None
-                    st.success("✅ Línea consolidada exitosamente")
-                    st.rerun()
-
-        if cancel_btn:
-            st.session_state.pending_line = None
-            st.info("❌ Línea descartada")
-            st.rerun()
-
-    st.divider()
-
-
-# =========================
 # TAB: COTIZACIONES Y PROPUESTAS (COMBINADO)
 # =========================
 with tab_quotes:
@@ -1290,55 +1182,134 @@ with tab_quotes:
 
         st.divider()
 
+        # Si hay una línea pendiente de confirmación (con correcciones)
+        if st.session_state.pending_line:
+            st.warning("🔍 Se detectaron posibles errores ortográficos en la descripción")
+
+            pending = st.session_state.pending_line
+            col1, col2 = st.columns(2)
+            with col1:
+                st.markdown("**📝 Original:**")
+                st.info(pending["description_input"])
+            with col2:
+                st.markdown("**✨ Sugerencia:**")
+                st.success(pending["corrected_desc"])
+
+            st.markdown("**🔧 Cambios detectados:**")
+            for correction in pending["corrections"]:
+                st.caption(f"  • {correction}")
+
+            st.divider()
+            st.subheader("✏️ Editar antes de consolidar")
+
+            with st.form("confirm_line"):
+                # SKU editable
+                edit_sku = st.text_input(
+                    "SKU (editable)",
+                    value=pending["sku"],
+                    help="Puedes modificar el SKU antes de agregar la línea"
+                )
+
+                # Descripción editable - permitir elegir qué versión usar como base
+                desc_option = st.radio(
+                    "Selecciona la base para la descripción:",
+                    ["Usar versión corregida", "Usar versión original"],
+                    horizontal=True
+                )
+
+                if desc_option == "Usar versión corregida":
+                    default_desc = pending["corrected_desc"]
+                else:
+                    default_desc = pending["description_input"]
+
+                edit_description = st.text_area(
+                    "Descripción final (editable)",
+                    value=default_desc,
+                    height=100,
+                    help="Puedes modificar la descripción antes de agregar la línea"
+                )
+
+                col_a, col_b, col_c = st.columns([2, 2, 1])
+                with col_a:
+                    confirm_btn = st.form_submit_button("✅ Consolidar línea", type="primary")
+                with col_b:
+                    cancel_btn = st.form_submit_button("❌ Cancelar")
+
+                if confirm_btn:
+                    if not edit_description or not edit_description.strip():
+                        st.error("❌ La descripción no puede estar vacía")
+                    elif not edit_sku or not edit_sku.strip():
+                        st.error("❌ El SKU no puede estar vacío")
+                    else:
+                        # Verificar si el SKU editado ya existe
+                        existing_skus = [line["sku"] for line in st.session_state.lines]
+                        if edit_sku != pending["sku"] and edit_sku in existing_skus:
+                            st.error(f"❌ El SKU '{edit_sku}' ya existe en esta cotización")
+                        else:
+                            # Actualizar datos editados
+                            pending["sku"] = edit_sku
+                            pending["description_final"] = edit_description
+                            st.session_state.lines.append(pending)
+                            st.session_state.pending_line = None
+                            st.success("✅ Línea consolidada exitosamente")
+                            st.rerun()
+
+                if cancel_btn:
+                    st.session_state.pending_line = None
+                    st.info("❌ Línea descartada")
+                    st.rerun()
+
+            st.divider()
+
         # Información de la cotización
-    st.subheader("📋 Información de la Cotización")
+        st.subheader("📋 Información de la Cotización")
 
-    # FORM para capturar todos los valores al mismo tiempo
-    with st.form("info_cotizacion_form", clear_on_submit=False):
-        proposal_name_form = st.text_input(
-            "Nombre de la Propuesta",
-            value=st.session_state.get('saved_proposal_name', ''),
-            placeholder="Ej: Implementación ERP 2026, Soporte Anual...",
-            help="Dale un nombre identificable a esta propuesta"
-        )  # FIX: Line 1391 fixed on 2026-02-09-23:05
+        # FORM para capturar todos los valores al mismo tiempo
+        with st.form("info_cotizacion_form", clear_on_submit=False):
+            proposal_name_form = st.text_input(
+                "Nombre de la Propuesta",
+                value=st.session_state.get('saved_proposal_name', ''),
+                placeholder="Ej: Implementación ERP 2026, Soporte Anual...",
+                help="Dale un nombre identificable a esta propuesta"
+            )  # FIX: Line 1391 fixed on 2026-02-09-23:05
 
-        col_form1, col_form2 = st.columns(2)
-        with col_form1:
-            client_name_form = st.text_input(
-                "Cliente / Empresa",
-                value=st.session_state.get('saved_client_name', ''),
-                placeholder="Ej: Acme Corp, Juan Pérez...",
-                help="Para quién es esta cotización"
-            )
-        with col_form2:
-            quoted_by_form = st.text_input(
-                "Cotizado por (User ID / Nombre)",
-                value=st.session_state.get('saved_quoted_by', ''),
-                placeholder="Ej: jperez, vendedor@empresa.com, Juan Pérez...",
-                help="Identificador de quién crea esta cotización"
-            )
+            col_form1, col_form2 = st.columns(2)
+            with col_form1:
+                client_name_form = st.text_input(
+                    "Cliente / Empresa",
+                    value=st.session_state.get('saved_client_name', ''),
+                    placeholder="Ej: Acme Corp, Juan Pérez...",
+                    help="Para quién es esta cotización"
+                )
+            with col_form2:
+                quoted_by_form = st.text_input(
+                    "Cotizado por (User ID / Nombre)",
+                    value=st.session_state.get('saved_quoted_by', ''),
+                    placeholder="Ej: jperez, vendedor@empresa.com, Juan Pérez...",
+                    help="Identificador de quién crea esta cotización"
+                )
 
-        info_submitted = st.form_submit_button("✅ Confirmar información")
+            info_submitted = st.form_submit_button("✅ Confirmar información")
 
-        if info_submitted:
-            st.session_state.saved_proposal_name = proposal_name_form
-            st.session_state.saved_client_name = client_name_form
-            st.session_state.saved_quoted_by = quoted_by_form
-            st.success(f"✅ Info guardada: {proposal_name_form} | {client_name_form} | {quoted_by_form}")
+            if info_submitted:
+                st.session_state.saved_proposal_name = proposal_name_form
+                st.session_state.saved_client_name = client_name_form
+                st.session_state.saved_quoted_by = quoted_by_form
+                st.success(f"✅ Info guardada: {proposal_name_form} | {client_name_form} | {quoted_by_form}")
 
-    # Asociar a propuesta existente
-    st.markdown("**¿Nueva propuesta o asociar a existente?**")
-    proposal_type = st.radio(
-        "Tipo",
-        ["Nueva propuesta", "Asociar a existente"],
-        horizontal=True,
-        help="Nueva: crea un nuevo grupo. Existente: nueva versión de propuesta anterior"
-    )
+        # Asociar a propuesta existente
+        st.markdown("**¿Nueva propuesta o asociar a existente?**")
+        proposal_type = st.radio(
+            "Tipo",
+            ["Nueva propuesta", "Asociar a existente"],
+            horizontal=True,
+            help="Nueva: crea un nuevo grupo. Existente: nueva versión de propuesta anterior"
+        )
 
-    # Si es asociar a existente, mostrar selector
-    if proposal_type == "Asociar a existente":
-        st.divider()
-        st.subheader("🔗 Asociar a Propuesta Existente")
+        # Si es asociar a existente, mostrar selector
+        if proposal_type == "Asociar a existente":
+            st.divider()
+            st.subheader("🔗 Asociar a Propuesta Existente")
 
         # Usar búsqueda optimizada
         selected_group_id = render_quote_search_selector(
@@ -3605,27 +3576,27 @@ with tab_comparator:
                 l1_all = load_lines_for_quote(q1["quote_id"])
                 l2_all = load_lines_for_quote(q2["quote_id"])
             
-            # Usar directamente los DataFrames con las columnas correctas
-            l1 = l1_all.copy()
-            l2 = l2_all.copy()
-        
-            # Calcular totales por origen
-            def calculate_origin_totals(df):
-                df = df.copy()
-                # Las columnas correctas son cost_unit y final_price_unit
-                df["cost_unit"] = pd.to_numeric(df["cost_unit"], errors="coerce").fillna(0.0)
-                df["final_price_unit"] = pd.to_numeric(df["final_price_unit"], errors="coerce").fillna(0.0)
-                # Usar cost_unit y final_price_unit directamente (sin multiplicar por quantity)
-                df["cost_total"] = df["cost_unit"]
-                df["revenue_total"] = df["final_price_unit"]
+                # Usar directamente los DataFrames con las columnas correctas
+                l1 = l1_all.copy()
+                l2 = l2_all.copy()
             
-                grouped = df.groupby("service_origin", as_index=False).agg({
-                    "cost_total": "sum",
-                    "revenue_total": "sum"
-                })
-                grouped.columns = ["Origen", "Costo", "Ingreso"]
-                grouped["Utilidad"] = grouped["Ingreso"] - grouped["Costo"]
-                return grouped
+                # Calcular totales por origen
+                def calculate_origin_totals(df):
+                    df = df.copy()
+                    # Las columnas correctas son cost_unit y final_price_unit
+                    df["cost_unit"] = pd.to_numeric(df["cost_unit"], errors="coerce").fillna(0.0)
+                    df["final_price_unit"] = pd.to_numeric(df["final_price_unit"], errors="coerce").fillna(0.0)
+                    # Usar cost_unit y final_price_unit directamente (sin multiplicar por quantity)
+                    df["cost_total"] = df["cost_unit"]
+                    df["revenue_total"] = df["final_price_unit"]
+                
+                    grouped = df.groupby("service_origin", as_index=False).agg({
+                        "cost_total": "sum",
+                        "revenue_total": "sum"
+                    })
+                    grouped.columns = ["Origen", "Costo", "Ingreso"]
+                    grouped["Utilidad"] = grouped["Ingreso"] - grouped["Costo"]
+                    return grouped
             
                 comp_v1 = calculate_origin_totals(l1)
                 comp_v2 = calculate_origin_totals(l2)
