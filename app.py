@@ -1716,7 +1716,7 @@ with tab_quotes:
                             "Margen%": line.get("margin_pct", 0),
                             "Precio": line.get("final_price_unit", 0),
                             "Tipo": line.get("line_type", "product"),
-                            "Origen": line.get("service_origin", "producto"),
+                            "Origen": line.get("service_origin", "profesional"),
                             "Estrategia": line.get("strategy", "penetration")
                         })
                     
@@ -1734,8 +1734,8 @@ with tab_quotes:
                             "Precio": st.column_config.NumberColumn("Precio", min_value=0, format="$%.2f"),
                             "Tipo": st.column_config.SelectboxColumn("Tipo", options=["product", "service"]),
                             "Origen": st.column_config.SelectboxColumn(
-                                "Origen",
-                                options=["producto", "refacciones", "póliza", "implementación", "soporte", "capacitación", "otro"]
+                                "Clasificación",
+                                options=["doméstico", "profesional", "accesorios", "refacciones", "servicios", "póliza"]
                             ),
                             "Estrategia": st.column_config.SelectboxColumn(
                                 "Estrategia",
@@ -1859,9 +1859,9 @@ with tab_quotes:
 
             with col2:
                 service_origin = st.selectbox(
-                    "Origen del servicio",
-                    ["producto", "refacciones", "póliza", "implementación", "soporte", "capacitación", "otro"],
-                    help="Origen o tipo del servicio/producto (para análisis de composición)"
+                    "Clasificación",
+                    ["doméstico", "profesional", "accesorios", "refacciones", "servicios", "póliza"],
+                    help="Tipo o categoría del producto/servicio (para análisis de composición)"
                 )
                 cost = st.number_input("Costo unitario", min_value=0.0, step=0.01)
                 price = st.number_input("Precio unitario", min_value=0.0, step=0.01)
@@ -2014,7 +2014,7 @@ with tab_quotes:
                 "Descripción": st.column_config.TextColumn("Descripción", width="large"),
                 "Cant.": st.column_config.NumberColumn("Cant.", min_value=0.01, step=1, format="%.2f"),
                 "Tipo": st.column_config.SelectboxColumn("Tipo", options=["product", "service"]),
-                "Origen": st.column_config.SelectboxColumn("Origen", options=["producto", "refacciones", "póliza", "implementación", "soporte", "capacitación", "otro"]),
+                "Origen": st.column_config.SelectboxColumn("Clasificación", options=["doméstico", "profesional", "accesorios", "refacciones", "servicios", "póliza"]),
                 "Estrategia": st.column_config.SelectboxColumn("Estrategia", options=["penetration", "defense", "upsell", "renewal"]),
                 "Costo Unit.": st.column_config.NumberColumn("Costo Unit.", min_value=0, step=0.01, format="$%.2f"),
                 "Precio Unit.": st.column_config.NumberColumn("Precio Unit.", min_value=0, step=0.01, format="$%.2f"),
