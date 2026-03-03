@@ -4193,25 +4193,30 @@ with tab_db:
                     lines = get_quote_lines_full(quote_id)
                     if lines:
                         for line in lines:
+                            # get_quote_lines_full devuelve: line_id, quote_id, sku, quantity, 
+                            # description_original, description_final, description_corrections, 
+                            # line_type, service_origin, cost_unit, final_price_unit, margin_pct, 
+                            # strategy, warnings, created_at, import_source, import_batch_id
                             all_lines_data.append({
                                 "ID Línea": line[0],
                                 "ID Cotización": line[1],
-                                "Descripción": line[2],
+                                "SKU": line[2],
                                 "Cantidad": line[3],
-                                "Precio Unitario": line[4],
-                                "Costo Unitario": line[5],
-                                "Precio Total": line[6],
-                                "Costo Total": line[7],
-                                "Utilidad": line[8],
-                                "Margen %": line[9],
-                                "Origen": line[10],
-                                "Playbook Matched": line[11],
-                                "Comentarios": line[12],
+                                "Descripción": line[4],
+                                "Precio Unitario": line[10],
+                                "Costo Unitario": line[9],
+                                "Precio Total": line[3] * line[10] if line[3] and line[10] else 0,
+                                "Costo Total": line[3] * line[9] if line[3] and line[9] else 0,
+                                "Utilidad": (line[3] * line[10] - line[3] * line[9]) if line[3] and line[10] and line[9] else 0,
+                                "Margen %": line[11],
+                                "Origen": line[8],
+                                "Playbook Matched": line[12],
+                                "Comentarios": line[6],
                                 "Salud": line[13],
-                                "Fue Corregido": line[14],
-                                "Texto Original": line[15],
-                                "Origen Importación": line[16] if len(line) > 16 else None,
-                                "Lote Importación": line[17] if len(line) > 17 else None
+                                "Fue Corregido": "Sí" if line[5] and line[5] != line[4] else "No",
+                                "Texto Original": line[4],
+                                "Origen Importación": line[15] if len(line) > 15 else None,
+                                "Lote Importación": line[16] if len(line) > 16 else None
                             })
 
                 lines_df = pd.DataFrame(all_lines_data) if all_lines_data else pd.DataFrame()
