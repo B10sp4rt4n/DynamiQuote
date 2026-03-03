@@ -498,11 +498,9 @@ st.divider()
 # =========================
 # Tabs principales
 # =========================
-tab_aup, tab_legacy, tab_comparator, tab_proposals, tab_db = st.tabs([
-    "🧠 Motor AUP", 
-    "📝 Cotizador Legacy", 
+tab_quotes, tab_comparator, tab_db = st.tabs([
+    "💼 Cotizaciones y Propuestas", 
     "⚖️ Comparador", 
-    "📄 Propuestas Formales", 
     "📚 Base de Datos"
 ])
 
@@ -1257,24 +1255,42 @@ if st.session_state.pending_line:
 
 
 # =========================
-# TAB: LEGACY COTIZADOR
+# TAB: COTIZACIONES Y PROPUESTAS (COMBINADO)
 # =========================
-with tab_legacy:
-    st.header("📝 Cotizador Universal – MVP Funcional")
-
-    # Mostrar banner si hay versión pendiente desde Base de Datos
-    if st.session_state.get('pending_new_version', False):
-        st.success(f"""
-        ✅ **Nueva versión cargada:** {st.session_state.get('pending_version_info', '')}
-
-        Se copiaron **{len(st.session_state.lines)}** líneas. Modifica lo necesario y presiona "Guardar Cotización".
-        """)
-        # Limpiar flag después de mostrar
-        st.session_state.pending_new_version = False
-
+with tab_quotes:
+    st.header("💼 Cotizaciones y Propuestas")
+    st.caption("Sistema integrado para cotizar y generar propuestas formales")
     st.divider()
 
-    # Información de la cotización
+    # Radio buttons para seleccionar sección (mantiene estado entre reruns)
+    seccion = st.radio(
+        "Selecciona la acción:",
+        ["📝 Crear Cotización", "📄 Generar Propuesta Formal"],
+        horizontal=True,
+        key="seccion_activa_quotes"
+    )
+    
+    st.divider()
+
+    # =========================
+    # SECCIÓN: COTIZADOR
+    # =========================
+    if seccion == "📝 Crear Cotización":
+        st.subheader("📝 Cotizador Universal – MVP Funcional")
+
+        # Mostrar banner si hay versión pendiente desde Base de Datos
+        if st.session_state.get('pending_new_version', False):
+            st.success(f"""
+            ✅ **Nueva versión cargada:** {st.session_state.get('pending_version_info', '')}
+
+            Se copiaron **{len(st.session_state.lines)}** líneas. Modifica lo necesario y presiona "Guardar Cotización".
+            """)
+            # Limpiar flag después de mostrar
+            st.session_state.pending_new_version = False
+
+        st.divider()
+
+        # Información de la cotización
     st.subheader("📋 Información de la Cotización")
 
     # FORM para capturar todos los valores al mismo tiempo
@@ -1610,6 +1626,225 @@ with tab_legacy:
         st.divider()
 
     else:
+        # =========================
+        # IMPORTACIÓN DESDE EXCEL
+        # =========================
+        with st.expander("📥 Importar múltiples líneas desde Excel", expanded=False):
+            st.markdown("""
+            Importa productos desde Excel para acelerar la creación de cotizaciones.
+            
+            **Pasos:**
+            1. Descarga la plantilla Excel
+            2. Llena tus productos
+            3. Sube el archivo
+            4. Revisa y confirma
+            """)
+            
+            # Botón de descarga del template
+            col_download, col_upload = st.columns(2)
+            
+            with col_download:
+                try:
+                    with open("templates/import/dynamiquote_simple.xlsx", "rb") as template_file:
+                        st.download_button(
+                            label="📄 Descargar Plantilla Excel",
+                            data=template_file,
+                            file_name="dynamiquote_productos.xlsx",
+                            mime="application/vnd.openxmlformats-officedocument.spreadsheetml.sheet",
+                            help="Descarga la plantilla, llénala y súbela de vuelta"
+                        )
+                except FileNotFoundError:
+                    st.error("❌ Plantilla no encontrada. Contacta al administrador.")
+            
+            with col_upload:
+                uploaded_file = st.file_uploader(
+                    "📁 Subir Excel completado",
+                    type=['xlsx'],
+                    help="Solo archivos .xlsx",
+                    key="excel_upload"
+                )
+            
+            if uploaded_file is not None:
+                # Procesar archivo
+                with st.spinner("Procesando Excel..."):
+                    import_result = import_excel_file(
+                        uploaded_file.getvalue(),
+                        uploaded_file.name,
+                        existing_lines=st.session_state.lines
+                    )
+                
+                if not import_result["success"]:
+                    st.error(import_result["error"])
+                    if import_result["validation_report"]:
+                        with st.expander("Ver detalles de errores"):
+                            st.markdown(format_validation_report(import_result["validation_report"]))
+                else:
+                    # Mostrar resumen
+                    report = import_result["validation_report"]
+                    col1, col2, col3 = st.columns(3)
+                    
+                    with col1:
+                        st.metric("📊 Total Filas", report["total_rows"])
+                    with col2:
+                        st.metric("✅ Válidas", report["valid_rows"], delta_color="normal")
+                    with col3:
+                        st.metric("❌ Con Errores", report["error_rows"], delta_color="inverse")
+                    
+                    # Alertas de duplicados
+                    if import_result.get("duplicates"):
+                        st.warning(f"⚠️ Se detectaron {len(import_result['duplicates'])} posibles duplicados")
+                        with st.expander("Ver duplicados detectados"):
+                            for dup in import_result["duplicates"]:
+                                st.caption(f"• Nueva: '{dup['new']}' → Existente: '{dup['existing']}' (similitud: {dup['ratio']:.0%})")
+                    
+                    # Reporte de validación
+                    with st.expander("📋 Reporte de Validación Completo"):
+                        st.markdown(format_validation_report(report))
+                    
+                    # Preview editable
+                    st.subheader("👀 Preview - Edita antes de confirmar")
+                    st.caption("Puedes modificar los datos antes de importarlos")
+                    
+                    # Preparar datos para el editor
+                    preview_data = []
+                    for line in import_result["lines"]:
+                        preview_data.append({
+                            "SKU": line.get("sku", ""),
+                            "Descripción": line.get("description_original", ""),
+                            "Cantidad": line.get("_cantidad", 1),
+                            "Costo": line.get("cost_unit", 0),
+                            "Margen%": line.get("margin_pct", 0),
+                            "Precio": line.get("final_price_unit", 0),
+                            "Tipo": line.get("line_type", "product"),
+                            "Origen": line.get("service_origin", "producto"),
+                            "Estrategia": line.get("strategy", "penetration")
+                        })
+                    
+                    preview_df = pd.DataFrame(preview_data)
+                    
+                    # Editor interactivo
+                    edited_data = st.data_editor(
+                        preview_df,
+                        column_config={
+                            "SKU": st.column_config.TextColumn("SKU", width="small"),
+                            "Descripción": st.column_config.TextColumn("Descripción", width="large"),
+                            "Cantidad": st.column_config.NumberColumn("Cantidad", min_value=1, format="%d"),
+                            "Costo": st.column_config.NumberColumn("Costo", min_value=0, format="$%.2f"),
+                            "Margen%": st.column_config.NumberColumn("Margen%", min_value=0, max_value=99, format="%.1f"),
+                            "Precio": st.column_config.NumberColumn("Precio", min_value=0, format="$%.2f"),
+                            "Tipo": st.column_config.SelectboxColumn("Tipo", options=["product", "service"]),
+                            "Origen": st.column_config.SelectboxColumn(
+                                "Origen",
+                                options=["producto", "refacciones", "póliza", "implementación", "soporte", "capacitación", "otro"]
+                            ),
+                            "Estrategia": st.column_config.SelectboxColumn(
+                                "Estrategia",
+                                options=["penetration", "defense", "upsell", "renewal"]
+                            )
+                        },
+                        num_rows="dynamic",
+                        use_container_width=True,
+                        hide_index=False,
+                        key=f"preview_editor_{import_result['import_batch_id']}"
+                    )
+                    
+                    # Guardar cambios en session_state
+                    st.session_state.edited_import_data = edited_data
+                    
+                    # Recalcular con datos editados
+                    st.markdown("---")
+                    st.subheader("💰 Resumen Final (con datos editados)")
+                    
+                    final_data = []
+                    for idx in range(len(edited_data)):
+                        costo = float(edited_data.iloc[idx]["Costo"])
+                        margen = float(edited_data.iloc[idx]["Margen%"])
+                        precio = float(edited_data.iloc[idx]["Precio"])
+                        
+                        # Recalcular precio basado en costo y margen
+                        if costo > 0 and margen > 0:
+                            precio_calculado = round(costo / (1 - margen / 100), 2)
+                            # Verificar coherencia
+                            if abs(precio - precio_calculado) > 0.01:
+                                # Usar precio calculado
+                                precio = precio_calculado
+                                margen_final = margen
+                            else:
+                                margen_final = margen
+                        else:
+                            margen_final = margen
+                        
+                        final_data.append({
+                            "SKU": edited_data.iloc[idx]["SKU"],
+                            "Descripción": edited_data.iloc[idx]["Descripción"],
+                            "Cantidad": int(edited_data.iloc[idx]["Cantidad"]),
+                            "Costo": f"${costo:.2f}",
+                            "Margen": f"{margen_final:.1f}%",
+                            "Precio": f"${precio:.2f}",
+                            "Tipo": edited_data.iloc[idx]["Tipo"]
+                        })
+                    
+                    final_df = pd.DataFrame(final_data)
+                    st.dataframe(final_df, use_container_width=True, hide_index=False)
+                    
+                    st.success(f"✅ {len(final_df)} líneas listas para importar")
+                    
+                    # Botones de acción final
+                    col_confirm, col_cancel = st.columns(2)
+                    
+                    with col_confirm:
+                        if st.button("✅ Confirmar e Importar Todo", type="primary", key="confirm_import"):
+                            # Aplicar ediciones finales
+                            updated_lines = []
+                            for idx in range(len(edited_data)):
+                                if idx < len(import_result["lines"]):
+                                    line = import_result["lines"][idx].copy()
+                                    
+                                    # Aplicar cambios del editor
+                                    costo = float(edited_data.iloc[idx]["Costo"])
+                                    margen = float(edited_data.iloc[idx]["Margen%"])
+                                    precio_calculado = round(costo / (1 - margen / 100), 2) if costo > 0 and margen > 0 else 0
+                                    
+                                    line["sku"] = str(edited_data.iloc[idx]["SKU"])
+                                    line["description_original"] = str(edited_data.iloc[idx]["Descripción"])
+                                    line["description_final"] = str(edited_data.iloc[idx]["Descripción"])
+                                    line["description_corrections"] = ""
+                                    line["quantity"] = int(edited_data.iloc[idx]["Cantidad"])
+                                    line["line_type"] = str(edited_data.iloc[idx]["Tipo"])
+                                    line["service_origin"] = str(edited_data.iloc[idx]["Origen"])
+                                    line["strategy"] = str(edited_data.iloc[idx]["Estrategia"])
+                                    line["cost_unit"] = costo
+                                    line["margin_pct"] = margen
+                                    line["final_price_unit"] = precio_calculado
+                                    
+                                    updated_lines.append(line)
+                            
+                            # Agregar a session state
+                            st.session_state.lines.extend(updated_lines)
+                            
+                            # Guardar archivo para auditoría
+                            file_id = import_result["import_batch_id"]
+                            quote_id = st.session_state.quote_id
+                            success_file, msg_file = save_import_file(
+                                file_id=file_id,
+                                quote_id=quote_id,
+                                filename=uploaded_file.name,
+                                uploaded_at=datetime.now(UTC).isoformat(),
+                                file_data=uploaded_file.getvalue(),
+                                file_size=import_result["file_info"]["size"],
+                                rows_imported=import_result["file_info"]["rows_imported"],
+                                rows_errors=import_result["file_info"]["rows_errors"]
+                            )
+                            
+                            st.success(f"✅ {len(updated_lines)} líneas importadas correctamente")
+                            st.rerun()
+                    
+                    with col_cancel:
+                        if st.button("❌ Cancelar Importación", key="cancel_import"):
+                            st.rerun()
+        
+        st.divider()
+        
         # Solo mostrar el formulario de agregar si no hay línea pendiente
         st.subheader("➕ Agregar línea")
 
@@ -2028,669 +2263,39 @@ with tab_legacy:
                 else:
                     st.error(message)
 
-# =========================
-# TAB: MOTOR AUP (Multitenant)
-# =========================
-with tab_aup:
-    st.header("🧠 Motor AUP (Multitenant)")
-    st.divider()
-
-    if "aup_context" not in st.session_state:
-        st.session_state.aup_context = {
-            "tenant_id": "default-tenant",
-            "user_id": "default-user",
-            "tenant_is_active": True,
-            "user_has_permission": True,
-        }
-
-    if "aup_proposal_id" not in st.session_state:
-        st.session_state.aup_proposal_id = None
-
-    if "aup_derived_id" not in st.session_state:
-        st.session_state.aup_derived_id = None
-
-    # Nota informativa sobre multitenancy
-    st.info("ℹ️ **Nota:** El sistema multitenancy está desactivado. Los campos tenant_id y user_id son opcionales con valores por defecto.")
-
-    col_ctx1, col_ctx2, col_ctx3, col_ctx4 = st.columns([2, 2, 1, 1])
-    with col_ctx1:
-        st.session_state.aup_context["tenant_id"] = st.text_input(
-            "tenant_id (opcional)",
-            value=st.session_state.aup_context.get("tenant_id", "default-tenant"),
-            placeholder="default-tenant",
-            help="Sistema multitenancy no activo"
-        )
-    with col_ctx2:
-        st.session_state.aup_context["user_id"] = st.text_input(
-            "user_id (opcional)",
-            value=st.session_state.aup_context.get("user_id", "default-user"),
-            placeholder="default-user",
-            help="Sistema multitenancy no activo"
-        )
-    with col_ctx3:
-        st.session_state.aup_context["tenant_is_active"] = st.checkbox(
-            "tenant activo",
-            value=st.session_state.aup_context.get("tenant_is_active", True),
-            disabled=True,
-            help="Siempre activo (multitenancy desactivado)"
-        )
-    with col_ctx4:
-        st.session_state.aup_context["user_has_permission"] = st.checkbox(
-            "permiso",
-            value=st.session_state.aup_context.get("user_has_permission", True),
-            disabled=True,
-            help="Siempre con permiso (multitenancy desactivado)"
-        )
-
-    context = st.session_state.aup_context
-
-    col_create, col_status = st.columns([1, 3])
-    with col_create:
-        if st.button("Crear propuesta AUP", type="primary"):
-            try:
-                st.session_state.aup_proposal_id = create_proposal("manual", context)
-                st.session_state.aup_derived_id = None
-                st.success("✅ Propuesta creada")
-            except Exception as exc:
-                st.error(f"❌ {exc}")
-
-    with col_status:
-        if st.session_state.aup_proposal_id:
-            proposal = aup_get_proposal(st.session_state.aup_proposal_id, context.get("tenant_id"))
-            if proposal:
-                st.caption(
-                    f"Propuesta: {proposal['proposal_id']} | Estado: {proposal['status']} | Origen: {proposal.get('origin')}"
-                )
-
-    if st.session_state.aup_proposal_id:
-        proposal_id = st.session_state.aup_proposal_id
-        tenant_id = context.get("tenant_id")
-
-        st.subheader("📥 Importar Excel")
-        excel_file = st.file_uploader("Archivo Excel", type=["xlsx", "xls"], key="aup_excel")
-        if st.button("Importar Excel a propuesta"):
-            if excel_file is None:
-                st.warning("Selecciona un archivo")
-            else:
-                try:
-                    result = import_excel(proposal_id, excel_file.read(), context)
-                    if result.get("success"):
-                        st.success(f"✅ Filas importadas: {result.get('imported')}")
-                    else:
-                        st.error(f"❌ Errores: {result.get('errors')}")
-                except Exception as exc:
-                    st.error(f"❌ {exc}")
-
-        st.subheader("➕ Agregar item manual")
-        with st.form("add_item_form", clear_on_submit=True):
-            col1, col2 = st.columns(2)
-            with col1:
-                new_quantity = st.number_input("Cantidad", min_value=0.01, value=1.0, step=0.01)
-                new_cost_unit = st.number_input("Costo unitario", min_value=0.0, value=0.0, step=0.01)
-            with col2:
-                new_sku = st.text_input("SKU (opcional)")
-                new_component_type = st.text_input("Tipo/Origen (opcional)", help="Ej: Interno, Externo, Proveedor A")
-
-            new_description = st.text_area("Descripción", placeholder="Descripción del item...")
-
-            submitted_add = st.form_submit_button("➕ Agregar item", type="primary")
-
-            if submitted_add:
-                if not new_description or not new_description.strip():
-                    st.error("❌ La descripción es obligatoria")
-                else:
-                    try:
-                        result = add_proposal_item(
-                            proposal_id,
-                            new_quantity,
-                            new_description,
-                            new_cost_unit,
-                            sku=new_sku if new_sku else None,
-                            component_type=new_component_type if new_component_type else None,
-                            context=context
-                        )
-                        st.success(f"✅ Item #{result['item_number']} agregado")
-                        st.rerun()
-                    except Exception as exc:
-                        st.error(f"❌ {exc}")
-
-        st.subheader("📦 Items de propuesta")
-        items = aup_get_items(proposal_id, tenant_id)
-        if items:
-            # Verificar que los items tengan las columnas necesarias
-            if items and isinstance(items, list) and len(items) > 0:
-                st.dataframe(pd.DataFrame(items), width="stretch")
-            else:
-                st.info("No hay items todavía")
-
-            st.markdown("**Editar item (controlado)**")
-            options = {f"#{i['item_number']} · {i.get('description','')}": i for i in items}
-            selected_label = st.selectbox("Selecciona item", list(options.keys()))
-            selected_item = options[selected_label]
-
-            with st.form("aup_edit_item"):
-                quantity = st.number_input("Cantidad", min_value=0.01, value=float(selected_item.get("quantity") or 1))
-                description = st.text_input("Descripción", value=selected_item.get("description") or "")
-                price_unit = st.number_input(
-                    "Precio unitario (opcional)",
-                    min_value=0.0,
-                    value=float(selected_item.get("price_unit") or 0.0),
-                )
-                component_type = st.text_input(
-                    "Tipo/Origen del servicio", 
-                    value=selected_item.get("component_type") or "",
-                    help="Ej: Interno, Externo, Proveedor A"
-                )
-                submitted = st.form_submit_button("Actualizar item")
-
-            if submitted:
-                try:
-                    update_proposal_item(
-                        selected_item["item_id"],
-                        {
-                            "quantity": quantity,
-                            "description": description,
-                            "price_unit": price_unit if price_unit > 0 else None,
-                            "component_type": component_type or None,
-                        },
-                        context,
-                    )
-                    st.success("✅ Item actualizado")
-                except Exception as exc:
-                    st.error(f"❌ {exc}")
-
-        else:
-            st.info("No hay items todavía")
-
-        st.subheader("🧮 Nodo integrado (única verdad)")
-        integrated = aup_get_integrated_node(proposal_id, tenant_id)
-        if integrated:
-            col_i1, col_i2, col_i3, col_i4, col_i5 = st.columns(5)
-            col_i1.metric("Costo total", f"${float(integrated.get('total_cost') or 0):,.2f}")
-            col_i2.metric("Precio total", f"${float(integrated.get('total_price') or 0):,.2f}")
-            col_i3.metric("Utilidad bruta", f"${float(integrated.get('gross_profit') or 0):,.2f}")
-            margin_pct = integrated.get("margin_pct")
-            col_i4.metric("Margen", f"{(float(margin_pct) * 100):.2f}%" if margin_pct is not None else "N/A")
-            col_i5.metric("Health", str(integrated.get("health")))
-        else:
-            st.caption("Nodo integrado no disponible")
-
-        st.subheader("🔒 Cierre formal")
-
-        # Verificar si hay items antes de permitir cerrar
-        items_count = len(items) if items else 0
-        can_close = items_count > 0
-
-        if not can_close:
-            st.warning("⚠️ No puedes cerrar una propuesta vacía. Importa un Excel o agrega items primero.")
-
-        if st.button("Cerrar propuesta AUP", disabled=not can_close):
-            try:
-                result = close_proposal(proposal_id, context)
-                st.success(f"✅ Propuesta cerrada. Hash: {result.get('hash')}")
-            except Exception as exc:
-                st.error(f"❌ {exc}")
-
-        proposal = aup_get_proposal(proposal_id, tenant_id)
-        if proposal and proposal.get("status") == "closed":
-            st.subheader("🧬 Derivar nueva propuesta")
-            if st.button("Derivar propuesta"):
-                try:
-                    st.session_state.aup_derived_id = derive_proposal(proposal_id, context)
-                    st.success(f"✅ Derivada: {st.session_state.aup_derived_id}")
-                except Exception as exc:
-                    st.error(f"❌ {exc}")
-
-            st.subheader("💰 Gastos asociados (post-cotización)")
-            with st.form("aup_add_expense"):
-                category = st.selectbox(
-                    "Categoría",
-                    ["logistica", "seguros", "fianzas", "administrativos", "contingencias", "financieros"],
-                )
-                description = st.text_input("Descripción del gasto")
-                amount = st.number_input("Monto", min_value=0.0, value=0.0)
-                add_expense = st.form_submit_button("Agregar gasto")
-
-            if add_expense:
-                try:
-                    add_project_expense(
-                        proposal_id,
-                        {"category": category, "description": description, "amount": amount},
-                        context,
-                    )
-                    st.success("✅ Gasto agregado")
-                except Exception as exc:
-                    st.error(f"❌ {exc}")
-
-            expenses = aup_get_expenses(proposal_id, tenant_id)
-            if expenses:
-                st.dataframe(pd.DataFrame(expenses), width="stretch")
-
-            st.subheader("📈 Nodo de rentabilidad")
-            profitability = aup_get_profitability_node(proposal_id, tenant_id)
-            if profitability:
-                col_p1, col_p2, col_p3, col_p4, col_p5 = st.columns(5)
-                col_p1.metric("Ventas", f"${float(profitability.get('total_sales') or 0):,.2f}")
-                col_p2.metric("Costos", f"${float(profitability.get('total_cost') or 0):,.2f}")
-                col_p3.metric("Gastos", f"${float(profitability.get('total_expenses') or 0):,.2f}")
-                net_margin = profitability.get("net_margin_pct")
-                col_p4.metric("Margen neto", f"{(float(net_margin) * 100):.2f}%" if net_margin is not None else "N/A")
-                col_p5.metric("Health", str(profitability.get("health")))
-
-        if st.session_state.aup_derived_id:
-            st.subheader("🔍 Comparación entre propuestas")
-            try:
-                comparison = compare_proposals(proposal_id, st.session_state.aup_derived_id, context)
-                col_c1, col_c2 = st.columns(2)
-                col_c1.metric("Δ Precio", f"${float(comparison.get('delta_price') or 0):,.2f}")
-                col_c2.metric("Δ Margen", f"{float(comparison.get('delta_margin') or 0) * 100:.2f}%")
-                st.dataframe(pd.DataFrame(comparison.get("drilldown", [])), width="stretch")
-            except Exception as exc:
-                st.error(f"❌ {exc}")
-
-        st.subheader("📊 Visualizaciones (solo lectura)")
-        try:
-            charts = generate_charts_data(proposal_id, context)
-            col_g1, col_g2, col_g3 = st.columns(3)
-
-            with col_g1:
-                st.markdown("**Aportación por Origen de Servicio**")
-                comp_data = charts.get("pie_component_contribution", {})
-                if comp_data:
-                    fig, ax = plt.subplots(figsize=(4, 4))
-                    ax.pie(comp_data.values(), labels=comp_data.keys(), autopct="%1.1f%%")
-                    st.pyplot(fig)
-                    plt.close(fig)
-                else:
-                    st.caption("Sin datos")
-
-            with col_g2:
-                st.markdown("**Costo vs Utilidad Bruta**")
-                cvp = charts.get("pie_cost_vs_profit", {})
-                fig, ax = plt.subplots(figsize=(4, 4))
-                ax.pie([cvp.get("total_cost", 0), cvp.get("gross_profit", 0)], labels=["Costo", "Utilidad"])
-                st.pyplot(fig)
-                plt.close(fig)
-
-            with col_g3:
-                st.markdown("**Distribución neta**")
-                net = charts.get("pie_net_distribution", {})
-                fig, ax = plt.subplots(figsize=(4, 4))
-                ax.pie(
-                    [net.get("total_cost", 0), net.get("total_expenses", 0), net.get("net_profit", 0)],
-                    labels=["Costo", "Gastos", "Utilidad Neta"],
-                )
-                st.pyplot(fig)
-                plt.close(fig)
-        except Exception as exc:
-            st.caption(f"Visualizaciones no disponibles: {exc}")
-    else:
-        st.info("Crea una propuesta para comenzar")
-
-# =========================
-# TAB: COMPARADOR
-# =========================
-with tab_comparator:
-    st.header("⚖️ Comparador de Cotizaciones")
-    st.divider()
+    # Fin del bloque de Cotizador
     
-    st.info("💡 Selecciona DOS cotizaciones cualesquiera para compararlas (pueden ser versiones distintas, clientes diferentes, etc.)")
-    
-    # Dos columnas para seleccionar las cotizaciones
-    col_q1, col_q2 = st.columns(2)
-    
-    with col_q1:
-        st.markdown("### 📄 Primera Cotización")
-        quote_1_id = render_quote_search_selector(
-            key="comparador_q1",
-            label="Buscar cotización base",
-            show_recent=True
-        )
-    
-    with col_q2:
-        st.markdown("### 📄 Segunda Cotización")
-        quote_2_id = render_quote_search_selector(
-            key="comparador_q2",
-            label="Buscar cotización a comparar",
-            show_recent=True
-        )
-    
-    st.divider()
-    
-    # Botón para comparar
-    if quote_1_id and quote_2_id:
-        col_btn1, col_btn2, col_btn3 = st.columns([2, 1, 2])
-        with col_btn2:
-            if st.button("🔄 Comparar Ambas", type="primary", use_container_width=True):
-                if quote_1_id == quote_2_id:
-                    st.warning("⚠️ Selecciona dos cotizaciones diferentes")
-                else:
-                    st.session_state.compare_quotes = {
-                        "q1_id": quote_1_id,
-                        "q2_id": quote_2_id
-                    }
-                    st.rerun()
-    
-    # Motor de comparación
-    if "compare_quotes" in st.session_state:
-        q1_id = st.session_state.compare_quotes["q1_id"]
-        q2_id = st.session_state.compare_quotes["q2_id"]
-        
-        # Cargar datos de ambas cotizaciones
-        from database import get_quote_by_id
-        
-        q1_data = get_quote_by_id(q1_id)
-        q2_data = get_quote_by_id(q2_id)
-        
-        if q1_data and q2_data:
-            st.success(f"✅ Comparando: **{q1_data.get('proposal_name', 'Sin nombre')}** vs **{q2_data.get('proposal_name', 'Sin nombre')}**")
-            st.divider()
-            
-            # ===== SELECTOR DE PLAYBOOK =====
-            st.markdown("### 📘 Playbook / Contexto de Industria")
-            
-            col_playbook, col_playbook_desc = st.columns([1, 2])
-            
-            with col_playbook:
-                selected_playbook = st.selectbox(
-                    "Selecciona playbook",
-                    list(PLAYBOOKS.keys()),
-                    key="comparador_playbook",
-                    help="El playbook ajusta umbrales de salud y pesos de decisión según el contexto de negocio"
-                )
-            
-            with col_playbook_desc:
-                pb_desc = PLAYBOOKS[selected_playbook]["description"]
-                pb_green = PLAYBOOKS[selected_playbook]["green"]
-                pb_yellow = PLAYBOOKS[selected_playbook]["yellow"]
-                st.info(f"**{selected_playbook}:** {pb_desc}  \n📊 Verde ≥{pb_green}% | Amarillo ≥{pb_yellow}%")
-            
-            st.divider()
-            
-            # Convertir a formato similar al de versiones
-            q1 = pd.Series({
-                "quote_id": q1_id,
-                "quote_group_id": q1_data.get("quote_group_id", ""),
-                "version": q1_data.get("version", 1),
-                "total_revenue": q1_data.get("total_revenue", 0),
-                "total_cost": q1_data.get("total_cost", 0),
-                "gross_profit": q1_data.get("gross_profit", 0),
-                "avg_margin": q1_data.get("avg_margin", 0),
-                "client_name": q1_data.get("client_name", ""),
-                "proposal_name": q1_data.get("proposal_name", ""),
-                "quoted_by": q1_data.get("quoted_by", ""),
-                "created_at": q1_data.get("created_at", "")
-            })
-            
-            q2 = pd.Series({
-                "quote_id": q2_id,
-                "quote_group_id": q2_data.get("quote_group_id", ""),
-                "version": q2_data.get("version", 1),
-                "total_revenue": q2_data.get("total_revenue", 0),
-                "total_cost": q2_data.get("total_cost", 0),
-                "gross_profit": q2_data.get("gross_profit", 0),
-                "avg_margin": q2_data.get("avg_margin", 0),
-                "client_name": q2_data.get("client_name", ""),
-                "proposal_name": q2_data.get("proposal_name", ""),
-                "quoted_by": q2_data.get("quoted_by", ""),
-                "created_at": q2_data.get("created_at", "")
-            })
-            
-            # ===== NIVEL A: Resumen Ejecutivo =====
-            st.markdown("### 📈 Resumen Ejecutivo")
-            
-            col_info1, col_info2 = st.columns(2)
-            
-            with col_info1:
-                st.markdown(f"**Cotización 1:**")
-                st.caption(f"Cliente: {q1['client_name'] or 'Sin especificar'}")
-                st.caption(f"Propuesta: {q1['proposal_name'] or 'Sin nombre'}")
-                st.caption(f"Cotizado por: {q1['quoted_by'] or 'Sin especificar'}")
-                st.caption(f"Versión: v{q1['version']}")
-            
-            with col_info2:
-                st.markdown(f"**Cotización 2:**")
-                st.caption(f"Cliente: {q2['client_name'] or 'Sin especificar'}")
-                st.caption(f"Propuesta: {q2['proposal_name'] or 'Sin nombre'}")
-                st.caption(f"Cotizado por: {q2['quoted_by'] or 'Sin especificar'}")
-                st.caption(f"Versión: v{q2['version']}")
-            
-            st.divider()
-            
-            col_metrics1, col_metrics2, col_metrics3, col_metrics4 = st.columns(4)
-            
-            with col_metrics1:
-                delta_revenue = float(q2["total_revenue"] - q1["total_revenue"])
-                st.metric(
-                    "Ingreso Total",
-                    f"${float(q2['total_revenue']):,.2f}",
-                    f"${delta_revenue:,.2f}",
-                    delta_color="normal"
-                )
-                st.caption(f"Q1: ${float(q1['total_revenue']):,.2f}")
-            
-            with col_metrics2:
-                delta_profit = float(q2["gross_profit"] - q1["gross_profit"])
-                st.metric(
-                    "Utilidad Bruta",
-                    f"${float(q2['gross_profit']):,.2f}",
-                    f"${delta_profit:,.2f}",
-                    delta_color="normal"
-                )
-                st.caption(f"Q1: ${float(q1['gross_profit']):,.2f}")
-            
-            with col_metrics3:
-                delta_cost = float(q2["total_cost"] - q1["total_cost"])
-                st.metric(
-                    "Costo Total",
-                    f"${float(q2['total_cost']):,.2f}",
-                    f"${delta_cost:,.2f}",
-                    delta_color="inverse"
-                )
-                st.caption(f"Q1: ${float(q1['total_cost']):,.2f}")
-            
-            with col_metrics4:
-                delta_margin = float(q2["avg_margin"] - q1["avg_margin"])
-                st.metric(
-                    "Margen Promedio",
-                    f"{float(q2['avg_margin']):.2f}%",
-                    f"{delta_margin:.2f}%",
-                    delta_color="normal"
-                )
-                st.caption(f"Q1: {float(q1['avg_margin']):.2f}%")
-            
-            # ===== NIVEL B: Análisis por componente de origen =====
-            st.divider()
-            st.markdown("### 🔍 Análisis por Componente de Origen")
-            
-            l1_all = load_lines_for_quote(q1["quote_id"])
-            l2_all = load_lines_for_quote(q2["quote_id"])
-            
-            l1 = pd.DataFrame(l1_all, columns=["sku", "description", "service_origin", "quantity", "unit_cost", "unit_price", "margin", "line_type"])
-            l2 = pd.DataFrame(l2_all, columns=["sku", "description", "service_origin", "quantity", "unit_cost", "unit_price", "margin", "line_type"])
-            
-            # Calcular totales por origen
-            def calculate_origin_totals(df):
-                df = df.copy()
-                df["quantity"] = pd.to_numeric(df["quantity"], errors="coerce").fillna(1.0)
-                df["unit_cost"] = pd.to_numeric(df["unit_cost"], errors="coerce").fillna(0.0)
-                df["unit_price"] = pd.to_numeric(df["unit_price"], errors="coerce").fillna(0.0)
-                df["cost_total"] = df["quantity"] * df["unit_cost"]
-                df["revenue_total"] = df["quantity"] * df["unit_price"]
-                
-                grouped = df.groupby("service_origin", as_index=False).agg({
-                    "cost_total": "sum",
-                    "revenue_total": "sum"
-                })
-                grouped.columns = ["Origen", "Costo", "Ingreso"]
-                grouped["Utilidad"] = grouped["Ingreso"] - grouped["Costo"]
-                return grouped
-            
-            comp_v1 = calculate_origin_totals(l1)
-            comp_v2 = calculate_origin_totals(l2)
-            
-            # Merge para comparar
-            comp_merged = pd.merge(
-                comp_v1,
-                comp_v2,
-                on="Origen",
-                how="outer",
-                suffixes=(" Q1", " Q2")
-            ).fillna(0)
-            
-            comp_merged["Δ Absoluto"] = comp_merged["Ingreso Q2"] - comp_merged["Ingreso Q1"]
-            comp_merged["Δ Relativo %"] = ((comp_merged["Ingreso Q2"] - comp_merged["Ingreso Q1"]) / comp_merged["Ingreso Q1"] * 100).replace([float('inf'), -float('inf')], 0).fillna(0)
-            
-            # Formatear para visualización
-            comp_components = comp_merged.copy()
-            for col in ["Costo Q1", "Ingreso Q1", "Utilidad Q1", "Costo Q2", "Ingreso Q2", "Utilidad Q2", "Δ Absoluto"]:
-                if col in comp_components.columns:
-                    comp_components[col] = comp_components[col].apply(lambda x: f"${x:,.2f}")
-            
-            if "Δ Relativo %" in comp_components.columns:
-                comp_components["Δ Relativo %"] = comp_components["Δ Relativo %"].apply(lambda x: f"{x:.2f}%")
-            
-            st.dataframe(comp_components, use_container_width=True, hide_index=True)
-            
-            # ===== NIVEL C: Cambios de SKU =====
-            st.divider()
-            st.markdown("### 📦 Cambios en SKUs")
-            
-            skus_v1 = set(l1["sku"].tolist())
-            skus_v2 = set(l2["sku"].tolist())
-            
-            skus_added = skus_v2 - skus_v1
-            skus_removed = skus_v1 - skus_v2
-            skus_common = skus_v1 & skus_v2
-            
-            col_sku1, col_sku2, col_sku3 = st.columns(3)
-            
-            with col_sku1:
-                st.metric("SKUs solo en Q2", len(skus_added))
-                if skus_added:
-                    with st.expander("Ver SKUs"):
-                        for sku in skus_added:
-                            st.caption(f"✅ {sku}")
-            
-            with col_sku2:
-                st.metric("SKUs solo en Q1", len(skus_removed))
-                if skus_removed:
-                    with st.expander("Ver SKUs"):
-                        for sku in skus_removed:
-                            st.caption(f"❌ {sku}")
-            
-            with col_sku3:
-                st.metric("SKUs en común", len(skus_common))
-            
-            # ===== NIVEL D: Sistema Narrativo Inteligente =====
-            st.divider()
-            st.markdown("### 📖 Narrativa Inteligente")
-            
-            narrative = generate_narrative(
-                q1=q1,
-                q2=q2,
-                l1=l1,
-                l2=l2,
-                playbook_name=selected_playbook,
-                playbook_config=PLAYBOOKS[selected_playbook]
-            )
-            
-            # Mostrar resumen ejecutivo
-            st.markdown("#### 📌 Resumen Ejecutivo")
-            st.success(narrative["executive"])
-            
-            # Mostrar detalle técnico
-            if narrative["detail"]:
-                with st.expander("📋 Ver detalle técnico", expanded=False):
-                    st.write(narrative["detail"])
-            
-            # Indicadores de salud
-            col_health1, col_health2 = st.columns(2)
-            
-            with col_health1:
-                health_color = {"verde": "🟢", "amarillo": "🟡", "rojo": "🔴"}
-                st.caption(f"Salud Q1: {health_color[narrative['health_v1']]} {narrative['health_v1'].upper()}")
-            
-            with col_health2:
-                st.caption(f"Salud Q2: {health_color[narrative['health_v2']]} {narrative['health_v2'].upper()}")
-            
-            st.divider()
-            
-            # Insight automático
-            st.markdown("### 💡 Insight Rápido")
-            
-            insights = []
-            
-            if delta_revenue > 0 and delta_margin > 0:
-                insights.append("✅ **Q2 superior:** Mayor ingreso Y mejor margen")
-            elif delta_revenue > 0 and delta_margin < 0:
-                insights.append("⚠️ **Crecimiento agresivo en Q2:** Más ingreso pero sacrificó margen")
-            elif delta_revenue < 0 and delta_margin > 0:
-                insights.append("🎯 **Q2 optimizada:** Menos ingreso pero margen mejoró")
-            else:
-                insights.append("❌ **Q2 deteriorada:** Menos ingreso Y peor margen")
-            
-            if len(skus_added) > len(skus_removed):
-                insights.append(f"📈 **Q2 más amplia:** {len(skus_added)} SKUs nuevos vs {len(skus_removed)} eliminados")
-            elif len(skus_removed) > len(skus_added):
-                insights.append(f"📉 **Q2 más simple:** {len(skus_removed)} SKUs eliminados vs {len(skus_added)} nuevos")
-            
-            # Origen que más cambió
-            if not comp_components.empty and "Δ Absoluto" in comp_components.columns:
-                try:
-                    # Necesitamos los valores numéricos originales, no los formateados
-                    max_change_idx = comp_merged["Δ Absoluto"].abs().idxmax()
-                    max_change_origen = comp_merged.loc[max_change_idx, "Origen"]
-                    max_change_value = comp_merged.loc[max_change_idx, "Δ Absoluto"]
-                    if abs(max_change_value) > 0:
-                        insights.append(f"🎯 **Origen clave:** '{max_change_origen}' cambió ${abs(max_change_value):,.2f}")
-                except Exception:
-                    pass
-            
-            for insight in insights:
-                st.markdown(insight)
-        else:
-            st.error("❌ No se pudieron cargar las cotizaciones seleccionadas")
-    else:
+    # =========================
+    # SECCIÓN: PROPUESTAS FORMALES
+    # =========================
+    if seccion == "📄 Generar Propuesta Formal":
+        st.subheader("📄 Generador de Propuestas Formales")
+
         st.markdown("""
-        <div style='text-align: center; padding: 3rem; background-color: rgba(128, 128, 128, 0.05); border-radius: 10px;'>
-            <h3>📊 Listo para comparar</h3>
-            <p>Selecciona dos cotizaciones arriba y presiona "🔄 Comparar Ambas"</p>
-            <p style='font-size: 0.9em; color: #888;'>💡 Puedes comparar versiones del mismo cliente, propuestas de clientes diferentes, o cualquier combinación</p>
-        </div>
-        """, unsafe_allow_html=True)
+        ### Sistema de Propuestas Profesionales
 
-# =========================
-# TAB: PROPUESTAS FORMALES
-# =========================
-with tab_proposals:
-    st.header("📄 Generador de Propuestas Formales")
-    st.divider()
+        Genera documentos formales de propuestas comerciales con:
+        - ✅ Personalización completa de emisor y receptor
+        - 🎨 Logos de empresa y cliente
+        - 📝 Introducción inteligente adaptada al sector
+        - 💰 Gestión de IVA (integrado o desglosado)
+        - 📋 Términos y condiciones editables
+        - ✍️ Firma digital
+        - 📄 **PDF profesional generado con ReportLab** (actualizado 2026-02-10)
+        """)
+        
+        # Verificar disponibilidad de generación de PDFs
+        try:
+            from formal_proposal_generator import REPORTLAB_AVAILABLE
+            if REPORTLAB_AVAILABLE:
+                st.success("✅ Sistema de generación de PDFs: **Activo y listo**")
+            else:
+                st.error("❌ ReportLab no está disponible. Los PDFs no se pueden generar.")
+        except Exception as e:
+            st.warning(f"⚠️ No se pudo verificar el sistema de PDFs: {e}")
 
-    st.markdown("""
-    ### Sistema de Propuestas Profesionales
+        st.divider()
 
-    Genera documentos formales de propuestas comerciales con:
-    - ✅ Personalización completa de emisor y receptor
-    - 🎨 Logos de empresa y cliente
-    - 📝 Introducción inteligente adaptada al sector
-    - 💰 Gestión de IVA (integrado o desglosado)
-    - 📋 Términos y condiciones editables
-    - ✍️ Firma digital
-    - 📄 **PDF profesional generado con ReportLab** (actualizado 2026-02-10)
-    """)
-    
-    # Verificar disponibilidad de generación de PDFs
-    try:
-        from formal_proposal_generator import REPORTLAB_AVAILABLE
-        if REPORTLAB_AVAILABLE:
-            st.success("✅ Sistema de generación de PDFs: **Activo y listo**")
-        else:
-            st.error("❌ ReportLab no está disponible. Los PDFs no se pueden generar.")
-    except Exception as e:
-        st.warning(f"⚠️ No se pudo verificar el sistema de PDFs: {e}")
-
-    st.divider()
 
     # Selector de origen
     st.subheader("1️⃣ Seleccionar Origen de la Propuesta")
@@ -3510,6 +3115,651 @@ with tab_proposals:
 
 # =========================
 # TAB: BASE DE DATOS
+# =========================
+
+# =========================
+# TAB: MOTOR AUP (OCULTO - código preservado)
+# =========================
+if False:  # Motor AUP deshabilitado - código preservado
+  with tab_aup:
+    st.header("🧠 Motor AUP (Multitenant)")
+    st.divider()
+
+    if "aup_context" not in st.session_state:
+        st.session_state.aup_context = {
+            "tenant_id": "default-tenant",
+            "user_id": "default-user",
+            "tenant_is_active": True,
+            "user_has_permission": True,
+        }
+
+    if "aup_proposal_id" not in st.session_state:
+        st.session_state.aup_proposal_id = None
+
+    if "aup_derived_id" not in st.session_state:
+        st.session_state.aup_derived_id = None
+
+    # Nota informativa sobre multitenancy
+    st.info("ℹ️ **Nota:** El sistema multitenancy está desactivado. Los campos tenant_id y user_id son opcionales con valores por defecto.")
+
+    col_ctx1, col_ctx2, col_ctx3, col_ctx4 = st.columns([2, 2, 1, 1])
+    with col_ctx1:
+        st.session_state.aup_context["tenant_id"] = st.text_input(
+            "tenant_id (opcional)",
+            value=st.session_state.aup_context.get("tenant_id", "default-tenant"),
+            placeholder="default-tenant",
+            help="Sistema multitenancy no activo"
+        )
+    with col_ctx2:
+        st.session_state.aup_context["user_id"] = st.text_input(
+            "user_id (opcional)",
+            value=st.session_state.aup_context.get("user_id", "default-user"),
+            placeholder="default-user",
+            help="Sistema multitenancy no activo"
+        )
+    with col_ctx3:
+        st.session_state.aup_context["tenant_is_active"] = st.checkbox(
+            "tenant activo",
+            value=st.session_state.aup_context.get("tenant_is_active", True),
+            disabled=True,
+            help="Siempre activo (multitenancy desactivado)"
+        )
+    with col_ctx4:
+        st.session_state.aup_context["user_has_permission"] = st.checkbox(
+            "permiso",
+            value=st.session_state.aup_context.get("user_has_permission", True),
+            disabled=True,
+            help="Siempre con permiso (multitenancy desactivado)"
+        )
+
+    context = st.session_state.aup_context
+
+    col_create, col_status = st.columns([1, 3])
+    with col_create:
+        if st.button("Crear propuesta AUP", type="primary"):
+            try:
+                st.session_state.aup_proposal_id = create_proposal("manual", context)
+                st.session_state.aup_derived_id = None
+                st.success("✅ Propuesta creada")
+            except Exception as exc:
+                st.error(f"❌ {exc}")
+
+    with col_status:
+        if st.session_state.aup_proposal_id:
+            proposal = aup_get_proposal(st.session_state.aup_proposal_id, context.get("tenant_id"))
+            if proposal:
+                st.caption(
+                    f"Propuesta: {proposal['proposal_id']} | Estado: {proposal['status']} | Origen: {proposal.get('origin')}"
+                )
+
+    if st.session_state.aup_proposal_id:
+        proposal_id = st.session_state.aup_proposal_id
+        tenant_id = context.get("tenant_id")
+
+        st.subheader("📥 Importar Excel")
+        excel_file = st.file_uploader("Archivo Excel", type=["xlsx", "xls"], key="aup_excel")
+        if st.button("Importar Excel a propuesta"):
+            if excel_file is None:
+                st.warning("Selecciona un archivo")
+            else:
+                try:
+                    result = import_excel(proposal_id, excel_file.read(), context)
+                    if result.get("success"):
+                        st.success(f"✅ Filas importadas: {result.get('imported')}")
+                    else:
+                        st.error(f"❌ Errores: {result.get('errors')}")
+                except Exception as exc:
+                    st.error(f"❌ {exc}")
+
+        st.subheader("➕ Agregar item manual")
+        with st.form("add_item_form", clear_on_submit=True):
+            col1, col2 = st.columns(2)
+            with col1:
+                new_quantity = st.number_input("Cantidad", min_value=0.01, value=1.0, step=0.01)
+                new_cost_unit = st.number_input("Costo unitario", min_value=0.0, value=0.0, step=0.01)
+            with col2:
+                new_sku = st.text_input("SKU (opcional)")
+                new_component_type = st.text_input("Tipo/Origen (opcional)", help="Ej: Interno, Externo, Proveedor A")
+
+            new_description = st.text_area("Descripción", placeholder="Descripción del item...")
+
+            submitted_add = st.form_submit_button("➕ Agregar item", type="primary")
+
+            if submitted_add:
+                if not new_description or not new_description.strip():
+                    st.error("❌ La descripción es obligatoria")
+                else:
+                    try:
+                        result = add_proposal_item(
+                            proposal_id,
+                            new_quantity,
+                            new_description,
+                            new_cost_unit,
+                            sku=new_sku if new_sku else None,
+                            component_type=new_component_type if new_component_type else None,
+                            context=context
+                        )
+                        st.success(f"✅ Item #{result['item_number']} agregado")
+                        st.rerun()
+                    except Exception as exc:
+                        st.error(f"❌ {exc}")
+
+        st.subheader("📦 Items de propuesta")
+        items = aup_get_items(proposal_id, tenant_id)
+        if items:
+            # Verificar que los items tengan las columnas necesarias
+            if items and isinstance(items, list) and len(items) > 0:
+                st.dataframe(pd.DataFrame(items), width="stretch")
+            else:
+                st.info("No hay items todavía")
+
+            st.markdown("**Editar item (controlado)**")
+            options = {f"#{i['item_number']} · {i.get('description','')}": i for i in items}
+            selected_label = st.selectbox("Selecciona item", list(options.keys()))
+            selected_item = options[selected_label]
+
+            with st.form("aup_edit_item"):
+                quantity = st.number_input("Cantidad", min_value=0.01, value=float(selected_item.get("quantity") or 1))
+                description = st.text_input("Descripción", value=selected_item.get("description") or "")
+                price_unit = st.number_input(
+                    "Precio unitario (opcional)",
+                    min_value=0.0,
+                    value=float(selected_item.get("price_unit") or 0.0),
+                )
+                component_type = st.text_input(
+                    "Tipo/Origen del servicio", 
+                    value=selected_item.get("component_type") or "",
+                    help="Ej: Interno, Externo, Proveedor A"
+                )
+                submitted = st.form_submit_button("Actualizar item")
+
+            if submitted:
+                try:
+                    update_proposal_item(
+                        selected_item["item_id"],
+                        {
+                            "quantity": quantity,
+                            "description": description,
+                            "price_unit": price_unit if price_unit > 0 else None,
+                            "component_type": component_type or None,
+                        },
+                        context,
+                    )
+                    st.success("✅ Item actualizado")
+                except Exception as exc:
+                    st.error(f"❌ {exc}")
+
+        else:
+            st.info("No hay items todavía")
+
+        st.subheader("🧮 Nodo integrado (única verdad)")
+        integrated = aup_get_integrated_node(proposal_id, tenant_id)
+        if integrated:
+            col_i1, col_i2, col_i3, col_i4, col_i5 = st.columns(5)
+            col_i1.metric("Costo total", f"${float(integrated.get('total_cost') or 0):,.2f}")
+            col_i2.metric("Precio total", f"${float(integrated.get('total_price') or 0):,.2f}")
+            col_i3.metric("Utilidad bruta", f"${float(integrated.get('gross_profit') or 0):,.2f}")
+            margin_pct = integrated.get("margin_pct")
+            col_i4.metric("Margen", f"{(float(margin_pct) * 100):.2f}%" if margin_pct is not None else "N/A")
+            col_i5.metric("Health", str(integrated.get("health")))
+        else:
+            st.caption("Nodo integrado no disponible")
+
+        st.subheader("🔒 Cierre formal")
+
+        # Verificar si hay items antes de permitir cerrar
+        items_count = len(items) if items else 0
+        can_close = items_count > 0
+
+        if not can_close:
+            st.warning("⚠️ No puedes cerrar una propuesta vacía. Importa un Excel o agrega items primero.")
+
+        if st.button("Cerrar propuesta AUP", disabled=not can_close):
+            try:
+                result = close_proposal(proposal_id, context)
+                st.success(f"✅ Propuesta cerrada. Hash: {result.get('hash')}")
+            except Exception as exc:
+                st.error(f"❌ {exc}")
+
+        proposal = aup_get_proposal(proposal_id, tenant_id)
+        if proposal and proposal.get("status") == "closed":
+            st.subheader("🧬 Derivar nueva propuesta")
+            if st.button("Derivar propuesta"):
+                try:
+                    st.session_state.aup_derived_id = derive_proposal(proposal_id, context)
+                    st.success(f"✅ Derivada: {st.session_state.aup_derived_id}")
+                except Exception as exc:
+                    st.error(f"❌ {exc}")
+
+            st.subheader("💰 Gastos asociados (post-cotización)")
+            with st.form("aup_add_expense"):
+                category = st.selectbox(
+                    "Categoría",
+                    ["logistica", "seguros", "fianzas", "administrativos", "contingencias", "financieros"],
+                )
+                description = st.text_input("Descripción del gasto")
+                amount = st.number_input("Monto", min_value=0.0, value=0.0)
+                add_expense = st.form_submit_button("Agregar gasto")
+
+            if add_expense:
+                try:
+                    add_project_expense(
+                        proposal_id,
+                        {"category": category, "description": description, "amount": amount},
+                        context,
+                    )
+                    st.success("✅ Gasto agregado")
+                except Exception as exc:
+                    st.error(f"❌ {exc}")
+
+            expenses = aup_get_expenses(proposal_id, tenant_id)
+            if expenses:
+                st.dataframe(pd.DataFrame(expenses), width="stretch")
+
+            st.subheader("📈 Nodo de rentabilidad")
+            profitability = aup_get_profitability_node(proposal_id, tenant_id)
+            if profitability:
+                col_p1, col_p2, col_p3, col_p4, col_p5 = st.columns(5)
+                col_p1.metric("Ventas", f"${float(profitability.get('total_sales') or 0):,.2f}")
+                col_p2.metric("Costos", f"${float(profitability.get('total_cost') or 0):,.2f}")
+                col_p3.metric("Gastos", f"${float(profitability.get('total_expenses') or 0):,.2f}")
+                net_margin = profitability.get("net_margin_pct")
+                col_p4.metric("Margen neto", f"{(float(net_margin) * 100):.2f}%" if net_margin is not None else "N/A")
+                col_p5.metric("Health", str(profitability.get("health")))
+
+        if st.session_state.aup_derived_id:
+            st.subheader("🔍 Comparación entre propuestas")
+            try:
+                comparison = compare_proposals(proposal_id, st.session_state.aup_derived_id, context)
+                col_c1, col_c2 = st.columns(2)
+                col_c1.metric("Δ Precio", f"${float(comparison.get('delta_price') or 0):,.2f}")
+                col_c2.metric("Δ Margen", f"{float(comparison.get('delta_margin') or 0) * 100:.2f}%")
+                st.dataframe(pd.DataFrame(comparison.get("drilldown", [])), width="stretch")
+            except Exception as exc:
+                st.error(f"❌ {exc}")
+
+        st.subheader("📊 Visualizaciones (solo lectura)")
+        try:
+            charts = generate_charts_data(proposal_id, context)
+            col_g1, col_g2, col_g3 = st.columns(3)
+
+            with col_g1:
+                st.markdown("**Aportación por Origen de Servicio**")
+                comp_data = charts.get("pie_component_contribution", {})
+                if comp_data:
+                    fig, ax = plt.subplots(figsize=(4, 4))
+                    ax.pie(comp_data.values(), labels=comp_data.keys(), autopct="%1.1f%%")
+                    st.pyplot(fig)
+                    plt.close(fig)
+                else:
+                    st.caption("Sin datos")
+
+            with col_g2:
+                st.markdown("**Costo vs Utilidad Bruta**")
+                cvp = charts.get("pie_cost_vs_profit", {})
+                fig, ax = plt.subplots(figsize=(4, 4))
+                ax.pie([cvp.get("total_cost", 0), cvp.get("gross_profit", 0)], labels=["Costo", "Utilidad"])
+                st.pyplot(fig)
+                plt.close(fig)
+
+            with col_g3:
+                st.markdown("**Distribución neta**")
+                net = charts.get("pie_net_distribution", {})
+                fig, ax = plt.subplots(figsize=(4, 4))
+                ax.pie(
+                    [net.get("total_cost", 0), net.get("total_expenses", 0), net.get("net_profit", 0)],
+                    labels=["Costo", "Gastos", "Utilidad Neta"],
+                )
+                st.pyplot(fig)
+                plt.close(fig)
+        except Exception as exc:
+            st.caption(f"Visualizaciones no disponibles: {exc}")
+    else:
+        st.info("Crea una propuesta para comenzar")
+
+# =========================
+# TAB: COMPARADOR
+# =========================
+with tab_comparator:
+    st.header("⚖️ Comparador de Cotizaciones")
+    st.divider()
+    
+    st.info("💡 Selecciona DOS cotizaciones cualesquiera para compararlas (pueden ser versiones distintas, clientes diferentes, etc.)")
+    
+    # Dos columnas para seleccionar las cotizaciones
+    col_q1, col_q2 = st.columns(2)
+    
+    with col_q1:
+        st.markdown("### 📄 Primera Cotización")
+        quote_1_id = render_quote_search_selector(
+            key="comparador_q1",
+            label="Buscar cotización base",
+            show_recent=True
+        )
+    
+    with col_q2:
+        st.markdown("### 📄 Segunda Cotización")
+        quote_2_id = render_quote_search_selector(
+            key="comparador_q2",
+            label="Buscar cotización a comparar",
+            show_recent=True
+        )
+    
+    st.divider()
+    
+    # Botón para comparar
+    if quote_1_id and quote_2_id:
+        col_btn1, col_btn2, col_btn3 = st.columns([2, 1, 2])
+        with col_btn2:
+            if st.button("🔄 Comparar Ambas", type="primary", use_container_width=True):
+                if quote_1_id == quote_2_id:
+                    st.warning("⚠️ Selecciona dos cotizaciones diferentes")
+                else:
+                    st.session_state.compare_quotes = {
+                        "q1_id": quote_1_id,
+                        "q2_id": quote_2_id
+                    }
+                    st.rerun()
+    
+    # Motor de comparación
+    if "compare_quotes" in st.session_state:
+        q1_group_id = st.session_state.compare_quotes["q1_id"]
+        q2_group_id = st.session_state.compare_quotes["q2_id"]
+        
+        # Obtener datos de grupo para sacar el quote_id
+        from database import get_quote_by_group_id, get_quote_by_id
+        
+        q1_group = get_quote_by_group_id(q1_group_id)
+        q2_group = get_quote_by_group_id(q2_group_id)
+        
+        if not q1_group or not q2_group:
+            st.error("❌ No se pudieron cargar las cotizaciones seleccionadas")
+        else:
+            # Obtener datos completos usando quote_id
+            q1_data = get_quote_by_id(q1_group["quote_id"])
+            q2_data = get_quote_by_id(q2_group["quote_id"])
+        
+            if not q1_data or not q2_data:
+                st.error("❌ No se pudieron cargar los detalles de las cotizaciones")
+            else:
+                st.success(f"✅ Comparando: **{q1_data.get('proposal_name', 'Sin nombre')}** vs **{q2_data.get('proposal_name', 'Sin nombre')}**")
+                st.divider()
+            
+                # ===== SELECTOR DE PLAYBOOK =====
+                st.markdown("### 📘 Playbook / Contexto de Industria")
+            
+                col_playbook, col_playbook_desc = st.columns([1, 2])
+            
+                with col_playbook:
+                    selected_playbook = st.selectbox(
+                        "Selecciona playbook",
+                        list(PLAYBOOKS.keys()),
+                        key="comparador_playbook",
+                        help="El playbook ajusta umbrales de salud y pesos de decisión según el contexto de negocio"
+                    )
+            
+                with col_playbook_desc:
+                    pb_desc = PLAYBOOKS[selected_playbook]["description"]
+                    pb_green = PLAYBOOKS[selected_playbook]["green"]
+                    pb_yellow = PLAYBOOKS[selected_playbook]["yellow"]
+                    st.info(f"**{selected_playbook}:** {pb_desc}  \n📊 Verde ≥{pb_green}% | Amarillo ≥{pb_yellow}%")
+            
+                st.divider()
+            
+                # Convertir a formato similar al de versiones
+                q1 = pd.Series({
+                    "quote_id": q1_data.get("quote_id"),
+                    "quote_group_id": q1_data.get("quote_group_id", ""),
+                    "version": q1_data.get("version", 1),
+                    "total_revenue": q1_data.get("total_revenue", 0),
+                    "total_cost": q1_data.get("total_cost", 0),
+                    "gross_profit": q1_data.get("gross_profit", 0),
+                    "avg_margin": q1_data.get("avg_margin", 0),
+                    "client_name": q1_data.get("client_name", ""),
+                    "proposal_name": q1_data.get("proposal_name", ""),
+                    "quoted_by": q1_data.get("quoted_by", ""),
+                    "created_at": q1_data.get("created_at", "")
+                })
+            
+                q2 = pd.Series({
+                    "quote_id": q2_data.get("quote_id"),
+                    "quote_group_id": q2_data.get("quote_group_id", ""),
+                    "version": q2_data.get("version", 1),
+                    "total_revenue": q2_data.get("total_revenue", 0),
+                    "total_cost": q2_data.get("total_cost", 0),
+                    "gross_profit": q2_data.get("gross_profit", 0),
+                    "avg_margin": q2_data.get("avg_margin", 0),
+                    "client_name": q2_data.get("client_name", ""),
+                    "proposal_name": q2_data.get("proposal_name", ""),
+                    "quoted_by": q2_data.get("quoted_by", ""),
+                    "created_at": q2_data.get("created_at", "")
+                })
+            
+                # ===== NIVEL A: Resumen Ejecutivo =====
+                st.markdown("### 📈 Resumen Ejecutivo")
+            
+                col_info1, col_info2 = st.columns(2)
+            
+                with col_info1:
+                    st.markdown(f"**Cotización 1:**")
+                    st.caption(f"Cliente: {q1['client_name'] or 'Sin especificar'}")
+                    st.caption(f"Propuesta: {q1['proposal_name'] or 'Sin nombre'}")
+                    st.caption(f"Cotizado por: {q1['quoted_by'] or 'Sin especificar'}")
+                    st.caption(f"Versión: v{q1['version']}")
+            
+                with col_info2:
+                    st.markdown(f"**Cotización 2:**")
+                    st.caption(f"Cliente: {q2['client_name'] or 'Sin especificar'}")
+                    st.caption(f"Propuesta: {q2['proposal_name'] or 'Sin nombre'}")
+                    st.caption(f"Cotizado por: {q2['quoted_by'] or 'Sin especificar'}")
+                    st.caption(f"Versión: v{q2['version']}")
+            
+                st.divider()
+            
+                col_metrics1, col_metrics2, col_metrics3, col_metrics4 = st.columns(4)
+            
+                with col_metrics1:
+                    delta_revenue = float(q2["total_revenue"] - q1["total_revenue"])
+                    st.metric(
+                        "Ingreso Total",
+                        f"${float(q2['total_revenue']):,.2f}",
+                        f"${delta_revenue:,.2f}",
+                        delta_color="normal"
+                    )
+                    st.caption(f"Q1: ${float(q1['total_revenue']):,.2f}")
+            
+                with col_metrics2:
+                    delta_profit = float(q2["gross_profit"] - q1["gross_profit"])
+                    st.metric(
+                        "Utilidad Bruta",
+                        f"${float(q2['gross_profit']):,.2f}",
+                        f"${delta_profit:,.2f}",
+                        delta_color="normal"
+                    )
+                    st.caption(f"Q1: ${float(q1['gross_profit']):,.2f}")
+            
+                with col_metrics3:
+                    delta_cost = float(q2["total_cost"] - q1["total_cost"])
+                    st.metric(
+                        "Costo Total",
+                        f"${float(q2['total_cost']):,.2f}",
+                        f"${delta_cost:,.2f}",
+                        delta_color="inverse"
+                    )
+                    st.caption(f"Q1: ${float(q1['total_cost']):,.2f}")
+            
+                with col_metrics4:
+                    delta_margin = float(q2["avg_margin"] - q1["avg_margin"])
+                    st.metric(
+                        "Margen Promedio",
+                        f"{float(q2['avg_margin']):.2f}%",
+                        f"{delta_margin:.2f}%",
+                        delta_color="normal"
+                    )
+                    st.caption(f"Q1: {float(q1['avg_margin']):.2f}%")
+            
+                # ===== NIVEL B: Análisis por componente de origen =====
+                st.divider()
+                st.markdown("### 🔍 Análisis por Componente de Origen")
+            
+                l1_all = load_lines_for_quote(q1["quote_id"])
+                l2_all = load_lines_for_quote(q2["quote_id"])
+            
+            # Usar directamente los DataFrames con las columnas correctas
+            l1 = l1_all.copy()
+            l2 = l2_all.copy()
+        
+            # Calcular totales por origen
+            def calculate_origin_totals(df):
+                df = df.copy()
+                # Las columnas correctas son cost_unit y final_price_unit
+                df["cost_unit"] = pd.to_numeric(df["cost_unit"], errors="coerce").fillna(0.0)
+                df["final_price_unit"] = pd.to_numeric(df["final_price_unit"], errors="coerce").fillna(0.0)
+                # Usar cost_unit y final_price_unit directamente (sin multiplicar por quantity)
+                df["cost_total"] = df["cost_unit"]
+                df["revenue_total"] = df["final_price_unit"]
+            
+                grouped = df.groupby("service_origin", as_index=False).agg({
+                    "cost_total": "sum",
+                    "revenue_total": "sum"
+                })
+                grouped.columns = ["Origen", "Costo", "Ingreso"]
+                grouped["Utilidad"] = grouped["Ingreso"] - grouped["Costo"]
+                return grouped
+            
+                comp_v1 = calculate_origin_totals(l1)
+                comp_v2 = calculate_origin_totals(l2)
+            
+                # Merge para comparar
+                comp_merged = pd.merge(
+                    comp_v1,
+                    comp_v2,
+                    on="Origen",
+                    how="outer",
+                    suffixes=(" Q1", " Q2")
+                ).fillna(0)
+            
+                comp_merged["Δ Absoluto"] = comp_merged["Ingreso Q2"] - comp_merged["Ingreso Q1"]
+                comp_merged["Δ Relativo %"] = ((comp_merged["Ingreso Q2"] - comp_merged["Ingreso Q1"]) / comp_merged["Ingreso Q1"] * 100).replace([float('inf'), -float('inf')], 0).fillna(0)
+            
+                # Formatear para visualización
+                comp_components = comp_merged.copy()
+                for col in ["Costo Q1", "Ingreso Q1", "Utilidad Q1", "Costo Q2", "Ingreso Q2", "Utilidad Q2", "Δ Absoluto"]:
+                    if col in comp_components.columns:
+                        comp_components[col] = comp_components[col].apply(lambda x: f"${x:,.2f}")
+            
+                if "Δ Relativo %" in comp_components.columns:
+                    comp_components["Δ Relativo %"] = comp_components["Δ Relativo %"].apply(lambda x: f"{x:.2f}%")
+            
+                st.dataframe(comp_components, use_container_width=True, hide_index=True)
+            
+                # ===== NIVEL C: Cambios de SKU =====
+                st.divider()
+                st.markdown("### 📦 Cambios en SKUs")
+            
+                skus_v1 = set(l1["sku"].tolist())
+                skus_v2 = set(l2["sku"].tolist())
+            
+                skus_added = skus_v2 - skus_v1
+                skus_removed = skus_v1 - skus_v2
+                skus_common = skus_v1 & skus_v2
+            
+                col_sku1, col_sku2, col_sku3 = st.columns(3)
+            
+                with col_sku1:
+                    st.metric("SKUs solo en Q2", len(skus_added))
+                    if skus_added:
+                        with st.expander("Ver SKUs"):
+                            for sku in skus_added:
+                                st.caption(f"✅ {sku}")
+            
+                with col_sku2:
+                    st.metric("SKUs solo en Q1", len(skus_removed))
+                    if skus_removed:
+                        with st.expander("Ver SKUs"):
+                            for sku in skus_removed:
+                                st.caption(f"❌ {sku}")
+            
+                with col_sku3:
+                    st.metric("SKUs en común", len(skus_common))
+            
+                # ===== NIVEL D: Sistema Narrativo Inteligente =====
+                st.divider()
+                st.markdown("### 📖 Narrativa Inteligente")
+            
+                narrative = generate_comparison_narrative(
+                    q1=q1,
+                    q2=q2,
+                    df1=l1,
+                    df2=l2,
+                    playbook_name=selected_playbook
+                )
+            
+                # Mostrar resumen ejecutivo
+                st.markdown("#### 📌 Resumen Ejecutivo")
+                st.success(narrative["executive"])
+            
+                # Mostrar detalle técnico
+                if narrative["detail"]:
+                    with st.expander("📋 Ver detalle técnico", expanded=False):
+                        st.write(narrative["detail"])
+            
+                # Indicadores de salud
+                col_health1, col_health2 = st.columns(2)
+            
+                with col_health1:
+                    health_color = {"verde": "🟢", "amarillo": "🟡", "rojo": "🔴"}
+                    st.caption(f"Salud Q1: {health_color[narrative['health_v1']]} {narrative['health_v1'].upper()}")
+            
+                with col_health2:
+                    st.caption(f"Salud Q2: {health_color[narrative['health_v2']]} {narrative['health_v2'].upper()}")
+            
+                st.divider()
+            
+                # Insight automático
+                st.markdown("### 💡 Insight Rápido")
+            
+                insights = []
+            
+                if delta_revenue > 0 and delta_margin > 0:
+                    insights.append("✅ **Q2 superior:** Mayor ingreso Y mejor margen")
+                elif delta_revenue > 0 and delta_margin < 0:
+                    insights.append("⚠️ **Crecimiento agresivo en Q2:** Más ingreso pero sacrificó margen")
+                elif delta_revenue < 0 and delta_margin > 0:
+                    insights.append("🎯 **Q2 optimizada:** Menos ingreso pero margen mejoró")
+                else:
+                    insights.append("❌ **Q2 deteriorada:** Menos ingreso Y peor margen")
+            
+                if len(skus_added) > len(skus_removed):
+                    insights.append(f"📈 **Q2 más amplia:** {len(skus_added)} SKUs nuevos vs {len(skus_removed)} eliminados")
+                elif len(skus_removed) > len(skus_added):
+                    insights.append(f"📉 **Q2 más simple:** {len(skus_removed)} SKUs eliminados vs {len(skus_added)} nuevos")
+            
+                # Origen que más cambió
+                if not comp_components.empty and "Δ Absoluto" in comp_components.columns:
+                    try:
+                        # Necesitamos los valores numéricos originales, no los formateados
+                        max_change_idx = comp_merged["Δ Absoluto"].abs().idxmax()
+                        max_change_origen = comp_merged.loc[max_change_idx, "Origen"]
+                        max_change_value = comp_merged.loc[max_change_idx, "Δ Absoluto"]
+                        if abs(max_change_value) > 0:
+                            insights.append(f"🎯 **Origen clave:** '{max_change_origen}' cambió ${abs(max_change_value):,.2f}")
+                    except Exception:
+                        pass
+            
+                for insight in insights:
+                    st.markdown(insight)
+    else:
+        st.markdown("""
+        <div style='text-align: center; padding: 3rem; background-color: rgba(128, 128, 128, 0.05); border-radius: 10px;'>
+            <h3>📊 Listo para comparar</h3>
+            <p>Selecciona dos cotizaciones arriba y presiona "🔄 Comparar Ambas"</p>
+            <p style='font-size: 0.9em; color: #888;'>💡 Puedes comparar versiones del mismo cliente, propuestas de clientes diferentes, o cualquier combinación</p>
+        </div>
+        """, unsafe_allow_html=True)
+
+# =========================
+# TAB: PROPUESTAS FORMALES
 # =========================
 with tab_db:
     st.header("📚 Base de Datos de Propuestas")

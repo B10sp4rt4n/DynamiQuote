@@ -795,20 +795,32 @@ def search_quotes(query: str, limit: int = 20) -> list:
             search_pattern = f"%{query}%"
             
             if is_postgres():
+                # Usar subconsulta para obtener última versión de cada grupo
+                # y luego ordenar por fecha más reciente
                 cur.execute("""
-                    SELECT DISTINCT ON (quote_group_id)
-                        quote_id, quote_group_id, version, parent_quote_id, 
-                        created_at, status, total_cost, total_revenue, 
-                        gross_profit, avg_margin, playbook_name, client_name, 
-                        quoted_by, proposal_name
-                    FROM quotes
-                    WHERE LOWER(client_name) LIKE LOWER(%s) 
-                       OR LOWER(proposal_name) LIKE LOWER(%s)
-                       OR LOWER(quoted_by) LIKE LOWER(%s)
-                       OR CAST(total_revenue AS TEXT) LIKE %s
-                    ORDER BY quote_group_id, version DESC, created_at DESC
+                    SELECT q.quote_id, q.quote_group_id, q.version, q.parent_quote_id,
+                           q.created_at, q.status, q.total_cost, q.total_revenue,
+                           q.gross_profit, q.avg_margin, q.playbook_name, q.client_name,
+                           q.quoted_by, q.proposal_name
+                    FROM quotes q
+                    INNER JOIN (
+                        SELECT quote_group_id, MAX(version) as max_version
+                        FROM quotes
+                        WHERE LOWER(client_name) LIKE LOWER(%s)
+                           OR LOWER(proposal_name) LIKE LOWER(%s)
+                           OR LOWER(quoted_by) LIKE LOWER(%s)
+                           OR CAST(total_revenue AS TEXT) LIKE %s
+                        GROUP BY quote_group_id
+                    ) latest ON q.quote_group_id = latest.quote_group_id 
+                            AND q.version = latest.max_version
+                    WHERE LOWER(q.client_name) LIKE LOWER(%s)
+                       OR LOWER(q.proposal_name) LIKE LOWER(%s)
+                       OR LOWER(q.quoted_by) LIKE LOWER(%s)
+                       OR CAST(q.total_revenue AS TEXT) LIKE %s
+                    ORDER BY q.created_at DESC
                     LIMIT %s
-                """, (search_pattern, search_pattern, search_pattern, search_pattern, limit))
+                """, (search_pattern, search_pattern, search_pattern, search_pattern,
+                      search_pattern, search_pattern, search_pattern, search_pattern, limit))
             else:
                 # SQLite: usar subconsulta para obtener solo la última versión
                 cur.execute("""
@@ -852,14 +864,21 @@ def get_recent_quotes(limit: int = 20) -> list:
     try:
         with get_cursor() as cur:
             if is_postgres():
+                # Usar subconsulta para obtener última versión de cada grupo
+                # y luego ordenar por fecha más reciente
                 cur.execute("""
-                    SELECT DISTINCT ON (quote_group_id)
-                        quote_id, quote_group_id, version, parent_quote_id,
-                        created_at, status, total_cost, total_revenue,
-                        gross_profit, avg_margin, playbook_name, client_name,
-                        quoted_by, proposal_name
-                    FROM quotes
-                    ORDER BY quote_group_id, version DESC, created_at DESC
+                    SELECT q.quote_id, q.quote_group_id, q.version, q.parent_quote_id,
+                           q.created_at, q.status, q.total_cost, q.total_revenue,
+                           q.gross_profit, q.avg_margin, q.playbook_name, q.client_name,
+                           q.quoted_by, q.proposal_name
+                    FROM quotes q
+                    INNER JOIN (
+                        SELECT quote_group_id, MAX(version) as max_version
+                        FROM quotes
+                        GROUP BY quote_group_id
+                    ) latest ON q.quote_group_id = latest.quote_group_id 
+                            AND q.version = latest.max_version
+                    ORDER BY q.created_at DESC
                     LIMIT %s
                 """, (limit,))
             else:
