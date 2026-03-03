@@ -1425,9 +1425,9 @@ with tab_quotes:
                         st.write(f"🔍 DEBUG: FINAL - st.session_state.parent_quote_id = {st.session_state.parent_quote_id}")
 
                         # Copiar información a los saved_* (para persistencia)
-                        st.session_state.saved_proposal_name = latest["proposal_name"] or ""
-                        st.session_state.saved_client_name = latest["client_name"] or ""
-                        st.session_state.saved_quoted_by = latest["quoted_by"] or ""
+                        st.session_state.saved_proposal_name = group_data["proposal_name"] or ""
+                        st.session_state.saved_client_name = group_data["client_name"] or ""
+                        st.session_state.saved_quoted_by = group_data["quoted_by"] or ""
 
                         st.success(f"✅ {len(quote_lines_raw)} líneas copiadas para nueva versión v{st.session_state.version}")
                         st.warning(f"⚠️ VERIFICACIÓN: La versión actual en session_state es: **v{st.session_state.version}**")
@@ -1439,8 +1439,8 @@ with tab_quotes:
                 st.divider()
                 st.markdown("**📊 Vista previa de la propuesta seleccionada:**")
 
-                # Obtener líneas para mostrar (usando la variable ya calculada)
-                lines_preview = get_quote_lines(latest["quote_id"] if 'latest' in locals() else group_quotes.iloc[0]["quote_id"])
+                # Obtener líneas para mostrar
+                lines_preview = get_quote_lines(group_data["quote_id"])
                 if lines_preview:
                     preview_df = pd.DataFrame(
                         lines_preview,
