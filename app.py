@@ -194,7 +194,7 @@ def render_advanced_quote_search(key: str, title: str = "🔍 Buscador de Cotiza
                 st.metric("Margen", f"{margin:.1f}%", label_visibility="collapsed", delta_color=delta_color)
             
             with col5:
-                if st.button("Seleccionar", key=f"{key}_select_{row['quote_group_id']}", type="primary", use_container_width=True):
+                if st.button("Seleccionar", key=f"{key}_select_{row['quote_group_id']}", type="primary", width='stretch'):
                     selected_group_id = row["quote_group_id"]
                     st.session_state[f"{key}_selected_group"] = selected_group_id
                     st.rerun()
@@ -455,7 +455,7 @@ with st.expander("🔍 **Búsqueda Rápida de Cotizaciones y Propuestas**", expa
         )
     
     with col_quick_btn:
-        quick_search_btn = st.button("🔍 Buscar", key="global_search_btn", use_container_width=True)
+        quick_search_btn = st.button("🔍 Buscar", key="global_search_btn", width='stretch')
     
     if quick_search and quick_search.strip():
         with st.spinner("Buscando..."):
@@ -485,7 +485,7 @@ with st.expander("🔍 **Búsqueda Rápida de Cotizaciones y Propuestas**", expa
                         
                         with col4:
                             # Botones de acción rápida
-                            if st.button("Ver", key=f"global_view_{group_id}", use_container_width=True, type="secondary"):
+                            if st.button("Ver", key=f"global_view_{group_id}", width='stretch', type="secondary"):
                                 st.session_state['selected_quote_group'] = group_id
                                 st.info(f"💡 Cotización {client or 'Sin cliente'} seleccionada. Ve al tab correspondiente para verla.")
                         
@@ -1455,7 +1455,7 @@ with tab_quotes:
                         lines_preview,
                         columns=["SKU", "Descripción", "Tipo", "Origen", "Costo Unit.", "Precio Unit.", "Margen %", "Estrategia", "Advertencias"]
                     )
-                    st.dataframe(preview_df, use_container_width=True)
+                    st.dataframe(preview_df, width='stretch')
                 else:
                     st.info("Esta propuesta no tiene líneas todavía")
             else:
@@ -1723,7 +1723,7 @@ with tab_quotes:
                             )
                         },
                         num_rows="dynamic",
-                        use_container_width=True,
+                        width='stretch',
                         hide_index=False,
                         key=f"preview_editor_{import_result['import_batch_id']}"
                     )
@@ -1765,7 +1765,7 @@ with tab_quotes:
                         })
                     
                     final_df = pd.DataFrame(final_data)
-                    st.dataframe(final_df, use_container_width=True, hide_index=False)
+                    st.dataframe(final_df, width='stretch', hide_index=False)
                     
                     st.success(f"✅ {len(final_df)} líneas listas para importar")
                     
@@ -1986,7 +1986,7 @@ with tab_quotes:
 
         edited_df = st.data_editor(
             display_df,
-            use_container_width=True,
+            width='stretch',
             hide_index=False,
             num_rows="fixed",
             column_config={
@@ -2125,7 +2125,7 @@ with tab_quotes:
                 if 'field_' in key or 'saved_' in key or 'input_' in key or 'proposal' in key.lower() or 'client' in key.lower() or 'quoted' in key.lower():
                     st.write(f"- `{key}`: `{st.session_state[key]}`")
 
-        save_button = st.button("💾 Guardar Cotización", type="primary", use_container_width=True)
+        save_button = st.button("💾 Guardar Cotización", type="primary", width='stretch')
 
         if save_button:
             # DEBUG INMEDIATO: Ver session_state en el momento del click
@@ -2678,13 +2678,13 @@ with tab_quotes:
             generate_button = st.button(
                 "🎯 Generar Propuesta Formal",
                 type="primary",
-                use_container_width=True
+                width='stretch'
             )
 
         with col2:
             preview_intro = st.button(
                 "👁️ Vista Previa Intro",
-                use_container_width=True
+                width='stretch'
             )
 
         if preview_intro:
@@ -2818,7 +2818,7 @@ with tab_quotes:
                                     data=pdf_data,
                                     file_name=f"{proposal['proposal_number']}.pdf",
                                     mime="application/pdf",
-                                    use_container_width=True
+                                    width='stretch'
                                 )
                         else:
                             st.error(f"❌ {message}")
@@ -2991,7 +2991,7 @@ with tab_quotes:
                                     file_name=f"{proposal_full['proposal_number']}.pdf",
                                     mime="application/pdf",
                                     key=f"download_{selected_proposal_id}",
-                                    use_container_width=True
+                                    width='stretch'
                                 )
                     
                     # Botón para regenerar PDF (siempre disponible)
@@ -2999,7 +2999,7 @@ with tab_quotes:
                         if st.button(
                             "🔄 Regenerar PDF",
                             key=f"regen_{selected_proposal_id}",
-                            use_container_width=True,
+                            width='stretch',
                             help="Genera un nuevo PDF con los datos actuales (sin modificar la propuesta)"
                         ):
                             with st.spinner("Generando PDF..."):
@@ -3076,7 +3076,7 @@ with tab_quotes:
                             if st.button(
                                 "✅ Marcar como Entregada",
                                 key=f"deliver_{selected_proposal_id}",
-                                use_container_width=True,
+                                width='stretch',
                                 type="primary",
                                 help="Marca la propuesta como entregada (inmutable)"
                             ):
@@ -3446,7 +3446,7 @@ with tab_comparator:
     if quote_1_id and quote_2_id:
         col_btn1, col_btn2, col_btn3 = st.columns([2, 1, 2])
         with col_btn2:
-            if st.button("🔄 Comparar Ambas", type="primary", use_container_width=True):
+            if st.button("🔄 Comparar Ambas", type="primary", width='stretch'):
                 if quote_1_id == quote_2_id:
                     st.warning("⚠️ Selecciona dos cotizaciones diferentes")
                 else:
@@ -3646,7 +3646,7 @@ with tab_comparator:
                 if "Δ Relativo %" in comp_components.columns:
                     comp_components["Δ Relativo %"] = comp_components["Δ Relativo %"].apply(lambda x: f"{x:.2f}%")
             
-                st.dataframe(comp_components, use_container_width=True, hide_index=True)
+                st.dataframe(comp_components, width='stretch', hide_index=True)
             
                 # ===== NIVEL C: Cambios de SKU =====
                 st.divider()
@@ -3796,7 +3796,7 @@ with tab_db:
                 key="db_search_limit"
             )
         with col_search2:
-            do_search = st.button("🔍 Buscar", key="do_search_btn", type="primary", use_container_width=True)
+            do_search = st.button("🔍 Buscar", key="do_search_btn", type="primary", width='stretch')
     
     with col_option2:
         st.markdown("##### 📅 Ver Recientes")
@@ -3809,7 +3809,7 @@ with tab_db:
                 key="db_recent_limit"
             )
         with col_recent2:
-            show_recent = st.button("📋 Ver Recientes", key="show_recent_btn", use_container_width=True)
+            show_recent = st.button("📋 Ver Recientes", key="show_recent_btn", width='stretch')
     
     # Determinar qué mostrar
     quotes_summary = None
@@ -3950,7 +3950,7 @@ with tab_db:
                     else:
                         paginated_df = lines_df
                     
-                    st.dataframe(paginated_df, hide_index=True, use_container_width=True)
+                    st.dataframe(paginated_df, hide_index=True, width='stretch')
                 else:
                     st.info("No hay líneas para esta versión")
                 
@@ -4090,7 +4090,7 @@ with tab_db:
                 # Mostrar tabla completa
                 st.dataframe(
                     display_lines_df,
-                    use_container_width=True,
+                    width='stretch',
                     hide_index=True,
                     height=400
                 )
@@ -4154,7 +4154,7 @@ with tab_db:
                     })
 
                 origen_df = pd.DataFrame(origen_df_data)
-                st.dataframe(origen_df, use_container_width=True, hide_index=True)
+                st.dataframe(origen_df, width='stretch', hide_index=True)
 
             else:
                 st.warning("⚠️ No se encontraron líneas para esta cotización")
@@ -4259,7 +4259,7 @@ with tab_db:
                     data=csv_quotes,
                     file_name=f"cotizaciones_{pd.Timestamp.now().strftime('%Y%m%d_%H%M%S')}.csv",
                     mime="text/csv",
-                    use_container_width=True
+                    width='stretch'
                 )
 
                 # CSV de líneas
@@ -4270,7 +4270,7 @@ with tab_db:
                         data=csv_lines,
                         file_name=f"lineas_cotizacion_{pd.Timestamp.now().strftime('%Y%m%d_%H%M%S')}.csv",
                         mime="text/csv",
-                        use_container_width=True
+                        width='stretch'
                     )
 
                 # Excel con ambas hojas
@@ -4288,7 +4288,7 @@ with tab_db:
                         data=excel_data,
                         file_name=f"base_datos_completa_{pd.Timestamp.now().strftime('%Y%m%d_%H%M%S')}.xlsx",
                         mime="application/vnd.openxmlformats-officedocument.spreadsheetml.sheet",
-                        use_container_width=True
+                        width='stretch'
                     )
                 except ImportError:
                     st.warning("⚠️ Instala 'openpyxl' para exportar a Excel")
@@ -4315,7 +4315,7 @@ with tab_db:
                         key="texto_confirmacion_borrado"
                     )
 
-                    if st.button("🗑️ BORRAR TODA LA BASE DE DATOS", type="primary", use_container_width=True):
+                    if st.button("🗑️ BORRAR TODA LA BASE DE DATOS", type="primary", width='stretch'):
                         if st.session_state.get("texto_confirmacion_borrado", "") == "BORRAR TODO":
                             with st.spinner("Borrando base de datos..."):
                                 conn = None
