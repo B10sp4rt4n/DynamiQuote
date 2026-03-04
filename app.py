@@ -1323,6 +1323,15 @@ with tab_quotes:
             group_data = get_quote_by_group_id(selected_group_id)
             
             if group_data:
+                # Validar que el diccionario tiene todos los campos necesarios
+                required_fields = ['quote_id', 'client_name', 'proposal_name', 'version', 'quoted_by']
+                missing_fields = [f for f in required_fields if f not in group_data]
+                
+                if missing_fields:
+                    st.error(f"⚠️ Error: La consulta retornó datos incompletos. Campos faltantes: {', '.join(missing_fields)}")
+                    st.warning("💡 Esto puede indicar que la base de datos necesita actualización. Contacta al administrador.")
+                    st.stop()
+                
                 # Mostrar información de la propuesta
                 st.success(f"✅ Propuesta seleccionada: {group_data['client_name']} - {group_data['proposal_name']}")
                 
@@ -1425,9 +1434,9 @@ with tab_quotes:
                         st.write(f"🔍 DEBUG: FINAL - st.session_state.parent_quote_id = {st.session_state.parent_quote_id}")
 
                         # Copiar información a los saved_* (para persistencia)
-                        st.session_state.saved_proposal_name = group_data["proposal_name"] or ""
-                        st.session_state.saved_client_name = group_data["client_name"] or ""
-                        st.session_state.saved_quoted_by = group_data["quoted_by"] or ""
+                        st.session_state.saved_proposal_name = group_data.get("proposal_name", "") or ""
+                        st.session_state.saved_client_name = group_data.get("client_name", "") or ""
+                        st.session_state.saved_quoted_by = group_data.get("quoted_by", "") or ""
 
                         st.success(f"✅ {len(quote_lines_raw)} líneas copiadas para nueva versión v{st.session_state.version}")
                         st.warning(f"⚠️ VERIFICACIÓN: La versión actual en session_state es: **v{st.session_state.version}**")
@@ -2211,6 +2220,10 @@ with tab_quotes:
                         st.session_state.quote_group_id = str(uuid.uuid4())
                         st.session_state.version = 1
                         st.session_state.parent_quote_id = None
+                        # Limpiar también los campos de información
+                        st.session_state.saved_proposal_name = ""
+                        st.session_state.saved_client_name = ""
+                        st.session_state.saved_quoted_by = ""
                         st.info("🆕 Preparado para nueva oportunidad")
                         st.rerun()
                     else:
@@ -2293,6 +2306,17 @@ with tab_quotes:
             # Obtener información del grupo
             group_data = get_quote_by_group_id(selected_group_id)
             if group_data:
+                # Validar que el diccionario tiene todos los campos necesarios
+                required_fields = ['quote_id', 'quote_group_id', 'version', 'created_at', 'status', 
+                                 'total_revenue', 'avg_margin', 'playbook_name', 'client_name', 
+                                 'proposal_name', 'quoted_by']
+                missing_fields = [f for f in required_fields if f not in group_data]
+                
+                if missing_fields:
+                    st.error(f"⚠️ Error: La consulta retornó datos incompletos. Campos faltantes: {', '.join(missing_fields)}")
+                    st.warning("💡 Esto puede indicar que la base de datos necesita actualización. Contacta al administrador.")
+                    st.stop()
+                    
                 source_id = group_data["quote_id"]
                 
                 # Mostrar resumen
@@ -2307,7 +2331,7 @@ with tab_quotes:
                     None, group_data['created_at'], group_data['status'],
                     0, group_data['total_revenue'], 0, group_data['avg_margin'],
                     group_data['playbook_name'], group_data['client_name'],
-                    "", group_data['proposal_name']
+                    group_data.get('quoted_by', 'Sin asignar'), group_data['proposal_name']
                 )
 
     elif origin_type == "Propuesta Anterior (Nueva Versión)":

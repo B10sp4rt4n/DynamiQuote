@@ -1054,7 +1054,8 @@ def get_quote_by_group_id(quote_group_id: str) -> dict:
                         avg_margin,
                         client_name,
                         proposal_name,
-                        playbook_name
+                        playbook_name,
+                        quoted_by
                     FROM quotes
                     WHERE quote_group_id = %s
                     ORDER BY version DESC
@@ -1072,7 +1073,8 @@ def get_quote_by_group_id(quote_group_id: str) -> dict:
                         avg_margin,
                         client_name,
                         proposal_name,
-                        playbook_name
+                        playbook_name,
+                        quoted_by
                     FROM quotes
                     WHERE quote_group_id = ?
                     ORDER BY version DESC
@@ -1091,7 +1093,8 @@ def get_quote_by_group_id(quote_group_id: str) -> dict:
                     "avg_margin": row[6],
                     "client_name": row[7] or "Sin nombre",
                     "proposal_name": row[8] or "Sin nombre",
-                    "playbook_name": row[9]
+                    "playbook_name": row[9],
+                    "quoted_by": row[10] or "Sin asignar"
                 }
             return None
     except Exception as e:
