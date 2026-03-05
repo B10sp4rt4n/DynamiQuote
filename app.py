@@ -1297,234 +1297,102 @@ with tab_quotes:
                 st.session_state.saved_quoted_by = quoted_by_form
                 st.success(f"✅ Info guardada: {proposal_name_form} | {client_name_form} | {quoted_by_form}")
 
-        # Asociar a propuesta existente
-        st.markdown("**¿Nueva propuesta o asociar a existente?**")
-        proposal_type = st.radio(
-            "Tipo",
-            ["Nueva propuesta", "Asociar a existente"],
+        # ¿Nueva cotización o v2 de una existente?
+        quote_mode = st.radio(
+            "Tipo de cotización:",
+            ["🆕 Nueva cotización", "📋 Crear v2 de propuesta existente"],
             horizontal=True,
-            help="Nueva: crea un nuevo grupo. Existente: nueva versión de propuesta anterior"
+            key="quote_mode_selector"
         )
 
-        # Si es asociar a existente, mostrar selector
-        if proposal_type == "Asociar a existente":
+        # Flujo V2: buscar y copiar propuesta existente
+        if quote_mode == "📋 Crear v2 de propuesta existente":
             st.divider()
-            st.subheader("🔗 Asociar a Propuesta Existente")
+            st.subheader("🔗 Seleccionar propuesta base")
 
-        # Usar búsqueda optimizada
-        selected_group_id = render_quote_search_selector(
-            key="asociar_existente",
-            label="🔍 Buscar propuesta base",
-            show_recent=True
-        )
-
-        if selected_group_id:
-            # Cargar información del grupo seleccionado
-            group_data = get_quote_by_group_id(selected_group_id)
-            
-            if group_data:
-                # Validar que el diccionario tiene todos los campos necesarios
-                required_fields = ['quote_id', 'client_name', 'proposal_name', 'version', 'quoted_by']
-                missing_fields = [f for f in required_fields if f not in group_data]
-                
-                if missing_fields:
-                    st.error(f"⚠️ Error: La consulta retornó datos incompletos. Campos faltantes: {', '.join(missing_fields)}")
-                    st.warning("💡 Esto puede indicar que la base de datos necesita actualización. Contacta al administrador.")
-                    st.stop()
-                
-                # Mostrar información de la propuesta
-                st.success(f"✅ Propuesta seleccionada: {group_data['client_name']} - {group_data['proposal_name']}")
-                
-                # Cargar todas las versiones del grupo para mostrar info
-                versions_df = load_versions_for_group(selected_group_id)
-                current_max_version = versions_df['version'].max() if not versions_df.empty else 1
-                next_version = current_max_version + 1
-                
-                st.info(f"📋 Esta propuesta tiene {len(versions_df)} versión(es). Al copiar, se creará la **versión {next_version}**")
-
-                # DEBUG: Mostrar estado actual antes de copiar
-                with st.expander("🔍 DEBUG: Estado actual antes de copiar", expanded=False):
-                    st.write(f"**Estado actual de session_state:**")
-                    st.write(f"- version: {st.session_state.version}")
-                    st.write(f"- quote_group_id: {st.session_state.quote_group_id}")
-                    st.write(f"- parent_quote_id: {st.session_state.parent_quote_id}")
-                    st.write(f"- Cantidad de líneas cargadas: {len(st.session_state.lines)}")
-                    st.write(f"")
-                    st.write(f"**Propuesta seleccionada:**")
-                    st.write(f"- group_id seleccionado: {selected_group_id}")
-                    st.write(f"- Versiones en este grupo: {versions_df['version'].tolist() if not versions_df.empty else []}")
-                    st.write(f"- Max versión: {current_max_version}")
-                    st.write(f"- Próxima versión que se creará: {next_version}")
-
-                if st.button("📋 Copiar datos de esta propuesta", type="primary"):
-                    latest_quote_id = group_data["quote_id"]
-
-                    st.write(f"🔍 DEBUG: quote_id seleccionado: {latest_quote_id}")
-                    st.write(f"🔍 DEBUG: Versión de la propuesta seleccionada: {group_data['version']}")
-                    st.write(f"🔍 DEBUG: Total de versiones en el grupo: {len(versions_df)}")
-
-                    # Cargar líneas
-                    lines = get_quote_lines(latest_quote_id)
-
-                    st.write(f"🔍 DEBUG: get_quote_lines retornó {len(lines) if lines else 0} líneas")
-
-                    if lines:
-                        # Obtener líneas completas con todos los campos
-                        quote_lines_raw = get_quote_lines_full(latest_quote_id)
-
-                        st.write(f"🔍 DEBUG: get_quote_lines_full retornó {len(quote_lines_raw) if quote_lines_raw else 0} líneas")
-
-                        # Limpiar líneas actuales
-                        st.session_state.lines = []
-
-                        # Mapear campos
-                        columns = ["line_id", "quote_id", "sku", "quantity", "description_original", 
-                                  "description_final", "description_corrections", "line_type", 
-                                  "service_origin", "cost_unit", "final_price_unit", "margin_pct", 
-                                  "strategy", "warnings", "created_at", "import_source", "import_batch_id"]
-
-                        for row in quote_lines_raw:
-                            line_dict = dict(zip(columns, row))
-                            # Generar nuevos IDs
-                            line_dict['line_id'] = str(uuid.uuid4())
-                            line_dict['created_at'] = datetime.now(UTC).isoformat()
-                            line_dict['description_input'] = str(line_dict.get('description_original', ''))
-                            line_dict['corrected_desc'] = str(line_dict.get('description_final', ''))
-                            line_dict['corrections'] = line_dict.get('description_corrections', '').split(', ') if line_dict.get('description_corrections') else []
-                            
-                            # IMPORTANTE: Convertir tipos numpy a tipos nativos de Python
-                            line_dict['quantity'] = float(line_dict.get('quantity', 1))
-                            line_dict['sku'] = str(line_dict.get('sku', ''))
-                            line_dict['description_original'] = str(line_dict.get('description_original', ''))
-                            line_dict['description_final'] = str(line_dict.get('description_final', ''))
-                            line_dict['description_corrections'] = str(line_dict.get('description_corrections', ''))
-                            line_dict['line_type'] = str(line_dict.get('line_type', ''))
-                            line_dict['service_origin'] = str(line_dict.get('service_origin', ''))
-                            line_dict['cost_unit'] = float(line_dict.get('cost_unit', 0))
-                            line_dict['final_price_unit'] = float(line_dict.get('final_price_unit', 0))
-                            line_dict['margin_pct'] = float(line_dict.get('margin_pct', 0)) if line_dict.get('margin_pct') is not None else 0.0
-                            line_dict['strategy'] = str(line_dict.get('strategy', ''))
-                            line_dict['warnings'] = str(line_dict.get('warnings', ''))
-                            line_dict['import_source'] = str(line_dict.get('import_source', 'manual'))
-                            line_dict['import_batch_id'] = str(line_dict.get('import_batch_id', '')) if line_dict.get('import_batch_id') else None
-
-                            st.session_state.lines.append(line_dict)
-
-                        st.write(f"🔍 DEBUG: st.session_state.lines ahora tiene {len(st.session_state.lines)} líneas")
-
-                        # Configurar para nueva versión
-                        st.session_state.quote_id = str(uuid.uuid4())
-                        st.session_state.quote_group_id = selected_group_id  # Mismo grupo
-                        
-                        # IMPORTANTE: Limpiar caché antes de cargar versiones para obtener datos frescos
-                        st.cache_data.clear()
-                        
-                        # Calcular la siguiente versión correctamente: MAX(versiones) + 1
-                        all_versions_for_group = load_versions_for_group(selected_group_id)
-                        st.write(f"🔍 DEBUG: Versiones encontradas para el grupo: {all_versions_for_group['version'].tolist() if not all_versions_for_group.empty else []}")
-                        max_version = all_versions_for_group["version"].max() if not all_versions_for_group.empty else 0
-                        st.write(f"🔍 DEBUG: Max versión encontrada: {max_version}")
-                        st.session_state.version = max_version + 1
-                        st.write(f"🔍 DEBUG: Nueva versión configurada en session_state: {st.session_state.version}")
-                        
-                        st.session_state.parent_quote_id = latest_quote_id
-
-                        st.write(f"🔍 DEBUG: FINAL - st.session_state.version = {st.session_state.version}")
-                        st.write(f"🔍 DEBUG: FINAL - st.session_state.quote_group_id = {st.session_state.quote_group_id}")
-                        st.write(f"🔍 DEBUG: FINAL - st.session_state.parent_quote_id = {st.session_state.parent_quote_id}")
-
-                        # Copiar información a los saved_* (para persistencia)
-                        st.session_state.saved_proposal_name = group_data.get("proposal_name", "") or ""
-                        st.session_state.saved_client_name = group_data.get("client_name", "") or ""
-                        st.session_state.saved_quoted_by = group_data.get("quoted_by", "") or ""
-
-                        st.success(f"✅ {len(quote_lines_raw)} líneas copiadas para nueva versión v{st.session_state.version}")
-                        st.warning(f"⚠️ VERIFICACIÓN: La versión actual en session_state es: **v{st.session_state.version}**")
-                        st.info(f"👉 Baja a la sección '➕ Agregar línea' para ver las {len(quote_lines_raw)} líneas cargadas, o ve a '✅ Cerrar y guardar propuesta' para guardarla directamente.")
-                    else:
-                        st.warning("Esta propuesta no tiene líneas")
-
-                # Mostrar tabla de datos de la propuesta seleccionada
-                st.divider()
-                st.markdown("**📊 Vista previa de la propuesta seleccionada:**")
-
-                # Obtener líneas para mostrar
-                lines_preview = get_quote_lines(group_data["quote_id"])
-                if lines_preview:
-                    preview_df = pd.DataFrame(
-                        lines_preview,
-                        columns=["SKU", "Descripción", "Tipo", "Origen", "Costo Unit.", "Precio Unit.", "Margen %", "Estrategia", "Advertencias"]
-                    )
-                    st.dataframe(preview_df, width='stretch')
-                else:
-                    st.info("Esta propuesta no tiene líneas todavía")
-            else:
-                st.info("No hay propuestas disponibles para asociar")
-        else:
-            st.info("No hay propuestas guardadas aún")
-
-    st.divider()
-
-    # Opción para cargar desde propuesta anterior
-    with st.expander("📄 Cargar desde Propuesta Anterior", expanded=False):
-        from database import get_formal_proposals, get_formal_proposal
-
-        all_proposals = get_formal_proposals()
-        if all_proposals:
-            proposal_options = {
-                f"{p['proposal_number']} - {p['recipient_company']} - {p['issued_date']}": p['proposal_doc_id']
-                for p in all_proposals
-            }
-
-            selected_proposal = st.selectbox(
-                "Selecciona una propuesta",
-                options=["-- Ninguna --"] + list(proposal_options.keys()),
-                key="load_from_proposal"
+            selected_group_id = render_quote_search_selector(
+                key="asociar_existente",
+                label="🔍 Buscar propuesta",
+                show_recent=True
             )
 
-            if selected_proposal != "-- Ninguna --":
-                if st.button("🔄 Cargar Datos de esta Propuesta", type="primary"):
-                    proposal_id = proposal_options[selected_proposal]
-                    existing_proposal = get_formal_proposal(proposal_id)
+            if selected_group_id:
+                group_data = get_quote_by_group_id(selected_group_id)
 
-                    if existing_proposal and existing_proposal.get('quote_id'):
-                        # Cargar líneas de la cotización original
-                        quote_lines_raw = get_quote_lines_full(existing_proposal['quote_id'])
+                if group_data:
+                    versions_df = load_versions_for_group(selected_group_id)
+                    current_max_version = versions_df['version'].max() if not versions_df.empty else 1
+                    next_version = current_max_version + 1
 
-                        if quote_lines_raw:
-                            # Convertir a formato de session_state.lines con nuevos IDs
+                    col_info1, col_info2, col_info3 = st.columns(3)
+                    col_info1.info(f"👤 {group_data['client_name']}")
+                    col_info2.info(f"📄 {group_data['proposal_name']}")
+                    col_info3.info(f"📋 {len(versions_df)} versión(es) → se creará v{next_version}")
+
+                    if st.button("📋 Copiar datos de esta propuesta", type="primary"):
+                        latest_quote_id = group_data["quote_id"]
+                        lines = get_quote_lines(latest_quote_id)
+
+                        if lines:
+                            quote_lines_raw = get_quote_lines_full(latest_quote_id)
                             st.session_state.lines = []
-                            columns = ["line_id", "quote_id", "sku", "quantity", "description_original", 
-                                      "description_final", "description_corrections", "line_type", 
-                                      "service_origin", "cost_unit", "final_price_unit", "margin_pct", 
-                                      "strategy", "warnings", "created_at"]
+
+                            columns = ["line_id", "quote_id", "sku", "quantity", "description_original",
+                                      "description_final", "description_corrections", "line_type",
+                                      "service_origin", "cost_unit", "final_price_unit", "margin_pct",
+                                      "strategy", "warnings", "created_at", "import_source", "import_batch_id"]
 
                             for row in quote_lines_raw:
                                 line_dict = dict(zip(columns, row))
-                                # Generar nuevos IDs para evitar conflictos
                                 line_dict['line_id'] = str(uuid.uuid4())
                                 line_dict['created_at'] = datetime.now(UTC).isoformat()
-                                # Asegurar que description_input esté presente
-                                line_dict['description_input'] = line_dict.get('description_original', '')
-                                line_dict['corrected_desc'] = line_dict.get('description_final', '')
+                                line_dict['description_input'] = str(line_dict.get('description_original', ''))
+                                line_dict['corrected_desc'] = str(line_dict.get('description_final', ''))
                                 line_dict['corrections'] = line_dict.get('description_corrections', '').split(', ') if line_dict.get('description_corrections') else []
-
+                                line_dict['quantity'] = float(line_dict.get('quantity', 1))
+                                line_dict['sku'] = str(line_dict.get('sku', ''))
+                                line_dict['description_original'] = str(line_dict.get('description_original', ''))
+                                line_dict['description_final'] = str(line_dict.get('description_final', ''))
+                                line_dict['description_corrections'] = str(line_dict.get('description_corrections', ''))
+                                line_dict['line_type'] = str(line_dict.get('line_type', ''))
+                                line_dict['service_origin'] = str(line_dict.get('service_origin', ''))
+                                line_dict['cost_unit'] = float(line_dict.get('cost_unit', 0))
+                                line_dict['final_price_unit'] = float(line_dict.get('final_price_unit', 0))
+                                line_dict['margin_pct'] = float(line_dict.get('margin_pct', 0)) if line_dict.get('margin_pct') is not None else 0.0
+                                line_dict['strategy'] = str(line_dict.get('strategy', ''))
+                                line_dict['warnings'] = str(line_dict.get('warnings', ''))
+                                line_dict['import_source'] = str(line_dict.get('import_source', 'manual'))
+                                line_dict['import_batch_id'] = str(line_dict.get('import_batch_id', '')) if line_dict.get('import_batch_id') else None
                                 st.session_state.lines.append(line_dict)
 
-                            # Generar nuevos IDs de cotización
                             st.session_state.quote_id = str(uuid.uuid4())
-                            st.session_state.quote_group_id = str(uuid.uuid4())
-                            st.session_state.version = 1
-                            st.session_state.parent_quote_id = None
+                            st.session_state.quote_group_id = selected_group_id
+                            st.cache_data.clear()
+                            all_versions_for_group = load_versions_for_group(selected_group_id)
+                            max_version = all_versions_for_group["version"].max() if not all_versions_for_group.empty else 0
+                            st.session_state.version = max_version + 1
+                            st.session_state.parent_quote_id = latest_quote_id
+                            st.session_state.saved_proposal_name = group_data.get("proposal_name", "") or ""
+                            st.session_state.saved_client_name = group_data.get("client_name", "") or ""
+                            st.session_state.saved_quoted_by = group_data.get("quoted_by", "") or ""
 
-                            st.success(f"✅ Cargadas {len(quote_lines_raw)} líneas desde {existing_proposal['proposal_number']}")
+                            st.success(f"✅ {len(quote_lines_raw)} líneas copiadas → v{st.session_state.version}. Modifica lo necesario y guarda.")
                             st.rerun()
                         else:
-                            st.error("No se encontraron líneas en la propuesta")
-                    else:
-                        st.error("No se pudo cargar la propuesta")
-        else:
-            st.info("No hay propuestas anteriores disponibles")
+                            st.warning("Esta propuesta no tiene líneas")
+
+                    # Vista previa de líneas
+                    lines_preview = get_quote_lines(group_data["quote_id"])
+                    if lines_preview:
+                        st.divider()
+                        st.caption("Vista previa de la propuesta seleccionada:")
+                        preview_df = pd.DataFrame(
+                            lines_preview,
+                            columns=["SKU", "Descripción", "Tipo", "Origen", "Costo Unit.", "Precio Unit.", "Margen %", "Estrategia", "Advertencias"]
+                        )
+                        st.dataframe(preview_df, width='stretch')
+                else:
+                    st.warning("No se encontró información de la propuesta seleccionada")
 
     # Si hay una línea pendiente de confirmación (con correcciones)
     if st.session_state.pending_line:
@@ -2118,22 +1986,9 @@ with tab_quotes:
             pb_save = PLAYBOOKS[save_playbook]
             st.caption(f"Verde ≥{pb_save['green']}% | Amarillo ≥{pb_save['yellow']}%")
 
-        # DEBUG PERMANENTE: Ver estado de session_state ANTES del botón
-        with st.expander("🔍 DEBUG: Estado de session_state (expandir para ver)", expanded=False):
-            st.write("**Claves field_/saved_/input_ en session_state:**")
-            for key in st.session_state:
-                if 'field_' in key or 'saved_' in key or 'input_' in key or 'proposal' in key.lower() or 'client' in key.lower() or 'quoted' in key.lower():
-                    st.write(f"- `{key}`: `{st.session_state[key]}`")
-
         save_button = st.button("💾 Guardar Cotización", type="primary", width='stretch')
 
         if save_button:
-            # DEBUG INMEDIATO: Ver session_state en el momento del click
-            st.warning("🔴 DEBUG AL MOMENTO DEL CLICK:")
-            for key in st.session_state:
-                if 'field_' in key or 'saved_' in key or 'input_' in key:
-                    st.write(f"**{key}** = `{st.session_state[key]}`")
-
             # Verificar que hay líneas
             if not st.session_state.lines:
                 st.error("❌ No hay líneas para guardar")
@@ -2142,14 +1997,6 @@ with tab_quotes:
                 proposal_name_value = st.session_state.get('saved_proposal_name', '') or ''
                 client_name_value = st.session_state.get('saved_client_name', '') or ''
                 quoted_by_value = st.session_state.get('saved_quoted_by', '') or ''
-
-                # DEBUG: Mostrar valores antes de guardar
-                st.info(f"""
-                **DEBUG - Valores a guardar:**
-                - proposal_name: `{proposal_name_value}`
-                - client_name: `{client_name_value}`
-                - quoted_by: `{quoted_by_value}`
-                """)
 
                 # Preparar datos para guardar
                 quote_data = (
@@ -2286,7 +2133,7 @@ with tab_quotes:
 
     origin_type = st.radio(
         "¿Desde dónde quieres generar la propuesta?",
-        ["Cotización Legacy", "Propuesta AUP", "Propuesta Anterior (Nueva Versión)"],
+        ["Cotización Legacy", "Propuesta Anterior (Nueva Versión)"],
         horizontal=True
     )
 
@@ -2363,9 +2210,6 @@ with tab_quotes:
                     st.caption("Se creará una nueva versión basada en esta propuesta con los datos prellenados")
         else:
             st.warning("No hay propuestas anteriores disponibles")
-
-    else:  # Propuesta AUP
-        st.info("🚧 Integración con Motor AUP próximamente")
 
     if source_id or existing_proposal:
         st.success(f"✅ Origen seleccionado: {source_id[:8]}...")
