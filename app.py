@@ -2133,7 +2133,7 @@ with tab_quotes:
 
     origin_type = st.radio(
         "¿Desde dónde quieres generar la propuesta?",
-        ["Cotización Legacy", "Propuesta Anterior (Nueva Versión)"],
+        ["Cotizador", "Propuesta Anterior (Nueva Versión)"],
         horizontal=True
     )
 
@@ -2141,11 +2141,11 @@ with tab_quotes:
     source_data = None
     existing_proposal = None
 
-    if origin_type == "Cotización Legacy":
+    if origin_type == "Cotizador":
         # Usar búsqueda optimizada
         selected_group_id = render_quote_search_selector(
             key="propuesta_formal_legacy",
-            label="🔍 Buscar cotización legacy",
+            label="🔍 Buscar cotización",
             show_recent=True
         )
         
@@ -4258,4 +4258,4 @@ with tab_db:
 # =========================
 st.divider()
 db_info = get_database_info()
-st.caption(f"DynamiQuote © 2026 | {db_info['icon']} {db_info['type']} | Motor AUP + Legacy Cotizador | State: Production-Ready")
+st.caption(f"DynamiQuote © 2026 | {db_info['icon']} {db_info['type']} | Cotizador | State: Production-Ready")
