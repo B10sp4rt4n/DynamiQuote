@@ -2318,13 +2318,68 @@ with tab_quotes:
                 )
 
             with col2:
+                # Inicializar subject en session_state si no existe
+                if "subject_value" not in st.session_state:
+                    st.session_state.subject_value = existing_proposal.get('subject', '') if existing_proposal else ""
+
+                col_subj_label, col_subj_btn = st.columns([3, 2])
+                with col_subj_label:
+                    st.markdown("**Asunto / Motivo**")
+                with col_subj_btn:
+                    ai_enabled = st.session_state.get('openai_enabled', False)
+                    gen_subject = st.button(
+                        "✨ Sugerir con IA" if ai_enabled else "🔒 IA no disponible",
+                        key="btn_gen_subject",
+                        disabled=not ai_enabled,
+                        help="Genera automáticamente una descripción del motivo basada en los productos cotizados" if ai_enabled else "Requiere API Key de OpenAI en la barra lateral"
+                    )
+
+                if gen_subject and ai_enabled:
+                    # Recopilar contexto: líneas, cliente, sector
+                    lines_context = st.session_state.get('lines', [])
+                    client_ctx = source_data[11] if source_data else st.session_state.get('saved_client_name', 'el cliente')
+                    sector_ctx = st.session_state.get('market_sector', 'Tecnología')
+
+                    skus_desc = "\n".join([
+                        f"- {l.get('sku','')}: {l.get('description_final', l.get('description_original',''))}"
+                        for l in lines_context[:15]
+                    ]) if lines_context else "Servicios tecnológicos y productos de cómputo"
+
+                    prompt = (
+                        f"Eres un ejecutivo comercial experto. Redacta un motivo/asunto profesional y conciso (máximo 3 oraciones) "
+                        f"para una propuesta comercial dirigida a '{client_ctx}' del sector '{sector_ctx}'. "
+                        f"Los productos/servicios cotizados son:\n{skus_desc}\n\n"
+                        f"El texto debe dar contexto al cliente de lo que se le va a ofrecer, ser directo y motivar la lectura. "
+                        f"No uses comillas ni encabezados. Solo el texto del motivo."
+                    )
+
+                    try:
+                        import openai
+                        api_key = st.session_state.get('openai_api_key')
+                        client_ai = openai.OpenAI(api_key=api_key)
+                        with st.spinner("Generando motivo con IA..."):
+                            response = client_ai.chat.completions.create(
+                                model="gpt-4o-mini",
+                                messages=[{"role": "user", "content": prompt}],
+                                max_tokens=200,
+                                temperature=0.7
+                            )
+                        st.session_state.subject_value = response.choices[0].message.content.strip()
+                        st.rerun()
+                    except Exception as e:
+                        st.error(f"Error generando sugerencia: {e}")
+
                 subject = st.text_area(
-                    "Asunto / Motivo",
-                    value=existing_proposal.get('subject', '') if existing_proposal else "",
-                    height=100,
-                    help="Describe el motivo o asunto de la propuesta",
-                    key="subject"
+                    "",
+                    value=st.session_state.subject_value,
+                    height=120,
+                    placeholder="Describe el motivo o asunto de la propuesta...",
+                    key="subject",
+                    label_visibility="collapsed"
                 )
+                # Sincronizar edición manual con session_state
+                if subject != st.session_state.subject_value:
+                    st.session_state.subject_value = subject
 
         # Sección: Logos
         with st.expander("🎨 Logos", expanded=False):
