@@ -2371,6 +2371,7 @@ with tab_quotes:
                                 temperature=0.7
                             )
                         st.session_state.subject_value = response.choices[0].message.content.strip()
+                        st.session_state['subject'] = st.session_state.subject_value
                         st.rerun()
                     except Exception as e:
                         st.error(f"Error generando sugerencia: {e}")
@@ -2426,6 +2427,7 @@ with tab_quotes:
                                 temperature=0.4
                             )
                         st.session_state.project_desc_value = _resp.choices[0].message.content.strip()
+                        st.session_state['project_description'] = st.session_state.project_desc_value
                         st.rerun()
                     except Exception as _e:
                         st.error(f"Error al corregir: {_e}")
