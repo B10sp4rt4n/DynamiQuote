@@ -1264,38 +1264,42 @@ with tab_quotes:
         # Información de la cotización
         st.subheader("📋 Información de la Cotización")
 
-        # FORM para capturar todos los valores al mismo tiempo
-        with st.form("info_cotizacion_form", clear_on_submit=False):
-            proposal_name_form = st.text_input(
-                "Nombre de la Propuesta",
-                value=st.session_state.get('saved_proposal_name', ''),
-                placeholder="Ej: Implementación ERP 2026, Soporte Anual...",
-                help="Dale un nombre identificable a esta propuesta"
-            )  # FIX: Line 1391 fixed on 2026-02-09-23:05
+        # Callbacks para persistir en tiempo real (sin necesidad de botón Confirmar)
+        def _sync_proposal_name():
+            st.session_state.saved_proposal_name = st.session_state._input_proposal_name
+        def _sync_client_name():
+            st.session_state.saved_client_name = st.session_state._input_client_name
+        def _sync_quoted_by():
+            st.session_state.saved_quoted_by = st.session_state._input_quoted_by
 
-            col_form1, col_form2 = st.columns(2)
-            with col_form1:
-                client_name_form = st.text_input(
-                    "Cliente / Empresa",
-                    value=st.session_state.get('saved_client_name', ''),
-                    placeholder="Ej: Acme Corp, Juan Pérez...",
-                    help="Para quién es esta cotización"
-                )
-            with col_form2:
-                quoted_by_form = st.text_input(
-                    "Cotizado por (User ID / Nombre)",
-                    value=st.session_state.get('saved_quoted_by', ''),
-                    placeholder="Ej: jperez, vendedor@empresa.com, Juan Pérez...",
-                    help="Identificador de quién crea esta cotización"
-                )
+        st.text_input(
+            "Nombre de la Propuesta",
+            value=st.session_state.get('saved_proposal_name', ''),
+            placeholder="Ej: Implementación ERP 2026, Soporte Anual...",
+            help="Dale un nombre identificable a esta propuesta",
+            key="_input_proposal_name",
+            on_change=_sync_proposal_name
+        )
 
-            info_submitted = st.form_submit_button("✅ Confirmar información")
-
-            if info_submitted:
-                st.session_state.saved_proposal_name = proposal_name_form
-                st.session_state.saved_client_name = client_name_form
-                st.session_state.saved_quoted_by = quoted_by_form
-                st.success(f"✅ Info guardada: {proposal_name_form} | {client_name_form} | {quoted_by_form}")
+        col_form1, col_form2 = st.columns(2)
+        with col_form1:
+            st.text_input(
+                "Cliente / Empresa",
+                value=st.session_state.get('saved_client_name', ''),
+                placeholder="Ej: Acme Corp, Juan Pérez...",
+                help="Para quién es esta cotización",
+                key="_input_client_name",
+                on_change=_sync_client_name
+            )
+        with col_form2:
+            st.text_input(
+                "Cotizado por (User ID / Nombre)",
+                value=st.session_state.get('saved_quoted_by', ''),
+                placeholder="Ej: jperez, vendedor@empresa.com, Juan Pérez...",
+                help="Identificador de quién crea esta cotización",
+                key="_input_quoted_by",
+                on_change=_sync_quoted_by
+            )
 
         # ¿Nueva cotización o v2 de una existente?
         quote_mode = st.radio(
@@ -2067,10 +2071,12 @@ with tab_quotes:
                         st.session_state.quote_group_id = str(uuid.uuid4())
                         st.session_state.version = 1
                         st.session_state.parent_quote_id = None
-                        # Limpiar también los campos de información
+                        # Limpiar campos de información y sus keys de widget
                         st.session_state.saved_proposal_name = ""
                         st.session_state.saved_client_name = ""
                         st.session_state.saved_quoted_by = ""
+                        for k in ['_input_proposal_name', '_input_client_name', '_input_quoted_by']:
+                            st.session_state.pop(k, None)
                         st.info("🆕 Preparado para nueva oportunidad")
                         st.rerun()
                     else:
