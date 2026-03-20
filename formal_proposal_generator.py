@@ -577,7 +577,14 @@ def generate_proposal_pdf(
             story.append(Paragraph(f"<b>Asunto:</b> {proposal_data['subject']}", body_style))
             story.append(Spacer(1, 0.1*inch))
         
-        # Descripción del Proyecto
+        # Introducción
+        intro_lines = proposal_data.get('custom_intro', '').split('\n')
+        for line in intro_lines:
+            if line.strip():
+                story.append(Paragraph(line, body_style))
+        story.append(Spacer(1, 0.15*inch))
+
+        # Descripción del Proyecto (después de la intro)
         if proposal_data.get('project_description'):
             story.append(Paragraph("<b>Descripción del Proyecto</b>", body_style))
             story.append(Spacer(1, 0.05*inch))
@@ -587,12 +594,7 @@ def generate_proposal_pdf(
                     story.append(Paragraph(line, body_style))
             story.append(Spacer(1, 0.15*inch))
 
-        # Introducción
-        intro_lines = proposal_data.get('custom_intro', '').split('\n')
-        for line in intro_lines:
-            if line.strip():
-                story.append(Paragraph(line, body_style))
-        story.append(Spacer(1, 0.2*inch))
+        story.append(Spacer(1, 0.05*inch))
         
         # ===== NUEVA PÁGINA PARA DETALLES =====
         story.append(PageBreak())
@@ -626,7 +628,7 @@ def generate_proposal_pdf(
             
             table_data.append([
                 str(idx),
-                str(line.get('sku', '-'))[:15],
+                Paragraph(str(line.get('sku', '-')), desc_style),
                 desc_paragraph,  # Ahora es Paragraph, no string
                 f"{int(quantity)}",
                 f"{totals['currency_symbol']}{unit_price:,.2f}",
@@ -973,17 +975,17 @@ def get_embedded_template() -> str:
     <p><strong>Asunto:</strong> {{ proposal.subject }}</p>
     {% endif %}
     
+    <!-- Introducción -->
+    <div class="intro">
+        {{ proposal.custom_intro }}
+    </div>
+    
     {% if proposal.project_description %}
     <div style="margin: 10px 0;">
         <p><strong>Descripción del Proyecto</strong></p>
         <div style="white-space: pre-line; margin-left: 8px;">{{ proposal.project_description }}</div>
     </div>
     {% endif %}
-    
-    <!-- Introducción -->
-    <div class="intro">
-        {{ proposal.custom_intro }}
-    </div>
     
     <!-- Tabla de items -->
     <h2 style="color: #2c3e50; border-bottom: 2px solid #3498db; padding-bottom: 5px;">DETALLE DE LA PROPUESTA</h2>
