@@ -2894,10 +2894,10 @@ with tab_quotes:
         st.divider()
         st.subheader("📚 Propuestas Generadas")
 
-        from database import get_formal_proposals, get_formal_proposal, get_quote_lines_full, mark_proposal_as_delivered
+        from database import get_formal_proposals, get_formal_proposal, get_quote_lines_full, mark_proposal_as_delivered, get_all_users
 
-        # Filtro por estado
-        col_filter1, col_filter2 = st.columns([1, 3])
+        # Filtros
+        col_filter1, col_filter2, col_filter3 = st.columns([1, 1, 2])
         with col_filter1:
             status_filter_option = st.selectbox(
                 "Filtrar por estado:",
@@ -2905,19 +2905,29 @@ with tab_quotes:
                 index=0,
                 key="proposal_status_filter"
             )
-        
+
+        # Filtro por usuario (solo visible para admin)
+        user_filter_alias = None
+        if _is_admin:
+            with col_filter2:
+                _users_list = get_all_users()
+                _user_opts = ["Todos los usuarios"] + [f"{u['full_name']} (@{u['alias']})" for u in _users_list]
+                _selected_user = st.selectbox("Filtrar por usuario:", options=_user_opts, index=0, key="proposal_user_filter")
+                if _selected_user != "Todos los usuarios":
+                    _idx = _user_opts.index(_selected_user) - 1
+                    user_filter_alias = _users_list[_idx]['alias']
+
         # Convertir a valor de BD
         status_filter_value = None
         if status_filter_option == "Borrador":
             status_filter_value = "draft"
         elif status_filter_option == "Entregadas":
             status_filter_value = "delivered"
-        
-        with col_filter2:
-            st.write("")  # Espaciador
-        
-        all_proposals = get_formal_proposals(status_filter=status_filter_value,
-                                               created_by_filter=None if _is_admin else _current_user['alias'])
+
+        all_proposals = get_formal_proposals(
+            status_filter=status_filter_value,
+            created_by_filter=user_filter_alias if _is_admin else _current_user['alias']
+        )
 
         if all_proposals:
             # Controles de paginación
