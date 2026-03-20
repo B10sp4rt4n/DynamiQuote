@@ -2442,8 +2442,8 @@ with tab_quotes:
                 key="project_description",
                 label_visibility="collapsed"
             )
-            if project_description != st.session_state.project_desc_value:
-                st.session_state.project_desc_value = project_description
+            # Sincronizar: siempre actualizar project_desc_value con lo que haya en el widget
+            st.session_state.project_desc_value = project_description
 
         # Sección: Logos
         with st.expander("🎨 Logos", expanded=False):
@@ -2756,8 +2756,8 @@ with tab_quotes:
                         context_data = {
                             'client_type': client_type,
                             'market_sector': market_sector,
-                            'subject': subject,
-                            'project_description': project_description
+                            'subject': st.session_state.get('subject', subject or ''),
+                            'project_description': st.session_state.get('project_desc_value') or st.session_state.get('project_description') or project_description or ''
                         }
 
                         logo_ids = {
