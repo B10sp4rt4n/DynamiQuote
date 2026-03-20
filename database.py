@@ -613,6 +613,33 @@ def init_database():
             cur.execute(proposal_audit_events_table)
             cur.execute(company_logos_table)
             cur.execute(formal_proposals_table)
+            # Tabla de usuarios de la app
+            if is_postgres():
+                cur.execute("""
+                    CREATE TABLE IF NOT EXISTS app_users (
+                        user_id TEXT PRIMARY KEY,
+                        alias TEXT UNIQUE NOT NULL,
+                        first_name TEXT NOT NULL,
+                        last_name TEXT NOT NULL,
+                        password_hash TEXT NOT NULL,
+                        role TEXT NOT NULL DEFAULT 'user',
+                        active BOOLEAN NOT NULL DEFAULT TRUE,
+                        created_at TIMESTAMP NOT NULL
+                    )
+                """)
+            else:
+                cur.execute("""
+                    CREATE TABLE IF NOT EXISTS app_users (
+                        user_id TEXT PRIMARY KEY,
+                        alias TEXT UNIQUE NOT NULL,
+                        first_name TEXT NOT NULL,
+                        last_name TEXT NOT NULL,
+                        password_hash TEXT NOT NULL,
+                        role TEXT NOT NULL DEFAULT 'user',
+                        active INTEGER NOT NULL DEFAULT 1,
+                        created_at TEXT NOT NULL
+                    )
+                """)
         return True, "Base de datos inicializada correctamente"
     except Exception as e:
         return False, f"Error inicializando base de datos: {e}"
@@ -1537,16 +1564,14 @@ def save_formal_proposal(proposal_data: dict) -> tuple[bool, str]:
         return False, f"❌ Error guardando propuesta: {e}"
 
 
-def get_formal_proposals(quote_id: str = None, status_filter: str = None) -> list:
+def get_formal_proposals(quote_id: str = None, status_filter: str = None, created_by_filter: str = None) -> list:
     """
     Obtiene lista de propuestas formales.
-    
     Args:
-        quote_id: Filtrar por cotización. None para todas.
-        status_filter: Filtrar por estado ('draft', 'delivered'). None para todos.
-        
-    Returns:
-        Lista de diccionarios con propuestas
+        quote_id: Filtrar por cotización.
+        status_filter: Filtrar por estado.
+        created_by_filter: Si se pasa un alias/nombre, filtra solo sus propuestas.
+                           Si es None o vacío, devuelve todas (admin).
     """
     try:
         with get_cursor() as cur:
@@ -1568,6 +1593,10 @@ def get_formal_proposals(quote_id: str = None, status_filter: str = None) -> lis
             if status_filter:
                 conditions.append("status = %s" if is_postgres() else "status = ?")
                 params.append(status_filter)
+
+            if created_by_filter:
+                conditions.append("created_by = %s" if is_postgres() else "created_by = ?")
+                params.append(created_by_filter)
             
             if conditions:
                 base_query += " WHERE " + " AND ".join(conditions)
@@ -1799,4 +1828,145 @@ def run_migrations():
         error_msg = f"Error ejecutando migraciones: {e}"
         print(f"❌ {error_msg}")
         return False, error_msg
+
+
+# ====================================
+# Gestión de Usuarios
+# ====================================
+
+def _hash_password(password: str) -> str:
+    """Genera hash seguro de contraseña con bcrypt."""
+    import bcrypt
+    return bcrypt.hashpw(password.encode('utf-8'), bcrypt.gensalt()).decode('utf-8')
+
+
+def _check_password(password: str, hashed: str) -> bool:
+    """Verifica contraseña contra su hash."""
+    import bcrypt
+    try:
+        return bcrypt.checkpw(password.encode('utf-8'), hashed.encode('utf-8'))
+    except Exception:
+        return False
+
+
+def create_user(alias: str, first_name: str, last_name: str, password: str, role: str = 'user') -> tuple[bool, str]:
+    """Crea un nuevo usuario. Retorna (success, mensaje)."""
+    from datetime import datetime, UTC
+    import uuid
+    try:
+        user_id = str(uuid.uuid4())
+        password_hash = _hash_password(password)
+        created_at = datetime.now(UTC).isoformat()
+        with get_cursor() as cur:
+            if is_postgres():
+                cur.execute(
+                    "INSERT INTO app_users (user_id, alias, first_name, last_name, password_hash, role, active, created_at) VALUES (%s,%s,%s,%s,%s,%s,%s,%s)",
+                    (user_id, alias.lower(), first_name, last_name, password_hash, role, True, created_at)
+                )
+            else:
+                cur.execute(
+                    "INSERT INTO app_users (user_id, alias, first_name, last_name, password_hash, role, active, created_at) VALUES (?,?,?,?,?,?,?,?)",
+                    (user_id, alias.lower(), first_name, last_name, password_hash, role, 1, created_at)
+                )
+        return True, f"Usuario '{alias}' creado correctamente"
+    except Exception as e:
+        if "unique" in str(e).lower() or "duplicate" in str(e).lower():
+            return False, f"El alias '{alias}' ya existe"
+        return False, f"Error creando usuario: {e}"
+
+
+def authenticate_user(alias: str, password: str) -> dict | None:
+    """
+    Verifica credenciales. Retorna dict con datos del usuario o None si falla.
+    """
+    try:
+        with get_cursor() as cur:
+            if is_postgres():
+                cur.execute(
+                    "SELECT user_id, alias, first_name, last_name, password_hash, role, active FROM app_users WHERE alias=%s",
+                    (alias.lower(),)
+                )
+            else:
+                cur.execute(
+                    "SELECT user_id, alias, first_name, last_name, password_hash, role, active FROM app_users WHERE alias=?",
+                    (alias.lower(),)
+                )
+            row = cur.fetchone()
+        if not row:
+            return None
+        user_id, alias_db, first_name, last_name, password_hash, role, active = row
+        if not active:
+            return None
+        if not _check_password(password, password_hash):
+            return None
+        return {
+            'user_id': user_id,
+            'alias': alias_db,
+            'first_name': first_name,
+            'last_name': last_name,
+            'full_name': f"{first_name} {last_name}",
+            'role': role,
+        }
+    except Exception as e:
+        print(f"Error en authenticate_user: {e}")
+        return None
+
+
+def get_all_users() -> list:
+    """Retorna todos los usuarios (para panel admin)."""
+    try:
+        with get_cursor() as cur:
+            if is_postgres():
+                cur.execute("SELECT user_id, alias, first_name, last_name, role, active, created_at FROM app_users ORDER BY created_at DESC")
+            else:
+                cur.execute("SELECT user_id, alias, first_name, last_name, role, active, created_at FROM app_users ORDER BY created_at DESC")
+            rows = cur.fetchall()
+        return [
+            {'user_id': r[0], 'alias': r[1], 'first_name': r[2], 'last_name': r[3],
+             'full_name': f"{r[2]} {r[3]}", 'role': r[4], 'active': bool(r[5]), 'created_at': r[6]}
+            for r in rows
+        ]
+    except Exception as e:
+        print(f"Error en get_all_users: {e}")
+        return []
+
+
+def toggle_user_active(user_id: str, active: bool) -> tuple[bool, str]:
+    """Activa o desactiva un usuario."""
+    try:
+        with get_cursor() as cur:
+            if is_postgres():
+                cur.execute("UPDATE app_users SET active=%s WHERE user_id=%s", (active, user_id))
+            else:
+                cur.execute("UPDATE app_users SET active=? WHERE user_id=?", (1 if active else 0, user_id))
+        return True, "Usuario actualizado"
+    except Exception as e:
+        return False, f"Error: {e}"
+
+
+def update_user_password(user_id: str, new_password: str) -> tuple[bool, str]:
+    """Cambia la contraseña de un usuario."""
+    try:
+        new_hash = _hash_password(new_password)
+        with get_cursor() as cur:
+            if is_postgres():
+                cur.execute("UPDATE app_users SET password_hash=%s WHERE user_id=%s", (new_hash, user_id))
+            else:
+                cur.execute("UPDATE app_users SET password_hash=? WHERE user_id=?", (new_hash, user_id))
+        return True, "Contraseña actualizada"
+    except Exception as e:
+        return False, f"Error: {e}"
+
+
+def users_exist() -> bool:
+    """Verifica si ya hay usuarios creados en el sistema."""
+    try:
+        with get_cursor() as cur:
+            if is_postgres():
+                cur.execute("SELECT COUNT(*) FROM app_users")
+            else:
+                cur.execute("SELECT COUNT(*) FROM app_users")
+            return cur.fetchone()[0] > 0
+    except Exception:
+        return False
 

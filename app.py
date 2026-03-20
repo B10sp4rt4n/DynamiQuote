@@ -5,7 +5,7 @@ import uuid
 from datetime import datetime, UTC
 import matplotlib.pyplot as plt
 from spellchecker import SpellChecker
-from database import init_database, save_quote, save_import_file, get_all_quotes, get_quote_lines, get_quote_lines_full, get_latest_version, load_versions_for_group, load_lines_for_quote, get_database_info, get_cursor, is_postgres, get_connection, save_logo, get_logos, search_quotes, get_recent_quotes, get_quote_groups_summary, get_quote_by_group_id, clear_search_caches
+from database import init_database, save_quote, save_import_file, get_all_quotes, get_quote_lines, get_quote_lines_full, get_latest_version, load_versions_for_group, load_lines_for_quote, get_database_info, get_cursor, is_postgres, get_connection, save_logo, get_logos, search_quotes, get_recent_quotes, get_quote_groups_summary, get_quote_by_group_id, clear_search_caches, authenticate_user, create_user, get_all_users, toggle_user_active, update_user_password, users_exist
 from excel_import import import_excel_file, format_validation_report
 from formal_proposal_generator import process_logo_upload
 import os
@@ -399,9 +399,80 @@ PLAYBOOKS = {
 st.set_page_config(page_title="Quote Intelligence MVP", layout="wide")
 
 # =========================
+# Sistema de Autenticación
+# =========================
+init_database()
+
+def _render_login():
+    """Pantalla de login centrada."""
+    col_l, col_c, col_r = st.columns([1, 1.2, 1])
+    with col_c:
+        st.image("https://img.icons8.com/fluency/96/lock.png", width=72)
+        st.title("DynamiQuote")
+        st.caption("Ingresa tus credenciales para continuar")
+        st.divider()
+        with st.form("login_form"):
+            alias = st.text_input("Usuario", placeholder="tu.alias").strip().lower()
+            password = st.text_input("Contraseña", type="password")
+            submitted = st.form_submit_button("Iniciar sesión", type="primary", use_container_width=True)
+        if submitted:
+            if not alias or not password:
+                st.error("Ingresa usuario y contraseña")
+            else:
+                user = authenticate_user(alias, password)
+                if user:
+                    st.session_state['authenticated'] = True
+                    st.session_state['current_user'] = user
+                    # Pre-rellenar quoted_by con nombre completo
+                    st.session_state['saved_quoted_by'] = user['full_name']
+                    st.rerun()
+                else:
+                    st.error("Credenciales incorrectas o usuario inactivo")
+
+        # Primer uso: si no hay usuarios, mostrar setup inicial
+        if not users_exist():
+            st.info("⚙️ Primera vez — Configura el usuario administrador")
+            with st.expander("Crear administrador inicial", expanded=True):
+                with st.form("setup_admin"):
+                    s_alias = st.text_input("Alias (usuario)", placeholder="admin")
+                    s_first = st.text_input("Nombre")
+                    s_last = st.text_input("Apellido")
+                    s_pass = st.text_input("Contraseña", type="password")
+                    s_pass2 = st.text_input("Confirmar contraseña", type="password")
+                    if st.form_submit_button("Crear administrador", type="primary", use_container_width=True):
+                        if not all([s_alias, s_first, s_last, s_pass]):
+                            st.error("Completa todos los campos")
+                        elif s_pass != s_pass2:
+                            st.error("Las contraseñas no coinciden")
+                        else:
+                            ok, msg = create_user(s_alias, s_first, s_last, s_pass, role='admin')
+                            if ok:
+                                st.success(f"✅ {msg} — Ya puedes iniciar sesión")
+                                st.rerun()
+                            else:
+                                st.error(msg)
+
+if not st.session_state.get('authenticated', False):
+    _render_login()
+    st.stop()
+
+# Usuario autenticado
+_current_user = st.session_state['current_user']
+_is_admin = _current_user['role'] == 'admin'
+
+# =========================
 # Sidebar - Configuración de OpenAI
 # =========================
 with st.sidebar:
+    # Usuario logueado
+    st.markdown(f"👤 **{_current_user['full_name']}**")
+    st.caption(f"@{_current_user['alias']} · {'👑 Admin' if _is_admin else '🧑 Usuario'}")
+    if st.button("🚪 Cerrar sesión", use_container_width=True):
+        for k in ['authenticated', 'current_user', 'saved_quoted_by']:
+            st.session_state.pop(k, None)
+        st.rerun()
+    st.divider()
+
     st.header("⚙️ Configuración")
 
     # OpenAI API Key — se carga automáticamente desde secrets o variable de entorno
@@ -2187,7 +2258,7 @@ with tab_quotes:
     elif origin_type == "Propuesta Anterior (Nueva Versión)":
         # Obtener propuestas disponibles
         from database import get_formal_proposals
-        all_proposals = get_formal_proposals()
+        all_proposals = get_formal_proposals(created_by_filter=None if _is_admin else _current_user['alias'])
 
         if all_proposals:
             proposal_options = {
@@ -2785,7 +2856,7 @@ with tab_quotes:
                             terms=terms,
                             signature_data=signature_data,
                             iva_config=iva_config,
-                            created_by="user"
+                            created_by=_current_user['alias']
                         )
 
                         if success:
@@ -2845,7 +2916,8 @@ with tab_quotes:
         with col_filter2:
             st.write("")  # Espaciador
         
-        all_proposals = get_formal_proposals(status_filter=status_filter_value)
+        all_proposals = get_formal_proposals(status_filter=status_filter_value,
+                                               created_by_filter=None if _is_admin else _current_user['alias'])
 
         if all_proposals:
             # Controles de paginación
@@ -4402,5 +4474,88 @@ with tab_db:
 # FOOTER
 # =========================
 st.divider()
+
+# Panel de Administración de Usuarios (solo admin)
+if _is_admin:
+    with st.expander("👥 Administración de Usuarios", expanded=False):
+        admin_tab1, admin_tab2 = st.tabs(["📋 Usuarios", "➕ Nuevo Usuario"])
+
+        with admin_tab1:
+            users = get_all_users()
+            if users:
+                for u in users:
+                    col_info, col_role, col_status, col_pass = st.columns([3, 1.5, 1, 1.5])
+                    with col_info:
+                        st.markdown(f"**{u['full_name']}** · `@{u['alias']}`")
+                        st.caption(f"ID: {u['user_id'][:8]}...  |  Creado: {str(u['created_at'])[:10]}")
+                    with col_role:
+                        st.markdown(f"{'👑 Admin' if u['role'] == 'admin' else '🧑 Usuario'}")
+                    with col_status:
+                        is_active = u['active']
+                        label = "✅" if is_active else "🔴"
+                        if st.button(label, key=f"toggle_{u['user_id']}", help="Activar/Desactivar"):
+                            toggle_user_active(u['user_id'], not is_active)
+                            st.rerun()
+                    with col_pass:
+                        if st.button("🔑 Reset", key=f"reset_{u['user_id']}", help="Cambiar contraseña"):
+                            st.session_state[f"reset_target"] = u['user_id']
+                            st.session_state[f"reset_alias"] = u['alias']
+                    st.divider()
+
+                # Modal reset contraseña
+                if st.session_state.get('reset_target'):
+                    target_id = st.session_state['reset_target']
+                    target_alias = st.session_state.get('reset_alias', '')
+                    st.warning(f"Cambiando contraseña de **@{target_alias}**")
+                    with st.form("form_reset_pass"):
+                        new_pass = st.text_input("Nueva contraseña", type="password")
+                        new_pass2 = st.text_input("Confirmar contraseña", type="password")
+                        col_ok, col_cancel = st.columns(2)
+                        with col_ok:
+                            if st.form_submit_button("Guardar", type="primary", use_container_width=True):
+                                if not new_pass:
+                                    st.error("Ingresa la nueva contraseña")
+                                elif new_pass != new_pass2:
+                                    st.error("Las contraseñas no coinciden")
+                                else:
+                                    ok, msg = update_user_password(target_id, new_pass)
+                                    if ok:
+                                        st.success(f"✅ Contraseña actualizada")
+                                        st.session_state.pop('reset_target', None)
+                                        st.session_state.pop('reset_alias', None)
+                                        st.rerun()
+                                    else:
+                                        st.error(msg)
+                        with col_cancel:
+                            if st.form_submit_button("Cancelar", use_container_width=True):
+                                st.session_state.pop('reset_target', None)
+                                st.session_state.pop('reset_alias', None)
+                                st.rerun()
+            else:
+                st.info("No hay usuarios registrados.")
+
+        with admin_tab2:
+            with st.form("form_new_user"):
+                col1, col2 = st.columns(2)
+                with col1:
+                    nu_first = st.text_input("Nombre *")
+                    nu_alias = st.text_input("Alias (usuario) *", placeholder="juan.perez")
+                    nu_pass = st.text_input("Contraseña *", type="password")
+                with col2:
+                    nu_last = st.text_input("Apellido *")
+                    nu_role = st.selectbox("Rol", options=["user", "admin"], format_func=lambda x: "👑 Admin" if x == "admin" else "🧑 Usuario")
+                    nu_pass2 = st.text_input("Confirmar contraseña *", type="password")
+                if st.form_submit_button("✅ Crear usuario", type="primary", use_container_width=True):
+                    if not all([nu_alias, nu_first, nu_last, nu_pass]):
+                        st.error("Completa todos los campos obligatorios (*)")
+                    elif nu_pass != nu_pass2:
+                        st.error("Las contraseñas no coinciden")
+                    else:
+                        ok, msg = create_user(nu_alias.strip(), nu_first.strip(), nu_last.strip(), nu_pass, role=nu_role)
+                        if ok:
+                            st.success(f"✅ {msg}")
+                        else:
+                            st.error(msg)
+
 db_info = get_database_info()
 st.caption(f"DynamiQuote © 2026 | {db_info['icon']} {db_info['type']} | Cotizador | State: Production-Ready")
