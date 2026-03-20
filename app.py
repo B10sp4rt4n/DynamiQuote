@@ -404,29 +404,26 @@ st.set_page_config(page_title="Quote Intelligence MVP", layout="wide")
 with st.sidebar:
     st.header("⚙️ Configuración")
 
-    # OpenAI API Key
+    # OpenAI API Key — se carga automáticamente desde secrets o variable de entorno
     st.subheader("🤖 Corrección Inteligente con IA")
 
-    # Intentar cargar desde variable de entorno primero
-    default_api_key = os.getenv("OPENAI_API_KEY", "")
+    # Prioridad: st.secrets > variable de entorno
+    _auto_key = ""
+    try:
+        _auto_key = st.secrets.get("OPENAI_API_KEY", "") or ""
+    except Exception:
+        pass
+    if not _auto_key:
+        _auto_key = os.getenv("OPENAI_API_KEY", "") or ""
 
-    openai_api_key = st.text_input(
-        "OpenAI API Key",
-        value=default_api_key,
-        type="password",
-        help="Ingresa tu API key de OpenAI para habilitar corrección inteligente de texto. Obténla en: https://platform.openai.com/api-keys"
-    )
-
-    if openai_api_key and openai_api_key.startswith("sk-"):
-        st.success("✅ OpenAI habilitado - Corrección inteligente activa")
-        # Guardar en session state
+    if _auto_key and _auto_key.startswith("sk-"):
         st.session_state.openai_enabled = True
-        st.session_state.openai_api_key = openai_api_key
+        st.session_state.openai_api_key = _auto_key
+        st.success("✅ IA habilitada — Sugerencias y correcciones con GPT disponibles")
     else:
-        st.warning("⚠️ OpenAI deshabilitado - Usando corrector básico")
-        st.caption("Sin API key, se usará el corrector ortográfico básico.")
         st.session_state.openai_enabled = False
         st.session_state.openai_api_key = None
+        st.warning("⚠️ IA no disponible — Configura OPENAI_API_KEY en Secrets")
 
     st.divider()
 
