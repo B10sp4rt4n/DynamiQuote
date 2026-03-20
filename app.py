@@ -2387,6 +2387,62 @@ with tab_quotes:
                 if subject != st.session_state.subject_value:
                     st.session_state.subject_value = subject
 
+            # Descripción del Proyecto (ancho completo)
+            st.divider()
+            if "project_desc_value" not in st.session_state:
+                st.session_state.project_desc_value = existing_proposal.get('project_description', '') if existing_proposal else ""
+
+            col_desc_label, col_desc_btn = st.columns([3, 2])
+            with col_desc_label:
+                st.markdown("**Descripción del Proyecto**")
+                st.caption("Contexto detallado que verá el cliente en la propuesta")
+            with col_desc_btn:
+                ai_enabled_desc = st.session_state.get('openai_enabled', False)
+                correct_desc = st.button(
+                    "✨ Corregir redacción con IA" if ai_enabled_desc else "🔒 IA no disponible",
+                    key="btn_correct_project_desc",
+                    disabled=not ai_enabled_desc,
+                    help="La IA mejora la redacción de tu texto manteniendo el contenido" if ai_enabled_desc else "Requiere API Key de OpenAI en la barra lateral"
+                )
+
+            if correct_desc and ai_enabled_desc:
+                raw_text = st.session_state.project_desc_value
+                if raw_text and raw_text.strip():
+                    correction_prompt = (
+                        f"Eres un redactor comercial experto. El usuario escribió la siguiente descripción de proyecto para una propuesta comercial:\n\n"
+                        f"{raw_text}\n\n"
+                        f"Corrige la ortografía, mejora la redacción y el tono profesional, y hazlo más persuasivo. "
+                        f"Mantén el significado original. No agregues información que no esté en el texto. "
+                        f"No uses comillas ni encabezados. Solo devuelve el texto corregido."
+                    )
+                    try:
+                        import openai as _openai
+                        _client_ai = _openai.OpenAI(api_key=st.session_state.get('openai_api_key'))
+                        with st.spinner("Corrigiendo redacción con IA..."):
+                            _resp = _client_ai.chat.completions.create(
+                                model="gpt-4o-mini",
+                                messages=[{"role": "user", "content": correction_prompt}],
+                                max_tokens=500,
+                                temperature=0.4
+                            )
+                        st.session_state.project_desc_value = _resp.choices[0].message.content.strip()
+                        st.rerun()
+                    except Exception as _e:
+                        st.error(f"Error al corregir: {_e}")
+                else:
+                    st.warning("Escribe primero la descripción del proyecto antes de corregir.")
+
+            project_description = st.text_area(
+                "",
+                value=st.session_state.project_desc_value,
+                height=150,
+                placeholder="Ej: Este proyecto busca modernizar la infraestructura tecnológica de la empresa, incorporando soluciones de cómputo de alto rendimiento y servicios de soporte especializado para garantizar la continuidad operativa...",
+                key="project_description",
+                label_visibility="collapsed"
+            )
+            if project_description != st.session_state.project_desc_value:
+                st.session_state.project_desc_value = project_description
+
         # Sección: Logos
         with st.expander("🎨 Logos", expanded=False):
             st.markdown("**Logo del Emisor (Tu Empresa)**")
@@ -2495,7 +2551,7 @@ with tab_quotes:
                         st.error(f"Error: {e}")
 
         # Sección: Configuración de IVA y Moneda
-        with st.expander("💰 Configuración de IVA y Moneda", expanded=True):
+        with st.expander("💰 Configuración de IVA, Moneda y Vigencia", expanded=True):
             col1, col2, col3 = st.columns(3)
 
             # Determinar valores por defecto de moneda
@@ -2538,6 +2594,33 @@ with tab_quotes:
                 )
 
                 iva_included_bool = iva_included.startswith("Integrado")
+
+            st.divider()
+            col_vig1, col_vig2 = st.columns([1, 3])
+            with col_vig1:
+                default_vigencia = 30
+                if existing_proposal and existing_proposal.get('valid_until') and existing_proposal.get('issued_date'):
+                    try:
+                        from datetime import date
+                        _issued = date.fromisoformat(str(existing_proposal['issued_date']))
+                        _valid  = date.fromisoformat(str(existing_proposal['valid_until']))
+                        default_vigencia = (_valid - _issued).days
+                    except:
+                        pass
+                valid_until_days = st.number_input(
+                    "Vigencia (días)",
+                    min_value=1,
+                    max_value=365,
+                    value=default_vigencia,
+                    step=1,
+                    help="Días de validez de la propuesta a partir de la fecha de emisión",
+                    key="valid_until_days"
+                )
+            with col_vig2:
+                from datetime import date, timedelta as _td
+                _today = date.today()
+                _expiry = _today + _td(days=int(valid_until_days))
+                st.info(f"📅 La propuesta vence el **{_expiry.strftime('%d/%m/%Y')}** ({int(valid_until_days)} días desde hoy)")
 
         # Sección: Términos y Condiciones
         with st.expander("📋 Términos y Condiciones", expanded=False):
@@ -2671,7 +2754,8 @@ with tab_quotes:
                         context_data = {
                             'client_type': client_type,
                             'market_sector': market_sector,
-                            'subject': subject
+                            'subject': subject,
+                            'project_description': project_description
                         }
 
                         logo_ids = {
@@ -2688,7 +2772,8 @@ with tab_quotes:
                             'rate': iva_rate,
                             'included': iva_included_bool,
                             'currency': currency_code,
-                            'currency_symbol': currency_symbol
+                            'currency_symbol': currency_symbol,
+                            'valid_until_days': int(valid_until_days)
                         }
 
                         # Generar propuesta

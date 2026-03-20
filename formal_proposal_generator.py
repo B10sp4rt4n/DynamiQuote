@@ -577,6 +577,16 @@ def generate_proposal_pdf(
             story.append(Paragraph(f"<b>Asunto:</b> {proposal_data['subject']}", body_style))
             story.append(Spacer(1, 0.1*inch))
         
+        # Descripción del Proyecto
+        if proposal_data.get('project_description'):
+            story.append(Paragraph("<b>Descripción del Proyecto</b>", body_style))
+            story.append(Spacer(1, 0.05*inch))
+            desc_lines = proposal_data['project_description'].split('\n')
+            for line in desc_lines:
+                if line.strip():
+                    story.append(Paragraph(line, body_style))
+            story.append(Spacer(1, 0.15*inch))
+
         # Introducción
         intro_lines = proposal_data.get('custom_intro', '').split('\n')
         for line in intro_lines:
@@ -963,6 +973,13 @@ def get_embedded_template() -> str:
     <p><strong>Asunto:</strong> {{ proposal.subject }}</p>
     {% endif %}
     
+    {% if proposal.project_description %}
+    <div style="margin: 10px 0;">
+        <p><strong>Descripción del Proyecto</strong></p>
+        <div style="white-space: pre-line; margin-left: 8px;">{{ proposal.project_description }}</div>
+    </div>
+    {% endif %}
+    
     <!-- Introducción -->
     <div class="intro">
         {{ proposal.custom_intro }}
@@ -1106,7 +1123,8 @@ def create_formal_proposal(
         
         # Fechas
         issued_date = datetime.now(UTC).date().isoformat()
-        valid_until = (datetime.now(UTC) + timedelta(days=30)).date().isoformat()
+        valid_days = iva_config.get('valid_until_days', 30) if iva_config else 30
+        valid_until = (datetime.now(UTC) + timedelta(days=int(valid_days))).date().isoformat()
         
         # Generar introducción
         custom_intro = generate_intro_text(
@@ -1140,6 +1158,7 @@ def create_formal_proposal(
             'client_type': context_data.get('client_type') if context_data else None,
             'market_sector': context_data.get('market_sector') if context_data else None,
             'subject': context_data.get('subject') if context_data else None,
+            'project_description': context_data.get('project_description') if context_data else None,
             'custom_intro': custom_intro,
             
             'issuer_logo_id': logo_ids.get('issuer') if logo_ids else None,
