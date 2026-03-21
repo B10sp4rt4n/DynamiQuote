@@ -2263,1316 +2263,1290 @@ with tab_quotes:
     if seccion == "📄 Generar Propuesta Formal":
         st.subheader("📄 Generador de Propuestas Formales")
 
-        st.markdown("""
-        ### Sistema de Propuestas Profesionales
+        # Selector de origen — primera sección visible
+        st.subheader("1️⃣ Seleccionar Origen de la Propuesta")
 
-        Genera documentos formales de propuestas comerciales con:
-        - ✅ Personalización completa de emisor y receptor
-        - 🎨 Logos de empresa y cliente
-        - 📝 Introducción inteligente adaptada al sector
-        - 💰 Gestión de IVA (integrado o desglosado)
-        - 📋 Términos y condiciones editables
-        - ✍️ Firma digital
-        - 📄 **PDF profesional generado con ReportLab** (actualizado 2026-02-10)
-        """)
-        
-        # Verificar disponibilidad de generación de PDFs
-        try:
-            from formal_proposal_generator import REPORTLAB_AVAILABLE
-            if REPORTLAB_AVAILABLE:
-                st.success("✅ Sistema de generación de PDFs: **Activo y listo**")
-            else:
-                st.error("❌ ReportLab no está disponible. Los PDFs no se pueden generar.")
-        except Exception as e:
-            st.warning(f"⚠️ No se pudo verificar el sistema de PDFs: {e}")
-
-        st.divider()
-
-
-    # Selector de origen
-    st.subheader("1️⃣ Seleccionar Origen de la Propuesta")
-
-    origin_type = st.radio(
-        "¿Desde dónde quieres generar la propuesta?",
-        ["Cotizador", "Propuesta Anterior (Nueva Versión)"],
-        horizontal=True
-    )
-
-    source_id = None
-    source_data = None
-    existing_proposal = None
-
-    if origin_type == "Cotizador":
-        # Usar búsqueda optimizada
-        selected_group_id = render_quote_search_selector(
-            key="propuesta_formal_legacy",
-            label="🔍 Buscar cotización",
-            show_recent=True
+        origin_type = st.radio(
+            "¿Desde dónde quieres generar la propuesta?",
+            ["Cotizador", "Propuesta Anterior (Nueva Versión)"],
+            horizontal=True
         )
-        
-        if selected_group_id:
-            # Obtener información del grupo
-            group_data = get_quote_by_group_id(selected_group_id)
-            if group_data:
-                # Validar que el diccionario tiene todos los campos necesarios
-                required_fields = ['quote_id', 'quote_group_id', 'version', 'created_at', 'status', 
-                                 'total_revenue', 'avg_margin', 'playbook_name', 'client_name', 
-                                 'proposal_name', 'quoted_by']
-                missing_fields = [f for f in required_fields if f not in group_data]
-                
-                if missing_fields:
-                    st.error(f"⚠️ Error: La consulta retornó datos incompletos. Campos faltantes: {', '.join(missing_fields)}")
-                    st.warning("💡 Esto puede indicar que la base de datos necesita actualización. Contacta al administrador.")
-                    st.stop()
+
+        source_id = None
+        source_data = None
+        existing_proposal = None
+
+        if origin_type == "Cotizador":
+            # Usar búsqueda optimizada
+            selected_group_id = render_quote_search_selector(
+                key="propuesta_formal_legacy",
+                label="🔍 Buscar cotización",
+                show_recent=True
+            )
+            
+            if selected_group_id:
+                # Obtener información del grupo
+                group_data = get_quote_by_group_id(selected_group_id)
+                if group_data:
+                    # Validar que el diccionario tiene todos los campos necesarios
+                    required_fields = ['quote_id', 'quote_group_id', 'version', 'created_at', 'status', 
+                                     'total_revenue', 'avg_margin', 'playbook_name', 'client_name', 
+                                     'proposal_name', 'quoted_by']
+                    missing_fields = [f for f in required_fields if f not in group_data]
                     
-                source_id = group_data["quote_id"]
-                
-                # Mostrar resumen
-                col1, col2, col3 = st.columns(3)
-                col1.metric("Total", f"${group_data['total_revenue']:,.2f}")
-                col2.metric("Margen", f"{group_data['avg_margin']:.1f}%")
-                col3.metric("Estado", group_data['status'])
-                
-                # Guardar para uso posterior
-                source_data = (
-                    source_id, group_data['quote_group_id'], group_data['version'],
-                    None, group_data['created_at'], group_data['status'],
-                    0, group_data['total_revenue'], 0, group_data['avg_margin'],
-                    group_data['playbook_name'], group_data['client_name'],
-                    group_data.get('quoted_by', 'Sin asignar'), group_data['proposal_name']
-                )
-
-    elif origin_type == "Propuesta Anterior (Nueva Versión)":
-        # Obtener propuestas disponibles
-        from database import get_formal_proposals
-        all_proposals = get_formal_proposals(created_by_filter=None if _is_admin else _current_user['alias'])
-
-        if all_proposals:
-            proposal_options = {
-                f"{p['proposal_number']} - {p['recipient_company']} - {p['issued_date']}": p['proposal_doc_id']
-                for p in all_proposals
-            }
-
-            selected_proposal = st.selectbox(
-                "Selecciona una propuesta anterior",
-                options=list(proposal_options.keys())
-            )
-
-            if selected_proposal:
-                proposal_id = proposal_options[selected_proposal]
-                from database import get_formal_proposal
-                existing_proposal = get_formal_proposal(proposal_id)
-
-                if existing_proposal:
-                    source_id = existing_proposal.get('quote_id')
-
-                    # Mostrar resumen
-                    st.info(f"📄 **{existing_proposal['proposal_number']}** - Generada el {existing_proposal['issued_date']}")
-                    st.caption("Se creará una nueva versión basada en esta propuesta con los datos prellenados")
-        else:
-            st.warning("No hay propuestas anteriores disponibles")
-
-    if source_id or existing_proposal:
-        st.success(f"✅ Origen seleccionado: {source_id[:8]}...")
-        st.divider()
-
-        # =========================
-        # Configuración de Propuesta
-        # =========================
-        st.subheader("2️⃣ Configuración de la Propuesta")
-
-        # Sección: Datos del Emisor
-        with st.expander("🏢 Datos del Emisor (Tu Empresa)", expanded=True):
-            col1, col2 = st.columns(2)
-
-            with col1:
-                issuer_company = st.text_input(
-                    "Nombre de la Empresa *", 
-                    value=existing_proposal.get('issuer_company') or 'Tu Empresa S.A. de C.V.' if existing_proposal else "Tu Empresa S.A. de C.V.", 
-                    key="issuer_company"
-                )
-                issuer_contact = st.text_input(
-                    "Nombre del Contacto", 
-                    value=existing_proposal.get('issuer_contact_name') or '' if existing_proposal else "", 
-                    key="issuer_contact"
-                )
-                issuer_title = st.text_input(
-                    "Cargo", 
-                    value=existing_proposal.get('issuer_contact_title') or '' if existing_proposal else "", 
-                    key="issuer_title"
-                )
-
-            with col2:
-                issuer_email = st.text_input(
-                    "Email", 
-                    value=existing_proposal.get('issuer_email') or '' if existing_proposal else "", 
-                    key="issuer_email"
-                )
-                issuer_phone = st.text_input(
-                    "Teléfono", 
-                    value=existing_proposal.get('issuer_phone') or '' if existing_proposal else "", 
-                    key="issuer_phone"
-                )
-
-        # Sección: Datos del Receptor
-        with st.expander("👤 Datos del Cliente (Receptor)", expanded=True):
-            col1, col2 = st.columns(2)
-
-            with col1:
-                recipient_company = st.text_input(
-                    "Nombre de la Empresa *", 
-                    value=existing_proposal.get('recipient_company') or '' if existing_proposal else "", 
-                    key="recipient_company"
-                )
-                recipient_contact = st.text_input(
-                    "Nombre del Contacto *", 
-                    value=existing_proposal.get('recipient_contact_name') or '' if existing_proposal else "", 
-                    key="recipient_contact"
-                )
-                recipient_title = st.text_input(
-                    "Cargo", 
-                    value=existing_proposal.get('recipient_contact_title') or '' if existing_proposal else "", 
-                    key="recipient_title"
-                )
-
-            with col2:
-                recipient_email = st.text_input(
-                    "Email", 
-                    value=existing_proposal.get('recipient_email', '') if existing_proposal else "", 
-                    key="recipient_email"
-                )
-
-        # Sección: Contexto
-        with st.expander("🎯 Contexto y Personalización", expanded=True):
-            col1, col2 = st.columns(2)
-
-            with col1:
-                from formal_proposal_generator import CLIENT_TYPES, MARKET_SECTORS
-
-                # Determinar índices si hay propuesta existente
-                default_client_idx = 0
-                default_sector_idx = 0
-                if existing_proposal:
-                    try:
-                        if existing_proposal.get('client_type') in CLIENT_TYPES:
-                            default_client_idx = CLIENT_TYPES.index(existing_proposal['client_type'])
-                    except:
-                        pass
-                    try:
-                        if existing_proposal.get('market_sector') in MARKET_SECTORS:
-                            default_sector_idx = MARKET_SECTORS.index(existing_proposal['market_sector'])
-                    except:
-                        pass
-
-                client_type = st.selectbox(
-                    "Tipo de Cliente",
-                    options=CLIENT_TYPES,
-                    index=default_client_idx,
-                    key="client_type"
-                )
-
-                market_sector = st.selectbox(
-                    "Sector de Mercado",
-                    options=MARKET_SECTORS,
-                    index=default_sector_idx,
-                    key="market_sector"
-                )
-
-            with col2:
-                # Inicializar subject en session_state si no existe
-                if "subject_value" not in st.session_state:
-                    st.session_state.subject_value = existing_proposal.get('subject', '') if existing_proposal else ""
-
-                col_subj_label, col_subj_btn = st.columns([3, 2])
-                with col_subj_label:
-                    st.markdown("**Asunto / Motivo**")
-                with col_subj_btn:
-                    ai_enabled = st.session_state.get('openai_enabled', False)
-                    gen_subject = st.button(
-                        "✨ Sugerir con IA" if ai_enabled else "🔒 IA no disponible",
-                        key="btn_gen_subject",
-                        disabled=not ai_enabled,
-                        help="Genera automáticamente una descripción del motivo basada en los productos cotizados" if ai_enabled else "Requiere API Key de OpenAI en la barra lateral"
-                    )
-
-                if gen_subject and ai_enabled:
-                    # Recopilar contexto: líneas, cliente, sector
-                    lines_context = st.session_state.get('lines', [])
-                    client_ctx = source_data[11] if source_data else st.session_state.get('saved_client_name', 'el cliente')
-                    sector_ctx = st.session_state.get('market_sector', 'Tecnología')
-
-                    skus_desc = "\n".join([
-                        f"- {l.get('sku','')}: {l.get('description_final', l.get('description_original',''))}"
-                        for l in lines_context[:15]
-                    ]) if lines_context else "Servicios tecnológicos y productos de cómputo"
-
-                    prompt = (
-                        f"Eres un ejecutivo comercial experto. Redacta un motivo/asunto profesional y conciso (máximo 3 oraciones) "
-                        f"para una propuesta comercial dirigida a '{client_ctx}' del sector '{sector_ctx}'. "
-                        f"Los productos/servicios cotizados son:\n{skus_desc}\n\n"
-                        f"El texto debe dar contexto al cliente de lo que se le va a ofrecer, ser directo y motivar la lectura. "
-                        f"No uses comillas ni encabezados. Solo el texto del motivo."
-                    )
-
-                    try:
-                        import openai
-                        api_key = st.session_state.get('openai_api_key')
-                        client_ai = openai.OpenAI(api_key=api_key)
-                        with st.spinner("Generando motivo con IA..."):
-                            response = client_ai.chat.completions.create(
-                                model="gpt-4o-mini",
-                                messages=[{"role": "user", "content": prompt}],
-                                max_tokens=200,
-                                temperature=0.7
-                            )
-                        st.session_state.subject_value = response.choices[0].message.content.strip()
-                        st.session_state['subject'] = st.session_state.subject_value
-                        st.rerun()
-                    except Exception as e:
-                        st.error(f"Error generando sugerencia: {e}")
-
-                subject = st.text_area(
-                    "",
-                    value=st.session_state.subject_value,
-                    height=120,
-                    placeholder="Describe el motivo o asunto de la propuesta...",
-                    key="subject",
-                    label_visibility="collapsed"
-                )
-                # Sincronizar edición manual con session_state
-                if subject != st.session_state.subject_value:
-                    st.session_state.subject_value = subject
-
-            # Descripción del Proyecto (ancho completo)
-            st.divider()
-            if "project_desc_value" not in st.session_state:
-                st.session_state.project_desc_value = existing_proposal.get('project_description', '') if existing_proposal else ""
-
-            col_desc_label, col_desc_btn = st.columns([3, 2])
-            with col_desc_label:
-                st.markdown("**Descripción del Proyecto**")
-                st.caption("Contexto detallado que verá el cliente en la propuesta")
-            with col_desc_btn:
-                ai_enabled_desc = st.session_state.get('openai_enabled', False)
-                correct_desc = st.button(
-                    "✨ Corregir redacción con IA" if ai_enabled_desc else "🔒 IA no disponible",
-                    key="btn_correct_project_desc",
-                    disabled=not ai_enabled_desc,
-                    help="La IA mejora la redacción de tu texto manteniendo el contenido" if ai_enabled_desc else "Requiere API Key de OpenAI en la barra lateral"
-                )
-
-            if correct_desc and ai_enabled_desc:
-                raw_text = st.session_state.project_desc_value
-                if raw_text and raw_text.strip():
-                    correction_prompt = (
-                        f"Eres un redactor comercial experto. El usuario escribió la siguiente descripción de proyecto para una propuesta comercial:\n\n"
-                        f"{raw_text}\n\n"
-                        f"Corrige la ortografía, mejora la redacción y el tono profesional, y hazlo más persuasivo. "
-                        f"Mantén el significado original. No agregues información que no esté en el texto. "
-                        f"No uses comillas ni encabezados. Solo devuelve el texto corregido."
-                    )
-                    try:
-                        import openai as _openai
-                        _client_ai = _openai.OpenAI(api_key=st.session_state.get('openai_api_key'))
-                        with st.spinner("Corrigiendo redacción con IA..."):
-                            _resp = _client_ai.chat.completions.create(
-                                model="gpt-4o-mini",
-                                messages=[{"role": "user", "content": correction_prompt}],
-                                max_tokens=500,
-                                temperature=0.4
-                            )
-                        st.session_state.project_desc_value = _resp.choices[0].message.content.strip()
-                        st.session_state['project_description'] = st.session_state.project_desc_value
-                        st.rerun()
-                    except Exception as _e:
-                        st.error(f"Error al corregir: {_e}")
-                else:
-                    st.warning("Escribe primero la descripción del proyecto antes de corregir.")
-
-            project_description = st.text_area(
-                "",
-                value=st.session_state.project_desc_value,
-                height=150,
-                placeholder="Ej: Este proyecto busca modernizar la infraestructura tecnológica de la empresa, incorporando soluciones de cómputo de alto rendimiento y servicios de soporte especializado para garantizar la continuidad operativa...",
-                key="project_description",
-                label_visibility="collapsed"
-            )
-            # Sincronizar: siempre actualizar project_desc_value con lo que haya en el widget
-            st.session_state.project_desc_value = project_description
-
-        # Sección: Logos
-        with st.expander("🎨 Logos", expanded=False):
-            st.markdown("**Logo del Emisor (Tu Empresa)**")
-
-            col1, col2 = st.columns(2)
-
-            with col1:
-                # Logos existentes
-                from database import get_logos
-                issuer_logos = get_logos('issuer')
-
-                if issuer_logos:
-                    logo_options = ["Ninguno"] + [f"{logo['logo_name']} ({logo['company_name']})" for logo in issuer_logos]
-                    selected_issuer_logo = st.selectbox(
-                        "Seleccionar logo existente",
-                        options=logo_options,
-                        key="selected_issuer_logo"
-                    )
-
-                    if selected_issuer_logo != "Ninguno":
-                        selected_idx = logo_options.index(selected_issuer_logo) - 1
-                        st.session_state.issuer_logo_id = issuer_logos[selected_idx]['logo_id']
-                else:
-                    st.info("No hay logos guardados")
-
-            with col2:
-                # Upload nuevo logo
-                uploaded_issuer_logo = st.file_uploader(
-                    "Subir nuevo logo",
-                    type=['png', 'jpg', 'jpeg'],
-                    key="upload_issuer_logo"
-                )
-
-                if uploaded_issuer_logo:
-                    _ih = hash(uploaded_issuer_logo.getvalue())
-                    if st.session_state.get('_last_issuer_upload_hash') != _ih:
-                        try:
-                            logo_data, logo_format = process_logo_upload(uploaded_issuer_logo)
-                            logo_id = str(uuid.uuid4())
-                            success, msg = save_logo(
-                                logo_id,
-                                uploaded_issuer_logo.name,
-                                'issuer',
-                                issuer_company,
-                                logo_data,
-                                logo_format
-                            )
-                            if success:
-                                st.session_state['_last_issuer_upload_hash'] = _ih
-                                st.session_state.issuer_logo_id = logo_id
-                                st.success(msg)
-                            else:
-                                st.error(msg)
-                        except Exception as e:
-                            st.error(f"Error: {e}")
-
-            st.divider()
-            st.markdown("**Logo del Cliente (Opcional)**")
-
-            col1, col2 = st.columns(2)
-
-            with col1:
-                client_logos = get_logos('client')
-
-                if client_logos:
-                    logo_options = ["Ninguno"] + [f"{logo['logo_name']} ({logo['company_name']})" for logo in client_logos]
-                    selected_client_logo = st.selectbox(
-                        "Seleccionar logo existente",
-                        options=logo_options,
-                        key="selected_client_logo"
-                    )
-
-                    if selected_client_logo != "Ninguno":
-                        selected_idx = logo_options.index(selected_client_logo) - 1
-                        st.session_state.client_logo_id = client_logos[selected_idx]['logo_id']
-                else:
-                    st.info("No hay logos de clientes guardados")
-
-            with col2:
-                uploaded_client_logo = st.file_uploader(
-                    "Subir logo de cliente",
-                    type=['png', 'jpg', 'jpeg'],
-                    key="upload_client_logo"
-                )
-
-                if uploaded_client_logo:
-                    _ch = hash(uploaded_client_logo.getvalue())
-                    if st.session_state.get('_last_client_upload_hash') != _ch:
-                        try:
-                            logo_data, logo_format = process_logo_upload(uploaded_client_logo)
-                            logo_id = str(uuid.uuid4())
-                            success, msg = save_logo(
-                                logo_id,
-                                uploaded_client_logo.name,
-                                'client',
-                                recipient_company,
-                                logo_data,
-                                logo_format
-                            )
-                            if success:
-                                st.session_state['_last_client_upload_hash'] = _ch
-                                st.session_state.client_logo_id = logo_id
-                                st.success(msg)
-                            else:
-                                st.error(msg)
-                        except Exception as e:
-                            st.error(f"Error: {e}")
-
-        # Sección: Configuración de IVA y Moneda
-        with st.expander("💰 Configuración de IVA, Moneda y Vigencia", expanded=True):
-            col1, col2, col3 = st.columns(3)
-
-            # Determinar valores por defecto de moneda
-            default_currency = "MXN (Pesos Mexicanos)"
-            if existing_proposal and existing_proposal.get('currency') == 'USD':
-                default_currency = "USD (Dólares)"
-
-            with col1:
-                currency = st.selectbox(
-                    "Moneda",
-                    options=["MXN (Pesos Mexicanos)", "USD (Dólares)"],
-                    index=0 if default_currency.startswith("MXN") else 1,
-                    key="currency",
-                    help="Moneda en la que se presenta la propuesta"
-                )
-                currency_code = "MXN" if currency.startswith("MXN") else "USD"
-                currency_symbol = "$" if currency_code == "MXN" else "US$"
-
-            with col2:
-                iva_rate = st.number_input(
-                    "Tasa de IVA (%)",
-                    min_value=0.0,
-                    max_value=100.0,
-                    value=float(existing_proposal.get('iva_rate', 0.16) * 100) if existing_proposal else 16.0,
-                    step=1.0,
-                    help="Tasa de IVA a aplicar (México: 16%)",
-                    key="iva_rate"
-                ) / 100
-
-            with col3:
-                default_iva_mode = "Desglosado (se suma al total)"
-                if existing_proposal and existing_proposal.get('iva_included'):
-                    default_iva_mode = "Integrado (ya incluido en precios)"
-
-                iva_included = st.radio(
-                    "¿Cómo mostrar el IVA?",
-                    options=["Desglosado (se suma al total)", "Integrado (ya incluido en precios)"],
-                    index=0 if default_iva_mode.startswith("Desglosado") else 1,
-                    key="iva_included"
-                )
-
-                iva_included_bool = iva_included.startswith("Integrado")
-
-            st.divider()
-            col_vig1, col_vig2 = st.columns([1, 3])
-            with col_vig1:
-                default_vigencia = 30
-                if existing_proposal and existing_proposal.get('valid_until') and existing_proposal.get('issued_date'):
-                    try:
-                        from datetime import date
-                        _issued = date.fromisoformat(str(existing_proposal['issued_date']))
-                        _valid  = date.fromisoformat(str(existing_proposal['valid_until']))
-                        default_vigencia = (_valid - _issued).days
-                    except:
-                        pass
-                valid_until_days = st.number_input(
-                    "Vigencia (días)",
-                    min_value=1,
-                    max_value=365,
-                    value=default_vigencia,
-                    step=1,
-                    help="Días de validez de la propuesta a partir de la fecha de emisión",
-                    key="valid_until_days"
-                )
-            with col_vig2:
-                from datetime import date, timedelta as _td
-                _today = date.today()
-                _expiry = _today + _td(days=int(valid_until_days))
-                st.info(f"📅 La propuesta vence el **{_expiry.strftime('%d/%m/%Y')}** ({int(valid_until_days)} días desde hoy)")
-
-        # Sección: Términos y Condiciones
-        with st.expander("📋 Términos y Condiciones", expanded=False):
-            from formal_proposal_generator import DEFAULT_TERMS
-
-            terms = st.text_area(
-                "Edita los términos y condiciones",
-                value=existing_proposal.get('terms_and_conditions', DEFAULT_TERMS) if existing_proposal else DEFAULT_TERMS,
-                height=300,
-                help="Personaliza los términos según tu negocio",
-                key="terms"
-            )
-
-        # Sección: Firma
-        with st.expander("✍️ Firma", expanded=True):
-            col1, col2 = st.columns(2)
-
-            with col1:
-                signature_name = st.text_input(
-                    "Nombre de quien firma",
-                    value=existing_proposal.get('signature_name', '') if existing_proposal else "",
-                    key="signature_name"
-                )
-
-            with col2:
-                signature_title = st.text_input(
-                    "Cargo/Posición",
-                    value=existing_proposal.get('signature_title', 'Ejecutivo Comercial') if existing_proposal else "Ejecutivo Comercial",
-                    key="signature_title"
-                )
-
-        st.divider()
-
-        # =========================
-        # Vista Previa y Generación
-        # =========================
-        st.subheader("3️⃣ Generar Propuesta")
-
-        # Botón de generación
-        col1, col2, col3 = st.columns([2, 1, 1])
-
-        with col1:
-            generate_button = st.button(
-                "🎯 Generar Propuesta Formal",
-                type="primary",
-                width='stretch'
-            )
-
-        with col2:
-            preview_intro = st.button(
-                "👁️ Vista Previa Intro",
-                width='stretch'
-            )
-
-        if preview_intro:
-            from formal_proposal_generator import generate_intro_text
-
-            # Validación básica para mostrar preview
-            issuer_clean = (issuer_company or "").strip()
-            recipient_comp_clean = (recipient_company or "").strip()
-            recipient_cont_clean = (recipient_contact or "").strip()
-
-            if not issuer_clean or not recipient_comp_clean or not recipient_cont_clean:
-                st.warning("⚠️ Completa los campos obligatorios (Empresa emisora, Empresa receptora, Contacto) para ver la vista previa")
-            else:
-                with st.spinner("Generando vista previa..."):
-                    intro_text = generate_intro_text(
-                        recipient_company,
-                        recipient_contact,
-                        client_type,
-                        market_sector,
-                        issuer_company,
-                        use_ai=st.session_state.get('openai_enabled', False),
-                        openai_api_key=st.session_state.get('openai_api_key')
-                    )
-
-                    st.markdown("---")
-                    st.markdown("### 📝 Vista Previa de Introducción")
-                    st.info(intro_text)
-                    st.markdown("---")
-
-        if generate_button:
-            # Debug: mostrar valores capturados
-            with st.expander("🔍 Debug - Valores capturados", expanded=False):
-                st.write("**Valores raw:**")
-                st.write(f"issuer_company: '{issuer_company}' (tipo: {type(issuer_company)})")
-                st.write(f"recipient_company: '{recipient_company}' (tipo: {type(recipient_company)})")
-                st.write(f"recipient_contact: '{recipient_contact}' (tipo: {type(recipient_contact)})")
-
-            # Validar campos requeridos - limpiar espacios primero
-            issuer_company_clean = (issuer_company or "").strip()
-            recipient_company_clean = (recipient_company or "").strip()
-            recipient_contact_clean = (recipient_contact or "").strip()
-
-            missing_fields = []
-            if not issuer_company_clean:
-                missing_fields.append("Nombre de Empresa Emisora")
-            if not recipient_company_clean:
-                missing_fields.append("Nombre de Empresa Receptora")
-            if not recipient_contact_clean:
-                missing_fields.append("Nombre del Contacto Receptor")
-
-            if missing_fields:
-                st.error(f"❌ Completa los siguientes campos obligatorios: {', '.join(missing_fields)}")
-            else:
-                with st.spinner("🎨 Generando propuesta formal..."):
-                    try:
-                        from formal_proposal_generator import create_formal_proposal, REPORTLAB_AVAILABLE
+                    if missing_fields:
+                        st.error(f"⚠️ Error: La consulta retornó datos incompletos. Campos faltantes: {', '.join(missing_fields)}")
+                        st.warning("💡 Esto puede indicar que la base de datos necesita actualización. Contacta al administrador.")
+                        st.stop()
                         
-                        # Verificar disponibilidad de ReportLab
-                        if not REPORTLAB_AVAILABLE:
-                            st.error("❌ ReportLab no está disponible. Los PDFs no se pueden generar. Verifica que las dependencias estén instaladas.")
-                            st.stop()
+                    source_id = group_data["quote_id"]
+                    
+                    # Mostrar resumen
+                    col1, col2, col3 = st.columns(3)
+                    col1.metric("Total", f"${group_data['total_revenue']:,.2f}")
+                    col2.metric("Margen", f"{group_data['avg_margin']:.1f}%")
+                    col3.metric("Estado", group_data['status'])
+                    
+                    # Guardar para uso posterior
+                    source_data = (
+                        source_id, group_data['quote_group_id'], group_data['version'],
+                        None, group_data['created_at'], group_data['status'],
+                        0, group_data['total_revenue'], 0, group_data['avg_margin'],
+                        group_data['playbook_name'], group_data['client_name'],
+                        group_data.get('quoted_by', 'Sin asignar'), group_data['proposal_name']
+                    )
 
-                        # Preparar datos
-                        issuer_data = {
-                            'company': issuer_company,
-                            'contact_name': issuer_contact,
-                            'contact_title': issuer_title,
-                            'email': issuer_email,
-                            'phone': issuer_phone
-                        }
+        elif origin_type == "Propuesta Anterior (Nueva Versión)":
+            # Obtener propuestas disponibles
+            from database import get_formal_proposals
+            all_proposals = get_formal_proposals(created_by_filter=None if _is_admin else _current_user['alias'])
 
-                        recipient_data = {
-                            'company': recipient_company,
-                            'contact_name': recipient_contact,
-                            'contact_title': recipient_title,
-                            'email': recipient_email
-                        }
+            if all_proposals:
+                proposal_options = {
+                    f"{p['proposal_number']} - {p['recipient_company']} - {p['issued_date']}": p['proposal_doc_id']
+                    for p in all_proposals
+                }
 
-                        context_data = {
-                            'client_type': client_type,
-                            'market_sector': market_sector,
-                            'subject': st.session_state.get('subject', subject or ''),
-                            'project_description': st.session_state.get('project_desc_value') or st.session_state.get('project_description') or project_description or ''
-                        }
+                selected_proposal = st.selectbox(
+                    "Selecciona una propuesta anterior",
+                    options=list(proposal_options.keys())
+                )
 
-                        logo_ids = {
-                            'issuer': st.session_state.get('issuer_logo_id'),
-                            'client': st.session_state.get('client_logo_id')
-                        }
+                if selected_proposal:
+                    proposal_id = proposal_options[selected_proposal]
+                    from database import get_formal_proposal
+                    existing_proposal = get_formal_proposal(proposal_id)
 
-                        signature_data = {
-                            'name': signature_name,
-                            'title': signature_title
-                        }
+                    if existing_proposal:
+                        source_id = existing_proposal.get('quote_id')
 
-                        iva_config = {
-                            'rate': iva_rate,
-                            'included': iva_included_bool,
-                            'currency': currency_code,
-                            'currency_symbol': currency_symbol,
-                            'valid_until_days': int(valid_until_days)
-                        }
+                        # Mostrar resumen
+                        st.info(f"📄 **{existing_proposal['proposal_number']}** - Generada el {existing_proposal['issued_date']}")
+                        st.caption("Se creará una nueva versión basada en esta propuesta con los datos prellenados")
+            else:
+                st.warning("No hay propuestas anteriores disponibles")
 
-                        # Generar propuesta
-                        success, proposal_doc_id, message = create_formal_proposal(
-                            quote_id=source_id,
-                            issuer_data=issuer_data,
-                            recipient_data=recipient_data,
-                            context_data=context_data,
-                            logo_ids=logo_ids,
-                            terms=terms,
-                            signature_data=signature_data,
-                            iva_config=iva_config,
-                            created_by=_current_user['alias']
+        if source_id or existing_proposal:
+            st.success(f"✅ Origen seleccionado: {source_id[:8]}...")
+            st.divider()
+
+            # =========================
+            # Configuración de Propuesta
+            # =========================
+            st.subheader("2️⃣ Configuración de la Propuesta")
+
+            # Sección: Datos del Emisor
+            with st.expander("🏢 Datos del Emisor (Tu Empresa)", expanded=True):
+                col1, col2 = st.columns(2)
+
+                with col1:
+                    issuer_company = st.text_input(
+                        "Nombre de la Empresa *", 
+                        value=existing_proposal.get('issuer_company') or 'Tu Empresa S.A. de C.V.' if existing_proposal else "Tu Empresa S.A. de C.V.", 
+                        key="issuer_company"
+                    )
+                    issuer_contact = st.text_input(
+                        "Nombre del Contacto", 
+                        value=existing_proposal.get('issuer_contact_name') or '' if existing_proposal else "", 
+                        key="issuer_contact"
+                    )
+                    issuer_title = st.text_input(
+                        "Cargo", 
+                        value=existing_proposal.get('issuer_contact_title') or '' if existing_proposal else "", 
+                        key="issuer_title"
+                    )
+
+                with col2:
+                    issuer_email = st.text_input(
+                        "Email", 
+                        value=existing_proposal.get('issuer_email') or '' if existing_proposal else "", 
+                        key="issuer_email"
+                    )
+                    issuer_phone = st.text_input(
+                        "Teléfono", 
+                        value=existing_proposal.get('issuer_phone') or '' if existing_proposal else "", 
+                        key="issuer_phone"
+                    )
+
+            # Sección: Datos del Receptor
+            with st.expander("👤 Datos del Cliente (Receptor)", expanded=True):
+                col1, col2 = st.columns(2)
+
+                with col1:
+                    recipient_company = st.text_input(
+                        "Nombre de la Empresa *", 
+                        value=existing_proposal.get('recipient_company') or '' if existing_proposal else "", 
+                        key="recipient_company"
+                    )
+                    recipient_contact = st.text_input(
+                        "Nombre del Contacto *", 
+                        value=existing_proposal.get('recipient_contact_name') or '' if existing_proposal else "", 
+                        key="recipient_contact"
+                    )
+                    recipient_title = st.text_input(
+                        "Cargo", 
+                        value=existing_proposal.get('recipient_contact_title') or '' if existing_proposal else "", 
+                        key="recipient_title"
+                    )
+
+                with col2:
+                    recipient_email = st.text_input(
+                        "Email", 
+                        value=existing_proposal.get('recipient_email', '') if existing_proposal else "", 
+                        key="recipient_email"
+                    )
+
+            # Sección: Contexto
+            with st.expander("🎯 Contexto y Personalización", expanded=True):
+                col1, col2 = st.columns(2)
+
+                with col1:
+                    from formal_proposal_generator import CLIENT_TYPES, MARKET_SECTORS
+
+                    # Determinar índices si hay propuesta existente
+                    default_client_idx = 0
+                    default_sector_idx = 0
+                    if existing_proposal:
+                        try:
+                            if existing_proposal.get('client_type') in CLIENT_TYPES:
+                                default_client_idx = CLIENT_TYPES.index(existing_proposal['client_type'])
+                        except:
+                            pass
+                        try:
+                            if existing_proposal.get('market_sector') in MARKET_SECTORS:
+                                default_sector_idx = MARKET_SECTORS.index(existing_proposal['market_sector'])
+                        except:
+                            pass
+
+                    client_type = st.selectbox(
+                        "Tipo de Cliente",
+                        options=CLIENT_TYPES,
+                        index=default_client_idx,
+                        key="client_type"
+                    )
+
+                    market_sector = st.selectbox(
+                        "Sector de Mercado",
+                        options=MARKET_SECTORS,
+                        index=default_sector_idx,
+                        key="market_sector"
+                    )
+
+                with col2:
+                    # Inicializar subject en session_state si no existe
+                    if "subject_value" not in st.session_state:
+                        st.session_state.subject_value = existing_proposal.get('subject', '') if existing_proposal else ""
+
+                    col_subj_label, col_subj_btn = st.columns([3, 2])
+                    with col_subj_label:
+                        st.markdown("**Asunto / Motivo**")
+                    with col_subj_btn:
+                        ai_enabled = st.session_state.get('openai_enabled', False)
+                        gen_subject = st.button(
+                            "✨ Sugerir con IA" if ai_enabled else "🔒 IA no disponible",
+                            key="btn_gen_subject",
+                            disabled=not ai_enabled,
+                            help="Genera automáticamente una descripción del motivo basada en los productos cotizados" if ai_enabled else "Requiere API Key de OpenAI en la barra lateral"
                         )
 
-                        if success:
-                            st.success(f"✅ {message}")
-                            st.balloons()
+                    if gen_subject and ai_enabled:
+                        # Recopilar contexto: líneas, cliente, sector
+                        lines_context = st.session_state.get('lines', [])
+                        client_ctx = source_data[11] if source_data else st.session_state.get('saved_client_name', 'el cliente')
+                        sector_ctx = st.session_state.get('market_sector', 'Tecnología')
 
-                            # Obtener PDF
-                            from database import get_formal_proposal
-                            proposal = get_formal_proposal(proposal_doc_id)
+                        skus_desc = "\n".join([
+                            f"- {l.get('sku','')}: {l.get('description_final', l.get('description_original',''))}"
+                            for l in lines_context[:15]
+                        ]) if lines_context else "Servicios tecnológicos y productos de cómputo"
 
-                            if proposal and proposal.get('pdf_file_data'):
-                                # Convertir memoryview a bytes si es necesario
-                                pdf_data = proposal['pdf_file_data']
-                                if isinstance(pdf_data, memoryview):
-                                    pdf_data = bytes(pdf_data)
+                        prompt = (
+                            f"Eres un ejecutivo comercial experto. Redacta un motivo/asunto profesional y conciso (máximo 3 oraciones) "
+                            f"para una propuesta comercial dirigida a '{client_ctx}' del sector '{sector_ctx}'. "
+                            f"Los productos/servicios cotizados son:\n{skus_desc}\n\n"
+                            f"El texto debe dar contexto al cliente de lo que se le va a ofrecer, ser directo y motivar la lectura. "
+                            f"No uses comillas ni encabezados. Solo el texto del motivo."
+                        )
 
-                                st.download_button(
-                                    label="📥 Descargar PDF",
-                                    data=pdf_data,
-                                    file_name=f"{proposal['proposal_number']}.pdf",
-                                    mime="application/pdf",
-                                    width='stretch'
+                        try:
+                            import openai
+                            api_key = st.session_state.get('openai_api_key')
+                            client_ai = openai.OpenAI(api_key=api_key)
+                            with st.spinner("Generando motivo con IA..."):
+                                response = client_ai.chat.completions.create(
+                                    model="gpt-4o-mini",
+                                    messages=[{"role": "user", "content": prompt}],
+                                    max_tokens=200,
+                                    temperature=0.7
                                 )
-                        else:
-                            st.error(f"❌ {message}")
+                            st.session_state.subject_value = response.choices[0].message.content.strip()
+                            st.session_state['subject'] = st.session_state.subject_value
+                            st.rerun()
+                        except Exception as e:
+                            st.error(f"Error generando sugerencia: {e}")
 
-                    except Exception as e:
-                        st.error(f"❌ Error generando propuesta: {e}")
-                        import traceback
-                        st.code(traceback.format_exc())
+                    subject = st.text_area(
+                        "",
+                        value=st.session_state.subject_value,
+                        height=120,
+                        placeholder="Describe el motivo o asunto de la propuesta...",
+                        key="subject",
+                        label_visibility="collapsed"
+                    )
+                    # Sincronizar edición manual con session_state
+                    if subject != st.session_state.subject_value:
+                        st.session_state.subject_value = subject
 
-        # =========================
-        # Historial de Propuestas
-        # =========================
-        st.divider()
-        st.subheader("📚 Propuestas Generadas")
+                # Descripción del Proyecto (ancho completo)
+                st.divider()
+                if "project_desc_value" not in st.session_state:
+                    st.session_state.project_desc_value = existing_proposal.get('project_description', '') if existing_proposal else ""
 
-        from database import get_formal_proposals, get_formal_proposal, get_quote_lines_full, mark_proposal_as_delivered, get_all_users
+                col_desc_label, col_desc_btn = st.columns([3, 2])
+                with col_desc_label:
+                    st.markdown("**Descripción del Proyecto**")
+                    st.caption("Contexto detallado que verá el cliente en la propuesta")
+                with col_desc_btn:
+                    ai_enabled_desc = st.session_state.get('openai_enabled', False)
+                    correct_desc = st.button(
+                        "✨ Corregir redacción con IA" if ai_enabled_desc else "🔒 IA no disponible",
+                        key="btn_correct_project_desc",
+                        disabled=not ai_enabled_desc,
+                        help="La IA mejora la redacción de tu texto manteniendo el contenido" if ai_enabled_desc else "Requiere API Key de OpenAI en la barra lateral"
+                    )
 
-        # Filtros
-        col_filter1, col_filter2, col_filter3 = st.columns([1, 1, 2])
-        with col_filter1:
-            status_filter_option = st.selectbox(
-                "Filtrar por estado:",
-                options=["Todas", "Borrador", "Entregadas"],
-                index=0,
-                key="proposal_status_filter"
-            )
+                if correct_desc and ai_enabled_desc:
+                    raw_text = st.session_state.project_desc_value
+                    if raw_text and raw_text.strip():
+                        correction_prompt = (
+                            f"Eres un redactor comercial experto. El usuario escribió la siguiente descripción de proyecto para una propuesta comercial:\n\n"
+                            f"{raw_text}\n\n"
+                            f"Corrige la ortografía, mejora la redacción y el tono profesional, y hazlo más persuasivo. "
+                            f"Mantén el significado original. No agregues información que no esté en el texto. "
+                            f"No uses comillas ni encabezados. Solo devuelve el texto corregido."
+                        )
+                        try:
+                            import openai as _openai
+                            _client_ai = _openai.OpenAI(api_key=st.session_state.get('openai_api_key'))
+                            with st.spinner("Corrigiendo redacción con IA..."):
+                                _resp = _client_ai.chat.completions.create(
+                                    model="gpt-4o-mini",
+                                    messages=[{"role": "user", "content": correction_prompt}],
+                                    max_tokens=500,
+                                    temperature=0.4
+                                )
+                            st.session_state.project_desc_value = _resp.choices[0].message.content.strip()
+                            st.session_state['project_description'] = st.session_state.project_desc_value
+                            st.rerun()
+                        except Exception as _e:
+                            st.error(f"Error al corregir: {_e}")
+                    else:
+                        st.warning("Escribe primero la descripción del proyecto antes de corregir.")
 
-        # Filtro por usuario (solo visible para admin)
-        user_filter_alias = None
-        if _is_admin:
-            with col_filter2:
-                _users_list = get_all_users()
-                _user_opts = ["Todos los usuarios"] + [f"{u['full_name']} (@{u['alias']})" for u in _users_list]
-                _selected_user = st.selectbox("Filtrar por usuario:", options=_user_opts, index=0, key="proposal_user_filter")
-                if _selected_user != "Todos los usuarios":
-                    _idx = _user_opts.index(_selected_user) - 1
-                    user_filter_alias = _users_list[_idx]['alias']
-
-        # Convertir a valor de BD
-        status_filter_value = None
-        if status_filter_option == "Borrador":
-            status_filter_value = "draft"
-        elif status_filter_option == "Entregadas":
-            status_filter_value = "delivered"
-
-        all_proposals = get_formal_proposals(
-            status_filter=status_filter_value,
-            created_by_filter=user_filter_alias if _is_admin else _current_user['alias']
-        )
-
-        if all_proposals:
-            # Controles de paginación
-            col1, col2, col3 = st.columns([2, 1, 1])
-            
-            with col1:
-                st.write(f"**Total: {len(all_proposals)} propuestas**")
-            
-            with col2:
-                items_per_page = st.selectbox(
-                    "Mostrar por página:",
-                    options=[10, 20, 50, len(all_proposals)],
-                    format_func=lambda x: "Todas" if x == len(all_proposals) else str(x),
-                    key="proposals_per_page"
+                project_description = st.text_area(
+                    "",
+                    value=st.session_state.project_desc_value,
+                    height=150,
+                    placeholder="Ej: Este proyecto busca modernizar la infraestructura tecnológica de la empresa, incorporando soluciones de cómputo de alto rendimiento y servicios de soporte especializado para garantizar la continuidad operativa...",
+                    key="project_description",
+                    label_visibility="collapsed"
                 )
-            
-            with col3:
-                # Calcular número de páginas
-                total_pages = (len(all_proposals) - 1) // items_per_page + 1
-                if 'proposals_page' not in st.session_state:
-                    st.session_state.proposals_page = 1
-                
-                current_page = st.number_input(
-                    f"Página (de {total_pages}):",
-                    min_value=1,
-                    max_value=total_pages,
-                    value=st.session_state.proposals_page,
-                    key="proposals_page_input"
+                # Sincronizar: siempre actualizar project_desc_value con lo que haya en el widget
+                st.session_state.project_desc_value = project_description
+
+            # Sección: Logos
+            with st.expander("🎨 Logos", expanded=False):
+                st.markdown("**Logo del Emisor (Tu Empresa)**")
+
+                col1, col2 = st.columns(2)
+
+                with col1:
+                    # Logos existentes
+                    from database import get_logos
+                    issuer_logos = get_logos('issuer')
+
+                    if issuer_logos:
+                        logo_options = ["Ninguno"] + [f"{logo['logo_name']} ({logo['company_name']})" for logo in issuer_logos]
+                        selected_issuer_logo = st.selectbox(
+                            "Seleccionar logo existente",
+                            options=logo_options,
+                            key="selected_issuer_logo"
+                        )
+
+                        if selected_issuer_logo != "Ninguno":
+                            selected_idx = logo_options.index(selected_issuer_logo) - 1
+                            st.session_state.issuer_logo_id = issuer_logos[selected_idx]['logo_id']
+                    else:
+                        st.info("No hay logos guardados")
+
+                with col2:
+                    # Upload nuevo logo
+                    uploaded_issuer_logo = st.file_uploader(
+                        "Subir nuevo logo",
+                        type=['png', 'jpg', 'jpeg'],
+                        key="upload_issuer_logo"
+                    )
+
+                    if uploaded_issuer_logo:
+                        _ih = hash(uploaded_issuer_logo.getvalue())
+                        if st.session_state.get('_last_issuer_upload_hash') != _ih:
+                            try:
+                                logo_data, logo_format = process_logo_upload(uploaded_issuer_logo)
+                                logo_id = str(uuid.uuid4())
+                                success, msg = save_logo(
+                                    logo_id,
+                                    uploaded_issuer_logo.name,
+                                    'issuer',
+                                    issuer_company,
+                                    logo_data,
+                                    logo_format
+                                )
+                                if success:
+                                    st.session_state['_last_issuer_upload_hash'] = _ih
+                                    st.session_state.issuer_logo_id = logo_id
+                                    st.success(msg)
+                                else:
+                                    st.error(msg)
+                            except Exception as e:
+                                st.error(f"Error: {e}")
+
+                st.divider()
+                st.markdown("**Logo del Cliente (Opcional)**")
+
+                col1, col2 = st.columns(2)
+
+                with col1:
+                    client_logos = get_logos('client')
+
+                    if client_logos:
+                        logo_options = ["Ninguno"] + [f"{logo['logo_name']} ({logo['company_name']})" for logo in client_logos]
+                        selected_client_logo = st.selectbox(
+                            "Seleccionar logo existente",
+                            options=logo_options,
+                            key="selected_client_logo"
+                        )
+
+                        if selected_client_logo != "Ninguno":
+                            selected_idx = logo_options.index(selected_client_logo) - 1
+                            st.session_state.client_logo_id = client_logos[selected_idx]['logo_id']
+                    else:
+                        st.info("No hay logos de clientes guardados")
+
+                with col2:
+                    uploaded_client_logo = st.file_uploader(
+                        "Subir logo de cliente",
+                        type=['png', 'jpg', 'jpeg'],
+                        key="upload_client_logo"
+                    )
+
+                    if uploaded_client_logo:
+                        _ch = hash(uploaded_client_logo.getvalue())
+                        if st.session_state.get('_last_client_upload_hash') != _ch:
+                            try:
+                                logo_data, logo_format = process_logo_upload(uploaded_client_logo)
+                                logo_id = str(uuid.uuid4())
+                                success, msg = save_logo(
+                                    logo_id,
+                                    uploaded_client_logo.name,
+                                    'client',
+                                    recipient_company,
+                                    logo_data,
+                                    logo_format
+                                )
+                                if success:
+                                    st.session_state['_last_client_upload_hash'] = _ch
+                                    st.session_state.client_logo_id = logo_id
+                                    st.success(msg)
+                                else:
+                                    st.error(msg)
+                            except Exception as e:
+                                st.error(f"Error: {e}")
+
+            # Sección: Configuración de IVA y Moneda
+            with st.expander("💰 Configuración de IVA, Moneda y Vigencia", expanded=True):
+                col1, col2, col3 = st.columns(3)
+
+                # Determinar valores por defecto de moneda
+                default_currency = "MXN (Pesos Mexicanos)"
+                if existing_proposal and existing_proposal.get('currency') == 'USD':
+                    default_currency = "USD (Dólares)"
+
+                with col1:
+                    currency = st.selectbox(
+                        "Moneda",
+                        options=["MXN (Pesos Mexicanos)", "USD (Dólares)"],
+                        index=0 if default_currency.startswith("MXN") else 1,
+                        key="currency",
+                        help="Moneda en la que se presenta la propuesta"
+                    )
+                    currency_code = "MXN" if currency.startswith("MXN") else "USD"
+                    currency_symbol = "$" if currency_code == "MXN" else "US$"
+
+                with col2:
+                    iva_rate = st.number_input(
+                        "Tasa de IVA (%)",
+                        min_value=0.0,
+                        max_value=100.0,
+                        value=float(existing_proposal.get('iva_rate', 0.16) * 100) if existing_proposal else 16.0,
+                        step=1.0,
+                        help="Tasa de IVA a aplicar (México: 16%)",
+                        key="iva_rate"
+                    ) / 100
+
+                with col3:
+                    default_iva_mode = "Desglosado (se suma al total)"
+                    if existing_proposal and existing_proposal.get('iva_included'):
+                        default_iva_mode = "Integrado (ya incluido en precios)"
+
+                    iva_included = st.radio(
+                        "¿Cómo mostrar el IVA?",
+                        options=["Desglosado (se suma al total)", "Integrado (ya incluido en precios)"],
+                        index=0 if default_iva_mode.startswith("Desglosado") else 1,
+                        key="iva_included"
+                    )
+
+                    iva_included_bool = iva_included.startswith("Integrado")
+
+                st.divider()
+                col_vig1, col_vig2 = st.columns([1, 3])
+                with col_vig1:
+                    default_vigencia = 30
+                    if existing_proposal and existing_proposal.get('valid_until') and existing_proposal.get('issued_date'):
+                        try:
+                            from datetime import date
+                            _issued = date.fromisoformat(str(existing_proposal['issued_date']))
+                            _valid  = date.fromisoformat(str(existing_proposal['valid_until']))
+                            default_vigencia = (_valid - _issued).days
+                        except:
+                            pass
+                    valid_until_days = st.number_input(
+                        "Vigencia (días)",
+                        min_value=1,
+                        max_value=365,
+                        value=default_vigencia,
+                        step=1,
+                        help="Días de validez de la propuesta a partir de la fecha de emisión",
+                        key="valid_until_days"
+                    )
+                with col_vig2:
+                    from datetime import date, timedelta as _td
+                    _today = date.today()
+                    _expiry = _today + _td(days=int(valid_until_days))
+                    st.info(f"📅 La propuesta vence el **{_expiry.strftime('%d/%m/%Y')}** ({int(valid_until_days)} días desde hoy)")
+
+            # Sección: Términos y Condiciones
+            with st.expander("📋 Términos y Condiciones", expanded=False):
+                from formal_proposal_generator import DEFAULT_TERMS
+
+                terms = st.text_area(
+                    "Edita los términos y condiciones",
+                    value=existing_proposal.get('terms_and_conditions', DEFAULT_TERMS) if existing_proposal else DEFAULT_TERMS,
+                    height=300,
+                    help="Personaliza los términos según tu negocio",
+                    key="terms"
                 )
-                st.session_state.proposals_page = current_page
-            
-            # Calcular índices de paginación
-            start_idx = (current_page - 1) * items_per_page
-            end_idx = min(start_idx + items_per_page, len(all_proposals))
-            paginated_proposals = all_proposals[start_idx:end_idx]
-            
-            st.write(f"Mostrando {start_idx + 1} - {end_idx} de {len(all_proposals)}")
+
+            # Sección: Firma
+            with st.expander("✍️ Firma", expanded=True):
+                col1, col2 = st.columns(2)
+
+                with col1:
+                    signature_name = st.text_input(
+                        "Nombre de quien firma",
+                        value=existing_proposal.get('signature_name', '') if existing_proposal else "",
+                        key="signature_name"
+                    )
+
+                with col2:
+                    signature_title = st.text_input(
+                        "Cargo/Posición",
+                        value=existing_proposal.get('signature_title', 'Ejecutivo Comercial') if existing_proposal else "Ejecutivo Comercial",
+                        key="signature_title"
+                    )
+
             st.divider()
-            
-            # Selector dropdown de propuesta
-            proposal_options = {
-                f"{prop['proposal_number']} - {prop['recipient_company']} ({prop['issued_date']})": prop['proposal_doc_id']
-                for prop in paginated_proposals
-            }
-            
-            selected_proposal_label = st.selectbox(
-                "Selecciona una propuesta:",
-                options=list(proposal_options.keys()),
-                key="selected_proposal_dropdown"
+
+            # =========================
+            # Vista Previa y Generación
+            # =========================
+            st.subheader("3️⃣ Generar Propuesta")
+
+            # Botón de generación
+            col1, col2, col3 = st.columns([2, 1, 1])
+
+            with col1:
+                generate_button = st.button(
+                    "🎯 Generar Propuesta Formal",
+                    type="primary",
+                    width='stretch'
+                )
+
+            with col2:
+                preview_intro = st.button(
+                    "👁️ Vista Previa Intro",
+                    width='stretch'
+                )
+
+            if preview_intro:
+                from formal_proposal_generator import generate_intro_text
+
+                # Validación básica para mostrar preview
+                issuer_clean = (issuer_company or "").strip()
+                recipient_comp_clean = (recipient_company or "").strip()
+                recipient_cont_clean = (recipient_contact or "").strip()
+
+                if not issuer_clean or not recipient_comp_clean or not recipient_cont_clean:
+                    st.warning("⚠️ Completa los campos obligatorios (Empresa emisora, Empresa receptora, Contacto) para ver la vista previa")
+                else:
+                    with st.spinner("Generando vista previa..."):
+                        intro_text = generate_intro_text(
+                            recipient_company,
+                            recipient_contact,
+                            client_type,
+                            market_sector,
+                            issuer_company,
+                            use_ai=st.session_state.get('openai_enabled', False),
+                            openai_api_key=st.session_state.get('openai_api_key')
+                        )
+
+                        st.markdown("---")
+                        st.markdown("### 📝 Vista Previa de Introducción")
+                        st.info(intro_text)
+                        st.markdown("---")
+
+            if generate_button:
+                # Debug: mostrar valores capturados
+                with st.expander("🔍 Debug - Valores capturados", expanded=False):
+                    st.write("**Valores raw:**")
+                    st.write(f"issuer_company: '{issuer_company}' (tipo: {type(issuer_company)})")
+                    st.write(f"recipient_company: '{recipient_company}' (tipo: {type(recipient_company)})")
+                    st.write(f"recipient_contact: '{recipient_contact}' (tipo: {type(recipient_contact)})")
+
+                # Validar campos requeridos - limpiar espacios primero
+                issuer_company_clean = (issuer_company or "").strip()
+                recipient_company_clean = (recipient_company or "").strip()
+                recipient_contact_clean = (recipient_contact or "").strip()
+
+                missing_fields = []
+                if not issuer_company_clean:
+                    missing_fields.append("Nombre de Empresa Emisora")
+                if not recipient_company_clean:
+                    missing_fields.append("Nombre de Empresa Receptora")
+                if not recipient_contact_clean:
+                    missing_fields.append("Nombre del Contacto Receptor")
+
+                if missing_fields:
+                    st.error(f"❌ Completa los siguientes campos obligatorios: {', '.join(missing_fields)}")
+                else:
+                    with st.spinner("🎨 Generando propuesta formal..."):
+                        try:
+                            from formal_proposal_generator import create_formal_proposal, REPORTLAB_AVAILABLE
+                            
+                            # Verificar disponibilidad de ReportLab
+                            if not REPORTLAB_AVAILABLE:
+                                st.error("❌ ReportLab no está disponible. Los PDFs no se pueden generar. Verifica que las dependencias estén instaladas.")
+                                st.stop()
+
+                            # Preparar datos
+                            issuer_data = {
+                                'company': issuer_company,
+                                'contact_name': issuer_contact,
+                                'contact_title': issuer_title,
+                                'email': issuer_email,
+                                'phone': issuer_phone
+                            }
+
+                            recipient_data = {
+                                'company': recipient_company,
+                                'contact_name': recipient_contact,
+                                'contact_title': recipient_title,
+                                'email': recipient_email
+                            }
+
+                            context_data = {
+                                'client_type': client_type,
+                                'market_sector': market_sector,
+                                'subject': st.session_state.get('subject', subject or ''),
+                                'project_description': st.session_state.get('project_desc_value') or st.session_state.get('project_description') or project_description or ''
+                            }
+
+                            logo_ids = {
+                                'issuer': st.session_state.get('issuer_logo_id'),
+                                'client': st.session_state.get('client_logo_id')
+                            }
+
+                            signature_data = {
+                                'name': signature_name,
+                                'title': signature_title
+                            }
+
+                            iva_config = {
+                                'rate': iva_rate,
+                                'included': iva_included_bool,
+                                'currency': currency_code,
+                                'currency_symbol': currency_symbol,
+                                'valid_until_days': int(valid_until_days)
+                            }
+
+                            # Generar propuesta
+                            success, proposal_doc_id, message = create_formal_proposal(
+                                quote_id=source_id,
+                                issuer_data=issuer_data,
+                                recipient_data=recipient_data,
+                                context_data=context_data,
+                                logo_ids=logo_ids,
+                                terms=terms,
+                                signature_data=signature_data,
+                                iva_config=iva_config,
+                                created_by=_current_user['alias']
+                            )
+
+                            if success:
+                                st.success(f"✅ {message}")
+                                st.balloons()
+
+                                # Obtener PDF
+                                from database import get_formal_proposal
+                                proposal = get_formal_proposal(proposal_doc_id)
+
+                                if proposal and proposal.get('pdf_file_data'):
+                                    # Convertir memoryview a bytes si es necesario
+                                    pdf_data = proposal['pdf_file_data']
+                                    if isinstance(pdf_data, memoryview):
+                                        pdf_data = bytes(pdf_data)
+
+                                    st.download_button(
+                                        label="📥 Descargar PDF",
+                                        data=pdf_data,
+                                        file_name=f"{proposal['proposal_number']}.pdf",
+                                        mime="application/pdf",
+                                        width='stretch'
+                                    )
+                            else:
+                                st.error(f"❌ {message}")
+
+                        except Exception as e:
+                            st.error(f"❌ Error generando propuesta: {e}")
+                            import traceback
+                            st.code(traceback.format_exc())
+
+            # =========================
+            # Historial de Propuestas
+            # =========================
+            st.divider()
+            st.subheader("📚 Propuestas Generadas")
+
+            from database import get_formal_proposals, get_formal_proposal, get_quote_lines_full, mark_proposal_as_delivered, get_all_users
+
+            # Filtros
+            col_filter1, col_filter2, col_filter3 = st.columns([1, 1, 2])
+            with col_filter1:
+                status_filter_option = st.selectbox(
+                    "Filtrar por estado:",
+                    options=["Todas", "Borrador", "Entregadas"],
+                    index=0,
+                    key="proposal_status_filter"
+                )
+
+            # Filtro por usuario (solo visible para admin)
+            user_filter_alias = None
+            if _is_admin:
+                with col_filter2:
+                    _users_list = get_all_users()
+                    _user_opts = ["Todos los usuarios"] + [f"{u['full_name']} (@{u['alias']})" for u in _users_list]
+                    _selected_user = st.selectbox("Filtrar por usuario:", options=_user_opts, index=0, key="proposal_user_filter")
+                    if _selected_user != "Todos los usuarios":
+                        _idx = _user_opts.index(_selected_user) - 1
+                        user_filter_alias = _users_list[_idx]['alias']
+
+            # Convertir a valor de BD
+            status_filter_value = None
+            if status_filter_option == "Borrador":
+                status_filter_value = "draft"
+            elif status_filter_option == "Entregadas":
+                status_filter_value = "delivered"
+
+            all_proposals = get_formal_proposals(
+                status_filter=status_filter_value,
+                created_by_filter=user_filter_alias if _is_admin else _current_user['alias']
             )
-            
-            if selected_proposal_label:
-                selected_proposal_id = proposal_options[selected_proposal_label]
+
+            if all_proposals:
+                # Controles de paginación
+                col1, col2, col3 = st.columns([2, 1, 1])
                 
-                # Obtener propuesta completa
-                proposal_full = get_formal_proposal(selected_proposal_id)
+                with col1:
+                    st.write(f"**Total: {len(all_proposals)} propuestas**")
                 
-                if proposal_full:
-                    # Mostrar detalles
-                    st.markdown("---")
+                with col2:
+                    items_per_page = st.selectbox(
+                        "Mostrar por página:",
+                        options=[10, 20, 50, len(all_proposals)],
+                        format_func=lambda x: "Todas" if x == len(all_proposals) else str(x),
+                        key="proposals_per_page"
+                    )
+                
+                with col3:
+                    # Calcular número de páginas
+                    total_pages = (len(all_proposals) - 1) // items_per_page + 1
+                    if 'proposals_page' not in st.session_state:
+                        st.session_state.proposals_page = 1
                     
-                    # Estado con badge visual
-                    is_delivered = proposal_full.get('delivery_hash') is not None
+                    current_page = st.number_input(
+                        f"Página (de {total_pages}):",
+                        min_value=1,
+                        max_value=total_pages,
+                        value=st.session_state.proposals_page,
+                        key="proposals_page_input"
+                    )
+                    st.session_state.proposals_page = current_page
+                
+                # Calcular índices de paginación
+                start_idx = (current_page - 1) * items_per_page
+                end_idx = min(start_idx + items_per_page, len(all_proposals))
+                paginated_proposals = all_proposals[start_idx:end_idx]
+                
+                st.write(f"Mostrando {start_idx + 1} - {end_idx} de {len(all_proposals)}")
+                st.divider()
+                
+                # Selector dropdown de propuesta
+                proposal_options = {
+                    f"{prop['proposal_number']} - {prop['recipient_company']} ({prop['issued_date']})": prop['proposal_doc_id']
+                    for prop in paginated_proposals
+                }
+                
+                selected_proposal_label = st.selectbox(
+                    "Selecciona una propuesta:",
+                    options=list(proposal_options.keys()),
+                    key="selected_proposal_dropdown"
+                )
+                
+                if selected_proposal_label:
+                    selected_proposal_id = proposal_options[selected_proposal_label]
                     
-                    if is_delivered:
-                        st.success("✅ PROPUESTA ENTREGADA - Inmutable")
-                        
-                        # Información de entrega
-                        col_d1, col_d2, col_d3, col_d4 = st.columns(4)
-                        with col_d1:
-                            st.write("**Consecutivo:**")
-                            st.code(proposal_full.get('delivery_number', 'N/A'))
-                        with col_d2:
-                            st.write("**Fecha Entrega:**")
-                            delivered_at = proposal_full.get('delivered_at', 'N/A')
-                            if delivered_at != 'N/A':
-                                # Formatear fecha si es datetime
-                                try:
-                                    from datetime import datetime
-                                    if isinstance(delivered_at, str):
-                                        dt = datetime.fromisoformat(delivered_at.replace('Z', '+00:00'))
-                                        delivered_at = dt.strftime('%Y-%m-%d %H:%M')
-                                except:
-                                    pass
-                            st.code(delivered_at)
-                        with col_d3:
-                            st.write("**Entregada por:**")
-                            st.code(proposal_full.get('delivered_by', 'N/A'))
-                        with col_d4:
-                            st.write("**Hash Verificación:**")
-                            st.code(proposal_full.get('delivery_hash', 'N/A')[:8])
-                        
-                        st.divider()
-                    else:
-                        st.warning("⚠️ Borrador - Puede ser marcada como entregada")
+                    # Obtener propuesta completa
+                    proposal_full = get_formal_proposal(selected_proposal_id)
                     
-                    col1, col2, col3 = st.columns(3)
-                    with col1:
-                        st.write("**Fecha Emisión:**")
-                        st.info(str(proposal_full['issued_date']))
-                    with col2:
-                        st.write("**Cliente:**")
-                        st.info(str(proposal_full['recipient_company']))
-                    with col3:
-                        st.write("**Número:**")
-                        st.info(str(proposal_full['proposal_number']))
-                    
-                    # Botones de acción
-                    if is_delivered:
-                        # Propuesta entregada: solo permitir regenerar PDF
+                    if proposal_full:
+                        # Mostrar detalles
                         st.markdown("---")
-                        st.write("📄 **Opciones disponibles (propuesta inmutable):**")
-                        col_btn1, col_btn2, col_btn3 = st.columns(3)
-                    else:
-                        # Propuesta borrador: permitir marcar como entregada + PDF
-                        st.markdown("---")
-                        st.write("⚙️ **Acciones disponibles:**")
-                        col_btn1, col_btn2, col_btn3 = st.columns(3)
-                    
-                    # Intentar descargar PDF guardado
-                    pdf_data_available = False
-                    if proposal_full.get('pdf_file_data'):
-                        pdf_data = proposal_full['pdf_file_data']
-                        if isinstance(pdf_data, memoryview):
-                            pdf_data = bytes(pdf_data)
-                        if len(pdf_data) > 0:
-                            pdf_data_available = True
-                            with col_btn1:
-                                st.download_button(
-                                    label="📥 Descargar PDF",
-                                    data=pdf_data,
-                                    file_name=f"{proposal_full['proposal_number']}.pdf",
-                                    mime="application/pdf",
-                                    key=f"download_{selected_proposal_id}",
-                                    width='stretch'
-                                )
-                    
-                    # Botón para regenerar PDF (siempre disponible)
-                    with col_btn2:
-                        if st.button(
-                            "🔄 Regenerar PDF",
-                            key=f"regen_{selected_proposal_id}",
-                            width='stretch',
-                            help="Genera un nuevo PDF con los datos actuales (sin modificar la propuesta)"
-                        ):
-                            with st.spinner("Generando PDF..."):
-                                try:
-                                    from formal_proposal_generator import generate_proposal_pdf, REPORTLAB_AVAILABLE
-                                    if not REPORTLAB_AVAILABLE:
-                                        st.error("❌ ReportLab no está disponible")
-                                    else:
-                                        # Obtener líneas de cotización
-                                        quote_id = proposal_full.get('quote_id')
-                                        if quote_id:
-                                            quote_lines_raw = get_quote_lines_full(quote_id)
-                                            columns = ["line_id", "quote_id", "sku", "quantity", "description_original", "description_final",
-                                                      "description_corrections", "line_type", "service_origin", "cost_unit",
-                                                      "final_price_unit", "margin_pct", "strategy", "warnings", "created_at",
-                                                      "import_source", "import_batch_id"]
-                                            quote_lines = []
-                                            for row in quote_lines_raw:
-                                                line_dict = dict(zip(columns, row))
-                                                if not line_dict.get('quantity') or line_dict['quantity'] <= 0:
-                                                    line_dict['quantity'] = 1
-                                                quote_lines.append(line_dict)
-
-                                            # Preparar datos de propuesta para PDF
-                                            pdf_proposal_data = {
-                                                'proposal_number': proposal_full.get('proposal_number', ''),
-                                                'issued_date': proposal_full.get('issued_date', ''),
-                                                'valid_until': proposal_full.get('valid_until', ''),
-                                                'issuer_company': proposal_full.get('issuer_company', ''),
-                                                'issuer_contact_name': proposal_full.get('issuer_contact_name', ''),
-                                                'issuer_contact_title': proposal_full.get('issuer_contact_title', ''),
-                                                'issuer_email': proposal_full.get('issuer_email', ''),
-                                                'issuer_phone': proposal_full.get('issuer_phone', ''),
-                                                'recipient_company': proposal_full.get('recipient_company', ''),
-                                                'recipient_contact_name': proposal_full.get('recipient_contact_name', ''),
-                                                'recipient_contact_title': proposal_full.get('recipient_contact_title', ''),
-                                                'recipient_email': proposal_full.get('recipient_email', ''),
-                                                'subject': proposal_full.get('subject', ''),
-                                                'custom_intro': proposal_full.get('custom_intro', ''),
-                                                'terms_and_conditions': proposal_full.get('terms_and_conditions', ''),
-                                                'signature_name': proposal_full.get('signature_name', ''),
-                                                'signature_title': proposal_full.get('signature_title', ''),
-                                                'issuer_logo_id': proposal_full.get('issuer_logo_id'),
-                                                'client_logo_id': proposal_full.get('client_logo_id'),
-                                                'iva_rate': proposal_full.get('iva_rate', 0.16),
-                                                'iva_included': proposal_full.get('iva_included', False),
-                                                'currency': proposal_full.get('currency', 'MXN'),
-                                                'currency_symbol': proposal_full.get('currency_symbol', '$'),
-                                            }
-
-                                            success, new_pdf_data, error = generate_proposal_pdf(pdf_proposal_data, quote_lines)
-
-                                            if success and new_pdf_data:
-                                                st.success(f"✅ PDF regenerado ({len(new_pdf_data)} bytes)")
-                                                st.download_button(
-                                                    label="📥 Descargar PDF Regenerado",
-                                                    data=new_pdf_data,
-                                                    file_name=f"{proposal_full['proposal_number']}.pdf",
-                                                    mime="application/pdf",
-                                                    key=f"regen_download_{selected_proposal_id}_new"
-                                                )
-                                            else:
-                                                st.error(f"❌ Error generando PDF: {error}")
-                                        else:
-                                            st.error("❌ No se encontró la cotización asociada a esta propuesta")
-                                except Exception as e:
-                                    st.error(f"❌ Error: {e}")
-                                    import traceback
-                                    st.code(traceback.format_exc())
-                    
-                    # Botón para marcar como entregada (solo si es draft)
-                    if not is_delivered:
-                        with col_btn3:
+                        
+                        # Estado con badge visual
+                        is_delivered = proposal_full.get('delivery_hash') is not None
+                        
+                        if is_delivered:
+                            st.success("✅ PROPUESTA ENTREGADA - Inmutable")
+                            
+                            # Información de entrega
+                            col_d1, col_d2, col_d3, col_d4 = st.columns(4)
+                            with col_d1:
+                                st.write("**Consecutivo:**")
+                                st.code(proposal_full.get('delivery_number', 'N/A'))
+                            with col_d2:
+                                st.write("**Fecha Entrega:**")
+                                delivered_at = proposal_full.get('delivered_at', 'N/A')
+                                if delivered_at != 'N/A':
+                                    # Formatear fecha si es datetime
+                                    try:
+                                        from datetime import datetime
+                                        if isinstance(delivered_at, str):
+                                            dt = datetime.fromisoformat(delivered_at.replace('Z', '+00:00'))
+                                            delivered_at = dt.strftime('%Y-%m-%d %H:%M')
+                                    except:
+                                        pass
+                                st.code(delivered_at)
+                            with col_d3:
+                                st.write("**Entregada por:**")
+                                st.code(proposal_full.get('delivered_by', 'N/A'))
+                            with col_d4:
+                                st.write("**Hash Verificación:**")
+                                st.code(proposal_full.get('delivery_hash', 'N/A')[:8])
+                            
+                            st.divider()
+                        else:
+                            st.warning("⚠️ Borrador - Puede ser marcada como entregada")
+                        
+                        col1, col2, col3 = st.columns(3)
+                        with col1:
+                            st.write("**Fecha Emisión:**")
+                            st.info(str(proposal_full['issued_date']))
+                        with col2:
+                            st.write("**Cliente:**")
+                            st.info(str(proposal_full['recipient_company']))
+                        with col3:
+                            st.write("**Número:**")
+                            st.info(str(proposal_full['proposal_number']))
+                        
+                        # Botones de acción
+                        if is_delivered:
+                            # Propuesta entregada: solo permitir regenerar PDF
+                            st.markdown("---")
+                            st.write("📄 **Opciones disponibles (propuesta inmutable):**")
+                            col_btn1, col_btn2, col_btn3 = st.columns(3)
+                        else:
+                            # Propuesta borrador: permitir marcar como entregada + PDF
+                            st.markdown("---")
+                            st.write("⚙️ **Acciones disponibles:**")
+                            col_btn1, col_btn2, col_btn3 = st.columns(3)
+                        
+                        # Intentar descargar PDF guardado
+                        pdf_data_available = False
+                        if proposal_full.get('pdf_file_data'):
+                            pdf_data = proposal_full['pdf_file_data']
+                            if isinstance(pdf_data, memoryview):
+                                pdf_data = bytes(pdf_data)
+                            if len(pdf_data) > 0:
+                                pdf_data_available = True
+                                with col_btn1:
+                                    st.download_button(
+                                        label="📥 Descargar PDF",
+                                        data=pdf_data,
+                                        file_name=f"{proposal_full['proposal_number']}.pdf",
+                                        mime="application/pdf",
+                                        key=f"download_{selected_proposal_id}",
+                                        width='stretch'
+                                    )
+                        
+                        # Botón para regenerar PDF (siempre disponible)
+                        with col_btn2:
                             if st.button(
-                                "✅ Marcar como Entregada",
-                                key=f"deliver_{selected_proposal_id}",
+                                "🔄 Regenerar PDF",
+                                key=f"regen_{selected_proposal_id}",
                                 width='stretch',
-                                type="primary",
-                                help="Marca la propuesta como entregada (inmutable)"
+                                help="Genera un nuevo PDF con los datos actuales (sin modificar la propuesta)"
                             ):
-                                # Confirmar con el usuario
-                                if 'confirm_delivery' not in st.session_state:
-                                    st.session_state.confirm_delivery = selected_proposal_id
-                                    st.warning("⚠️ **¿Estás seguro?** Esta acción es irreversible. La propuesta se marcará como entregada y será inmutable.")
-                                    
-                        # Confirmar entrega
-                        if st.session_state.get('confirm_delivery') == selected_proposal_id:
-                            col_confirm1, col_confirm2 = st.columns(2)
-                            with col_confirm1:
-                                if st.button("✅ Sí, marcar como entregada", key=f"confirm_yes_{selected_proposal_id}"):
-                                    # Obtener usuario actual (puedes usar st.session_state si tienes login)
-                                    current_user = st.session_state.get('user_name', 'system')
-                                    
-                                    success, message = mark_proposal_as_delivered(selected_proposal_id, current_user)
-                                    if success:
-                                        st.success(message)
+                                with st.spinner("Generando PDF..."):
+                                    try:
+                                        from formal_proposal_generator import generate_proposal_pdf, REPORTLAB_AVAILABLE
+                                        if not REPORTLAB_AVAILABLE:
+                                            st.error("❌ ReportLab no está disponible")
+                                        else:
+                                            # Obtener líneas de cotización
+                                            quote_id = proposal_full.get('quote_id')
+                                            if quote_id:
+                                                quote_lines_raw = get_quote_lines_full(quote_id)
+                                                columns = ["line_id", "quote_id", "sku", "quantity", "description_original", "description_final",
+                                                          "description_corrections", "line_type", "service_origin", "cost_unit",
+                                                          "final_price_unit", "margin_pct", "strategy", "warnings", "created_at",
+                                                          "import_source", "import_batch_id"]
+                                                quote_lines = []
+                                                for row in quote_lines_raw:
+                                                    line_dict = dict(zip(columns, row))
+                                                    if not line_dict.get('quantity') or line_dict['quantity'] <= 0:
+                                                        line_dict['quantity'] = 1
+                                                    quote_lines.append(line_dict)
+
+                                                # Preparar datos de propuesta para PDF
+                                                pdf_proposal_data = {
+                                                    'proposal_number': proposal_full.get('proposal_number', ''),
+                                                    'issued_date': proposal_full.get('issued_date', ''),
+                                                    'valid_until': proposal_full.get('valid_until', ''),
+                                                    'issuer_company': proposal_full.get('issuer_company', ''),
+                                                    'issuer_contact_name': proposal_full.get('issuer_contact_name', ''),
+                                                    'issuer_contact_title': proposal_full.get('issuer_contact_title', ''),
+                                                    'issuer_email': proposal_full.get('issuer_email', ''),
+                                                    'issuer_phone': proposal_full.get('issuer_phone', ''),
+                                                    'recipient_company': proposal_full.get('recipient_company', ''),
+                                                    'recipient_contact_name': proposal_full.get('recipient_contact_name', ''),
+                                                    'recipient_contact_title': proposal_full.get('recipient_contact_title', ''),
+                                                    'recipient_email': proposal_full.get('recipient_email', ''),
+                                                    'subject': proposal_full.get('subject', ''),
+                                                    'custom_intro': proposal_full.get('custom_intro', ''),
+                                                    'terms_and_conditions': proposal_full.get('terms_and_conditions', ''),
+                                                    'signature_name': proposal_full.get('signature_name', ''),
+                                                    'signature_title': proposal_full.get('signature_title', ''),
+                                                    'issuer_logo_id': proposal_full.get('issuer_logo_id'),
+                                                    'client_logo_id': proposal_full.get('client_logo_id'),
+                                                    'iva_rate': proposal_full.get('iva_rate', 0.16),
+                                                    'iva_included': proposal_full.get('iva_included', False),
+                                                    'currency': proposal_full.get('currency', 'MXN'),
+                                                    'currency_symbol': proposal_full.get('currency_symbol', '$'),
+                                                }
+
+                                                success, new_pdf_data, error = generate_proposal_pdf(pdf_proposal_data, quote_lines)
+
+                                                if success and new_pdf_data:
+                                                    st.success(f"✅ PDF regenerado ({len(new_pdf_data)} bytes)")
+                                                    st.download_button(
+                                                        label="📥 Descargar PDF Regenerado",
+                                                        data=new_pdf_data,
+                                                        file_name=f"{proposal_full['proposal_number']}.pdf",
+                                                        mime="application/pdf",
+                                                        key=f"regen_download_{selected_proposal_id}_new"
+                                                    )
+                                                else:
+                                                    st.error(f"❌ Error generando PDF: {error}")
+                                            else:
+                                                st.error("❌ No se encontró la cotización asociada a esta propuesta")
+                                    except Exception as e:
+                                        st.error(f"❌ Error: {e}")
+                                        import traceback
+                                        st.code(traceback.format_exc())
+                        
+                        # Botón para marcar como entregada (solo si es draft)
+                        if not is_delivered:
+                            with col_btn3:
+                                if st.button(
+                                    "✅ Marcar como Entregada",
+                                    key=f"deliver_{selected_proposal_id}",
+                                    width='stretch',
+                                    type="primary",
+                                    help="Marca la propuesta como entregada (inmutable)"
+                                ):
+                                    # Confirmar con el usuario
+                                    if 'confirm_delivery' not in st.session_state:
+                                        st.session_state.confirm_delivery = selected_proposal_id
+                                        st.warning("⚠️ **¿Estás seguro?** Esta acción es irreversible. La propuesta se marcará como entregada y será inmutable.")
+                                        
+                            # Confirmar entrega
+                            if st.session_state.get('confirm_delivery') == selected_proposal_id:
+                                col_confirm1, col_confirm2 = st.columns(2)
+                                with col_confirm1:
+                                    if st.button("✅ Sí, marcar como entregada", key=f"confirm_yes_{selected_proposal_id}"):
+                                        # Obtener usuario actual (puedes usar st.session_state si tienes login)
+                                        current_user = st.session_state.get('user_name', 'system')
+                                        
+                                        success, message = mark_proposal_as_delivered(selected_proposal_id, current_user)
+                                        if success:
+                                            st.success(message)
+                                            del st.session_state.confirm_delivery
+                                            st.rerun()
+                                        else:
+                                            st.error(message)
+                                
+                                with col_confirm2:
+                                    if st.button("❌ Cancelar", key=f"confirm_no_{selected_proposal_id}"):
                                         del st.session_state.confirm_delivery
                                         st.rerun()
-                                    else:
-                                        st.error(message)
-                            
-                            with col_confirm2:
-                                if st.button("❌ Cancelar", key=f"confirm_no_{selected_proposal_id}"):
-                                    del st.session_state.confirm_delivery
-                                    st.rerun()
-        else:
-            st.info("No hay propuestas formales generadas aún")
-
-# =========================
-# TAB: BASE DE DATOS
-# =========================
-
-# =========================
-# TAB: MOTOR AUP (OCULTO - código preservado)
-# =========================
-if False:  # Motor AUP deshabilitado - código preservado
-  with tab_aup:
-    st.header("🧠 Motor AUP (Multitenant)")
-    st.divider()
-
-    if "aup_context" not in st.session_state:
-        st.session_state.aup_context = {
-            "tenant_id": "default-tenant",
-            "user_id": "default-user",
-            "tenant_is_active": True,
-            "user_has_permission": True,
-        }
-
-    if "aup_proposal_id" not in st.session_state:
-        st.session_state.aup_proposal_id = None
-
-    if "aup_derived_id" not in st.session_state:
-        st.session_state.aup_derived_id = None
-
-    # Nota informativa sobre multitenancy
-    st.info("ℹ️ **Nota:** El sistema multitenancy está desactivado. Los campos tenant_id y user_id son opcionales con valores por defecto.")
-
-    col_ctx1, col_ctx2, col_ctx3, col_ctx4 = st.columns([2, 2, 1, 1])
-    with col_ctx1:
-        st.session_state.aup_context["tenant_id"] = st.text_input(
-            "tenant_id (opcional)",
-            value=st.session_state.aup_context.get("tenant_id", "default-tenant"),
-            placeholder="default-tenant",
-            help="Sistema multitenancy no activo"
-        )
-    with col_ctx2:
-        st.session_state.aup_context["user_id"] = st.text_input(
-            "user_id (opcional)",
-            value=st.session_state.aup_context.get("user_id", "default-user"),
-            placeholder="default-user",
-            help="Sistema multitenancy no activo"
-        )
-    with col_ctx3:
-        st.session_state.aup_context["tenant_is_active"] = st.checkbox(
-            "tenant activo",
-            value=st.session_state.aup_context.get("tenant_is_active", True),
-            disabled=True,
-            help="Siempre activo (multitenancy desactivado)"
-        )
-    with col_ctx4:
-        st.session_state.aup_context["user_has_permission"] = st.checkbox(
-            "permiso",
-            value=st.session_state.aup_context.get("user_has_permission", True),
-            disabled=True,
-            help="Siempre con permiso (multitenancy desactivado)"
-        )
-
-    context = st.session_state.aup_context
-
-    col_create, col_status = st.columns([1, 3])
-    with col_create:
-        if st.button("Crear propuesta AUP", type="primary"):
-            try:
-                st.session_state.aup_proposal_id = create_proposal("manual", context)
-                st.session_state.aup_derived_id = None
-                st.success("✅ Propuesta creada")
-            except Exception as exc:
-                st.error(f"❌ {exc}")
-
-    with col_status:
-        if st.session_state.aup_proposal_id:
-            proposal = aup_get_proposal(st.session_state.aup_proposal_id, context.get("tenant_id"))
-            if proposal:
-                st.caption(
-                    f"Propuesta: {proposal['proposal_id']} | Estado: {proposal['status']} | Origen: {proposal.get('origin')}"
-                )
-
-    if st.session_state.aup_proposal_id:
-        proposal_id = st.session_state.aup_proposal_id
-        tenant_id = context.get("tenant_id")
-
-        st.subheader("📥 Importar Excel")
-        excel_file = st.file_uploader("Archivo Excel", type=["xlsx", "xls"], key="aup_excel")
-        if st.button("Importar Excel a propuesta"):
-            if excel_file is None:
-                st.warning("Selecciona un archivo")
             else:
+                st.info("No hay propuestas formales generadas aún")
+
+    # =========================
+    # TAB: BASE DE DATOS
+    # =========================
+
+    # =========================
+    # TAB: MOTOR AUP (OCULTO - código preservado)
+    # =========================
+    if False:  # Motor AUP deshabilitado - código preservado
+      with tab_aup:
+        st.header("🧠 Motor AUP (Multitenant)")
+        st.divider()
+
+        if "aup_context" not in st.session_state:
+            st.session_state.aup_context = {
+                "tenant_id": "default-tenant",
+                "user_id": "default-user",
+                "tenant_is_active": True,
+                "user_has_permission": True,
+            }
+
+        if "aup_proposal_id" not in st.session_state:
+            st.session_state.aup_proposal_id = None
+
+        if "aup_derived_id" not in st.session_state:
+            st.session_state.aup_derived_id = None
+
+        # Nota informativa sobre multitenancy
+        st.info("ℹ️ **Nota:** El sistema multitenancy está desactivado. Los campos tenant_id y user_id son opcionales con valores por defecto.")
+
+        col_ctx1, col_ctx2, col_ctx3, col_ctx4 = st.columns([2, 2, 1, 1])
+        with col_ctx1:
+            st.session_state.aup_context["tenant_id"] = st.text_input(
+                "tenant_id (opcional)",
+                value=st.session_state.aup_context.get("tenant_id", "default-tenant"),
+                placeholder="default-tenant",
+                help="Sistema multitenancy no activo"
+            )
+        with col_ctx2:
+            st.session_state.aup_context["user_id"] = st.text_input(
+                "user_id (opcional)",
+                value=st.session_state.aup_context.get("user_id", "default-user"),
+                placeholder="default-user",
+                help="Sistema multitenancy no activo"
+            )
+        with col_ctx3:
+            st.session_state.aup_context["tenant_is_active"] = st.checkbox(
+                "tenant activo",
+                value=st.session_state.aup_context.get("tenant_is_active", True),
+                disabled=True,
+                help="Siempre activo (multitenancy desactivado)"
+            )
+        with col_ctx4:
+            st.session_state.aup_context["user_has_permission"] = st.checkbox(
+                "permiso",
+                value=st.session_state.aup_context.get("user_has_permission", True),
+                disabled=True,
+                help="Siempre con permiso (multitenancy desactivado)"
+            )
+
+        context = st.session_state.aup_context
+
+        col_create, col_status = st.columns([1, 3])
+        with col_create:
+            if st.button("Crear propuesta AUP", type="primary"):
                 try:
-                    result = import_excel(proposal_id, excel_file.read(), context)
-                    if result.get("success"):
-                        st.success(f"✅ Filas importadas: {result.get('imported')}")
-                    else:
-                        st.error(f"❌ Errores: {result.get('errors')}")
+                    st.session_state.aup_proposal_id = create_proposal("manual", context)
+                    st.session_state.aup_derived_id = None
+                    st.success("✅ Propuesta creada")
                 except Exception as exc:
                     st.error(f"❌ {exc}")
 
-        st.subheader("➕ Agregar item manual")
-        with st.form("add_item_form", clear_on_submit=True):
-            col1, col2 = st.columns(2)
-            with col1:
-                new_quantity = st.number_input("Cantidad", min_value=0.01, value=1.0, step=0.01)
-                new_cost_unit = st.number_input("Costo unitario", min_value=0.0, value=0.0, step=0.01)
-            with col2:
-                new_sku = st.text_input("SKU (opcional)")
-                new_component_type = st.text_input("Tipo/Origen (opcional)", help="Ej: Interno, Externo, Proveedor A")
+        with col_status:
+            if st.session_state.aup_proposal_id:
+                proposal = aup_get_proposal(st.session_state.aup_proposal_id, context.get("tenant_id"))
+                if proposal:
+                    st.caption(
+                        f"Propuesta: {proposal['proposal_id']} | Estado: {proposal['status']} | Origen: {proposal.get('origin')}"
+                    )
 
-            new_description = st.text_area("Descripción", placeholder="Descripción del item...")
+        if st.session_state.aup_proposal_id:
+            proposal_id = st.session_state.aup_proposal_id
+            tenant_id = context.get("tenant_id")
 
-            submitted_add = st.form_submit_button("➕ Agregar item", type="primary")
-
-            if submitted_add:
-                if not new_description or not new_description.strip():
-                    st.error("❌ La descripción es obligatoria")
+            st.subheader("📥 Importar Excel")
+            excel_file = st.file_uploader("Archivo Excel", type=["xlsx", "xls"], key="aup_excel")
+            if st.button("Importar Excel a propuesta"):
+                if excel_file is None:
+                    st.warning("Selecciona un archivo")
                 else:
                     try:
-                        result = add_proposal_item(
-                            proposal_id,
-                            new_quantity,
-                            new_description,
-                            new_cost_unit,
-                            sku=new_sku if new_sku else None,
-                            component_type=new_component_type if new_component_type else None,
-                            context=context
-                        )
-                        st.success(f"✅ Item #{result['item_number']} agregado")
-                        st.rerun()
+                        result = import_excel(proposal_id, excel_file.read(), context)
+                        if result.get("success"):
+                            st.success(f"✅ Filas importadas: {result.get('imported')}")
+                        else:
+                            st.error(f"❌ Errores: {result.get('errors')}")
                     except Exception as exc:
                         st.error(f"❌ {exc}")
 
-        st.subheader("📦 Items de propuesta")
-        items = aup_get_items(proposal_id, tenant_id)
-        if items:
-            # Verificar que los items tengan las columnas necesarias
-            if items and isinstance(items, list) and len(items) > 0:
-                st.dataframe(pd.DataFrame(items), width="stretch")
+            st.subheader("➕ Agregar item manual")
+            with st.form("add_item_form", clear_on_submit=True):
+                col1, col2 = st.columns(2)
+                with col1:
+                    new_quantity = st.number_input("Cantidad", min_value=0.01, value=1.0, step=0.01)
+                    new_cost_unit = st.number_input("Costo unitario", min_value=0.0, value=0.0, step=0.01)
+                with col2:
+                    new_sku = st.text_input("SKU (opcional)")
+                    new_component_type = st.text_input("Tipo/Origen (opcional)", help="Ej: Interno, Externo, Proveedor A")
+
+                new_description = st.text_area("Descripción", placeholder="Descripción del item...")
+
+                submitted_add = st.form_submit_button("➕ Agregar item", type="primary")
+
+                if submitted_add:
+                    if not new_description or not new_description.strip():
+                        st.error("❌ La descripción es obligatoria")
+                    else:
+                        try:
+                            result = add_proposal_item(
+                                proposal_id,
+                                new_quantity,
+                                new_description,
+                                new_cost_unit,
+                                sku=new_sku if new_sku else None,
+                                component_type=new_component_type if new_component_type else None,
+                                context=context
+                            )
+                            st.success(f"✅ Item #{result['item_number']} agregado")
+                            st.rerun()
+                        except Exception as exc:
+                            st.error(f"❌ {exc}")
+
+            st.subheader("📦 Items de propuesta")
+            items = aup_get_items(proposal_id, tenant_id)
+            if items:
+                # Verificar que los items tengan las columnas necesarias
+                if items and isinstance(items, list) and len(items) > 0:
+                    st.dataframe(pd.DataFrame(items), width="stretch")
+                else:
+                    st.info("No hay items todavía")
+
+                st.markdown("**Editar item (controlado)**")
+                options = {f"#{i['item_number']} · {i.get('description','')}": i for i in items}
+                selected_label = st.selectbox("Selecciona item", list(options.keys()))
+                selected_item = options[selected_label]
+
+                with st.form("aup_edit_item"):
+                    quantity = st.number_input("Cantidad", min_value=0.01, value=float(selected_item.get("quantity") or 1))
+                    description = st.text_input("Descripción", value=selected_item.get("description") or "")
+                    price_unit = st.number_input(
+                        "Precio unitario (opcional)",
+                        min_value=0.0,
+                        value=float(selected_item.get("price_unit") or 0.0),
+                    )
+                    component_type = st.text_input(
+                        "Tipo/Origen del servicio", 
+                        value=selected_item.get("component_type") or "",
+                        help="Ej: Interno, Externo, Proveedor A"
+                    )
+                    submitted = st.form_submit_button("Actualizar item")
+
+                if submitted:
+                    try:
+                        update_proposal_item(
+                            selected_item["item_id"],
+                            {
+                                "quantity": quantity,
+                                "description": description,
+                                "price_unit": price_unit if price_unit > 0 else None,
+                                "component_type": component_type or None,
+                            },
+                            context,
+                        )
+                        st.success("✅ Item actualizado")
+                    except Exception as exc:
+                        st.error(f"❌ {exc}")
+
             else:
                 st.info("No hay items todavía")
 
-            st.markdown("**Editar item (controlado)**")
-            options = {f"#{i['item_number']} · {i.get('description','')}": i for i in items}
-            selected_label = st.selectbox("Selecciona item", list(options.keys()))
-            selected_item = options[selected_label]
+            st.subheader("🧮 Nodo integrado (única verdad)")
+            integrated = aup_get_integrated_node(proposal_id, tenant_id)
+            if integrated:
+                col_i1, col_i2, col_i3, col_i4, col_i5 = st.columns(5)
+                col_i1.metric("Costo total", f"${float(integrated.get('total_cost') or 0):,.2f}")
+                col_i2.metric("Precio total", f"${float(integrated.get('total_price') or 0):,.2f}")
+                col_i3.metric("Utilidad bruta", f"${float(integrated.get('gross_profit') or 0):,.2f}")
+                margin_pct = integrated.get("margin_pct")
+                col_i4.metric("Margen", f"{(float(margin_pct) * 100):.2f}%" if margin_pct is not None else "N/A")
+                col_i5.metric("Health", str(integrated.get("health")))
+            else:
+                st.caption("Nodo integrado no disponible")
 
-            with st.form("aup_edit_item"):
-                quantity = st.number_input("Cantidad", min_value=0.01, value=float(selected_item.get("quantity") or 1))
-                description = st.text_input("Descripción", value=selected_item.get("description") or "")
-                price_unit = st.number_input(
-                    "Precio unitario (opcional)",
-                    min_value=0.0,
-                    value=float(selected_item.get("price_unit") or 0.0),
-                )
-                component_type = st.text_input(
-                    "Tipo/Origen del servicio", 
-                    value=selected_item.get("component_type") or "",
-                    help="Ej: Interno, Externo, Proveedor A"
-                )
-                submitted = st.form_submit_button("Actualizar item")
+            st.subheader("🔒 Cierre formal")
 
-            if submitted:
+            # Verificar si hay items antes de permitir cerrar
+            items_count = len(items) if items else 0
+            can_close = items_count > 0
+
+            if not can_close:
+                st.warning("⚠️ No puedes cerrar una propuesta vacía. Importa un Excel o agrega items primero.")
+
+            if st.button("Cerrar propuesta AUP", disabled=not can_close):
                 try:
-                    update_proposal_item(
-                        selected_item["item_id"],
-                        {
-                            "quantity": quantity,
-                            "description": description,
-                            "price_unit": price_unit if price_unit > 0 else None,
-                            "component_type": component_type or None,
-                        },
-                        context,
+                    result = close_proposal(proposal_id, context)
+                    st.success(f"✅ Propuesta cerrada. Hash: {result.get('hash')}")
+                except Exception as exc:
+                    st.error(f"❌ {exc}")
+
+            proposal = aup_get_proposal(proposal_id, tenant_id)
+            if proposal and proposal.get("status") == "closed":
+                st.subheader("🧬 Derivar nueva propuesta")
+                if st.button("Derivar propuesta"):
+                    try:
+                        st.session_state.aup_derived_id = derive_proposal(proposal_id, context)
+                        st.success(f"✅ Derivada: {st.session_state.aup_derived_id}")
+                    except Exception as exc:
+                        st.error(f"❌ {exc}")
+
+                st.subheader("💰 Gastos asociados (post-cotización)")
+                with st.form("aup_add_expense"):
+                    category = st.selectbox(
+                        "Categoría",
+                        ["logistica", "seguros", "fianzas", "administrativos", "contingencias", "financieros"],
                     )
-                    st.success("✅ Item actualizado")
-                except Exception as exc:
-                    st.error(f"❌ {exc}")
+                    description = st.text_input("Descripción del gasto")
+                    amount = st.number_input("Monto", min_value=0.0, value=0.0)
+                    add_expense = st.form_submit_button("Agregar gasto")
 
-        else:
-            st.info("No hay items todavía")
+                if add_expense:
+                    try:
+                        add_project_expense(
+                            proposal_id,
+                            {"category": category, "description": description, "amount": amount},
+                            context,
+                        )
+                        st.success("✅ Gasto agregado")
+                    except Exception as exc:
+                        st.error(f"❌ {exc}")
 
-        st.subheader("🧮 Nodo integrado (única verdad)")
-        integrated = aup_get_integrated_node(proposal_id, tenant_id)
-        if integrated:
-            col_i1, col_i2, col_i3, col_i4, col_i5 = st.columns(5)
-            col_i1.metric("Costo total", f"${float(integrated.get('total_cost') or 0):,.2f}")
-            col_i2.metric("Precio total", f"${float(integrated.get('total_price') or 0):,.2f}")
-            col_i3.metric("Utilidad bruta", f"${float(integrated.get('gross_profit') or 0):,.2f}")
-            margin_pct = integrated.get("margin_pct")
-            col_i4.metric("Margen", f"{(float(margin_pct) * 100):.2f}%" if margin_pct is not None else "N/A")
-            col_i5.metric("Health", str(integrated.get("health")))
-        else:
-            st.caption("Nodo integrado no disponible")
+                expenses = aup_get_expenses(proposal_id, tenant_id)
+                if expenses:
+                    st.dataframe(pd.DataFrame(expenses), width="stretch")
 
-        st.subheader("🔒 Cierre formal")
+                st.subheader("📈 Nodo de rentabilidad")
+                profitability = aup_get_profitability_node(proposal_id, tenant_id)
+                if profitability:
+                    col_p1, col_p2, col_p3, col_p4, col_p5 = st.columns(5)
+                    col_p1.metric("Ventas", f"${float(profitability.get('total_sales') or 0):,.2f}")
+                    col_p2.metric("Costos", f"${float(profitability.get('total_cost') or 0):,.2f}")
+                    col_p3.metric("Gastos", f"${float(profitability.get('total_expenses') or 0):,.2f}")
+                    net_margin = profitability.get("net_margin_pct")
+                    col_p4.metric("Margen neto", f"{(float(net_margin) * 100):.2f}%" if net_margin is not None else "N/A")
+                    col_p5.metric("Health", str(profitability.get("health")))
 
-        # Verificar si hay items antes de permitir cerrar
-        items_count = len(items) if items else 0
-        can_close = items_count > 0
-
-        if not can_close:
-            st.warning("⚠️ No puedes cerrar una propuesta vacía. Importa un Excel o agrega items primero.")
-
-        if st.button("Cerrar propuesta AUP", disabled=not can_close):
-            try:
-                result = close_proposal(proposal_id, context)
-                st.success(f"✅ Propuesta cerrada. Hash: {result.get('hash')}")
-            except Exception as exc:
-                st.error(f"❌ {exc}")
-
-        proposal = aup_get_proposal(proposal_id, tenant_id)
-        if proposal and proposal.get("status") == "closed":
-            st.subheader("🧬 Derivar nueva propuesta")
-            if st.button("Derivar propuesta"):
+            if st.session_state.aup_derived_id:
+                st.subheader("🔍 Comparación entre propuestas")
                 try:
-                    st.session_state.aup_derived_id = derive_proposal(proposal_id, context)
-                    st.success(f"✅ Derivada: {st.session_state.aup_derived_id}")
+                    comparison = compare_proposals(proposal_id, st.session_state.aup_derived_id, context)
+                    col_c1, col_c2 = st.columns(2)
+                    col_c1.metric("Δ Precio", f"${float(comparison.get('delta_price') or 0):,.2f}")
+                    col_c2.metric("Δ Margen", f"{float(comparison.get('delta_margin') or 0) * 100:.2f}%")
+                    st.dataframe(pd.DataFrame(comparison.get("drilldown", [])), width="stretch")
                 except Exception as exc:
                     st.error(f"❌ {exc}")
 
-            st.subheader("💰 Gastos asociados (post-cotización)")
-            with st.form("aup_add_expense"):
-                category = st.selectbox(
-                    "Categoría",
-                    ["logistica", "seguros", "fianzas", "administrativos", "contingencias", "financieros"],
-                )
-                description = st.text_input("Descripción del gasto")
-                amount = st.number_input("Monto", min_value=0.0, value=0.0)
-                add_expense = st.form_submit_button("Agregar gasto")
-
-            if add_expense:
-                try:
-                    add_project_expense(
-                        proposal_id,
-                        {"category": category, "description": description, "amount": amount},
-                        context,
-                    )
-                    st.success("✅ Gasto agregado")
-                except Exception as exc:
-                    st.error(f"❌ {exc}")
-
-            expenses = aup_get_expenses(proposal_id, tenant_id)
-            if expenses:
-                st.dataframe(pd.DataFrame(expenses), width="stretch")
-
-            st.subheader("📈 Nodo de rentabilidad")
-            profitability = aup_get_profitability_node(proposal_id, tenant_id)
-            if profitability:
-                col_p1, col_p2, col_p3, col_p4, col_p5 = st.columns(5)
-                col_p1.metric("Ventas", f"${float(profitability.get('total_sales') or 0):,.2f}")
-                col_p2.metric("Costos", f"${float(profitability.get('total_cost') or 0):,.2f}")
-                col_p3.metric("Gastos", f"${float(profitability.get('total_expenses') or 0):,.2f}")
-                net_margin = profitability.get("net_margin_pct")
-                col_p4.metric("Margen neto", f"{(float(net_margin) * 100):.2f}%" if net_margin is not None else "N/A")
-                col_p5.metric("Health", str(profitability.get("health")))
-
-        if st.session_state.aup_derived_id:
-            st.subheader("🔍 Comparación entre propuestas")
+            st.subheader("📊 Visualizaciones (solo lectura)")
             try:
-                comparison = compare_proposals(proposal_id, st.session_state.aup_derived_id, context)
-                col_c1, col_c2 = st.columns(2)
-                col_c1.metric("Δ Precio", f"${float(comparison.get('delta_price') or 0):,.2f}")
-                col_c2.metric("Δ Margen", f"{float(comparison.get('delta_margin') or 0) * 100:.2f}%")
-                st.dataframe(pd.DataFrame(comparison.get("drilldown", [])), width="stretch")
-            except Exception as exc:
-                st.error(f"❌ {exc}")
+                charts = generate_charts_data(proposal_id, context)
+                col_g1, col_g2, col_g3 = st.columns(3)
 
-        st.subheader("📊 Visualizaciones (solo lectura)")
-        try:
-            charts = generate_charts_data(proposal_id, context)
-            col_g1, col_g2, col_g3 = st.columns(3)
+                with col_g1:
+                    st.markdown("**Aportación por Origen de Servicio**")
+                    comp_data = charts.get("pie_component_contribution", {})
+                    if comp_data:
+                        fig, ax = plt.subplots(figsize=(4, 4))
+                        ax.pie(comp_data.values(), labels=comp_data.keys(), autopct="%1.1f%%")
+                        st.pyplot(fig)
+                        plt.close(fig)
+                    else:
+                        st.caption("Sin datos")
 
-            with col_g1:
-                st.markdown("**Aportación por Origen de Servicio**")
-                comp_data = charts.get("pie_component_contribution", {})
-                if comp_data:
+                with col_g2:
+                    st.markdown("**Costo vs Utilidad Bruta**")
+                    cvp = charts.get("pie_cost_vs_profit", {})
                     fig, ax = plt.subplots(figsize=(4, 4))
-                    ax.pie(comp_data.values(), labels=comp_data.keys(), autopct="%1.1f%%")
+                    ax.pie([cvp.get("total_cost", 0), cvp.get("gross_profit", 0)], labels=["Costo", "Utilidad"])
                     st.pyplot(fig)
                     plt.close(fig)
-                else:
-                    st.caption("Sin datos")
 
-            with col_g2:
-                st.markdown("**Costo vs Utilidad Bruta**")
-                cvp = charts.get("pie_cost_vs_profit", {})
-                fig, ax = plt.subplots(figsize=(4, 4))
-                ax.pie([cvp.get("total_cost", 0), cvp.get("gross_profit", 0)], labels=["Costo", "Utilidad"])
-                st.pyplot(fig)
-                plt.close(fig)
+                with col_g3:
+                    st.markdown("**Distribución neta**")
+                    net = charts.get("pie_net_distribution", {})
+                    fig, ax = plt.subplots(figsize=(4, 4))
+                    ax.pie(
+                        [net.get("total_cost", 0), net.get("total_expenses", 0), net.get("net_profit", 0)],
+                        labels=["Costo", "Gastos", "Utilidad Neta"],
+                    )
+                    st.pyplot(fig)
+                    plt.close(fig)
+            except Exception as exc:
+                st.caption(f"Visualizaciones no disponibles: {exc}")
+        else:
+            st.info("Crea una propuesta para comenzar")
 
-            with col_g3:
-                st.markdown("**Distribución neta**")
-                net = charts.get("pie_net_distribution", {})
-                fig, ax = plt.subplots(figsize=(4, 4))
-                ax.pie(
-                    [net.get("total_cost", 0), net.get("total_expenses", 0), net.get("net_profit", 0)],
-                    labels=["Costo", "Gastos", "Utilidad Neta"],
-                )
-                st.pyplot(fig)
-                plt.close(fig)
-        except Exception as exc:
-            st.caption(f"Visualizaciones no disponibles: {exc}")
-    else:
-        st.info("Crea una propuesta para comenzar")
-
-# =========================
-# TAB: COMPARADOR
+    # =========================
+    # TAB: COMPARADOR
 # =========================
 with tab_comparator:
     st.header("⚖️ Comparador de Cotizaciones")
