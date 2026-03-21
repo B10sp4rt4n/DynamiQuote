@@ -1455,8 +1455,13 @@ def get_logos(logo_type: str = None) -> list:
             
             columns = ["logo_id", "logo_name", "logo_type", "company_name", "logo_format", "uploaded_at", "is_default"]
             results = []
+            seen = set()
             for row in cur.fetchall():
-                results.append(dict(zip(columns, row)))
+                d = dict(zip(columns, row))
+                key = (d['logo_name'], d['logo_type'])
+                if key not in seen:
+                    seen.add(key)
+                    results.append(d)
             return results
     except Exception as e:
         st.error(f"Error obteniendo logos: {e}")

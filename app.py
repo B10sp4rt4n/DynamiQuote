@@ -2634,27 +2634,27 @@ with tab_quotes:
                 )
 
                 if uploaded_issuer_logo:
-                    try:
-                        logo_data, logo_format = process_logo_upload(uploaded_issuer_logo)
-                        logo_id = str(uuid.uuid4())
-
-                        # Guardar logo
-                        success, msg = save_logo(
-                            logo_id,
-                            uploaded_issuer_logo.name,
-                            'issuer',
-                            issuer_company,
-                            logo_data,
-                            logo_format
-                        )
-
-                        if success:
-                            st.success(msg)
-                            st.session_state.issuer_logo_id = logo_id
-                        else:
-                            st.error(msg)
-                    except Exception as e:
-                        st.error(f"Error: {e}")
+                    _ih = hash(uploaded_issuer_logo.getvalue())
+                    if st.session_state.get('_last_issuer_upload_hash') != _ih:
+                        try:
+                            logo_data, logo_format = process_logo_upload(uploaded_issuer_logo)
+                            logo_id = str(uuid.uuid4())
+                            success, msg = save_logo(
+                                logo_id,
+                                uploaded_issuer_logo.name,
+                                'issuer',
+                                issuer_company,
+                                logo_data,
+                                logo_format
+                            )
+                            if success:
+                                st.session_state['_last_issuer_upload_hash'] = _ih
+                                st.session_state.issuer_logo_id = logo_id
+                                st.success(msg)
+                            else:
+                                st.error(msg)
+                        except Exception as e:
+                            st.error(f"Error: {e}")
 
             st.divider()
             st.markdown("**Logo del Cliente (Opcional)**")
@@ -2686,26 +2686,27 @@ with tab_quotes:
                 )
 
                 if uploaded_client_logo:
-                    try:
-                        logo_data, logo_format = process_logo_upload(uploaded_client_logo)
-                        logo_id = str(uuid.uuid4())
-
-                        success, msg = save_logo(
-                            logo_id,
-                            uploaded_client_logo.name,
-                            'client',
-                            recipient_company,
-                            logo_data,
-                            logo_format
-                        )
-
-                        if success:
-                            st.success(msg)
-                            st.session_state.client_logo_id = logo_id
-                        else:
-                            st.error(msg)
-                    except Exception as e:
-                        st.error(f"Error: {e}")
+                    _ch = hash(uploaded_client_logo.getvalue())
+                    if st.session_state.get('_last_client_upload_hash') != _ch:
+                        try:
+                            logo_data, logo_format = process_logo_upload(uploaded_client_logo)
+                            logo_id = str(uuid.uuid4())
+                            success, msg = save_logo(
+                                logo_id,
+                                uploaded_client_logo.name,
+                                'client',
+                                recipient_company,
+                                logo_data,
+                                logo_format
+                            )
+                            if success:
+                                st.session_state['_last_client_upload_hash'] = _ch
+                                st.session_state.client_logo_id = logo_id
+                                st.success(msg)
+                            else:
+                                st.error(msg)
+                        except Exception as e:
+                            st.error(f"Error: {e}")
 
         # Sección: Configuración de IVA y Moneda
         with st.expander("💰 Configuración de IVA, Moneda y Vigencia", expanded=True):
