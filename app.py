@@ -472,8 +472,10 @@ with st.sidebar:
     st.markdown(f"👤 **{_current_user['full_name']}**")
     st.caption(f"@{_current_user['alias']} · {'👑 Admin' if _is_admin else '🧑 Usuario'}")
     if st.button("🚪 Cerrar sesión", use_container_width=True):
-        for k in ['authenticated', 'current_user', 'saved_quoted_by']:
-            st.session_state.pop(k, None)
+        _logout_keep = {'openai_enabled', 'openai_api_key'}
+        for _k in list(st.session_state.keys()):
+            if _k not in _logout_keep:
+                st.session_state.pop(_k, None)
         st.rerun()
     st.divider()
 
@@ -1240,151 +1242,59 @@ with tab_quotes:
     # SECCIÓN: COTIZADOR
     # =========================
     if seccion == "📝 Crear Cotización":
-        st.subheader("📝 Cotizador Universal – MVP Funcional")
+        st.subheader("📝 Cotizador Universal")
 
-        # Mostrar banner si hay versión pendiente desde Base de Datos
-        if st.session_state.get('pending_new_version', False):
-            st.success(f"""
-            ✅ **Nueva versión cargada:** {st.session_state.get('pending_version_info', '')}
+        _qmode = st.session_state.get('quote_start_mode')
 
-            Se copiaron **{len(st.session_state.lines)}** líneas. Modifica lo necesario y presiona "Guardar Cotización".
-            """)
-            # Limpiar flag después de mostrar
-            st.session_state.pending_new_version = False
-
-        st.divider()
-
-        # Si hay una línea pendiente de confirmación (con correcciones)
-        if st.session_state.pending_line:
-            st.warning("🔍 Se detectaron posibles errores ortográficos en la descripción")
-
-            pending = st.session_state.pending_line
-            col1, col2 = st.columns(2)
-            with col1:
-                st.markdown("**📝 Original:**")
-                st.info(pending["description_input"])
-            with col2:
-                st.markdown("**✨ Sugerencia:**")
-                st.success(pending["corrected_desc"])
-
-            st.markdown("**🔧 Cambios detectados:**")
-            for correction in pending["corrections"]:
-                st.caption(f"  • {correction}")
-
-            st.divider()
-            st.subheader("✏️ Editar antes de consolidar")
-
-            with st.form("confirm_line"):
-                # SKU editable
-                edit_sku = st.text_input(
-                    "SKU (editable)",
-                    value=pending["sku"],
-                    help="Puedes modificar el SKU antes de agregar la línea"
-                )
-
-                # Descripción editable - permitir elegir qué versión usar como base
-                desc_option = st.radio(
-                    "Selecciona la base para la descripción:",
-                    ["Usar versión corregida", "Usar versión original"],
-                    horizontal=True
-                )
-
-                if desc_option == "Usar versión corregida":
-                    default_desc = pending["corrected_desc"]
-                else:
-                    default_desc = pending["description_input"]
-
-                edit_description = st.text_area(
-                    "Descripción final (editable)",
-                    value=default_desc,
-                    height=100,
-                    help="Puedes modificar la descripción antes de agregar la línea"
-                )
-
-                col_a, col_b, col_c = st.columns([2, 2, 1])
-                with col_a:
-                    confirm_btn = st.form_submit_button("✅ Consolidar línea", type="primary")
-                with col_b:
-                    cancel_btn = st.form_submit_button("❌ Cancelar")
-
-                if confirm_btn:
-                    if not edit_description or not edit_description.strip():
-                        st.error("❌ La descripción no puede estar vacía")
-                    elif not edit_sku or not edit_sku.strip():
-                        st.error("❌ El SKU no puede estar vacío")
-                    else:
-                        # Verificar si el SKU editado ya existe
-                        existing_skus = [line["sku"] for line in st.session_state.lines]
-                        if edit_sku != pending["sku"] and edit_sku in existing_skus:
-                            st.error(f"❌ El SKU '{edit_sku}' ya existe en esta cotización")
-                        else:
-                            # Actualizar datos editados
-                            pending["sku"] = edit_sku
-                            pending["description_final"] = edit_description
-                            st.session_state.lines.append(pending)
-                            st.session_state.pending_line = None
-                            st.success("✅ Línea consolidada exitosamente")
-                            st.rerun()
-
-                if cancel_btn:
-                    st.session_state.pending_line = None
-                    st.info("❌ Línea descartada")
+        # ==========================================================
+        # LANDING: elegir modo de inicio (aparece al entrar limpio)
+        # ==========================================================
+        if _qmode is None:
+            st.markdown("")
+            st.markdown("### ¿Cómo deseas comenzar?")
+            st.markdown("")
+            col_l, col_r, _col_sp = st.columns([2, 2, 1])
+            with col_l:
+                st.markdown("""
+                <div style="border:2px solid #1976D2;border-radius:12px;
+                            padding:28px;text-align:center;background:#E3F2FD;">
+                <h3 style="margin:0 0 8px 0;">🆕 Nueva Propuesta</h3>
+                <p style="margin:0;color:#555;">Crea una cotización desde cero</p>
+                </div>
+                """, unsafe_allow_html=True)
+                st.markdown("")
+                if st.button("Crear Nueva Propuesta", type="primary",
+                             use_container_width=True, key="btn_modo_nueva"):
+                    st.session_state['quote_start_mode'] = 'nueva'
+                    st.rerun()
+            with col_r:
+                st.markdown("""
+                <div style="border:2px solid #F57C00;border-radius:12px;
+                            padding:28px;text-align:center;background:#FFF3E0;">
+                <h3 style="margin:0 0 8px 0;">📋 Nueva Versión</h3>
+                <p style="margin:0;color:#555;">
+                Toma una propuesta existente como base y crea una versión mejorada
+                </p>
+                </div>
+                """, unsafe_allow_html=True)
+                st.markdown("")
+                if st.button("Nueva Versión de Propuesta Existente", type="secondary",
+                             use_container_width=True, key="btn_modo_v2"):
+                    st.session_state['quote_start_mode'] = 'v2'
                     st.rerun()
 
-            st.divider()
+        # ==========================================================
+        # MODO V2: seleccionar y desglosar propuesta base
+        # ==========================================================
+        elif _qmode == 'v2' and not st.session_state.lines:
+            col_back, _ = st.columns([1, 5])
+            with col_back:
+                if st.button("← Volver", key="btn_volver_landing_v2"):
+                    st.session_state.pop('quote_start_mode', None)
+                    st.rerun()
 
-        # Información de la cotización
-        st.subheader("📋 Información de la Cotización")
-
-        # Callbacks para persistir en tiempo real (sin necesidad de botón Confirmar)
-        def _sync_proposal_name():
-            st.session_state.saved_proposal_name = st.session_state._input_proposal_name
-        def _sync_client_name():
-            st.session_state.saved_client_name = st.session_state._input_client_name
-        def _sync_quoted_by():
-            st.session_state.saved_quoted_by = st.session_state._input_quoted_by
-
-        st.text_input(
-            "Nombre de la Propuesta",
-            value=st.session_state.get('saved_proposal_name', ''),
-            placeholder="Ej: Implementación ERP 2026, Soporte Anual...",
-            help="Dale un nombre identificable a esta propuesta",
-            key="_input_proposal_name",
-            on_change=_sync_proposal_name
-        )
-
-        col_form1, col_form2 = st.columns(2)
-        with col_form1:
-            st.text_input(
-                "Cliente / Empresa",
-                value=st.session_state.get('saved_client_name', ''),
-                placeholder="Ej: Acme Corp, Juan Pérez...",
-                help="Para quién es esta cotización",
-                key="_input_client_name",
-                on_change=_sync_client_name
-            )
-        with col_form2:
-            st.text_input(
-                "Cotizado por (User ID / Nombre)",
-                value=st.session_state.get('saved_quoted_by', ''),
-                placeholder="Ej: jperez, vendedor@empresa.com, Juan Pérez...",
-                help="Identificador de quién crea esta cotización",
-                key="_input_quoted_by",
-                on_change=_sync_quoted_by
-            )
-
-        # ¿Nueva cotización o v2 de una existente?
-        quote_mode = st.radio(
-            "Tipo de cotización:",
-            ["🆕 Nueva cotización", "📋 Crear v2 de propuesta existente"],
-            horizontal=True,
-            key="quote_mode_selector"
-        )
-
-        # Flujo V2: buscar y copiar propuesta existente
-        if quote_mode == "📋 Crear v2 de propuesta existente":
-            st.divider()
-            st.subheader("🔗 Seleccionar propuesta base")
+            st.subheader("📋 Nueva Versión – Seleccionar propuesta base")
+            st.caption("Busca la propuesta original, revisa su contenido y cópiala para crear la nueva versión.")
 
             selected_group_id = render_quote_search_selector(
                 key="asociar_existente",
@@ -1400,78 +1310,251 @@ with tab_quotes:
                     current_max_version = versions_df['version'].max() if not versions_df.empty else 1
                     next_version = current_max_version + 1
 
-                    col_info1, col_info2, col_info3 = st.columns(3)
-                    col_info1.info(f"👤 {group_data['client_name']}")
-                    col_info2.info(f"📄 {group_data['proposal_name']}")
-                    col_info3.info(f"📋 {len(versions_df)} versión(es) → se creará v{next_version}")
+                    st.divider()
+                    st.subheader("📂 Desglose de la propuesta seleccionada")
 
-                    if st.button("📋 Copiar datos de esta propuesta", type="primary"):
-                        latest_quote_id = group_data["quote_id"]
-                        lines = get_quote_lines(latest_quote_id)
+                    col_d1, col_d2, col_d3 = st.columns(3)
+                    col_d1.metric("👤 Cliente", group_data.get('client_name') or '—')
+                    col_d2.metric("📄 Propuesta", group_data.get('proposal_name') or 'Sin nombre')
+                    col_d3.metric("🔢 Versiones existentes", len(versions_df))
 
-                        if lines:
-                            quote_lines_raw = get_quote_lines_full(latest_quote_id)
-                            st.session_state.lines = []
+                    if not versions_df.empty:
+                        with st.expander(f"Historial de versiones ({len(versions_df)})", expanded=True):
+                            ver_cols = [c for c in ['version', 'created_at', 'status', 'total_revenue', 'avg_margin']
+                                        if c in versions_df.columns]
+                            rename_map = {'version': 'Versión', 'created_at': 'Fecha',
+                                          'status': 'Estado', 'total_revenue': 'Total', 'avg_margin': 'Margen%'}
+                            st.dataframe(versions_df[ver_cols].rename(columns=rename_map),
+                                         use_container_width=True, hide_index=True)
 
-                            columns = ["line_id", "quote_id", "sku", "quantity", "description_original",
-                                      "description_final", "description_corrections", "line_type",
-                                      "service_origin", "cost_unit", "final_price_unit", "margin_pct",
-                                      "strategy", "warnings", "created_at", "import_source", "import_batch_id"]
-
-                            for row in quote_lines_raw:
-                                line_dict = dict(zip(columns, row))
-                                line_dict['line_id'] = str(uuid.uuid4())
-                                line_dict['created_at'] = datetime.now(UTC).isoformat()
-                                line_dict['description_input'] = str(line_dict.get('description_original', ''))
-                                line_dict['corrected_desc'] = str(line_dict.get('description_final', ''))
-                                line_dict['corrections'] = line_dict.get('description_corrections', '').split(', ') if line_dict.get('description_corrections') else []
-                                line_dict['quantity'] = float(line_dict.get('quantity', 1))
-                                line_dict['sku'] = str(line_dict.get('sku', ''))
-                                line_dict['description_original'] = str(line_dict.get('description_original', ''))
-                                line_dict['description_final'] = str(line_dict.get('description_final', ''))
-                                line_dict['description_corrections'] = str(line_dict.get('description_corrections', ''))
-                                line_dict['line_type'] = str(line_dict.get('line_type', ''))
-                                line_dict['service_origin'] = str(line_dict.get('service_origin', ''))
-                                line_dict['cost_unit'] = float(line_dict.get('cost_unit', 0))
-                                line_dict['final_price_unit'] = float(line_dict.get('final_price_unit', 0))
-                                line_dict['margin_pct'] = float(line_dict.get('margin_pct', 0)) if line_dict.get('margin_pct') is not None else 0.0
-                                line_dict['strategy'] = str(line_dict.get('strategy', ''))
-                                line_dict['warnings'] = str(line_dict.get('warnings', ''))
-                                line_dict['import_source'] = str(line_dict.get('import_source', 'manual'))
-                                line_dict['import_batch_id'] = str(line_dict.get('import_batch_id', '')) if line_dict.get('import_batch_id') else None
-                                st.session_state.lines.append(line_dict)
-
-                            st.session_state.quote_id = str(uuid.uuid4())
-                            st.session_state.quote_group_id = selected_group_id
-                            st.cache_data.clear()
-                            all_versions_for_group = load_versions_for_group(selected_group_id)
-                            max_version = all_versions_for_group["version"].max() if not all_versions_for_group.empty else 0
-                            st.session_state.version = max_version + 1
-                            st.session_state.parent_quote_id = latest_quote_id
-                            st.session_state.saved_proposal_name = group_data.get("proposal_name", "") or ""
-                            st.session_state.saved_client_name = group_data.get("client_name", "") or ""
-                            st.session_state.saved_quoted_by = group_data.get("quoted_by", "") or ""
-
-                            st.success(f"✅ {len(quote_lines_raw)} líneas copiadas → v{st.session_state.version}. Modifica lo necesario y guarda.")
-                            st.rerun()
-                        else:
-                            st.warning("Esta propuesta no tiene líneas")
-
-                    # Vista previa de líneas
                     lines_preview = get_quote_lines(group_data["quote_id"])
                     if lines_preview:
-                        st.divider()
-                        st.caption("Vista previa de la propuesta seleccionada:")
+                        st.markdown(f"**📦 Líneas de la versión más reciente (v{current_max_version}) — {len(lines_preview)} ítems:**")
                         preview_df = pd.DataFrame(
                             lines_preview,
-                            columns=["SKU", "Descripción", "Tipo", "Origen", "Costo Unit.", "Precio Unit.", "Margen %", "Estrategia", "Advertencias"]
+                            columns=["SKU", "Descripción", "Tipo", "Origen",
+                                     "Costo Unit.", "Precio Unit.", "Margen %", "Estrategia", "Advertencias"]
                         )
-                        st.dataframe(preview_df, width='stretch')
+                        st.dataframe(preview_df, use_container_width=True)
+                    else:
+                        st.info("Esta propuesta no tiene líneas registradas.")
+
+                    st.divider()
+                    st.info(f"Se creará la **v{next_version}** de esta propuesta. "
+                            "Podrás modificar líneas, precios y agregar nuevos ítems antes de guardar.")
+
+                    if lines_preview and st.button(f"📋 Copiar propuesta y crear v{next_version}",
+                                                   type="primary", key="btn_copiar_v2"):
+                        latest_quote_id = group_data["quote_id"]
+                        quote_lines_raw = get_quote_lines_full(latest_quote_id)
+                        st.session_state.lines = []
+
+                        _cols_v2 = ["line_id", "quote_id", "sku", "quantity", "description_original",
+                                    "description_final", "description_corrections", "line_type",
+                                    "service_origin", "cost_unit", "final_price_unit", "margin_pct",
+                                    "strategy", "warnings", "created_at", "import_source", "import_batch_id"]
+
+                        for row in quote_lines_raw:
+                            line_dict = dict(zip(_cols_v2, row))
+                            line_dict['line_id'] = str(uuid.uuid4())
+                            line_dict['created_at'] = datetime.now(UTC).isoformat()
+                            line_dict['description_input'] = str(line_dict.get('description_original', ''))
+                            line_dict['corrected_desc'] = str(line_dict.get('description_final', ''))
+                            line_dict['corrections'] = (line_dict.get('description_corrections', '').split(', ')
+                                                         if line_dict.get('description_corrections') else [])
+                            line_dict['quantity'] = float(line_dict.get('quantity', 1))
+                            line_dict['sku'] = str(line_dict.get('sku', ''))
+                            line_dict['description_original'] = str(line_dict.get('description_original', ''))
+                            line_dict['description_final'] = str(line_dict.get('description_final', ''))
+                            line_dict['description_corrections'] = str(line_dict.get('description_corrections', ''))
+                            line_dict['line_type'] = str(line_dict.get('line_type', ''))
+                            line_dict['service_origin'] = str(line_dict.get('service_origin', ''))
+                            line_dict['cost_unit'] = float(line_dict.get('cost_unit', 0))
+                            line_dict['final_price_unit'] = float(line_dict.get('final_price_unit', 0))
+                            line_dict['margin_pct'] = (float(line_dict.get('margin_pct', 0))
+                                                        if line_dict.get('margin_pct') is not None else 0.0)
+                            line_dict['strategy'] = str(line_dict.get('strategy', ''))
+                            line_dict['warnings'] = str(line_dict.get('warnings', ''))
+                            line_dict['import_source'] = str(line_dict.get('import_source', 'manual'))
+                            line_dict['import_batch_id'] = (str(line_dict.get('import_batch_id', ''))
+                                                             if line_dict.get('import_batch_id') else None)
+                            st.session_state.lines.append(line_dict)
+
+                        st.session_state.quote_id = str(uuid.uuid4())
+                        st.session_state.quote_group_id = selected_group_id
+                        st.cache_data.clear()
+                        all_versions_for_group = load_versions_for_group(selected_group_id)
+                        max_version = all_versions_for_group["version"].max() if not all_versions_for_group.empty else 0
+                        st.session_state.version = max_version + 1
+                        st.session_state.parent_quote_id = latest_quote_id
+                        st.session_state.saved_proposal_name = group_data.get("proposal_name", "") or ""
+                        st.session_state.saved_client_name = group_data.get("client_name", "") or ""
+                        st.session_state.saved_quoted_by = group_data.get("quoted_by", "") or ""
+
+                        st.success(f"✅ {len(quote_lines_raw)} líneas copiadas. "
+                                   f"Se creará la v{st.session_state.version}. "
+                                   "Modifica lo necesario y guarda.")
+                        st.rerun()
                 else:
-                    st.warning("No se encontró información de la propuesta seleccionada")
+                    st.warning("No se encontró información de la propuesta seleccionada.")
+
+        # ==========================================================
+        # MODO COTIZADOR: nueva propuesta o v2 con datos ya cargados
+        # ==========================================================
+        else:
+            # Botón de reinicio + badge de versión
+            _col_hdr, _col_btn = st.columns([5, 1])
+            with _col_btn:
+                if st.button("🔄 Reiniciar", key="btn_reset_cotizador",
+                             help="Descartar esta cotización y volver al inicio"):
+                    _keep_keys = {'authenticated', 'current_user', 'saved_quoted_by',
+                                  'openai_enabled', 'openai_api_key', 'seccion_activa_quotes'}
+                    for _k in list(st.session_state.keys()):
+                        if _k not in _keep_keys:
+                            st.session_state.pop(_k, None)
+                    st.rerun()
+
+            if _qmode == 'v2' and st.session_state.get('parent_quote_id'):
+                vnum = st.session_state.get('version', '?')
+                pname = st.session_state.get('saved_proposal_name', '')
+                st.info(f"📋 Editando **nueva versión (v{vnum})** basada en: *{pname}*")
+
+            # Mostrar banner si hay versión pendiente desde Base de Datos
+            if st.session_state.get('pending_new_version', False):
+                st.success(f"""
+                ✅ **Nueva versión cargada:** {st.session_state.get('pending_version_info', '')}
+
+                Se copiaron **{len(st.session_state.lines)}** líneas. Modifica lo necesario y presiona "Guardar Cotización".
+                """)
+                st.session_state.pending_new_version = False
+
+            st.divider()
+
+            # Si hay una línea pendiente de confirmación (con correcciones)
+            if st.session_state.pending_line:
+                st.warning("🔍 Se detectaron posibles errores ortográficos en la descripción")
+
+                pending = st.session_state.pending_line
+                col1, col2 = st.columns(2)
+                with col1:
+                    st.markdown("**📝 Original:**")
+                    st.info(pending["description_input"])
+                with col2:
+                    st.markdown("**✨ Sugerencia:**")
+                    st.success(pending["corrected_desc"])
+
+                st.markdown("**🔧 Cambios detectados:**")
+                for correction in pending["corrections"]:
+                    st.caption(f"  • {correction}")
+
+                st.divider()
+                st.subheader("✏️ Editar antes de consolidar")
+
+                with st.form("confirm_line"):
+                    # SKU editable
+                    edit_sku = st.text_input(
+                        "SKU (editable)",
+                        value=pending["sku"],
+                        help="Puedes modificar el SKU antes de agregar la línea"
+                    )
+
+                    # Descripción editable - permitir elegir qué versión usar como base
+                    desc_option = st.radio(
+                        "Selecciona la base para la descripción:",
+                        ["Usar versión corregida", "Usar versión original"],
+                        horizontal=True
+                    )
+
+                    if desc_option == "Usar versión corregida":
+                        default_desc = pending["corrected_desc"]
+                    else:
+                        default_desc = pending["description_input"]
+
+                    edit_description = st.text_area(
+                        "Descripción final (editable)",
+                        value=default_desc,
+                        height=100,
+                        help="Puedes modificar la descripción antes de agregar la línea"
+                    )
+
+                    col_a, col_b, col_c = st.columns([2, 2, 1])
+                    with col_a:
+                        confirm_btn = st.form_submit_button("✅ Consolidar línea", type="primary")
+                    with col_b:
+                        cancel_btn = st.form_submit_button("❌ Cancelar")
+
+                    if confirm_btn:
+                        if not edit_description or not edit_description.strip():
+                            st.error("❌ La descripción no puede estar vacía")
+                        elif not edit_sku or not edit_sku.strip():
+                            st.error("❌ El SKU no puede estar vacío")
+                        else:
+                            # Verificar si el SKU editado ya existe
+                            existing_skus = [line["sku"] for line in st.session_state.lines]
+                            if edit_sku != pending["sku"] and edit_sku in existing_skus:
+                                st.error(f"❌ El SKU '{edit_sku}' ya existe en esta cotización")
+                            else:
+                                # Actualizar datos editados
+                                pending["sku"] = edit_sku
+                                pending["description_final"] = edit_description
+                                st.session_state.lines.append(pending)
+                                st.session_state.pending_line = None
+                                st.success("✅ Línea consolidada exitosamente")
+                                st.rerun()
+
+                    if cancel_btn:
+                        st.session_state.pending_line = None
+                        st.info("❌ Línea descartada")
+                        st.rerun()
+
+                st.divider()
+
+            # Información de la cotización
+            st.subheader("📋 Información de la Cotización")
+
+            # Callbacks para persistir en tiempo real (sin necesidad de botón Confirmar)
+            def _sync_proposal_name():
+                st.session_state.saved_proposal_name = st.session_state._input_proposal_name
+            def _sync_client_name():
+                st.session_state.saved_client_name = st.session_state._input_client_name
+            def _sync_quoted_by():
+                st.session_state.saved_quoted_by = st.session_state._input_quoted_by
+
+            st.text_input(
+                "Nombre de la Propuesta",
+                value=st.session_state.get('saved_proposal_name', ''),
+                placeholder="Ej: Implementación ERP 2026, Soporte Anual...",
+                help="Dale un nombre identificable a esta propuesta",
+                key="_input_proposal_name",
+                on_change=_sync_proposal_name
+            )
+
+            col_form1, col_form2 = st.columns(2)
+            with col_form1:
+                st.text_input(
+                    "Cliente / Empresa",
+                    value=st.session_state.get('saved_client_name', ''),
+                    placeholder="Ej: Acme Corp, Juan Pérez...",
+                    help="Para quién es esta cotización",
+                    key="_input_client_name",
+                    on_change=_sync_client_name
+                )
+            with col_form2:
+                st.text_input(
+                    "Cotizado por (User ID / Nombre)",
+                    value=st.session_state.get('saved_quoted_by', ''),
+                    placeholder="Ej: jperez, vendedor@empresa.com, Juan Pérez...",
+                    help="Identificador de quién crea esta cotización",
+                    key="_input_quoted_by",
+                    on_change=_sync_quoted_by
+                )
+    # Mostrar maquinaria del cotizador sólo cuando hay un modo activo con datos cargados
+    _qm_outer = st.session_state.get('quote_start_mode')
+    _show_cotizador = (_qm_outer is not None and
+                       not (_qm_outer == 'v2' and not st.session_state.lines))
 
     # Si hay una línea pendiente de confirmación (con correcciones)
-    if st.session_state.pending_line:
+    if _show_cotizador and st.session_state.pending_line:
         st.warning("🔍 Se detectaron posibles errores ortográficos en la descripción")
 
         pending = st.session_state.pending_line
@@ -1549,7 +1632,7 @@ with tab_quotes:
 
         st.divider()
 
-    else:
+    elif _show_cotizador:
         # =========================
         # IMPORTACIÓN DESDE EXCEL
         # =========================
