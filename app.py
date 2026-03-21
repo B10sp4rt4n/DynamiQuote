@@ -421,9 +421,13 @@ def _render_login():
             else:
                 user = authenticate_user(alias, password)
                 if user:
+                    # Limpiar todo el estado previo del formulario antes de entrar
+                    _keep = {'openai_enabled', 'openai_api_key'}
+                    for _k in list(st.session_state.keys()):
+                        if _k not in _keep:
+                            del st.session_state[_k]
                     st.session_state['authenticated'] = True
                     st.session_state['current_user'] = user
-                    # Pre-rellenar quoted_by con nombre completo
                     st.session_state['saved_quoted_by'] = user['full_name']
                     st.rerun()
                 else:
