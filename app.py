@@ -1514,11 +1514,11 @@ with tab_quotes:
 
             # Callbacks para persistir en tiempo real (sin necesidad de botón Confirmar)
             def _sync_proposal_name():
-                st.session_state.saved_proposal_name = st.session_state._input_proposal_name
+                st.session_state.saved_proposal_name = st.session_state.get('_input_proposal_name', '')
             def _sync_client_name():
-                st.session_state.saved_client_name = st.session_state._input_client_name
+                st.session_state.saved_client_name = st.session_state.get('_input_client_name', '')
             def _sync_quoted_by():
-                st.session_state.saved_quoted_by = st.session_state._input_quoted_by
+                st.session_state.saved_quoted_by = st.session_state.get('_input_quoted_by', '')
 
             st.text_input(
                 "Nombre de la Propuesta",
