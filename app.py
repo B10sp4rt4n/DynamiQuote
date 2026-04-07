@@ -759,34 +759,34 @@ with st.expander("🔍 **Búsqueda Rápida de Cotizaciones y Propuestas**", expa
                         kpi3.metric("Utilidad Bruta", f"${gross_profit:,.0f}")
                         kpi4.metric("Margen", f"{avg_margin:.1f}%")
                         
-                        # Info + gráfica pastel
-                        col_info, col_pie = st.columns([3, 1])
-                        with col_info:
-                            st.caption(f"👤 **Cotizó:** {quoted_by or 'N/A'}  ·  📅 {pd.to_datetime(created_at).strftime('%Y-%m-%d')}  ·  📋 {playbook or 'N/A'}")
-                        with col_pie:
-                            import matplotlib
-                            matplotlib.use("Agg")
-                            import matplotlib.pyplot as plt
-                            from io import BytesIO
-                            _pie_cost = float(total_cost or 0)
-                            _pie_profit = float(gross_profit or 0)
-                            if _pie_cost + _pie_profit > 0:
-                                fig_p, ax_p = plt.subplots(figsize=(1.8, 1.8), dpi=100)
-                                ax_p.pie(
-                                    [_pie_cost, _pie_profit],
-                                    labels=["Costo", "Utilidad"],
-                                    colors=["#ef4444", "#22c55e"],
-                                    autopct="%1.0f%%",
-                                    textprops={"fontsize": 7},
-                                    pctdistance=0.75,
-                                    wedgeprops={"width": 0.4},
-                                )
-                                ax_p.set_aspect("equal")
-                                buf = BytesIO()
-                                fig_p.savefig(buf, format="png", bbox_inches="tight", transparent=True)
-                                plt.close(fig_p)
-                                buf.seek(0)
-                                st.image(buf, use_container_width=True)
+                        st.caption(f"👤 **Cotizó:** {quoted_by or 'N/A'}  ·  📅 {pd.to_datetime(created_at).strftime('%Y-%m-%d')}  ·  📋 {playbook or 'N/A'}")
+                        
+                        # Gráfica pastel costo vs utilidad
+                        import matplotlib
+                        matplotlib.use("Agg")
+                        import matplotlib.pyplot as plt
+                        from io import BytesIO
+                        _pie_cost = float(total_cost or 0)
+                        _pie_profit = float(gross_profit or 0)
+                        if _pie_cost + _pie_profit > 0:
+                            fig_p, ax_p = plt.subplots(figsize=(2.5, 2.5), dpi=80)
+                            wedges, texts, autotexts = ax_p.pie(
+                                [_pie_cost, _pie_profit],
+                                labels=["Costo", "Utilidad"],
+                                colors=["#ef4444", "#22c55e"],
+                                autopct="%1.0f%%",
+                                textprops={"fontsize": 9},
+                                pctdistance=0.75,
+                                wedgeprops={"width": 0.4},
+                            )
+                            ax_p.set_aspect("equal")
+                            _buf = BytesIO()
+                            fig_p.savefig(_buf, format="png", bbox_inches="tight", transparent=True)
+                            plt.close(fig_p)
+                            _buf.seek(0)
+                            _col_spacer1, _col_chart, _col_spacer2 = st.columns([2, 1, 2])
+                            with _col_chart:
+                                st.image(_buf)
                         
                         # Líneas de detalle
                         lines = get_quote_lines(quote_id)
