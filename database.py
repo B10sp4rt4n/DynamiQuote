@@ -69,28 +69,42 @@ def get_config_value(key: str, aliases: tuple[str, ...] = ()) -> tuple[Optional[
 
     Retorna:
         tuple[value, source]
-        source puede ser: streamlit-secrets, streamlit-secrets:<section>, dotenv, env, missing
+        source puede ser: streamlit-secrets, dotenv, env, missing
     """
-    candidate_keys = {key.lower(), *(alias.lower() for alias in aliases)}
+    all_keys = [key] + list(aliases)
 
+    # 1. Intentar Streamlit Secrets (acceso directo por clave, sin iterar)
     try:
         if hasattr(st, 'secrets'):
-            found_value, found_source = _search_nested_secrets(st.secrets, candidate_keys)
-            if found_value:
-                return found_value, found_source
+            for k in all_keys:
+                try:
+                    val = st.secrets.get(k)
+                    if val is not None and str(val).strip():
+                        return str(val).strip(), f'streamlit-secrets:{k}'
+                except Exception:
+                    pass
+            # Búsqueda anidada como fallback (e.g. sección [database])
+            try:
+                candidate_keys = {k.lower() for k in all_keys}
+                found_value, found_source = _search_nested_secrets(st.secrets, candidate_keys)
+                if found_value:
+                    return found_value, found_source
+            except Exception:
+                pass
     except Exception as e:
-        print(f"❌ ERROR al leer st.secrets para {key}: {e}")
+        print(f"❌ ERROR al acceder st.secrets: {e}")
 
+    # 2. Intentar .env y variables de entorno
     load_dotenv()
-    for env_key in (key, *aliases):
-        value = os.getenv(env_key)
-        if value and value.strip():
-            return value.strip(), f'dotenv:{env_key}'
+    for k in all_keys:
+        val = os.getenv(k)
+        if val and val.strip():
+            return val.strip(), f'dotenv:{k}'
 
-    for env_key in (key, *aliases):
-        value = os.environ.get(env_key)
-        if value and value.strip():
-            return value.strip(), f'env:{env_key}'
+    for k in all_keys:
+        val = os.environ.get(k)
+        if val and val.strip():
+            return val.strip(), f'env:{k}'
 
     return None, 'missing'
 
@@ -126,27 +140,20 @@ def get_database_url() -> Optional[str]:
     Returns:
         str: URL de conexión a PostgreSQL o None para usar SQLite
     """
-    if hasattr(st, 'secrets'):
-        print("🔍 DEBUG: st.secrets está disponible")
-        try:
-            secrets_keys = list(st.secrets.keys()) if hasattr(st.secrets, 'keys') else []
-            print(f"🔍 DEBUG: Keys en secrets: {secrets_keys}")
-        except Exception:
-            pass
-
     database_url, source = get_database_url_and_source()
     if database_url:
         print(f"✅ Usando DATABASE_URL desde {source}")
-        print(f"🔍 DEBUG: URL encontrada (primeros 30 chars): {database_url[:30]}...")
         return database_url
-    
     print("ℹ️  DATABASE_URL no encontrada. Usando SQLite local para desarrollo.")
     return None
 
 
-# Obtener configuración
-DATABASE_URL = get_database_url()
-DATABASE_URL_SOURCE = get_database_url_and_source()[1]
+# Obtener configuración (llamar get_database_url_and_source() UNA sola vez)
+try:
+    DATABASE_URL, DATABASE_URL_SOURCE = get_database_url_and_source()
+except Exception as _e:
+    print(f"⚠️ Error obteniendo DATABASE_URL: {_e}")
+    DATABASE_URL, DATABASE_URL_SOURCE = None, 'error'
 SQLITE_DB = "quotes_mvp.db"
 
 
