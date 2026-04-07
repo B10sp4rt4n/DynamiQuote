@@ -764,11 +764,14 @@ with st.expander("🔍 **Búsqueda Rápida de Cotizaciones y Propuestas**", expa
                         with col_info:
                             st.caption(f"👤 **Cotizó:** {quoted_by or 'N/A'}  ·  📅 {pd.to_datetime(created_at).strftime('%Y-%m-%d')}  ·  📋 {playbook or 'N/A'}")
                         with col_pie:
+                            import matplotlib
+                            matplotlib.use("Agg")
                             import matplotlib.pyplot as plt
+                            from io import BytesIO
                             _pie_cost = float(total_cost or 0)
                             _pie_profit = float(gross_profit or 0)
                             if _pie_cost + _pie_profit > 0:
-                                fig_p, ax_p = plt.subplots(figsize=(2, 2))
+                                fig_p, ax_p = plt.subplots(figsize=(1.8, 1.8), dpi=100)
                                 ax_p.pie(
                                     [_pie_cost, _pie_profit],
                                     labels=["Costo", "Utilidad"],
@@ -779,8 +782,11 @@ with st.expander("🔍 **Búsqueda Rápida de Cotizaciones y Propuestas**", expa
                                     wedgeprops={"width": 0.4},
                                 )
                                 ax_p.set_aspect("equal")
-                                st.pyplot(fig_p, use_container_width=False)
+                                buf = BytesIO()
+                                fig_p.savefig(buf, format="png", bbox_inches="tight", transparent=True)
                                 plt.close(fig_p)
+                                buf.seek(0)
+                                st.image(buf, use_container_width=True)
                         
                         # Líneas de detalle
                         lines = get_quote_lines(quote_id)
