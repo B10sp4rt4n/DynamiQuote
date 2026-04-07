@@ -76,6 +76,41 @@ def render_plotly_donut(values, labels, colors=None, height=240, center_title=No
 
     st.plotly_chart(fig, use_container_width=True, config={"displayModeBar": False}, key=key)
 
+
+def build_quote_lines_display_df(lines_raw):
+    """Convierte líneas completas de cotización en una tabla lista para UI."""
+    if not lines_raw:
+        return pd.DataFrame()
+
+    columns = [
+        "line_id", "quote_id", "SKU", "Cantidad", "description_original",
+        "Descripción", "description_corrections", "Tipo", "Origen",
+        "Costo Unit.", "Precio Unit.", "Margen %", "Estrategia",
+        "Advertencias", "created_at", "import_source", "import_batch_id"
+    ]
+    lines_df = pd.DataFrame(lines_raw, columns=columns)
+
+    lines_df["Cantidad"] = pd.to_numeric(lines_df["Cantidad"], errors="coerce").fillna(1.0)
+    lines_df["Costo Unit."] = pd.to_numeric(lines_df["Costo Unit."], errors="coerce").fillna(0.0)
+    lines_df["Precio Unit."] = pd.to_numeric(lines_df["Precio Unit."], errors="coerce").fillna(0.0)
+    lines_df["Margen %"] = pd.to_numeric(lines_df["Margen %"], errors="coerce")
+
+    display_df = lines_df[[
+        "SKU", "Cantidad", "Descripción", "Tipo", "Origen",
+        "Costo Unit.", "Precio Unit.", "Margen %", "Estrategia", "Advertencias"
+    ]].copy()
+
+    display_df["Cantidad"] = display_df["Cantidad"].apply(
+        lambda x: int(x) if float(x).is_integer() else round(float(x), 2)
+    )
+    display_df["Costo Unit."] = display_df["Costo Unit."].apply(lambda x: f"${x:,.2f}")
+    display_df["Precio Unit."] = display_df["Precio Unit."].apply(lambda x: f"${x:,.2f}")
+    display_df["Margen %"] = display_df["Margen %"].apply(
+        lambda x: f"{x:.1f}%" if pd.notna(x) else "—"
+    )
+
+    return display_df
+
 # =========================
 # Helpers de Performance
 # =========================
@@ -816,14 +851,11 @@ with st.expander("🔍 **Búsqueda Rápida de Cotizaciones y Propuestas**", expa
                                 )
                         
                         # Líneas de detalle
-                        lines = get_quote_lines(quote_id)
+                        lines = get_quote_lines_full(quote_id)
                         if lines:
                             st.markdown("---")
                             st.caption(f"📦 **{len(lines)} líneas de detalle**")
-                            lines_df = pd.DataFrame(lines, columns=["SKU", "Descripción", "Tipo", "Origen", "Costo Unit.", "Precio Unit.", "Margen %", "Estrategia", "Alertas"])
-                            lines_df["Costo Unit."] = lines_df["Costo Unit."].apply(lambda x: f"${x:,.2f}" if x else "—")
-                            lines_df["Precio Unit."] = lines_df["Precio Unit."].apply(lambda x: f"${x:,.2f}" if x else "—")
-                            lines_df["Margen %"] = lines_df["Margen %"].apply(lambda x: f"{x:.1f}%" if x else "—")
+                            lines_df = build_quote_lines_display_df(lines)
                             st.dataframe(lines_df, use_container_width=True, hide_index=True)
             else:
                 st.warning("⚠️ No se encontraron resultados. Intenta con otros términos.")
@@ -1588,15 +1620,11 @@ with tab_quotes:
                             st.dataframe(versions_df[ver_cols].rename(columns=rename_map),
                                          use_container_width=True, hide_index=True)
 
-                    lines_preview = get_quote_lines(group_data["quote_id"])
+                    lines_preview = get_quote_lines_full(group_data["quote_id"])
                     if lines_preview:
                         st.markdown(f"**📦 Líneas de la versión más reciente (v{current_max_version}) — {len(lines_preview)} ítems:**")
-                        preview_df = pd.DataFrame(
-                            lines_preview,
-                            columns=["SKU", "Descripción", "Tipo", "Origen",
-                                     "Costo Unit.", "Precio Unit.", "Margen %", "Estrategia", "Advertencias"]
-                        )
-                        st.dataframe(preview_df, use_container_width=True)
+                        preview_df = build_quote_lines_display_df(lines_preview)
+                        st.dataframe(preview_df, use_container_width=True, hide_index=True)
                     else:
                         st.info("Esta propuesta no tiene líneas registradas.")
 
@@ -4252,12 +4280,9 @@ with tab_db:
                 st.divider()
                 
                 # Mostrar líneas de la versión seleccionada con paginado
-                lines = get_quote_lines(selected_version_id)
+                lines = get_quote_lines_full(selected_version_id)
                 if lines:
-                    lines_df = pd.DataFrame(
-                        lines,
-                        columns=["SKU", "Descripción", "Tipo", "Origen", "Costo Unit.", "Precio Unit.", "Margen %", "Estrategia", "Advertencias"]
-                    )
+                    lines_df = build_quote_lines_display_df(lines)
                     
                     total_lines = len(lines_df)
                     st.caption(f"📋 Líneas de cotización: {total_lines} total")
