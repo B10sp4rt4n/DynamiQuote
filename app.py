@@ -4,6 +4,7 @@ import pandas as pd
 import uuid
 from datetime import datetime, UTC
 import matplotlib.pyplot as plt
+import plotly.graph_objects as go
 from spellchecker import SpellChecker
 from database import init_database, save_quote, save_import_file, get_all_quotes, get_quote_lines, get_quote_lines_full, get_latest_version, load_versions_for_group, load_lines_for_quote, get_database_info, get_cursor, is_postgres, get_connection, save_logo, get_logos, search_quotes, get_recent_quotes, get_quote_groups_summary, get_quote_by_group_id, clear_search_caches, authenticate_user, create_user, get_all_users, toggle_user_active, update_user_password, users_exist, create_tenant, get_all_tenants, get_tenant, toggle_tenant_active, update_user_seller_code, update_user_tenant, tenants_exist, get_user_by_id, get_openai_api_key, is_streamlit_cloud, get_database_config_source
 from excel_import import import_excel_file, format_validation_report
@@ -36,6 +37,44 @@ plt.ioff()
 def get_spell_checker():
     """Cache del corrector ortográfico para evitar recargas."""
     return SpellChecker(language='es')
+
+
+def render_plotly_donut(values, labels, colors=None, height=240, center_title=None, key=None):
+    """Renderiza una gráfica de dona interactiva con Plotly."""
+    normalized_values = [max(float(v or 0), 0) for v in values]
+    if sum(normalized_values) <= 0:
+        st.caption("Sin datos")
+        return
+
+    fig = go.Figure(data=[go.Pie(
+        labels=labels,
+        values=normalized_values,
+        hole=0.55,
+        sort=False,
+        marker=dict(colors=colors or ["#3b82f6", "#22c55e", "#f59e0b", "#ef4444"]),
+        textinfo="label+percent",
+        textfont_size=12,
+        hovertemplate="<b>%{label}</b><br>$%{value:,.2f}<br>%{percent}<extra></extra>",
+    )])
+
+    fig.update_layout(
+        showlegend=False,
+        margin=dict(t=10, b=10, l=10, r=10),
+        height=height,
+        paper_bgcolor="rgba(0,0,0,0)",
+        plot_bgcolor="rgba(0,0,0,0)",
+    )
+
+    if center_title:
+        fig.add_annotation(
+            text=center_title,
+            x=0.5,
+            y=0.5,
+            showarrow=False,
+            font=dict(size=13, color="#64748b"),
+        )
+
+    st.plotly_chart(fig, use_container_width=True, config={"displayModeBar": False}, key=key)
 
 # =========================
 # Helpers de Performance
@@ -762,28 +801,19 @@ with st.expander("🔍 **Búsqueda Rápida de Cotizaciones y Propuestas**", expa
                         st.caption(f"👤 **Cotizó:** {quoted_by or 'N/A'}  ·  📅 {pd.to_datetime(created_at).strftime('%Y-%m-%d')}  ·  📋 {playbook or 'N/A'}")
                         
                         # Gráfica dona costo vs utilidad (Plotly interactiva)
-                        import plotly.graph_objects as go
                         _pie_cost = float(total_cost or 0)
                         _pie_profit = float(gross_profit or 0)
                         if _pie_cost + _pie_profit > 0:
-                            fig_donut = go.Figure(data=[go.Pie(
-                                labels=["Costo", "Utilidad"],
-                                values=[_pie_cost, _pie_profit],
-                                hole=0.5,
-                                marker=dict(colors=["#ef4444", "#22c55e"]),
-                                textinfo="label+percent",
-                                textfont_size=12,
-                            )])
-                            fig_donut.update_layout(
-                                showlegend=False,
-                                margin=dict(t=0, b=0, l=0, r=0),
-                                height=220,
-                                paper_bgcolor="rgba(0,0,0,0)",
-                                plot_bgcolor="rgba(0,0,0,0)",
-                            )
                             _col_spacer1, _col_chart, _col_spacer2 = st.columns([2, 1, 2])
                             with _col_chart:
-                                st.plotly_chart(fig_donut, use_container_width=True, config={"displayModeBar": False})
+                                render_plotly_donut(
+                                    [_pie_cost, _pie_profit],
+                                    ["Costo", "Utilidad"],
+                                    colors=["#ef4444", "#22c55e"],
+                                    height=220,
+                                    center_title="Costo vs\nUtilidad",
+                                    key=f"quote_search_donut_{quote_id}",
+                                )
                         
                         # Líneas de detalle
                         lines = get_quote_lines(quote_id)
@@ -2256,16 +2286,14 @@ with tab_quotes:
 
             with col_graph2:
                 st.markdown("**Costo vs Utilidad Bruta**")
-                fig2, ax2 = plt.subplots(figsize=(6, 4))
-                ax2.pie(
+                render_plotly_donut(
                     [total_cost, gross_profit],
-                    labels=["Costo", "Utilidad Bruta"],
-                    autopct="%1.1f%%",
-                    startangle=90
+                    ["Costo", "Utilidad Bruta"],
+                    colors=["#ef4444", "#22c55e"],
+                    height=320,
+                    center_title="Finanzas",
+                    key="main_financial_donut",
                 )
-                ax2.set_title("Distribución financiera")
-                st.pyplot(fig2)
-                plt.close(fig2)  # Cerrar figura para liberar memoria
 
             # =========================
             # Cerrar propuesta
@@ -3675,10 +3703,14 @@ with tab_quotes:
                 with col_g2:
                     st.markdown("**Costo vs Utilidad Bruta**")
                     cvp = charts.get("pie_cost_vs_profit", {})
-                    fig, ax = plt.subplots(figsize=(4, 4))
-                    ax.pie([cvp.get("total_cost", 0), cvp.get("gross_profit", 0)], labels=["Costo", "Utilidad"])
-                    st.pyplot(fig)
-                    plt.close(fig)
+                    render_plotly_donut(
+                        [cvp.get("total_cost", 0), cvp.get("gross_profit", 0)],
+                        ["Costo", "Utilidad"],
+                        colors=["#ef4444", "#22c55e"],
+                        height=300,
+                        center_title="Bruta",
+                        key=f"readonly_cost_profit_{proposal_id}",
+                    )
 
                 with col_g3:
                     st.markdown("**Distribución neta**")
@@ -4202,32 +4234,20 @@ with tab_db:
                 with col5:
                     st.metric("Costo Total", f"${selected_row['Costo Total']:,.2f}")
                 
-                # Gráfica pastel costo vs utilidad
-                import matplotlib
-                matplotlib.use("Agg")
-                import matplotlib.pyplot as plt
-                from io import BytesIO
+                # Gráfica dona costo vs utilidad
                 _kpi_cost = float(selected_row['Costo Total'] or 0)
                 _kpi_profit = float(selected_row['Utilidad Bruta'] or 0)
                 if _kpi_cost + _kpi_profit > 0:
-                    fig_kpi, ax_kpi = plt.subplots(figsize=(2.5, 2.5), dpi=80)
-                    ax_kpi.pie(
-                        [_kpi_cost, _kpi_profit],
-                        labels=["Costo", "Utilidad"],
-                        colors=["#ef4444", "#22c55e"],
-                        autopct="%1.0f%%",
-                        textprops={"fontsize": 9},
-                        pctdistance=0.75,
-                        wedgeprops={"width": 0.4},
-                    )
-                    ax_kpi.set_aspect("equal")
-                    _kpi_buf = BytesIO()
-                    fig_kpi.savefig(_kpi_buf, format="png", bbox_inches="tight", transparent=True)
-                    plt.close(fig_kpi)
-                    _kpi_buf.seek(0)
                     _sp1, _sp_chart, _sp2 = st.columns([2, 1, 2])
                     with _sp_chart:
-                        st.image(_kpi_buf)
+                        render_plotly_donut(
+                            [_kpi_cost, _kpi_profit],
+                            ["Costo", "Utilidad"],
+                            colors=["#ef4444", "#22c55e"],
+                            height=220,
+                            center_title="Versión",
+                            key=f"version_kpi_donut_{group_id}_{selected_version_id}",
+                        )
                 
                 st.divider()
                 
