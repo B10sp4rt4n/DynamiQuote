@@ -180,7 +180,9 @@ def init_database():
             total_revenue DECIMAL(10,2),
             gross_profit DECIMAL(10,2),
             avg_margin DECIMAL(5,2),
-            playbook_name TEXT DEFAULT 'General'
+            playbook_name TEXT DEFAULT 'General',
+            tenant_id TEXT REFERENCES tenants(tenant_id),
+            created_by_user_id TEXT
         )
         """
         
@@ -214,7 +216,8 @@ def init_database():
             file_data BYTEA NOT NULL,
             file_size INTEGER,
             rows_imported INTEGER,
-            rows_errors INTEGER
+            rows_errors INTEGER,
+            tenant_id TEXT REFERENCES tenants(tenant_id)
         )
         """
 
@@ -312,10 +315,21 @@ def init_database():
         )
         """
 
+        tenants_table = """
+        CREATE TABLE IF NOT EXISTS tenants (
+            tenant_id TEXT PRIMARY KEY,
+            name TEXT NOT NULL,
+            slug TEXT UNIQUE NOT NULL,
+            active BOOLEAN NOT NULL DEFAULT TRUE,
+            created_at TIMESTAMP NOT NULL
+        )
+        """
+
         # Tablas para propuestas formales
         company_logos_table = """
         CREATE TABLE IF NOT EXISTS company_logos (
             logo_id TEXT PRIMARY KEY,
+            tenant_id TEXT REFERENCES tenants(tenant_id),
             logo_name TEXT NOT NULL,
             logo_type TEXT NOT NULL,
             company_name TEXT,
@@ -373,10 +387,21 @@ def init_database():
             
             created_by TEXT,
             created_at TIMESTAMP NOT NULL,
-            updated_at TIMESTAMP
+            updated_at TIMESTAMP,
+            tenant_id TEXT REFERENCES tenants(tenant_id)
         )
         """
     else:
+        tenants_table = """
+        CREATE TABLE IF NOT EXISTS tenants (
+            tenant_id TEXT PRIMARY KEY,
+            name TEXT NOT NULL,
+            slug TEXT UNIQUE NOT NULL,
+            active INTEGER NOT NULL DEFAULT 1,
+            created_at TEXT NOT NULL
+        )
+        """
+
         quotes_table = """
         CREATE TABLE IF NOT EXISTS quotes (
             quote_id TEXT PRIMARY KEY,
@@ -389,7 +414,9 @@ def init_database():
             total_revenue REAL,
             gross_profit REAL,
             avg_margin REAL,
-            playbook_name TEXT DEFAULT 'General'
+            playbook_name TEXT DEFAULT 'General',
+            tenant_id TEXT,
+            created_by_user_id TEXT
         )
         """
         
@@ -424,6 +451,7 @@ def init_database():
             file_size INTEGER,
             rows_imported INTEGER,
             rows_errors INTEGER,
+            tenant_id TEXT,
             FOREIGN KEY (quote_id) REFERENCES quotes(quote_id)
         )
         """
@@ -533,6 +561,7 @@ def init_database():
         company_logos_table = """
         CREATE TABLE IF NOT EXISTS company_logos (
             logo_id TEXT PRIMARY KEY,
+            tenant_id TEXT,
             logo_name TEXT NOT NULL,
             logo_type TEXT NOT NULL,
             company_name TEXT,
@@ -591,6 +620,7 @@ def init_database():
             created_by TEXT,
             created_at TEXT NOT NULL,
             updated_at TEXT,
+            tenant_id TEXT,
             
             FOREIGN KEY (quote_id) REFERENCES quotes(quote_id),
             FOREIGN KEY (proposal_id) REFERENCES proposals(proposal_id),
@@ -601,6 +631,7 @@ def init_database():
     
     try:
         with get_cursor() as cur:
+            cur.execute(tenants_table)
             cur.execute(quotes_table)
             cur.execute(quote_lines_table)
             cur.execute(import_files_table)
@@ -624,7 +655,9 @@ def init_database():
                         password_hash TEXT NOT NULL,
                         role TEXT NOT NULL DEFAULT 'user',
                         active BOOLEAN NOT NULL DEFAULT TRUE,
-                        created_at TIMESTAMP NOT NULL
+                        created_at TIMESTAMP NOT NULL,
+                        tenant_id TEXT REFERENCES tenants(tenant_id),
+                        seller_code TEXT
                     )
                 """)
             else:
@@ -637,7 +670,9 @@ def init_database():
                         password_hash TEXT NOT NULL,
                         role TEXT NOT NULL DEFAULT 'user',
                         active INTEGER NOT NULL DEFAULT 1,
-                        created_at TEXT NOT NULL
+                        created_at TEXT NOT NULL,
+                        tenant_id TEXT,
+                        seller_code TEXT
                     )
                 """)
         return True, "Base de datos inicializada correctamente"
@@ -687,7 +722,10 @@ def save_quote(quote_data: tuple, lines_data: list) -> tuple[bool, str]:
     Guarda cotización y sus líneas en una transacción atómica.
     
     Args:
-        quote_data: Tupla con datos de la cotización (14 campos: quote_id, quote_group_id, version, parent_quote_id, created_at, status, total_cost, total_revenue, gross_profit, avg_margin, playbook_name, client_name, quoted_by, proposal_name)
+        quote_data: Tupla con datos de la cotización (16 campos: quote_id, quote_group_id, version,
+                    parent_quote_id, created_at, status, total_cost, total_revenue, gross_profit,
+                    avg_margin, playbook_name, client_name, quoted_by, proposal_name,
+                    tenant_id, created_by_user_id)
         lines_data: Lista de tuplas con datos de líneas (17 campos cada una: incluye import_source, import_batch_id)
     
     Returns:
@@ -705,8 +743,8 @@ def save_quote(quote_data: tuple, lines_data: list) -> tuple[bool, str]:
                 print(f"[DEBUG] Guardando cotización en PostgreSQL: {quote_data[0]}")
                 cur.execute(
                     """INSERT INTO quotes 
-                       (quote_id, quote_group_id, version, parent_quote_id, created_at, status, total_cost, total_revenue, gross_profit, avg_margin, playbook_name, client_name, quoted_by, proposal_name)
-                       VALUES (%s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s)""",
+                       (quote_id, quote_group_id, version, parent_quote_id, created_at, status, total_cost, total_revenue, gross_profit, avg_margin, playbook_name, client_name, quoted_by, proposal_name, tenant_id, created_by_user_id)
+                       VALUES (%s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s)""",
                     quote_data
                 )
                 print(f"[DEBUG] Cotización guardada, insertando líneas...")
@@ -734,7 +772,7 @@ def save_quote(quote_data: tuple, lines_data: list) -> tuple[bool, str]:
             else:
                 print(f"[DEBUG] Guardando cotización en SQLite: {quote_data[0]}")
                 cur.execute(
-                    "INSERT INTO quotes VALUES (?,?,?,?,?,?,?,?,?,?,?,?,?,?)",
+                    "INSERT INTO quotes (quote_id, quote_group_id, version, parent_quote_id, created_at, status, total_cost, total_revenue, gross_profit, avg_margin, playbook_name, client_name, quoted_by, proposal_name, tenant_id, created_by_user_id) VALUES (?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?)",
                     quote_data
                 )
                 print(f"[DEBUG] Cotización guardada, insertando líneas...")
@@ -813,33 +851,42 @@ def clear_search_caches():
         print(f"⚠️ Error limpiando cachés: {e}")
 
 
-def search_quotes(query: str, limit: int = 20) -> list:
+def search_quotes(query: str, limit: int = 20, tenant_id: str = None) -> list:
     """
     Busca cotizaciones por texto en múltiples campos: client_name, proposal_name, quoted_by.
     Retorna solo la última versión de cada grupo que coincida.
     
     Búsqueda inteligente: encuentra coincidencias parciales en cualquiera de los campos.
+    Filtro multitenant: si tenant_id se proporciona, limita resultados a esa empresa.
     
     NO CACHEADA: Cada búsqueda es diferente, cachear acumula datos en memoria.
     
     Args:
         query: Texto a buscar (case-insensitive)
         limit: Número máximo de resultados (default: 20)
+        tenant_id: ID de empresa para aislar datos. None = sin filtro (superadmin).
         
     Returns:
         Lista de tuplas con datos de cotizaciones
     """
     if not query or query.strip() == "":
-        return get_recent_quotes(limit)
+        return get_recent_quotes(limit, tenant_id=tenant_id)
     
     try:
         with get_cursor() as cur:
             search_pattern = f"%{query}%"
             
             if is_postgres():
-                # Usar subconsulta para obtener última versión de cada grupo
-                # y luego ordenar por fecha más reciente
-                cur.execute("""
+                tenant_filter = "AND q.tenant_id = %s" if tenant_id else ""
+                tenant_inner_filter = "AND tenant_id = %s" if tenant_id else ""
+                params_inner = [search_pattern, search_pattern, search_pattern, search_pattern]
+                if tenant_id:
+                    params_inner.append(tenant_id)
+                params_outer = [search_pattern, search_pattern, search_pattern, search_pattern]
+                if tenant_id:
+                    params_outer.append(tenant_id)
+                params_outer.append(limit)
+                cur.execute(f"""
                     SELECT q.quote_id, q.quote_group_id, q.version, q.parent_quote_id,
                            q.created_at, q.status, q.total_cost, q.total_revenue,
                            q.gross_profit, q.avg_margin, q.playbook_name, q.client_name,
@@ -848,24 +895,33 @@ def search_quotes(query: str, limit: int = 20) -> list:
                     INNER JOIN (
                         SELECT quote_group_id, MAX(version) as max_version
                         FROM quotes
-                        WHERE LOWER(client_name) LIKE LOWER(%s)
+                        WHERE (LOWER(client_name) LIKE LOWER(%s)
                            OR LOWER(proposal_name) LIKE LOWER(%s)
                            OR LOWER(quoted_by) LIKE LOWER(%s)
-                           OR CAST(total_revenue AS TEXT) LIKE %s
+                           OR CAST(total_revenue AS TEXT) LIKE %s)
+                        {tenant_inner_filter}
                         GROUP BY quote_group_id
                     ) latest ON q.quote_group_id = latest.quote_group_id 
                             AND q.version = latest.max_version
-                    WHERE LOWER(q.client_name) LIKE LOWER(%s)
+                    WHERE (LOWER(q.client_name) LIKE LOWER(%s)
                        OR LOWER(q.proposal_name) LIKE LOWER(%s)
                        OR LOWER(q.quoted_by) LIKE LOWER(%s)
-                       OR CAST(q.total_revenue AS TEXT) LIKE %s
+                       OR CAST(q.total_revenue AS TEXT) LIKE %s)
+                    {tenant_filter}
                     ORDER BY q.created_at DESC
                     LIMIT %s
-                """, (search_pattern, search_pattern, search_pattern, search_pattern,
-                      search_pattern, search_pattern, search_pattern, search_pattern, limit))
+                """, params_inner + params_outer)
             else:
-                # SQLite: usar subconsulta para obtener solo la última versión
-                cur.execute("""
+                tenant_filter = "AND q.tenant_id = ?" if tenant_id else ""
+                tenant_inner_filter = "AND tenant_id = ?" if tenant_id else ""
+                params_inner = [search_pattern, search_pattern, search_pattern, search_pattern]
+                if tenant_id:
+                    params_inner.append(tenant_id)
+                params_outer = [search_pattern, search_pattern, search_pattern, search_pattern]
+                if tenant_id:
+                    params_outer.append(tenant_id)
+                params_outer.append(limit)
+                cur.execute(f"""
                     SELECT q.quote_id, q.quote_group_id, q.version, q.parent_quote_id,
                            q.created_at, q.status, q.total_cost, q.total_revenue,
                            q.gross_profit, q.avg_margin, q.playbook_name, q.client_name,
@@ -874,16 +930,17 @@ def search_quotes(query: str, limit: int = 20) -> list:
                     INNER JOIN (
                         SELECT quote_group_id, MAX(version) as max_version
                         FROM quotes
-                        WHERE LOWER(client_name) LIKE LOWER(?)
+                        WHERE (LOWER(client_name) LIKE LOWER(?)
                            OR LOWER(proposal_name) LIKE LOWER(?)
                            OR LOWER(quoted_by) LIKE LOWER(?)
-                           OR CAST(total_revenue AS TEXT) LIKE ?
+                           OR CAST(total_revenue AS TEXT) LIKE ?)
+                        {tenant_inner_filter}
                         GROUP BY quote_group_id
                     ) latest ON q.quote_group_id = latest.quote_group_id 
                             AND q.version = latest.max_version
                     ORDER BY q.created_at DESC
                     LIMIT ?
-                """, (search_pattern, search_pattern, search_pattern, search_pattern, limit))
+                """, params_inner + params_outer)
             
             return cur.fetchall()
     except Exception as e:
@@ -891,14 +948,16 @@ def search_quotes(query: str, limit: int = 20) -> list:
         return []
 
 
-def get_recent_quotes(limit: int = 20) -> list:
+def get_recent_quotes(limit: int = 20, tenant_id: str = None) -> list:
     """
     Obtiene las cotizaciones más recientes (última versión de cada grupo).
+    Filtro multitenant: si tenant_id se proporciona, limita resultados a esa empresa.
     
     NO CACHEADA: Datos cambian frecuentemente, mejor traer frescos.
     
     Args:
         limit: Número máximo de resultados (default: 20)
+        tenant_id: ID de empresa para aislar datos. None = sin filtro (superadmin).
         
     Returns:
         Lista de tuplas con datos de cotizaciones
@@ -906,9 +965,9 @@ def get_recent_quotes(limit: int = 20) -> list:
     try:
         with get_cursor() as cur:
             if is_postgres():
-                # Usar subconsulta para obtener última versión de cada grupo
-                # y luego ordenar por fecha más reciente
-                cur.execute("""
+                tenant_filter = "WHERE q.tenant_id = %s" if tenant_id else ""
+                params = (tenant_id, limit) if tenant_id else (limit,)
+                cur.execute(f"""
                     SELECT q.quote_id, q.quote_group_id, q.version, q.parent_quote_id,
                            q.created_at, q.status, q.total_cost, q.total_revenue,
                            q.gross_profit, q.avg_margin, q.playbook_name, q.client_name,
@@ -920,11 +979,14 @@ def get_recent_quotes(limit: int = 20) -> list:
                         GROUP BY quote_group_id
                     ) latest ON q.quote_group_id = latest.quote_group_id 
                             AND q.version = latest.max_version
+                    {tenant_filter}
                     ORDER BY q.created_at DESC
                     LIMIT %s
-                """, (limit,))
+                """, params)
             else:
-                cur.execute("""
+                tenant_filter = "AND q.tenant_id = ?" if tenant_id else ""
+                params = (tenant_id, limit) if tenant_id else (limit,)
+                cur.execute(f"""
                     SELECT q.quote_id, q.quote_group_id, q.version, q.parent_quote_id,
                            q.created_at, q.status, q.total_cost, q.total_revenue,
                            q.gross_profit, q.avg_margin, q.playbook_name, q.client_name,
@@ -936,9 +998,10 @@ def get_recent_quotes(limit: int = 20) -> list:
                         GROUP BY quote_group_id
                     ) latest ON q.quote_group_id = latest.quote_group_id 
                             AND q.version = latest.max_version
+                    {tenant_filter}
                     ORDER BY q.created_at DESC
                     LIMIT ?
-                """, (limit,))
+                """, params)
             
             return cur.fetchall()
     except Exception as e:
@@ -946,15 +1009,17 @@ def get_recent_quotes(limit: int = 20) -> list:
         return []
 
 
-def get_quote_groups_summary(limit: int = 100) -> list:
+def get_quote_groups_summary(limit: int = 100, tenant_id: str = None) -> list:
     """
     Obtiene un resumen de grupos de cotizaciones (1 fila por grupo).
     Incluye información de la última versión y conteo de versiones.
+    Filtro multitenant: si tenant_id se proporciona, limita resultados a esa empresa.
     
     NO CACHEADA: Datos dinámicos que cambian con cada operación.
     
     Args:
         limit: Número máximo de grupos (default: 100)
+        tenant_id: ID de empresa para aislar datos. None = sin filtro (superadmin).
         
     Returns:
         Lista de diccionarios con información resumida
@@ -962,7 +1027,9 @@ def get_quote_groups_summary(limit: int = 100) -> list:
     try:
         with get_cursor() as cur:
             if is_postgres():
-                cur.execute("""
+                tenant_filter = "WHERE tenant_id = %s" if tenant_id else ""
+                params = (tenant_id, tenant_id, limit) if tenant_id else (limit,)
+                cur.execute(f"""
                     WITH latest_versions AS (
                         SELECT DISTINCT ON (quote_group_id)
                             quote_group_id,
@@ -976,11 +1043,13 @@ def get_quote_groups_summary(limit: int = 100) -> list:
                             proposal_name,
                             playbook_name
                         FROM quotes
+                        {tenant_filter}
                         ORDER BY quote_group_id, version DESC
                     ),
                     version_counts AS (
                         SELECT quote_group_id, COUNT(*) as version_count
                         FROM quotes
+                        {"WHERE tenant_id = %s" if tenant_id else ""}
                         GROUP BY quote_group_id
                     )
                     SELECT 
@@ -999,9 +1068,13 @@ def get_quote_groups_summary(limit: int = 100) -> list:
                     JOIN version_counts vc ON lv.quote_group_id = vc.quote_group_id
                     ORDER BY lv.created_at DESC
                     LIMIT %s
-                """, (limit,))
+                """, params)
             else:
-                cur.execute("""
+                tenant_filter_inner = "AND q.tenant_id = ?" if tenant_id else ""
+                tenant_filter_counts = "WHERE tenant_id = ?" if tenant_id else ""
+                params_inner = (tenant_id,) if tenant_id else ()
+                params_counts = (tenant_id,) if tenant_id else ()
+                cur.execute(f"""
                     SELECT 
                         latest.quote_group_id,
                         latest.quote_id,
@@ -1023,15 +1096,17 @@ def get_quote_groups_summary(limit: int = 100) -> list:
                             GROUP BY quote_group_id
                         ) m ON q.quote_group_id = m.quote_group_id 
                            AND q.version = m.max_version
+                        {tenant_filter_inner}
                     ) latest
                     JOIN (
                         SELECT quote_group_id, COUNT(*) as version_count
                         FROM quotes
+                        {tenant_filter_counts}
                         GROUP BY quote_group_id
                     ) counts ON latest.quote_group_id = counts.quote_group_id
                     ORDER BY latest.created_at DESC
                     LIMIT ?
-                """, (limit,))
+                """, params_inner + params_counts + (limit,))
             
             results = cur.fetchall()
             
@@ -1807,6 +1882,7 @@ def run_migrations():
             ("quantity", "migrate_add_quantity_to_quote_lines"),
             ("formal_proposals", "migrate_add_formal_proposals"),
             ("delivery_hash", "migrate_add_delivery_hash"),
+            ("multitenant", "migrate_add_multitenant"),
         ]
         
         for name, module_name in migrations:
@@ -1854,7 +1930,7 @@ def _check_password(password: str, hashed: str) -> bool:
         return False
 
 
-def create_user(alias: str, first_name: str, last_name: str, password: str, role: str = 'user') -> tuple[bool, str]:
+def create_user(alias: str, first_name: str, last_name: str, password: str, role: str = 'user', tenant_id: str = None, seller_code: str = None) -> tuple[bool, str]:
     """Crea un nuevo usuario. Retorna (success, mensaje)."""
     from datetime import datetime, UTC
     import uuid
@@ -1865,13 +1941,13 @@ def create_user(alias: str, first_name: str, last_name: str, password: str, role
         with get_cursor() as cur:
             if is_postgres():
                 cur.execute(
-                    "INSERT INTO app_users (user_id, alias, first_name, last_name, password_hash, role, active, created_at) VALUES (%s,%s,%s,%s,%s,%s,%s,%s)",
-                    (user_id, alias.lower(), first_name, last_name, password_hash, role, True, created_at)
+                    "INSERT INTO app_users (user_id, alias, first_name, last_name, password_hash, role, active, created_at, tenant_id, seller_code) VALUES (%s,%s,%s,%s,%s,%s,%s,%s,%s,%s)",
+                    (user_id, alias.lower(), first_name, last_name, password_hash, role, True, created_at, tenant_id, seller_code)
                 )
             else:
                 cur.execute(
-                    "INSERT INTO app_users (user_id, alias, first_name, last_name, password_hash, role, active, created_at) VALUES (?,?,?,?,?,?,?,?)",
-                    (user_id, alias.lower(), first_name, last_name, password_hash, role, 1, created_at)
+                    "INSERT INTO app_users (user_id, alias, first_name, last_name, password_hash, role, active, created_at, tenant_id, seller_code) VALUES (?,?,?,?,?,?,?,?,?,?)",
+                    (user_id, alias.lower(), first_name, last_name, password_hash, role, 1, created_at, tenant_id, seller_code)
                 )
         return True, f"Usuario '{alias}' creado correctamente"
     except Exception as e:
@@ -1888,18 +1964,18 @@ def authenticate_user(alias: str, password: str) -> dict | None:
         with get_cursor() as cur:
             if is_postgres():
                 cur.execute(
-                    "SELECT user_id, alias, first_name, last_name, password_hash, role, active FROM app_users WHERE alias=%s",
+                    "SELECT user_id, alias, first_name, last_name, password_hash, role, active, tenant_id, seller_code FROM app_users WHERE alias=%s",
                     (alias.lower(),)
                 )
             else:
                 cur.execute(
-                    "SELECT user_id, alias, first_name, last_name, password_hash, role, active FROM app_users WHERE alias=?",
+                    "SELECT user_id, alias, first_name, last_name, password_hash, role, active, tenant_id, seller_code FROM app_users WHERE alias=?",
                     (alias.lower(),)
                 )
             row = cur.fetchone()
         if not row:
             return None
-        user_id, alias_db, first_name, last_name, password_hash, role, active = row
+        user_id, alias_db, first_name, last_name, password_hash, role, active, tenant_id, seller_code = row
         if not active:
             return None
         if not _check_password(password, password_hash):
@@ -1911,30 +1987,36 @@ def authenticate_user(alias: str, password: str) -> dict | None:
             'last_name': last_name,
             'full_name': f"{first_name} {last_name}",
             'role': role,
+            'tenant_id': tenant_id,
+            'seller_code': seller_code,
         }
     except Exception as e:
         print(f"Error en authenticate_user: {e}")
         return None
 
 
-def get_all_users() -> list:
-    """Retorna todos los usuarios (para panel admin)."""
+def get_all_users(tenant_id: str = None) -> list:
+    """Retorna todos los usuarios (para panel admin). Filtra por tenant si se proporciona."""
     try:
         with get_cursor() as cur:
-            if is_postgres():
-                cur.execute("SELECT user_id, alias, first_name, last_name, role, active, created_at FROM app_users ORDER BY created_at DESC")
+            if tenant_id:
+                query = "SELECT user_id, alias, first_name, last_name, role, active, created_at, tenant_id, seller_code FROM app_users WHERE tenant_id = {} ORDER BY created_at DESC"
+                if is_postgres():
+                    cur.execute(query.format("%s"), (tenant_id,))
+                else:
+                    cur.execute(query.format("?"), (tenant_id,))
             else:
-                cur.execute("SELECT user_id, alias, first_name, last_name, role, active, created_at FROM app_users ORDER BY created_at DESC")
+                cur.execute("SELECT user_id, alias, first_name, last_name, role, active, created_at, tenant_id, seller_code FROM app_users ORDER BY created_at DESC")
             rows = cur.fetchall()
         return [
             {'user_id': r[0], 'alias': r[1], 'first_name': r[2], 'last_name': r[3],
-             'full_name': f"{r[2]} {r[3]}", 'role': r[4], 'active': bool(r[5]), 'created_at': r[6]}
+             'full_name': f"{r[2]} {r[3]}", 'role': r[4], 'active': bool(r[5]), 'created_at': r[6],
+             'tenant_id': r[7], 'seller_code': r[8]}
             for r in rows
         ]
     except Exception as e:
         print(f"Error en get_all_users: {e}")
         return []
-
 
 def toggle_user_active(user_id: str, active: bool) -> tuple[bool, str]:
     """Activa o desactiva un usuario."""
@@ -1971,6 +2053,127 @@ def users_exist() -> bool:
                 cur.execute("SELECT COUNT(*) FROM app_users")
             else:
                 cur.execute("SELECT COUNT(*) FROM app_users")
+            return cur.fetchone()[0] > 0
+    except Exception:
+        return False
+
+
+# ====================================
+# Gestión de Empresas (Tenants)
+# ====================================
+
+def create_tenant(name: str, slug: str) -> tuple[bool, str, str]:
+    """
+    Crea una nueva empresa/tenant.
+
+    Args:
+        name: Nombre visible de la empresa (ej. "Acme Corp")
+        slug: Identificador corto único (ej. "acme", solo minúsculas y guiones)
+
+    Returns:
+        Tupla (success: bool, message: str, tenant_id: str)
+    """
+    import uuid
+    from datetime import datetime, UTC
+    try:
+        tenant_id = str(uuid.uuid4())
+        created_at = datetime.now(UTC).isoformat()
+        slug_clean = slug.lower().strip().replace(" ", "-")
+        with get_cursor() as cur:
+            if is_postgres():
+                cur.execute(
+                    "INSERT INTO tenants (tenant_id, name, slug, active, created_at) VALUES (%s,%s,%s,%s,%s)",
+                    (tenant_id, name.strip(), slug_clean, True, created_at)
+                )
+            else:
+                cur.execute(
+                    "INSERT INTO tenants (tenant_id, name, slug, active, created_at) VALUES (?,?,?,?,?)",
+                    (tenant_id, name.strip(), slug_clean, 1, created_at)
+                )
+        return True, f"Empresa '{name}' creada correctamente", tenant_id
+    except Exception as e:
+        if "unique" in str(e).lower() or "duplicate" in str(e).lower():
+            return False, f"El slug '{slug}' ya existe", ""
+        return False, f"Error creando empresa: {e}", ""
+
+
+def get_all_tenants() -> list:
+    """Retorna todas las empresas registradas."""
+    try:
+        with get_cursor() as cur:
+            cur.execute("SELECT tenant_id, name, slug, active, created_at FROM tenants ORDER BY name ASC")
+            rows = cur.fetchall()
+        return [
+            {'tenant_id': r[0], 'name': r[1], 'slug': r[2], 'active': bool(r[3]), 'created_at': r[4]}
+            for r in rows
+        ]
+    except Exception as e:
+        print(f"Error en get_all_tenants: {e}")
+        return []
+
+
+def get_tenant(tenant_id: str) -> dict | None:
+    """Retorna los datos de una empresa por su ID."""
+    try:
+        with get_cursor() as cur:
+            if is_postgres():
+                cur.execute("SELECT tenant_id, name, slug, active, created_at FROM tenants WHERE tenant_id=%s", (tenant_id,))
+            else:
+                cur.execute("SELECT tenant_id, name, slug, active, created_at FROM tenants WHERE tenant_id=?", (tenant_id,))
+            row = cur.fetchone()
+        if row:
+            return {'tenant_id': row[0], 'name': row[1], 'slug': row[2], 'active': bool(row[3]), 'created_at': row[4]}
+        return None
+    except Exception as e:
+        print(f"Error en get_tenant: {e}")
+        return None
+
+
+def toggle_tenant_active(tenant_id: str, active: bool) -> tuple[bool, str]:
+    """Activa o desactiva una empresa (y sus usuarios implícitamente)."""
+    try:
+        with get_cursor() as cur:
+            if is_postgres():
+                cur.execute("UPDATE tenants SET active=%s WHERE tenant_id=%s", (active, tenant_id))
+            else:
+                cur.execute("UPDATE tenants SET active=? WHERE tenant_id=?", (1 if active else 0, tenant_id))
+        estado = "activada" if active else "desactivada"
+        return True, f"Empresa {estado} correctamente"
+    except Exception as e:
+        return False, f"Error: {e}"
+
+
+def update_user_seller_code(user_id: str, seller_code: str) -> tuple[bool, str]:
+    """Actualiza el código de vendedor de un usuario."""
+    try:
+        with get_cursor() as cur:
+            if is_postgres():
+                cur.execute("UPDATE app_users SET seller_code=%s WHERE user_id=%s", (seller_code.upper().strip(), user_id))
+            else:
+                cur.execute("UPDATE app_users SET seller_code=? WHERE user_id=?", (seller_code.upper().strip(), user_id))
+        return True, "Código de vendedor actualizado"
+    except Exception as e:
+        return False, f"Error: {e}"
+
+
+def update_user_tenant(user_id: str, tenant_id: str) -> tuple[bool, str]:
+    """Asigna o cambia la empresa de un usuario."""
+    try:
+        with get_cursor() as cur:
+            if is_postgres():
+                cur.execute("UPDATE app_users SET tenant_id=%s WHERE user_id=%s", (tenant_id, user_id))
+            else:
+                cur.execute("UPDATE app_users SET tenant_id=? WHERE user_id=?", (tenant_id, user_id))
+        return True, "Empresa del usuario actualizada"
+    except Exception as e:
+        return False, f"Error: {e}"
+
+
+def tenants_exist() -> bool:
+    """Verifica si ya hay empresas registradas."""
+    try:
+        with get_cursor() as cur:
+            cur.execute("SELECT COUNT(*) FROM tenants")
             return cur.fetchone()[0] > 0
     except Exception:
         return False
