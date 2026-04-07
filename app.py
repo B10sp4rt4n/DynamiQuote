@@ -4205,6 +4205,33 @@ with tab_db:
                 with col5:
                     st.metric("Costo Total", f"${selected_row['Costo Total']:,.2f}")
                 
+                # Gráfica pastel costo vs utilidad
+                import matplotlib
+                matplotlib.use("Agg")
+                import matplotlib.pyplot as plt
+                from io import BytesIO
+                _kpi_cost = float(selected_row['Costo Total'] or 0)
+                _kpi_profit = float(selected_row['Utilidad Bruta'] or 0)
+                if _kpi_cost + _kpi_profit > 0:
+                    fig_kpi, ax_kpi = plt.subplots(figsize=(2.5, 2.5), dpi=80)
+                    ax_kpi.pie(
+                        [_kpi_cost, _kpi_profit],
+                        labels=["Costo", "Utilidad"],
+                        colors=["#ef4444", "#22c55e"],
+                        autopct="%1.0f%%",
+                        textprops={"fontsize": 9},
+                        pctdistance=0.75,
+                        wedgeprops={"width": 0.4},
+                    )
+                    ax_kpi.set_aspect("equal")
+                    _kpi_buf = BytesIO()
+                    fig_kpi.savefig(_kpi_buf, format="png", bbox_inches="tight", transparent=True)
+                    plt.close(fig_kpi)
+                    _kpi_buf.seek(0)
+                    _sp1, _sp_chart, _sp2 = st.columns([2, 1, 2])
+                    with _sp_chart:
+                        st.image(_kpi_buf)
+                
                 st.divider()
                 
                 # Mostrar líneas de la versión seleccionada con paginado
