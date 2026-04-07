@@ -5,7 +5,7 @@ import uuid
 from datetime import datetime, UTC
 import matplotlib.pyplot as plt
 from spellchecker import SpellChecker
-from database import init_database, save_quote, save_import_file, get_all_quotes, get_quote_lines, get_quote_lines_full, get_latest_version, load_versions_for_group, load_lines_for_quote, get_database_info, get_cursor, is_postgres, get_connection, save_logo, get_logos, search_quotes, get_recent_quotes, get_quote_groups_summary, get_quote_by_group_id, clear_search_caches, authenticate_user, create_user, get_all_users, toggle_user_active, update_user_password, users_exist, create_tenant, get_all_tenants, get_tenant, toggle_tenant_active, update_user_seller_code, update_user_tenant, tenants_exist
+from database import init_database, save_quote, save_import_file, get_all_quotes, get_quote_lines, get_quote_lines_full, get_latest_version, load_versions_for_group, load_lines_for_quote, get_database_info, get_cursor, is_postgres, get_connection, save_logo, get_logos, search_quotes, get_recent_quotes, get_quote_groups_summary, get_quote_by_group_id, clear_search_caches, authenticate_user, create_user, get_all_users, toggle_user_active, update_user_password, users_exist, create_tenant, get_all_tenants, get_tenant, toggle_tenant_active, update_user_seller_code, update_user_tenant, tenants_exist, get_user_by_id
 from excel_import import import_excel_file, format_validation_report
 from formal_proposal_generator import process_logo_upload
 import os
@@ -461,7 +461,20 @@ if not st.session_state.get('authenticated', False):
     st.stop()
 
 # Usuario autenticado
-_current_user = st.session_state['current_user']
+_session_user = st.session_state.get('current_user')
+if not _session_user or not _session_user.get('user_id'):
+    st.session_state['authenticated'] = False
+    st.session_state.pop('current_user', None)
+    st.rerun()
+
+_refreshed_user = get_user_by_id(_session_user['user_id'])
+if not _refreshed_user:
+    st.session_state['authenticated'] = False
+    st.session_state.pop('current_user', None)
+    st.rerun()
+
+st.session_state['current_user'] = _refreshed_user
+_current_user = _refreshed_user
 _is_admin = _current_user['role'] == 'admin'
 
 # =========================

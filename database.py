@@ -1995,6 +1995,41 @@ def authenticate_user(alias: str, password: str) -> dict | None:
         return None
 
 
+def get_user_by_id(user_id: str) -> dict | None:
+    """Obtiene un usuario por ID para refrescar sesión y permisos."""
+    try:
+        with get_cursor() as cur:
+            if is_postgres():
+                cur.execute(
+                    "SELECT user_id, alias, first_name, last_name, role, active, tenant_id, seller_code FROM app_users WHERE user_id=%s",
+                    (user_id,)
+                )
+            else:
+                cur.execute(
+                    "SELECT user_id, alias, first_name, last_name, role, active, tenant_id, seller_code FROM app_users WHERE user_id=?",
+                    (user_id,)
+                )
+            row = cur.fetchone()
+        if not row:
+            return None
+        user_id_db, alias_db, first_name, last_name, role, active, tenant_id, seller_code = row
+        if not active:
+            return None
+        return {
+            'user_id': user_id_db,
+            'alias': alias_db,
+            'first_name': first_name,
+            'last_name': last_name,
+            'full_name': f"{first_name} {last_name}",
+            'role': role,
+            'tenant_id': tenant_id,
+            'seller_code': seller_code,
+        }
+    except Exception as e:
+        print(f"Error en get_user_by_id: {e}")
+        return None
+
+
 def get_all_users(tenant_id: str = None) -> list:
     """Retorna todos los usuarios (para panel admin). Filtra por tenant si se proporciona."""
     try:
