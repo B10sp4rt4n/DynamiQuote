@@ -5,7 +5,7 @@ import uuid
 from datetime import datetime, UTC
 import matplotlib.pyplot as plt
 from spellchecker import SpellChecker
-from database import init_database, save_quote, save_import_file, get_all_quotes, get_quote_lines, get_quote_lines_full, get_latest_version, load_versions_for_group, load_lines_for_quote, get_database_info, get_cursor, is_postgres, get_connection, save_logo, get_logos, search_quotes, get_recent_quotes, get_quote_groups_summary, get_quote_by_group_id, clear_search_caches, authenticate_user, create_user, get_all_users, toggle_user_active, update_user_password, users_exist, create_tenant, get_all_tenants, get_tenant, toggle_tenant_active, update_user_seller_code, update_user_tenant, tenants_exist, get_user_by_id
+from database import init_database, save_quote, save_import_file, get_all_quotes, get_quote_lines, get_quote_lines_full, get_latest_version, load_versions_for_group, load_lines_for_quote, get_database_info, get_cursor, is_postgres, get_connection, save_logo, get_logos, search_quotes, get_recent_quotes, get_quote_groups_summary, get_quote_by_group_id, clear_search_caches, authenticate_user, create_user, get_all_users, toggle_user_active, update_user_password, users_exist, create_tenant, get_all_tenants, get_tenant, toggle_tenant_active, update_user_seller_code, update_user_tenant, tenants_exist, get_user_by_id, get_openai_api_key, is_streamlit_cloud
 from excel_import import import_excel_file, format_validation_report
 from formal_proposal_generator import process_logo_upload
 import os
@@ -496,6 +496,11 @@ st.session_state['current_user'] = _refreshed_user
 _current_user = _refreshed_user
 _is_admin = _current_user['role'] == 'admin'
 
+_startup_db_info = get_database_info()
+if is_streamlit_cloud() and _startup_db_info['type'] == 'SQLite':
+    st.error("❌ Streamlit Cloud está corriendo con SQLite porque falta DATABASE_URL en Secrets. Configura DATABASE_URL y reinicia la app.")
+    st.stop()
+
 # =========================
 # Sidebar - Configuración de OpenAI
 # =========================
@@ -529,31 +534,29 @@ with st.sidebar:
     # OpenAI API Key — se carga automáticamente desde secrets o variable de entorno
     st.subheader("🤖 Corrección Inteligente con IA")
 
-    # Prioridad: st.secrets > variable de entorno
-    _auto_key = ""
-    try:
-        _auto_key = st.secrets.get("OPENAI_API_KEY", "") or ""
-    except Exception:
-        pass
-    if not _auto_key:
-        _auto_key = os.getenv("OPENAI_API_KEY", "") or ""
+    _auto_key, _openai_source = get_openai_api_key()
+    _auto_key = _auto_key or ""
 
     if _auto_key and _auto_key.startswith("sk-"):
         st.session_state.openai_enabled = True
         st.session_state.openai_api_key = _auto_key
         st.success("✅ IA habilitada — Sugerencias y correcciones con GPT disponibles")
+        st.caption(f"Fuente OpenAI: {_openai_source}")
     else:
         st.session_state.openai_enabled = False
         st.session_state.openai_api_key = None
         st.warning("⚠️ IA no disponible — Configura OPENAI_API_KEY en Secrets")
+        st.caption(f"Fuente OpenAI: {_openai_source}")
 
     st.divider()
 
     # Info de base de datos
-    db_info = get_database_info()
+    db_info = _startup_db_info
     st.caption(f"💾 Base de datos: {db_info['type']}")
     if db_info['type'] == 'PostgreSQL':
         st.caption(f"🌐 Host: {db_info['host']}")
+    elif is_streamlit_cloud():
+        st.caption("⚠️ DATABASE_URL no resuelta en Streamlit Cloud")
 
 st.title("🧾 DynamiQuote – Motor Multitenant de Propuestas")
 

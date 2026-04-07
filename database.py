@@ -36,6 +36,52 @@ from dotenv import load_dotenv
 # Configuración de Variables de Entorno
 # ====================================
 
+def is_streamlit_cloud() -> bool:
+    """Detecta si la app corre en Streamlit Cloud."""
+    return os.getenv('STREAMLIT_SHARING_MODE', '') == 'streamlit_app'
+
+
+def get_config_value(key: str) -> tuple[Optional[str], str]:
+    """
+    Obtiene una configuración desde Streamlit Secrets, .env o variables de entorno.
+
+    Retorna:
+        tuple[value, source]
+        source puede ser: streamlit-secrets, streamlit-secrets:<section>, dotenv, env, missing
+    """
+    try:
+        if hasattr(st, 'secrets'):
+            if key in st.secrets:
+                value = st.secrets[key]
+                if value and str(value).strip():
+                    return str(value).strip(), 'streamlit-secrets'
+
+            for section in ('database', 'openai', 'connections', 'app', 'secrets'):
+                if section in st.secrets:
+                    section_values = st.secrets[section]
+                    if hasattr(section_values, 'get'):
+                        value = section_values.get(key)
+                        if value and str(value).strip():
+                            return str(value).strip(), f'streamlit-secrets:{section}'
+    except Exception as e:
+        print(f"❌ ERROR al leer st.secrets para {key}: {e}")
+
+    load_dotenv()
+    value = os.getenv(key)
+    if value and value.strip():
+        return value.strip(), 'dotenv'
+
+    value = os.environ.get(key)
+    if value and value.strip():
+        return value.strip(), 'env'
+
+    return None, 'missing'
+
+
+def get_openai_api_key() -> tuple[Optional[str], str]:
+    """Obtiene OPENAI_API_KEY y la fuente desde la que fue resuelta."""
+    return get_config_value('OPENAI_API_KEY')
+
 def get_database_url() -> Optional[str]:
     """
     Obtiene DATABASE_URL de forma automática según el entorno:
@@ -46,39 +92,18 @@ def get_database_url() -> Optional[str]:
     Returns:
         str: URL de conexión a PostgreSQL o None para usar SQLite
     """
-    # Prioridad 1: Streamlit Cloud (secrets.toml)
-    try:
-        # Verificar si estamos en Streamlit y si secrets está disponible
-        if hasattr(st, 'secrets'):
-            print("🔍 DEBUG: st.secrets está disponible")
+    if hasattr(st, 'secrets'):
+        print("🔍 DEBUG: st.secrets está disponible")
+        try:
             secrets_keys = list(st.secrets.keys()) if hasattr(st.secrets, 'keys') else []
             print(f"🔍 DEBUG: Keys en secrets: {secrets_keys}")
-            
-            if 'DATABASE_URL' in st.secrets:
-                db_url = st.secrets['DATABASE_URL']
-                print(f"✅ Usando DATABASE_URL de Streamlit Cloud Secrets")
-                print(f"🔍 DEBUG: URL encontrada (primeros 30 chars): {db_url[:30]}...")
-                return db_url
-            else:
-                print("⚠️ WARNING: DATABASE_URL no encontrada en st.secrets")
-        else:
-            print("⚠️ WARNING: st.secrets no está disponible")
-    except Exception as e:
-        print(f"❌ ERROR al leer st.secrets: {e}")
-    
-    # Prioridad 2: Archivo .env local
-    load_dotenv()
-    database_url = os.getenv('DATABASE_URL')
-    
-    if database_url and database_url.strip():
-        print("✅ Usando DATABASE_URL de archivo .env local")
-        return database_url
-    
-    # Prioridad 3: Variable de entorno del sistema
-    database_url = os.environ.get('DATABASE_URL')
-    
-    if database_url and database_url.strip():
-        print("✅ Usando DATABASE_URL de variable de entorno del sistema")
+        except Exception:
+            pass
+
+    database_url, source = get_config_value('DATABASE_URL')
+    if database_url:
+        print(f"✅ Usando DATABASE_URL desde {source}")
+        print(f"🔍 DEBUG: URL encontrada (primeros 30 chars): {database_url[:30]}...")
         return database_url
     
     print("ℹ️  DATABASE_URL no encontrada. Usando SQLite local para desarrollo.")
