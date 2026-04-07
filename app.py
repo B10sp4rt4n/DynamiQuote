@@ -746,32 +746,58 @@ with st.expander("🔍 **Búsqueda Rápida de Cotizaciones y Propuestas**", expa
             if quick_results:
                 st.success(f"✅ {len(quick_results)} resultados encontrados")
                 
-                # Mostrar resultados en tarjetas compactas
-                for result in quick_results:
+                # Mostrar resultados en tarjetas expandibles
+                for idx, result in enumerate(quick_results):
                     quote_id, group_id, version, parent_id, created_at, status, total_cost, total_revenue, gross_profit, avg_margin, playbook, client, quoted_by, proposal = result
                     
-                    with st.container():
-                        col1, col2, col3, col4 = st.columns([3, 2, 1, 1])
+                    _label = f"**{client or 'Sin cliente'}** — {proposal or 'Sin nombre'}  |  💰 ${total_revenue:,.0f}  |  📊 {avg_margin:.1f}%  |  v{version} · {status}"
+                    with st.expander(_label, expanded=False):
+                        # KPIs y gráfica pastel lado a lado
+                        col_kpis, col_pie = st.columns([3, 1])
                         
-                        with col1:
-                            st.markdown(f"**{client or 'Sin cliente'}** - {proposal or 'Sin nombre'}")
-                            st.caption(f"👤 {quoted_by or 'N/A'} | 📅 {pd.to_datetime(created_at).strftime('%Y-%m-%d')}")
+                        with col_kpis:
+                            # KPIs principales
+                            kpi1, kpi2, kpi3, kpi4 = st.columns(4)
+                            kpi1.metric("Costo Total", f"${total_cost:,.0f}")
+                            kpi2.metric("Precio Total", f"${total_revenue:,.0f}")
+                            kpi3.metric("Utilidad Bruta", f"${gross_profit:,.0f}")
+                            kpi4.metric("Margen", f"{avg_margin:.1f}%")
+                            
+                            # Info adicional
+                            info1, info2, info3 = st.columns(3)
+                            info1.caption(f"👤 **Cotizó:** {quoted_by or 'N/A'}")
+                            info2.caption(f"📅 **Fecha:** {pd.to_datetime(created_at).strftime('%Y-%m-%d')}")
+                            info3.caption(f"📋 **Playbook:** {playbook or 'N/A'}")
                         
-                        with col2:
-                            st.caption(f"💰 ${total_revenue:,.0f}")
-                            st.caption(f"📊 Margen: {avg_margin:.1f}%")
+                        with col_pie:
+                            import plotly.graph_objects as go
+                            _pie_cost = total_cost or 0
+                            _pie_profit = gross_profit or 0
+                            fig_pie = go.Figure(data=[go.Pie(
+                                labels=["Costo", "Utilidad"],
+                                values=[_pie_cost, _pie_profit],
+                                marker=dict(colors=["#ef4444", "#22c55e"]),
+                                hole=0.4,
+                                textinfo="percent",
+                                textfont_size=11,
+                            )])
+                            fig_pie.update_layout(
+                                margin=dict(l=0, r=0, t=0, b=0),
+                                height=150,
+                                showlegend=False,
+                            )
+                            st.plotly_chart(fig_pie, use_container_width=True, key=f"pie_{quote_id}")
                         
-                        with col3:
-                            st.caption(f"v{version}")
-                            st.caption(f"🏷️ {status}")
-                        
-                        with col4:
-                            # Botones de acción rápida
-                            if st.button("Ver", key=f"global_view_{group_id}", width='stretch', type="secondary"):
-                                st.session_state['selected_quote_group'] = group_id
-                                st.info(f"💡 Cotización {client or 'Sin cliente'} seleccionada. Ve al tab correspondiente para verla.")
-                        
-                        st.divider()
+                        # Líneas de detalle
+                        lines = get_quote_lines(quote_id)
+                        if lines:
+                            st.markdown("---")
+                            st.caption(f"📦 **{len(lines)} líneas de detalle**")
+                            lines_df = pd.DataFrame(lines, columns=["SKU", "Descripción", "Tipo", "Origen", "Costo Unit.", "Precio Unit.", "Margen %", "Estrategia", "Alertas"])
+                            lines_df["Costo Unit."] = lines_df["Costo Unit."].apply(lambda x: f"${x:,.2f}" if x else "—")
+                            lines_df["Precio Unit."] = lines_df["Precio Unit."].apply(lambda x: f"${x:,.2f}" if x else "—")
+                            lines_df["Margen %"] = lines_df["Margen %"].apply(lambda x: f"{x:.1f}%" if x else "—")
+                            st.dataframe(lines_df, use_container_width=True, hide_index=True)
             else:
                 st.warning("⚠️ No se encontraron resultados. Intenta con otros términos.")
 
