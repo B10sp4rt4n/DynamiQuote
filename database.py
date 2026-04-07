@@ -167,12 +167,20 @@ def is_postgres() -> bool:
     return DATABASE_URL is not None and DATABASE_URL.strip() != ""
 
 
+def _normalize_db_url(url: str) -> str:
+    """Normaliza la URL de conexión para que psycopg2 la acepte."""
+    for prefix in ("psql://", "postgres://"):
+        if url.startswith(prefix):
+            return "postgresql://" + url[len(prefix):]
+    return url
+
+
 def _create_connection():
     """Crea una nueva conexión a la base de datos."""
     if is_postgres():
         try:
             import psycopg2
-            conn = psycopg2.connect(DATABASE_URL)
+            conn = psycopg2.connect(_normalize_db_url(DATABASE_URL))
             return conn
         except ImportError as e:
             raise ImportError("psycopg2 no está instalado. Ejecuta: pip install psycopg2-binary") from e
