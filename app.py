@@ -770,7 +770,7 @@ with st.expander("🔍 **Búsqueda Rápida de Cotizaciones y Propuestas**", expa
                             info3.caption(f"📋 **Playbook:** {playbook or 'N/A'}")
                         
                         with col_pie:
-                            import plotly.graph_objects as go
+                            import plotly.graph_objects as go  # noqa: E402
                             _pie_cost = total_cost or 0
                             _pie_profit = gross_profit or 0
                             fig_pie = go.Figure(data=[go.Pie(
