@@ -438,23 +438,42 @@ def _render_login():
             st.info("⚙️ Primera vez — Configura el usuario administrador")
             with st.expander("Crear administrador inicial", expanded=True):
                 with st.form("setup_admin"):
+                    st.caption("Primero crea la empresa principal y luego el usuario administrador.")
+                    col_company_1, col_company_2 = st.columns(2)
+                    with col_company_1:
+                        s_tenant_name = st.text_input("Empresa *", placeholder="Acme Corp")
+                    with col_company_2:
+                        s_tenant_slug = st.text_input("Slug empresa *", placeholder="acme-corp")
                     s_alias = st.text_input("Alias (usuario)", placeholder="admin")
                     s_first = st.text_input("Nombre")
                     s_last = st.text_input("Apellido")
+                    s_seller_code = st.text_input("Código de vendedor", placeholder="ADM")
                     s_pass = st.text_input("Contraseña", type="password")
                     s_pass2 = st.text_input("Confirmar contraseña", type="password")
                     if st.form_submit_button("Crear administrador", type="primary", use_container_width=True):
-                        if not all([s_alias, s_first, s_last, s_pass]):
+                        if not all([s_tenant_name, s_tenant_slug, s_alias, s_first, s_last, s_pass]):
                             st.error("Completa todos los campos")
                         elif s_pass != s_pass2:
                             st.error("Las contraseñas no coinciden")
                         else:
-                            ok, msg = create_user(s_alias, s_first, s_last, s_pass, role='admin')
-                            if ok:
-                                st.success(f"✅ {msg} — Ya puedes iniciar sesión")
-                                st.rerun()
+                            ok_tenant, tenant_msg, tenant_id = create_tenant(s_tenant_name.strip(), s_tenant_slug.strip())
+                            if not ok_tenant:
+                                st.error(tenant_msg)
                             else:
-                                st.error(msg)
+                                ok, msg = create_user(
+                                    s_alias,
+                                    s_first,
+                                    s_last,
+                                    s_pass,
+                                    role='admin',
+                                    tenant_id=tenant_id,
+                                    seller_code=s_seller_code.strip().upper() if s_seller_code.strip() else None,
+                                )
+                                if ok:
+                                    st.success(f"✅ {msg} — Ya puedes iniciar sesión")
+                                    st.rerun()
+                                else:
+                                    st.error(msg)
 
 if not st.session_state.get('authenticated', False):
     _render_login()
@@ -537,6 +556,163 @@ with st.sidebar:
         st.caption(f"🌐 Host: {db_info['host']}")
 
 st.title("🧾 DynamiQuote – Motor Multitenant de Propuestas")
+
+with st.container():
+    if _tenant_name:
+        st.success(f"🏢 Empresa activa: {_tenant_name} | Usuario: {_current_user['full_name']} | Rol: {'Admin' if _is_admin else 'Usuario'}")
+    elif _is_admin:
+        st.warning("🌐 Estás operando como admin global sin tenant asignado. Ves datos de todas las empresas.")
+    else:
+        st.warning("⚠️ Tu usuario no tiene empresa asignada. Pide a un administrador que te asigne un tenant.")
+
+
+def render_admin_panel(expanded: bool = True):
+    """Renderiza el panel visible de administración para usuarios y empresas."""
+    with st.expander("👥 Administración de Usuarios y Empresas", expanded=expanded):
+        admin_tab1, admin_tab2, admin_tab3 = st.tabs(["📋 Usuarios", "➕ Nuevo Usuario", "🏢 Empresas"])
+
+        with admin_tab1:
+            _all_tenants_map = {t['tenant_id']: t['name'] for t in get_all_tenants()}
+            users = get_all_users()
+            if users:
+                st.caption("Gestiona accesos, empresa asignada y estado de los vendedores.")
+                for u in users:
+                    col_info, col_company, col_role, col_status, col_pass = st.columns([3, 2, 1.5, 1, 1.5])
+                    with col_info:
+                        seller_tag = f" · `{u['seller_code']}`" if u.get('seller_code') else ""
+                        st.markdown(f"**{u['full_name']}** · `@{u['alias']}`{seller_tag}")
+                        st.caption(f"ID: {u['user_id'][:8]}...  |  Creado: {str(u['created_at'])[:10]}")
+                    with col_company:
+                        tenant_name = _all_tenants_map.get(u.get('tenant_id'), 'Sin empresa')
+                        st.caption(f"🏢 {tenant_name}")
+                    with col_role:
+                        st.markdown(f"{'👑 Admin' if u['role'] == 'admin' else '🧑 Usuario'}")
+                    with col_status:
+                        is_active = u['active']
+                        label = "✅" if is_active else "🔴"
+                        if st.button(label, key=f"toggle_{u['user_id']}", help="Activar/Desactivar"):
+                            toggle_user_active(u['user_id'], not is_active)
+                            st.rerun()
+                    with col_pass:
+                        if st.button("🔑 Reset", key=f"reset_{u['user_id']}", help="Cambiar contraseña"):
+                            st.session_state['reset_target'] = u['user_id']
+                            st.session_state['reset_alias'] = u['alias']
+                    st.divider()
+
+                if st.session_state.get('reset_target'):
+                    target_id = st.session_state['reset_target']
+                    target_alias = st.session_state.get('reset_alias', '')
+                    st.warning(f"Cambiando contraseña de **@{target_alias}**")
+                    with st.form("form_reset_pass"):
+                        new_pass = st.text_input("Nueva contraseña", type="password")
+                        new_pass2 = st.text_input("Confirmar contraseña", type="password")
+                        col_ok, col_cancel = st.columns(2)
+                        with col_ok:
+                            if st.form_submit_button("Guardar", type="primary", use_container_width=True):
+                                if not new_pass:
+                                    st.error("Ingresa la nueva contraseña")
+                                elif new_pass != new_pass2:
+                                    st.error("Las contraseñas no coinciden")
+                                else:
+                                    ok, msg = update_user_password(target_id, new_pass)
+                                    if ok:
+                                        st.success("✅ Contraseña actualizada")
+                                        st.session_state.pop('reset_target', None)
+                                        st.session_state.pop('reset_alias', None)
+                                        st.rerun()
+                                    else:
+                                        st.error(msg)
+                        with col_cancel:
+                            if st.form_submit_button("Cancelar", use_container_width=True):
+                                st.session_state.pop('reset_target', None)
+                                st.session_state.pop('reset_alias', None)
+                                st.rerun()
+            else:
+                st.info("No hay usuarios registrados.")
+
+        with admin_tab2:
+            _tenants_for_form = get_all_tenants()
+            _tenant_options = {t['name']: t['tenant_id'] for t in _tenants_for_form if t['active']}
+            with st.form("form_new_user"):
+                col1, col2 = st.columns(2)
+                with col1:
+                    nu_first = st.text_input("Nombre *")
+                    nu_alias = st.text_input("Alias (usuario) *", placeholder="juan.perez")
+                    nu_pass = st.text_input("Contraseña *", type="password")
+                    nu_seller_code = st.text_input("Código de vendedor", placeholder="JGP", help="Código corto del vendedor. Ej: JGP")
+                with col2:
+                    nu_last = st.text_input("Apellido *")
+                    nu_role = st.selectbox("Rol", options=["user", "admin"], format_func=lambda x: "👑 Admin" if x == "admin" else "🧑 Usuario")
+                    nu_pass2 = st.text_input("Confirmar contraseña *", type="password")
+                    if _tenant_options:
+                        nu_tenant_name = st.selectbox("Empresa *", options=["— Sin asignar —"] + list(_tenant_options.keys()))
+                        nu_tenant_id = _tenant_options.get(nu_tenant_name) if nu_tenant_name != "— Sin asignar —" else None
+                    else:
+                        st.warning("⚠️ No hay empresas registradas. Crea una en la pestaña Empresas primero.")
+                        nu_tenant_id = None
+                if st.form_submit_button("✅ Crear usuario", type="primary", use_container_width=True):
+                    if not all([nu_alias, nu_first, nu_last, nu_pass]):
+                        st.error("Completa todos los campos obligatorios (*)")
+                    elif nu_pass != nu_pass2:
+                        st.error("Las contraseñas no coinciden")
+                    else:
+                        ok, msg = create_user(
+                            nu_alias.strip(), nu_first.strip(), nu_last.strip(), nu_pass,
+                            role=nu_role,
+                            tenant_id=nu_tenant_id,
+                            seller_code=nu_seller_code.strip().upper() if nu_seller_code.strip() else None
+                        )
+                        if ok:
+                            st.success(f"✅ {msg}")
+                            st.rerun()
+                        else:
+                            st.error(msg)
+
+        with admin_tab3:
+            st.subheader("🏢 Gestión de Empresas")
+            all_tenants = get_all_tenants()
+            if all_tenants:
+                all_users = get_all_users()
+                for t in all_tenants:
+                    col_name, col_slug, col_users, col_status = st.columns([3, 2, 1, 1])
+                    with col_name:
+                        st.markdown(f"**{t['name']}**")
+                        st.caption(f"ID: {t['tenant_id'][:8]}... | Desde: {str(t['created_at'])[:10]}")
+                    with col_slug:
+                        st.caption(f"`{t['slug']}`")
+                    with col_users:
+                        _count = sum(1 for u in all_users if u.get('tenant_id') == t['tenant_id'])
+                        st.caption(f"👥 {_count}")
+                    with col_status:
+                        _active = t['active']
+                        if st.button("✅" if _active else "🔴", key=f"ten_toggle_{t['tenant_id']}", help="Activar/Desactivar empresa"):
+                            toggle_tenant_active(t['tenant_id'], not _active)
+                            st.rerun()
+                    st.divider()
+            else:
+                st.info("No hay empresas registradas.")
+
+            st.subheader("➕ Nueva Empresa")
+            with st.form("form_new_tenant"):
+                col_t1, col_t2 = st.columns(2)
+                with col_t1:
+                    t_name = st.text_input("Nombre de la empresa *", placeholder="Acme Corp")
+                with col_t2:
+                    t_slug = st.text_input("Slug único *", placeholder="acme-corp", help="Solo minúsculas y guiones. Ej: acme-corp")
+                if st.form_submit_button("✅ Crear empresa", type="primary", use_container_width=True):
+                    if not t_name.strip() or not t_slug.strip():
+                        st.error("Nombre y slug son obligatorios")
+                    else:
+                        ok, msg, _ = create_tenant(t_name.strip(), t_slug.strip())
+                        if ok:
+                            st.success(f"✅ {msg}")
+                            st.rerun()
+                        else:
+                            st.error(msg)
+
+
+if _is_admin:
+    render_admin_panel(expanded=True)
 
 # =========================
 # Búsqueda Global (Siempre Visible)
@@ -4492,148 +4668,6 @@ with tab_db:
 # FOOTER
 # =========================
 st.divider()
-
-# Panel de Administración de Usuarios (solo admin)
-if _is_admin:
-    with st.expander("👥 Administración de Usuarios y Empresas", expanded=False):
-        admin_tab1, admin_tab2, admin_tab3 = st.tabs(["📋 Usuarios", "➕ Nuevo Usuario", "🏢 Empresas"])
-
-        with admin_tab1:
-            _all_tenants_map = {t['tenant_id']: t['name'] for t in get_all_tenants()}
-            users = get_all_users()
-            if users:
-                for u in users:
-                    col_info, col_company, col_role, col_status, col_pass = st.columns([3, 2, 1.5, 1, 1.5])
-                    with col_info:
-                        seller_tag = f" · `{u['seller_code']}`" if u.get('seller_code') else ""
-                        st.markdown(f"**{u['full_name']}** · `@{u['alias']}`{seller_tag}")
-                        st.caption(f"ID: {u['user_id'][:8]}...  |  Creado: {str(u['created_at'])[:10]}")
-                    with col_company:
-                        tenant_name = _all_tenants_map.get(u.get('tenant_id'), '—')
-                        st.caption(f"🏢 {tenant_name}")
-                    with col_role:
-                        st.markdown(f"{'👑 Admin' if u['role'] == 'admin' else '🧑 Usuario'}")
-                    with col_status:
-                        is_active = u['active']
-                        label = "✅" if is_active else "🔴"
-                        if st.button(label, key=f"toggle_{u['user_id']}", help="Activar/Desactivar"):
-                            toggle_user_active(u['user_id'], not is_active)
-                            st.rerun()
-                    with col_pass:
-                        if st.button("🔑 Reset", key=f"reset_{u['user_id']}", help="Cambiar contraseña"):
-                            st.session_state[f"reset_target"] = u['user_id']
-                            st.session_state[f"reset_alias"] = u['alias']
-                    st.divider()
-
-                # Modal reset contraseña
-                if st.session_state.get('reset_target'):
-                    target_id = st.session_state['reset_target']
-                    target_alias = st.session_state.get('reset_alias', '')
-                    st.warning(f"Cambiando contraseña de **@{target_alias}**")
-                    with st.form("form_reset_pass"):
-                        new_pass = st.text_input("Nueva contraseña", type="password")
-                        new_pass2 = st.text_input("Confirmar contraseña", type="password")
-                        col_ok, col_cancel = st.columns(2)
-                        with col_ok:
-                            if st.form_submit_button("Guardar", type="primary", use_container_width=True):
-                                if not new_pass:
-                                    st.error("Ingresa la nueva contraseña")
-                                elif new_pass != new_pass2:
-                                    st.error("Las contraseñas no coinciden")
-                                else:
-                                    ok, msg = update_user_password(target_id, new_pass)
-                                    if ok:
-                                        st.success(f"✅ Contraseña actualizada")
-                                        st.session_state.pop('reset_target', None)
-                                        st.session_state.pop('reset_alias', None)
-                                        st.rerun()
-                                    else:
-                                        st.error(msg)
-                        with col_cancel:
-                            if st.form_submit_button("Cancelar", use_container_width=True):
-                                st.session_state.pop('reset_target', None)
-                                st.session_state.pop('reset_alias', None)
-                                st.rerun()
-            else:
-                st.info("No hay usuarios registrados.")
-
-        with admin_tab2:
-            _tenants_for_form = get_all_tenants()
-            _tenant_options = {t['name']: t['tenant_id'] for t in _tenants_for_form if t['active']}
-            with st.form("form_new_user"):
-                col1, col2 = st.columns(2)
-                with col1:
-                    nu_first = st.text_input("Nombre *")
-                    nu_alias = st.text_input("Alias (usuario) *", placeholder="juan.perez")
-                    nu_pass = st.text_input("Contraseña *", type="password")
-                    nu_seller_code = st.text_input("Código de vendedor", placeholder="JGP", help="Código corto único del vendedor (ej. JGP). Opcional.")
-                with col2:
-                    nu_last = st.text_input("Apellido *")
-                    nu_role = st.selectbox("Rol", options=["user", "admin"], format_func=lambda x: "👑 Admin" if x == "admin" else "🧑 Usuario")
-                    nu_pass2 = st.text_input("Confirmar contraseña *", type="password")
-                    if _tenant_options:
-                        nu_tenant_name = st.selectbox("Empresa *", options=["— Sin asignar —"] + list(_tenant_options.keys()))
-                        nu_tenant_id = _tenant_options.get(nu_tenant_name) if nu_tenant_name != "— Sin asignar —" else None
-                    else:
-                        st.warning("⚠️ No hay empresas registradas. Crea una en la pestaña Empresas primero.")
-                        nu_tenant_id = None
-                if st.form_submit_button("✅ Crear usuario", type="primary", use_container_width=True):
-                    if not all([nu_alias, nu_first, nu_last, nu_pass]):
-                        st.error("Completa todos los campos obligatorios (*)")
-                    elif nu_pass != nu_pass2:
-                        st.error("Las contraseñas no coinciden")
-                    else:
-                        ok, msg = create_user(
-                            nu_alias.strip(), nu_first.strip(), nu_last.strip(), nu_pass,
-                            role=nu_role,
-                            tenant_id=nu_tenant_id,
-                            seller_code=nu_seller_code.strip().upper() if nu_seller_code.strip() else None
-                        )
-                        if ok:
-                            st.success(f"✅ {msg}")
-                        else:
-                            st.error(msg)
-
-        with admin_tab3:
-            st.subheader("🏢 Gestión de Empresas")
-            all_tenants = get_all_tenants()
-            if all_tenants:
-                for t in all_tenants:
-                    col_name, col_slug, col_users, col_status = st.columns([3, 2, 1, 1])
-                    with col_name:
-                        st.markdown(f"**{t['name']}**")
-                        st.caption(f"ID: {t['tenant_id'][:8]}... | Desde: {str(t['created_at'])[:10]}")
-                    with col_slug:
-                        st.caption(f"`{t['slug']}`")
-                    with col_users:
-                        _count = sum(1 for u in get_all_users() if u.get('tenant_id') == t['tenant_id'])
-                        st.caption(f"👥 {_count}")
-                    with col_status:
-                        _active = t['active']
-                        if st.button("✅" if _active else "🔴", key=f"ten_toggle_{t['tenant_id']}", help="Activar/Desactivar empresa"):
-                            toggle_tenant_active(t['tenant_id'], not _active)
-                            st.rerun()
-                    st.divider()
-            else:
-                st.info("No hay empresas registradas.")
-
-            st.subheader("➕ Nueva Empresa")
-            with st.form("form_new_tenant"):
-                col_t1, col_t2 = st.columns(2)
-                with col_t1:
-                    t_name = st.text_input("Nombre de la empresa *", placeholder="Acme Corp")
-                with col_t2:
-                    t_slug = st.text_input("Slug único *", placeholder="acme-corp", help="Solo minúsculas y guiones. Ej: acme-corp")
-                if st.form_submit_button("✅ Crear empresa", type="primary", use_container_width=True):
-                    if not t_name.strip() or not t_slug.strip():
-                        st.error("Nombre y slug son obligatorios")
-                    else:
-                        ok, msg, _ = create_tenant(t_name.strip(), t_slug.strip())
-                        if ok:
-                            st.success(f"✅ {msg}")
-                            st.rerun()
-                        else:
-                            st.error(msg)
 
 db_info = get_database_info()
 st.caption(f"DynamiQuote © 2026 | {db_info['icon']} {db_info['type']} | Cotizador | State: Production-Ready")
