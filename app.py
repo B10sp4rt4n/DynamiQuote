@@ -740,7 +740,7 @@ with st.expander("🔍 **Búsqueda Rápida de Cotizaciones y Propuestas**", expa
     
     if quick_search and quick_search.strip():
         with st.spinner("Buscando..."):
-            _search_tenant = None if _is_admin and not _user_tenant_id else _user_tenant_id
+            _search_tenant = None if _is_admin else _user_tenant_id
             quick_results = search_quotes(quick_search, limit=10, tenant_id=_search_tenant)
             
             if quick_results:
