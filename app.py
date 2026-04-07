@@ -752,41 +752,35 @@ with st.expander("🔍 **Búsqueda Rápida de Cotizaciones y Propuestas**", expa
                     
                     _label = f"**{client or 'Sin cliente'}** — {proposal or 'Sin nombre'}  |  💰 ${total_revenue:,.0f}  |  📊 {avg_margin:.1f}%  |  v{version} · {status}"
                     with st.expander(_label, expanded=False):
-                        # KPIs y gráfica pastel lado a lado
-                        col_kpis, col_pie = st.columns([3, 1])
+                        # KPIs principales
+                        kpi1, kpi2, kpi3, kpi4 = st.columns(4)
+                        kpi1.metric("Costo Total", f"${total_cost:,.0f}")
+                        kpi2.metric("Precio Total", f"${total_revenue:,.0f}")
+                        kpi3.metric("Utilidad Bruta", f"${gross_profit:,.0f}")
+                        kpi4.metric("Margen", f"{avg_margin:.1f}%")
                         
-                        with col_kpis:
-                            # KPIs principales
-                            kpi1, kpi2, kpi3, kpi4 = st.columns(4)
-                            kpi1.metric("Costo Total", f"${total_cost:,.0f}")
-                            kpi2.metric("Precio Total", f"${total_revenue:,.0f}")
-                            kpi3.metric("Utilidad Bruta", f"${gross_profit:,.0f}")
-                            kpi4.metric("Margen", f"{avg_margin:.1f}%")
-                            
-                            # Info adicional
-                            info1, info2, info3 = st.columns(3)
-                            info1.caption(f"👤 **Cotizó:** {quoted_by or 'N/A'}")
-                            info2.caption(f"📅 **Fecha:** {pd.to_datetime(created_at).strftime('%Y-%m-%d')}")
-                            info3.caption(f"📋 **Playbook:** {playbook or 'N/A'}")
-                        
+                        # Info + gráfica pastel
+                        col_info, col_pie = st.columns([3, 1])
+                        with col_info:
+                            st.caption(f"👤 **Cotizó:** {quoted_by or 'N/A'}  ·  📅 {pd.to_datetime(created_at).strftime('%Y-%m-%d')}  ·  📋 {playbook or 'N/A'}")
                         with col_pie:
-                            import plotly.graph_objects as go  # noqa: E402
-                            _pie_cost = total_cost or 0
-                            _pie_profit = gross_profit or 0
-                            fig_pie = go.Figure(data=[go.Pie(
-                                labels=["Costo", "Utilidad"],
-                                values=[_pie_cost, _pie_profit],
-                                marker=dict(colors=["#ef4444", "#22c55e"]),
-                                hole=0.4,
-                                textinfo="percent",
-                                textfont_size=11,
-                            )])
-                            fig_pie.update_layout(
-                                margin=dict(l=0, r=0, t=0, b=0),
-                                height=150,
-                                showlegend=False,
-                            )
-                            st.plotly_chart(fig_pie, use_container_width=True, key=f"pie_{quote_id}")
+                            import matplotlib.pyplot as plt
+                            _pie_cost = float(total_cost or 0)
+                            _pie_profit = float(gross_profit or 0)
+                            if _pie_cost + _pie_profit > 0:
+                                fig_p, ax_p = plt.subplots(figsize=(2, 2))
+                                ax_p.pie(
+                                    [_pie_cost, _pie_profit],
+                                    labels=["Costo", "Utilidad"],
+                                    colors=["#ef4444", "#22c55e"],
+                                    autopct="%1.0f%%",
+                                    textprops={"fontsize": 7},
+                                    pctdistance=0.75,
+                                    wedgeprops={"width": 0.4},
+                                )
+                                ax_p.set_aspect("equal")
+                                st.pyplot(fig_p, use_container_width=False)
+                                plt.close(fig_p)
                         
                         # Líneas de detalle
                         lines = get_quote_lines(quote_id)
