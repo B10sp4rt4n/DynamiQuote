@@ -5,7 +5,7 @@ import uuid
 from datetime import datetime, UTC
 import matplotlib.pyplot as plt
 from spellchecker import SpellChecker
-from database import init_database, save_quote, save_import_file, get_all_quotes, get_quote_lines, get_quote_lines_full, get_latest_version, load_versions_for_group, load_lines_for_quote, get_database_info, get_cursor, is_postgres, get_connection, save_logo, get_logos, search_quotes, get_recent_quotes, get_quote_groups_summary, get_quote_by_group_id, clear_search_caches, authenticate_user, create_user, get_all_users, toggle_user_active, update_user_password, users_exist
+from database import init_database, save_quote, save_import_file, get_all_quotes, get_quote_lines, get_quote_lines_full, get_latest_version, load_versions_for_group, load_lines_for_quote, get_database_info, get_cursor, is_postgres, get_connection, save_logo, get_logos, search_quotes, get_recent_quotes, get_quote_groups_summary, get_quote_by_group_id, clear_search_caches, authenticate_user, create_user, get_all_users, toggle_user_active, update_user_password, users_exist, create_tenant, get_all_tenants, get_tenant, toggle_tenant_active, update_user_seller_code, update_user_tenant, tenants_exist
 from excel_import import import_excel_file, format_validation_report
 from formal_proposal_generator import process_logo_upload
 import os
@@ -470,7 +470,20 @@ _is_admin = _current_user['role'] == 'admin'
 with st.sidebar:
     # Usuario logueado
     st.markdown(f"👤 **{_current_user['full_name']}**")
-    st.caption(f"@{_current_user['alias']} · {'👑 Admin' if _is_admin else '🧑 Usuario'}")
+    _seller_code = _current_user.get('seller_code')
+    _user_tenant_id = _current_user.get('tenant_id')
+    # Mostrar empresa del usuario
+    if _user_tenant_id:
+        _tenant_info = get_tenant(_user_tenant_id)
+        _tenant_name = _tenant_info['name'] if _tenant_info else "—"
+    else:
+        _tenant_name = None
+    _alias_line = f"@{_current_user['alias']} · {'👑 Admin' if _is_admin else '🧑 Usuario'}"
+    if _seller_code:
+        _alias_line += f" · `{_seller_code}`"
+    st.caption(_alias_line)
+    if _tenant_name:
+        st.caption(f"🏢 {_tenant_name}")
     if st.button("🚪 Cerrar sesión", use_container_width=True):
         _logout_keep = {'openai_enabled', 'openai_api_key'}
         for _k in list(st.session_state.keys()):
@@ -533,7 +546,8 @@ with st.expander("🔍 **Búsqueda Rápida de Cotizaciones y Propuestas**", expa
     
     if quick_search and quick_search.strip():
         with st.spinner("Buscando..."):
-            quick_results = search_quotes(quick_search, limit=10)
+            _search_tenant = None if _is_admin and not _user_tenant_id else _user_tenant_id
+            quick_results = search_quotes(quick_search, limit=10, tenant_id=_search_tenant)
             
             if quick_results:
                 st.success(f"✅ {len(quick_results)} resultados encontrados")
@@ -4468,17 +4482,22 @@ st.divider()
 
 # Panel de Administración de Usuarios (solo admin)
 if _is_admin:
-    with st.expander("👥 Administración de Usuarios", expanded=False):
-        admin_tab1, admin_tab2 = st.tabs(["📋 Usuarios", "➕ Nuevo Usuario"])
+    with st.expander("👥 Administración de Usuarios y Empresas", expanded=False):
+        admin_tab1, admin_tab2, admin_tab3 = st.tabs(["📋 Usuarios", "➕ Nuevo Usuario", "🏢 Empresas"])
 
         with admin_tab1:
+            _all_tenants_map = {t['tenant_id']: t['name'] for t in get_all_tenants()}
             users = get_all_users()
             if users:
                 for u in users:
-                    col_info, col_role, col_status, col_pass = st.columns([3, 1.5, 1, 1.5])
+                    col_info, col_company, col_role, col_status, col_pass = st.columns([3, 2, 1.5, 1, 1.5])
                     with col_info:
-                        st.markdown(f"**{u['full_name']}** · `@{u['alias']}`")
+                        seller_tag = f" · `{u['seller_code']}`" if u.get('seller_code') else ""
+                        st.markdown(f"**{u['full_name']}** · `@{u['alias']}`{seller_tag}")
                         st.caption(f"ID: {u['user_id'][:8]}...  |  Creado: {str(u['created_at'])[:10]}")
+                    with col_company:
+                        tenant_name = _all_tenants_map.get(u.get('tenant_id'), '—')
+                        st.caption(f"🏢 {tenant_name}")
                     with col_role:
                         st.markdown(f"{'👑 Admin' if u['role'] == 'admin' else '🧑 Usuario'}")
                     with col_status:
@@ -4526,25 +4545,80 @@ if _is_admin:
                 st.info("No hay usuarios registrados.")
 
         with admin_tab2:
+            _tenants_for_form = get_all_tenants()
+            _tenant_options = {t['name']: t['tenant_id'] for t in _tenants_for_form if t['active']}
             with st.form("form_new_user"):
                 col1, col2 = st.columns(2)
                 with col1:
                     nu_first = st.text_input("Nombre *")
                     nu_alias = st.text_input("Alias (usuario) *", placeholder="juan.perez")
                     nu_pass = st.text_input("Contraseña *", type="password")
+                    nu_seller_code = st.text_input("Código de vendedor", placeholder="JGP", help="Código corto único del vendedor (ej. JGP). Opcional.")
                 with col2:
                     nu_last = st.text_input("Apellido *")
                     nu_role = st.selectbox("Rol", options=["user", "admin"], format_func=lambda x: "👑 Admin" if x == "admin" else "🧑 Usuario")
                     nu_pass2 = st.text_input("Confirmar contraseña *", type="password")
+                    if _tenant_options:
+                        nu_tenant_name = st.selectbox("Empresa *", options=["— Sin asignar —"] + list(_tenant_options.keys()))
+                        nu_tenant_id = _tenant_options.get(nu_tenant_name) if nu_tenant_name != "— Sin asignar —" else None
+                    else:
+                        st.warning("⚠️ No hay empresas registradas. Crea una en la pestaña Empresas primero.")
+                        nu_tenant_id = None
                 if st.form_submit_button("✅ Crear usuario", type="primary", use_container_width=True):
                     if not all([nu_alias, nu_first, nu_last, nu_pass]):
                         st.error("Completa todos los campos obligatorios (*)")
                     elif nu_pass != nu_pass2:
                         st.error("Las contraseñas no coinciden")
                     else:
-                        ok, msg = create_user(nu_alias.strip(), nu_first.strip(), nu_last.strip(), nu_pass, role=nu_role)
+                        ok, msg = create_user(
+                            nu_alias.strip(), nu_first.strip(), nu_last.strip(), nu_pass,
+                            role=nu_role,
+                            tenant_id=nu_tenant_id,
+                            seller_code=nu_seller_code.strip().upper() if nu_seller_code.strip() else None
+                        )
                         if ok:
                             st.success(f"✅ {msg}")
+                        else:
+                            st.error(msg)
+
+        with admin_tab3:
+            st.subheader("🏢 Gestión de Empresas")
+            all_tenants = get_all_tenants()
+            if all_tenants:
+                for t in all_tenants:
+                    col_name, col_slug, col_users, col_status = st.columns([3, 2, 1, 1])
+                    with col_name:
+                        st.markdown(f"**{t['name']}**")
+                        st.caption(f"ID: {t['tenant_id'][:8]}... | Desde: {str(t['created_at'])[:10]}")
+                    with col_slug:
+                        st.caption(f"`{t['slug']}`")
+                    with col_users:
+                        _count = sum(1 for u in get_all_users() if u.get('tenant_id') == t['tenant_id'])
+                        st.caption(f"👥 {_count}")
+                    with col_status:
+                        _active = t['active']
+                        if st.button("✅" if _active else "🔴", key=f"ten_toggle_{t['tenant_id']}", help="Activar/Desactivar empresa"):
+                            toggle_tenant_active(t['tenant_id'], not _active)
+                            st.rerun()
+                    st.divider()
+            else:
+                st.info("No hay empresas registradas.")
+
+            st.subheader("➕ Nueva Empresa")
+            with st.form("form_new_tenant"):
+                col_t1, col_t2 = st.columns(2)
+                with col_t1:
+                    t_name = st.text_input("Nombre de la empresa *", placeholder="Acme Corp")
+                with col_t2:
+                    t_slug = st.text_input("Slug único *", placeholder="acme-corp", help="Solo minúsculas y guiones. Ej: acme-corp")
+                if st.form_submit_button("✅ Crear empresa", type="primary", use_container_width=True):
+                    if not t_name.strip() or not t_slug.strip():
+                        st.error("Nombre y slug son obligatorios")
+                    else:
+                        ok, msg, _ = create_tenant(t_name.strip(), t_slug.strip())
+                        if ok:
+                            st.success(f"✅ {msg}")
+                            st.rerun()
                         else:
                             st.error(msg)
 
