@@ -336,13 +336,34 @@ def import_excel(proposal_id: str, excel_file: bytes, context: Dict[str, Any]) -
         )
         item_number = (result.get("max_num") or 0) + 1
 
-    # Procesar línea por línea, cada línea es un nodo independiente
+    # ── Fase 1: calcular todos los items en MEMORIA (sin tocar la BD) ──────────
+    created_at = _now_iso()
+    items_in_memory: List[Tuple[Any, ...]] = []
     for row in parsed_rows:
-        with get_cursor() as cur:
-            item_id = str(uuid.uuid4())
-            subtotal_cost = row["quantity"] * row["cost_unit"]
-            created_at = _now_iso()
+        item_id = str(uuid.uuid4())
+        subtotal_cost = row["quantity"] * row["cost_unit"]
+        items_in_memory.append((
+            item_id,
+            tenant_id,
+            proposal_id,
+            item_number,
+            row["quantity"],
+            row.get("sku"),
+            row["description"],
+            row["cost_unit"],
+            None,          # price_unit
+            subtotal_cost,
+            None,          # subtotal_price
+            "open",
+            "excel",
+            None,          # component_type
+            created_at,
+        ))
+        item_number += 1
 
+    # ── Fase 2: insertar todos los items en UNA sola transacción ────────────
+    with get_cursor() as cur:
+        for params in items_in_memory:
             _execute(
                 cur,
                 """
@@ -361,38 +382,11 @@ def import_excel(proposal_id: str, excel_file: bytes, context: Dict[str, Any]) -
                 )
                 VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
                 """,
-                (
-                    item_id,
-                    tenant_id,
-                    proposal_id,
-                    item_number,
-                    row["quantity"],
-                    row.get("sku"),
-                    row["description"],
-                    row["cost_unit"],
-                    None,
-                    subtotal_cost,
-                    None,
-                    "open",
-                    "excel",
-                    None,
-                    created_at,
-                ),
+                params,
             )
-        
-        # Calcular el nodo de este item de forma independiente
-        item_data = {
-            "item_id": item_id,
-            "item_number": item_number,
-            "quantity": row["quantity"],
-            "cost_unit": row["cost_unit"],
-            "price_unit": None
-        }
-        item_node = calculate_item_node(item_data)
-        
-        # Recalcular nodo integrado después de cada línea para consolidar todos los items
-        recalculate_integrated_node(proposal_id, context)
-        item_number += 1
+
+    # ── Fase 3: recalcular nodo integrado UNA SOLA VEZ al final ────────────
+    recalculate_integrated_node(proposal_id, context)
 
     return {"success": True, "errors": [], "imported": len(parsed_rows)}
 

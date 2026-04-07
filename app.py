@@ -761,32 +761,29 @@ with st.expander("🔍 **Búsqueda Rápida de Cotizaciones y Propuestas**", expa
                         
                         st.caption(f"👤 **Cotizó:** {quoted_by or 'N/A'}  ·  📅 {pd.to_datetime(created_at).strftime('%Y-%m-%d')}  ·  📋 {playbook or 'N/A'}")
                         
-                        # Gráfica pastel costo vs utilidad
-                        import matplotlib
-                        matplotlib.use("Agg")
-                        import matplotlib.pyplot as plt
-                        from io import BytesIO
+                        # Gráfica dona costo vs utilidad (Plotly interactiva)
+                        import plotly.graph_objects as go
                         _pie_cost = float(total_cost or 0)
                         _pie_profit = float(gross_profit or 0)
                         if _pie_cost + _pie_profit > 0:
-                            fig_p, ax_p = plt.subplots(figsize=(2.5, 2.5), dpi=80)
-                            wedges, texts, autotexts = ax_p.pie(
-                                [_pie_cost, _pie_profit],
+                            fig_donut = go.Figure(data=[go.Pie(
                                 labels=["Costo", "Utilidad"],
-                                colors=["#ef4444", "#22c55e"],
-                                autopct="%1.0f%%",
-                                textprops={"fontsize": 9},
-                                pctdistance=0.75,
-                                wedgeprops={"width": 0.4},
+                                values=[_pie_cost, _pie_profit],
+                                hole=0.5,
+                                marker=dict(colors=["#ef4444", "#22c55e"]),
+                                textinfo="label+percent",
+                                textfont_size=12,
+                            )])
+                            fig_donut.update_layout(
+                                showlegend=False,
+                                margin=dict(t=0, b=0, l=0, r=0),
+                                height=220,
+                                paper_bgcolor="rgba(0,0,0,0)",
+                                plot_bgcolor="rgba(0,0,0,0)",
                             )
-                            ax_p.set_aspect("equal")
-                            _buf = BytesIO()
-                            fig_p.savefig(_buf, format="png", bbox_inches="tight", transparent=True)
-                            plt.close(fig_p)
-                            _buf.seek(0)
                             _col_spacer1, _col_chart, _col_spacer2 = st.columns([2, 1, 2])
                             with _col_chart:
-                                st.image(_buf)
+                                st.plotly_chart(fig_donut, use_container_width=True, config={"displayModeBar": False})
                         
                         # Líneas de detalle
                         lines = get_quote_lines(quote_id)
