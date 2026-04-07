@@ -27,7 +27,7 @@ REGLA: La BD es fuente de verdad. Consultar cuando se necesite, no precachear.
 import os
 import sqlite3
 from contextlib import contextmanager
-from typing import Optional, Generator
+from typing import Any, Optional, Generator
 from datetime import datetime, UTC
 import streamlit as st
 from dotenv import load_dotenv
@@ -41,7 +41,29 @@ def is_streamlit_cloud() -> bool:
     return os.getenv('STREAMLIT_SHARING_MODE', '') == 'streamlit_app'
 
 
-def get_config_value(key: str) -> tuple[Optional[str], str]:
+def _search_nested_secrets(container: Any, candidate_keys: set[str], path: str = "") -> tuple[Optional[str], str]:
+    """Busca una clave dentro de st.secrets, incluyendo secciones anidadas."""
+    if not hasattr(container, 'items'):
+        return None, 'missing'
+
+    for raw_key, value in container.items():
+        key_text = str(raw_key)
+        current_path = f"{path}.{key_text}" if path else key_text
+
+        if key_text.lower() in candidate_keys:
+            value_text = str(value).strip()
+            if value_text:
+                return value_text, f'streamlit-secrets:{current_path}'
+
+        if hasattr(value, 'items'):
+            found_value, found_source = _search_nested_secrets(value, candidate_keys, current_path)
+            if found_value:
+                return found_value, found_source
+
+    return None, 'missing'
+
+
+def get_config_value(key: str, aliases: tuple[str, ...] = ()) -> tuple[Optional[str], str]:
     """
     Obtiene una configuración desde Streamlit Secrets, .env o variables de entorno.
 
@@ -49,38 +71,50 @@ def get_config_value(key: str) -> tuple[Optional[str], str]:
         tuple[value, source]
         source puede ser: streamlit-secrets, streamlit-secrets:<section>, dotenv, env, missing
     """
+    candidate_keys = {key.lower(), *(alias.lower() for alias in aliases)}
+
     try:
         if hasattr(st, 'secrets'):
-            if key in st.secrets:
-                value = st.secrets[key]
-                if value and str(value).strip():
-                    return str(value).strip(), 'streamlit-secrets'
-
-            for section in ('database', 'openai', 'connections', 'app', 'secrets'):
-                if section in st.secrets:
-                    section_values = st.secrets[section]
-                    if hasattr(section_values, 'get'):
-                        value = section_values.get(key)
-                        if value and str(value).strip():
-                            return str(value).strip(), f'streamlit-secrets:{section}'
+            found_value, found_source = _search_nested_secrets(st.secrets, candidate_keys)
+            if found_value:
+                return found_value, found_source
     except Exception as e:
         print(f"❌ ERROR al leer st.secrets para {key}: {e}")
 
     load_dotenv()
-    value = os.getenv(key)
-    if value and value.strip():
-        return value.strip(), 'dotenv'
+    for env_key in (key, *aliases):
+        value = os.getenv(env_key)
+        if value and value.strip():
+            return value.strip(), f'dotenv:{env_key}'
 
-    value = os.environ.get(key)
-    if value and value.strip():
-        return value.strip(), 'env'
+    for env_key in (key, *aliases):
+        value = os.environ.get(env_key)
+        if value and value.strip():
+            return value.strip(), f'env:{env_key}'
 
     return None, 'missing'
 
 
 def get_openai_api_key() -> tuple[Optional[str], str]:
     """Obtiene OPENAI_API_KEY y la fuente desde la que fue resuelta."""
-    return get_config_value('OPENAI_API_KEY')
+    return get_config_value('OPENAI_API_KEY', aliases=('openai_api_key', 'OPENAI_KEY', 'openai_key', 'api_key'))
+
+
+def get_database_url_and_source() -> tuple[Optional[str], str]:
+    """Obtiene DATABASE_URL y la fuente desde la que fue resuelta."""
+    return get_config_value(
+        'DATABASE_URL',
+        aliases=(
+            'database_url',
+            'POSTGRES_URL',
+            'postgres_url',
+            'POSTGRESQL_URL',
+            'postgresql_url',
+            'NEON_DATABASE_URL',
+            'neon_database_url',
+            'url',
+        )
+    )
 
 def get_database_url() -> Optional[str]:
     """
@@ -100,7 +134,7 @@ def get_database_url() -> Optional[str]:
         except Exception:
             pass
 
-    database_url, source = get_config_value('DATABASE_URL')
+    database_url, source = get_database_url_and_source()
     if database_url:
         print(f"✅ Usando DATABASE_URL desde {source}")
         print(f"🔍 DEBUG: URL encontrada (primeros 30 chars): {database_url[:30]}...")
@@ -112,7 +146,13 @@ def get_database_url() -> Optional[str]:
 
 # Obtener configuración
 DATABASE_URL = get_database_url()
+DATABASE_URL_SOURCE = get_database_url_and_source()[1]
 SQLITE_DB = "quotes_mvp.db"
+
+
+def get_database_config_source() -> str:
+    """Retorna la fuente desde la que se resolvió DATABASE_URL."""
+    return DATABASE_URL_SOURCE
 
 
 def is_postgres() -> bool:
