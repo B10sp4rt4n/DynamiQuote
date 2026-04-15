@@ -2446,7 +2446,9 @@ with tab_quotes:
                         save_playbook,
                         client_name_value or "Cliente sin nombre",
                         quoted_by_value or "Sin asignar",
-                        proposal_name_value or "Sin nombre"
+                        proposal_name_value or "Sin nombre",
+                        _user_tenant_id,
+                        _current_user['user_id'],
                     )
 
                     lines_data = []
