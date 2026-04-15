@@ -6,7 +6,7 @@ from datetime import datetime, UTC
 import matplotlib.pyplot as plt
 import plotly.graph_objects as go
 from spellchecker import SpellChecker
-from database import init_database, save_quote, save_import_file, get_all_quotes, get_quote_lines, get_quote_lines_full, get_latest_version, load_versions_for_group, load_lines_for_quote, get_database_info, get_cursor, is_postgres, get_connection, save_logo, get_logos, search_quotes, get_recent_quotes, get_quote_groups_summary, get_quote_by_group_id, clear_search_caches, authenticate_user, create_user, get_all_users, toggle_user_active, update_user_password, users_exist, create_tenant, get_all_tenants, get_tenant, toggle_tenant_active, update_user_seller_code, update_user_tenant, tenants_exist, get_user_by_id, get_openai_api_key, is_streamlit_cloud, get_database_config_source
+from database import init_database, save_quote, save_import_file, get_all_quotes, get_quote_lines, get_quote_lines_full, get_latest_version, load_versions_for_group, load_lines_for_quote, get_database_info, get_cursor, is_postgres, get_connection, save_logo, get_logos, search_quotes, get_recent_quotes, get_quote_groups_summary, get_quote_by_group_id, clear_search_caches, authenticate_user, create_user, get_all_users, toggle_user_active, update_user_password, users_exist, create_tenant, get_all_tenants, get_tenant, toggle_tenant_active, update_user_seller_code, update_user_tenant, update_user, tenants_exist, get_user_by_id, get_openai_api_key, is_streamlit_cloud, get_database_config_source
 from excel_import import import_excel_file, format_validation_report
 from formal_proposal_generator import process_logo_upload
 import os
@@ -652,11 +652,13 @@ def render_admin_panel(expanded: bool = True):
 
         with admin_tab1:
             _all_tenants_map = {t['tenant_id']: t['name'] for t in get_all_tenants()}
+            _tenant_options = {"— Sin asignar —": None}
+            _tenant_options.update({t['name']: t['tenant_id'] for t in get_all_tenants() if t['active']})
             users = get_all_users()
             if users:
                 st.caption("Gestiona accesos, empresa asignada y estado de los vendedores.")
                 for u in users:
-                    col_info, col_company, col_role, col_status, col_pass = st.columns([3, 2, 1.5, 1, 1.5])
+                    col_info, col_company, col_role, col_status, col_edit, col_pass = st.columns([3, 2, 1.5, 1, 1.2, 1.2])
                     with col_info:
                         seller_tag = f" · `{u['seller_code']}`" if u.get('seller_code') else ""
                         st.markdown(f"**{u['full_name']}** · `@{u['alias']}`{seller_tag}")
@@ -672,10 +674,76 @@ def render_admin_panel(expanded: bool = True):
                         if st.button(label, key=f"toggle_{u['user_id']}", help="Activar/Desactivar"):
                             toggle_user_active(u['user_id'], not is_active)
                             st.rerun()
+                    with col_edit:
+                        if st.button("✏️ Editar", key=f"edit_{u['user_id']}", help="Editar datos del usuario"):
+                            st.session_state['edit_target'] = u['user_id']
+                            st.rerun()
                     with col_pass:
                         if st.button("🔑 Reset", key=f"reset_{u['user_id']}", help="Cambiar contraseña"):
                             st.session_state['reset_target'] = u['user_id']
                             st.session_state['reset_alias'] = u['alias']
+                    if st.session_state.get('edit_target') == u['user_id']:
+                        st.info(f"Editando usuario @{u['alias']}")
+                        current_tenant_label = next(
+                            (name for name, tenant_id in _tenant_options.items() if tenant_id == u.get('tenant_id')),
+                            "— Sin asignar —"
+                        )
+                        with st.form(f"form_edit_user_{u['user_id']}"):
+                            edit_col1, edit_col2 = st.columns(2)
+                            with edit_col1:
+                                edit_first_name = st.text_input("Nombre", value=u['first_name'], key=f"edit_first_{u['user_id']}")
+                                edit_alias = st.text_input("Alias", value=u['alias'], key=f"edit_alias_{u['user_id']}")
+                                edit_seller_code = st.text_input(
+                                    "Código de vendedor",
+                                    value=u.get('seller_code') or "",
+                                    key=f"edit_seller_{u['user_id']}"
+                                )
+                                edit_role = st.selectbox(
+                                    "Rol",
+                                    options=["user", "admin"],
+                                    index=0 if u['role'] == 'user' else 1,
+                                    format_func=lambda x: "👑 Admin" if x == "admin" else "🧑 Usuario",
+                                    key=f"edit_role_{u['user_id']}"
+                                )
+                            with edit_col2:
+                                edit_last_name = st.text_input("Apellido", value=u['last_name'], key=f"edit_last_{u['user_id']}")
+                                selected_tenant_name = st.selectbox(
+                                    "Empresa asignada",
+                                    options=list(_tenant_options.keys()),
+                                    index=list(_tenant_options.keys()).index(current_tenant_label),
+                                    key=f"edit_tenant_{u['user_id']}"
+                                )
+                                st.caption("Guarda para asignar, cambiar o quitar la empresa del usuario.")
+                            if st.form_submit_button("Guardar cambios", type="primary", use_container_width=True):
+                                selected_tenant_id = _tenant_options[selected_tenant_name]
+                                if (
+                                    edit_alias.strip().lower() == u['alias']
+                                    and edit_first_name.strip() == u['first_name']
+                                    and edit_last_name.strip() == u['last_name']
+                                    and edit_role == u['role']
+                                    and selected_tenant_id == u.get('tenant_id')
+                                    and (edit_seller_code.strip().upper() if edit_seller_code.strip() else None) == u.get('seller_code')
+                                ):
+                                    st.info("No hay cambios para guardar.")
+                                else:
+                                    ok, msg = update_user(
+                                        u['user_id'],
+                                        edit_alias,
+                                        edit_first_name,
+                                        edit_last_name,
+                                        edit_role,
+                                        tenant_id=selected_tenant_id,
+                                        seller_code=edit_seller_code,
+                                    )
+                                    if ok:
+                                        st.success("✅ Usuario actualizado")
+                                        st.session_state.pop('edit_target', None)
+                                        st.rerun()
+                                    else:
+                                        st.error(msg)
+                            if st.form_submit_button("Cancelar", use_container_width=True):
+                                st.session_state.pop('edit_target', None)
+                                st.rerun()
                     st.divider()
 
                 if st.session_state.get('reset_target'):

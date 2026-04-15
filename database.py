@@ -2271,6 +2271,48 @@ def update_user_seller_code(user_id: str, seller_code: str) -> tuple[bool, str]:
         return False, f"Error: {e}"
 
 
+def update_user(user_id: str, alias: str, first_name: str, last_name: str, role: str,
+                tenant_id: str = None, seller_code: str = None) -> tuple[bool, str]:
+    """Actualiza los datos editables de un usuario."""
+    try:
+        alias_clean = alias.lower().strip()
+        first_name_clean = first_name.strip()
+        last_name_clean = last_name.strip()
+        role_clean = role.strip().lower()
+        seller_code_clean = seller_code.upper().strip() if seller_code and seller_code.strip() else None
+
+        if not all([alias_clean, first_name_clean, last_name_clean]):
+            return False, "Alias, nombre y apellido son obligatorios"
+
+        if role_clean not in ('admin', 'user'):
+            return False, "Rol inválido"
+
+        with get_cursor() as cur:
+            if is_postgres():
+                cur.execute(
+                    """
+                    UPDATE app_users
+                    SET alias=%s, first_name=%s, last_name=%s, role=%s, tenant_id=%s, seller_code=%s
+                    WHERE user_id=%s
+                    """,
+                    (alias_clean, first_name_clean, last_name_clean, role_clean, tenant_id, seller_code_clean, user_id)
+                )
+            else:
+                cur.execute(
+                    """
+                    UPDATE app_users
+                    SET alias=?, first_name=?, last_name=?, role=?, tenant_id=?, seller_code=?
+                    WHERE user_id=?
+                    """,
+                    (alias_clean, first_name_clean, last_name_clean, role_clean, tenant_id, seller_code_clean, user_id)
+                )
+        return True, "Usuario actualizado"
+    except Exception as e:
+        if "unique" in str(e).lower() or "duplicate" in str(e).lower():
+            return False, f"El alias '{alias}' ya existe"
+        return False, f"Error actualizando usuario: {e}"
+
+
 def update_user_tenant(user_id: str, tenant_id: str) -> tuple[bool, str]:
     """Asigna o cambia la empresa de un usuario."""
     try:
