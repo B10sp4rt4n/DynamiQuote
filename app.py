@@ -2626,6 +2626,19 @@ with tab_quotes:
             st.success(f"✅ Origen seleccionado: {source_id[:8]}...")
             st.divider()
 
+            default_issuer_company = (
+                (existing_proposal.get('issuer_company') or '').strip()
+                if existing_proposal else (_tenant_name or "Tu Empresa S.A. de C.V.")
+            ) or "Tu Empresa S.A. de C.V."
+            default_recipient_company = (
+                (existing_proposal.get('recipient_company') or '').strip()
+                if existing_proposal else ((source_data[11] if source_data and len(source_data) > 11 else "") or st.session_state.get('saved_client_name', ''))
+            )
+            default_recipient_contact = (
+                (existing_proposal.get('recipient_contact_name') or '').strip()
+                if existing_proposal else ""
+            )
+
             # =========================
             # Configuración de Propuesta
             # =========================
@@ -2638,7 +2651,7 @@ with tab_quotes:
                 with col1:
                     issuer_company = st.text_input(
                         "Nombre de la Empresa *", 
-                        value=existing_proposal.get('issuer_company') or 'Tu Empresa S.A. de C.V.' if existing_proposal else "Tu Empresa S.A. de C.V.", 
+                        value=default_issuer_company,
                         key="issuer_company"
                     )
                     issuer_contact = st.text_input(
@@ -2671,12 +2684,12 @@ with tab_quotes:
                 with col1:
                     recipient_company = st.text_input(
                         "Nombre de la Empresa *", 
-                        value=existing_proposal.get('recipient_company') or '' if existing_proposal else "", 
+                        value=default_recipient_company,
                         key="recipient_company"
                     )
                     recipient_contact = st.text_input(
-                        "Nombre del Contacto *", 
-                        value=existing_proposal.get('recipient_contact_name') or '' if existing_proposal else "", 
+                        "Nombre del Contacto", 
+                        value=default_recipient_contact,
                         key="recipient_contact"
                     )
                     recipient_title = st.text_input(
@@ -3089,15 +3102,15 @@ with tab_quotes:
                 # Validación básica para mostrar preview
                 issuer_clean = (issuer_company or "").strip()
                 recipient_comp_clean = (recipient_company or "").strip()
-                recipient_cont_clean = (recipient_contact or "").strip()
+                recipient_cont_clean = (recipient_contact or "").strip() or "A quien corresponda"
 
-                if not issuer_clean or not recipient_comp_clean or not recipient_cont_clean:
-                    st.warning("⚠️ Completa los campos obligatorios (Empresa emisora, Empresa receptora, Contacto) para ver la vista previa")
+                if not issuer_clean or not recipient_comp_clean:
+                    st.warning("⚠️ Completa los campos obligatorios (Empresa emisora y Empresa receptora) para ver la vista previa")
                 else:
                     with st.spinner("Generando vista previa..."):
                         intro_text = generate_intro_text(
                             recipient_company,
-                            recipient_contact,
+                            recipient_cont_clean,
                             client_type,
                             market_sector,
                             issuer_company,
@@ -3121,15 +3134,13 @@ with tab_quotes:
                 # Validar campos requeridos - limpiar espacios primero
                 issuer_company_clean = (issuer_company or "").strip()
                 recipient_company_clean = (recipient_company or "").strip()
-                recipient_contact_clean = (recipient_contact or "").strip()
+                recipient_contact_clean = (recipient_contact or "").strip() or "A quien corresponda"
 
                 missing_fields = []
                 if not issuer_company_clean:
                     missing_fields.append("Nombre de Empresa Emisora")
                 if not recipient_company_clean:
                     missing_fields.append("Nombre de Empresa Receptora")
-                if not recipient_contact_clean:
-                    missing_fields.append("Nombre del Contacto Receptor")
 
                 if missing_fields:
                     st.error(f"❌ Completa los siguientes campos obligatorios: {', '.join(missing_fields)}")
@@ -3154,7 +3165,7 @@ with tab_quotes:
 
                             recipient_data = {
                                 'company': recipient_company,
-                                'contact_name': recipient_contact,
+                                'contact_name': recipient_contact_clean,
                                 'contact_title': recipient_title,
                                 'email': recipient_email
                             }
