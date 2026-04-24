@@ -1720,41 +1720,11 @@ with tab_quotes:
         _qmode = st.session_state.get('quote_start_mode')
 
         # ==========================================================
-        # LANDING: elegir modo de inicio (aparece al entrar limpio)
+        # AUTO-INICIO: ir directamente a nueva cotización
         # ==========================================================
         if _qmode is None:
-            st.markdown("")
-            st.markdown("### ¿Cómo deseas comenzar?")
-            st.markdown("")
-            col_l, col_r, _col_sp = st.columns([2, 2, 1])
-            with col_l:
-                st.markdown("""
-                <div style="border:2px solid #1976D2;border-radius:12px;
-                            padding:28px;text-align:center;background:#E3F2FD;">
-                <h3 style="margin:0 0 8px 0;">🆕 Nueva Cotización</h3>
-                <p style="margin:0;color:#555;">Crea una cotización desde cero</p>
-                </div>
-                """, unsafe_allow_html=True)
-                st.markdown("")
-                if st.button("Crear Nueva Cotización", type="primary",
-                             use_container_width=True, key="btn_modo_nueva"):
-                    st.session_state['quote_start_mode'] = 'nueva'
-                    st.rerun()
-            with col_r:
-                st.markdown("""
-                <div style="border:2px solid #F57C00;border-radius:12px;
-                            padding:28px;text-align:center;background:#FFF3E0;">
-                <h3 style="margin:0 0 8px 0;">📋 Nueva Versión de Cotización</h3>
-                <p style="margin:0;color:#555;">
-                Toma una cotización existente como base y crea una versión mejorada
-                </p>
-                </div>
-                """, unsafe_allow_html=True)
-                st.markdown("")
-                if st.button("Nueva Versión de Propuesta Existente", type="secondary",
-                             use_container_width=True, key="btn_modo_v2"):
-                    st.session_state['quote_start_mode'] = 'v2'
-                    st.rerun()
+            st.session_state['quote_start_mode'] = 'nueva'
+            st.rerun()
 
 
 
@@ -2323,38 +2293,16 @@ with tab_quotes:
                 pb_save = PLAYBOOKS[save_playbook]
                 st.caption(f"Verde ≥{pb_save['green']}% | Amarillo ≥{pb_save['yellow']}%")
 
-            # Si se acaba de guardar, mostrar opciones en lugar del botón de guardar
+            # Si se acaba de guardar, mostrar éxito y reiniciar
             if st.session_state.get('_quote_just_saved'):
                 st.success("✅ Cotización guardada correctamente")
-                st.markdown("**¿Qué deseas hacer ahora?**")
-                col_prop, col_nueva, col_version = st.columns(3)
-                with col_prop:
-                    if st.button("📄 Generar Propuesta Formal", type="primary", use_container_width=True):
-                        st.session_state['_quote_just_saved'] = False
-                        st.session_state.seccion_activa_quotes = "📄 Generar Propuesta Formal"
-                        st.rerun()
-                with col_nueva:
-                    if st.button("🆕 Nueva Cotización", use_container_width=True):
-                        st.session_state['_quote_just_saved'] = False
-                        _keep_keys = {'authenticated', 'current_user', 'openai_enabled', 'openai_api_key',
-                                      'seccion_activa_quotes', '_startup_db_info_cache', '_openai_key_cache'}
-                        for _k in list(st.session_state.keys()):
-                            if _k not in _keep_keys:
-                                st.session_state.pop(_k, None)
-                        st.rerun()
-                with col_version:
-                    if st.button("📋 Nueva Versión", use_container_width=True):
-                        st.session_state['_quote_just_saved'] = False
-                        current_group_id = st.session_state.quote_group_id
-                        saved_quote_id = st.session_state.quote_id
-                        all_versions_for_group = load_versions_for_group(current_group_id)
-                        max_version = all_versions_for_group["version"].max() if not all_versions_for_group.empty else 0
-                        st.session_state.lines = []
-                        st.session_state.quote_id = str(uuid.uuid4())
-                        st.session_state.quote_group_id = current_group_id
-                        st.session_state.version = max_version + 1
-                        st.session_state.parent_quote_id = saved_quote_id
-                        st.rerun()
+                st.session_state['_quote_just_saved'] = False
+                _keep_keys = {'authenticated', 'current_user', 'openai_enabled', 'openai_api_key',
+                              '_startup_db_info_cache', '_openai_key_cache'}
+                for _k in list(st.session_state.keys()):
+                    if _k not in _keep_keys:
+                        st.session_state.pop(_k, None)
+                st.rerun()
             else:
                 save_button = st.button("💾 Guardar Cotización", type="primary", width='stretch')
 
@@ -2427,11 +2375,8 @@ with tab_quotes:
                     success, message = save_quote(quote_data, lines_data)
 
                     if success:
-                        st.success(message)
                         clear_search_caches()
                         cleanup_session_state()
-                        # Guardar el quote_id recién guardado para poder ir a propuesta formal
-                        st.session_state['_last_saved_quote_group_id'] = st.session_state.quote_group_id
                         st.session_state['_quote_just_saved'] = True
                         st.rerun()
                     else:
