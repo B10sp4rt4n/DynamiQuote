@@ -1721,7 +1721,7 @@ with tab_quotes:
             st.markdown("")
             st.markdown("### ¿Cómo deseas comenzar?")
             st.markdown("")
-            col_l, col_r, _col_sp = st.columns([2, 2, 1])
+            col_l, _col_sp = st.columns([2, 3])
             with col_l:
                 st.markdown("""
                 <div style="border:2px solid #1976D2;border-radius:12px;
@@ -1735,21 +1735,8 @@ with tab_quotes:
                              use_container_width=True, key="btn_modo_nueva"):
                     st.session_state['quote_start_mode'] = 'nueva'
                     st.rerun()
-            with col_r:
-                st.markdown("""
-                <div style="border:2px solid #F57C00;border-radius:12px;
-                            padding:28px;text-align:center;background:#FFF3E0;">
-                <h3 style="margin:0 0 8px 0;">📋 Nueva Versión</h3>
-                <p style="margin:0;color:#555;">
-                Toma una propuesta existente como base y crea una versión mejorada
-                </p>
-                </div>
-                """, unsafe_allow_html=True)
-                st.markdown("")
-                if st.button("Nueva Versión de Propuesta Existente", type="secondary",
-                             use_container_width=True, key="btn_modo_v2"):
-                    st.session_state['quote_start_mode'] = 'v2'
-                    st.rerun()
+
+
 
         # ==========================================================
         # MODO V2: seleccionar y desglosar propuesta base
@@ -1921,30 +1908,7 @@ with tab_quotes:
                     key="draft_quoted_by",
                 )
 
-            _has_pending_quote_info = (
-                st.session_state.get('draft_proposal_name', '') != st.session_state.get('saved_proposal_name', '')
-                or st.session_state.get('draft_client_name', '') != st.session_state.get('saved_client_name', '')
-                or st.session_state.get('draft_quoted_by', '') != st.session_state.get('saved_quoted_by', '')
-            )
 
-            if _has_pending_quote_info:
-                col_confirm_info, col_revert_info = st.columns(2)
-                with col_confirm_info:
-                    if st.button("💾 Guardar cambios de cotización", type="primary", use_container_width=True):
-                        st.session_state.saved_proposal_name = st.session_state.get('draft_proposal_name', '')
-                        st.session_state.saved_client_name = st.session_state.get('draft_client_name', '')
-                        st.session_state.saved_quoted_by = st.session_state.get('draft_quoted_by', '')
-                        st.success("✅ Cambios de cotización guardados")
-                with col_revert_info:
-                    if st.button("↩️ Descartar cambios", use_container_width=True):
-                        st.session_state.draft_proposal_name = st.session_state.get('saved_proposal_name', '')
-                        st.session_state.draft_client_name = st.session_state.get('saved_client_name', '')
-                        st.session_state.draft_quoted_by = st.session_state.get('saved_quoted_by', '')
-                        st.info("Cambios descartados")
-                        st.rerun()
-                st.caption("⚠️ Hay cambios en borrador. No se guardarán hasta confirmar.")
-            else:
-                st.caption("✅ Datos de cotización guardados.")
     # Mostrar maquinaria del cotizador sólo cuando hay un modo activo con datos cargados
         _qm_outer = st.session_state.get('quote_start_mode')
         _show_cotizador = (_qm_outer is not None and
@@ -2030,226 +1994,6 @@ with tab_quotes:
             st.divider()
 
         elif _show_cotizador:
-            # =========================
-            # IMPORTACIÓN DESDE EXCEL
-            # =========================
-            with st.expander("📥 Importar múltiples líneas desde Excel", expanded=False):
-                st.markdown("""
-                Importa productos desde Excel para acelerar la creación de cotizaciones.
-                
-                **Pasos:**
-                1. Descarga la plantilla Excel
-                2. Llena tus productos
-                3. Sube el archivo
-                4. Revisa y confirma
-                """)
-                
-                # Botón de descarga del template
-                col_download, col_upload = st.columns(2)
-                
-                with col_download:
-                    try:
-                        with open("templates/import/dynamiquote_simple.xlsx", "rb") as template_file:
-                            st.download_button(
-                                label="📄 Descargar Plantilla Excel",
-                                data=template_file,
-                                file_name="dynamiquote_productos.xlsx",
-                                mime="application/vnd.openxmlformats-officedocument.spreadsheetml.sheet",
-                                help="Descarga la plantilla, llénala y súbela de vuelta"
-                            )
-                    except FileNotFoundError:
-                        st.error("❌ Plantilla no encontrada. Contacta al administrador.")
-                
-                with col_upload:
-                    uploaded_file = st.file_uploader(
-                        "📁 Subir Excel completado",
-                        type=['xlsx'],
-                        help="Solo archivos .xlsx",
-                        key="excel_upload"
-                    )
-                
-                if uploaded_file is not None:
-                    # Procesar archivo
-                    with st.spinner("Procesando Excel..."):
-                        import_result = import_excel_file(
-                            uploaded_file.getvalue(),
-                            uploaded_file.name,
-                            existing_lines=st.session_state.lines
-                        )
-                    
-                    if not import_result["success"]:
-                        st.error(import_result["error"])
-                        if import_result["validation_report"]:
-                            with st.expander("Ver detalles de errores"):
-                                st.markdown(format_validation_report(import_result["validation_report"]))
-                    else:
-                        # Mostrar resumen
-                        report = import_result["validation_report"]
-                        col1, col2, col3 = st.columns(3)
-                        
-                        with col1:
-                            st.metric("📊 Total Filas", report["total_rows"])
-                        with col2:
-                            st.metric("✅ Válidas", report["valid_rows"], delta_color="normal")
-                        with col3:
-                            st.metric("❌ Con Errores", report["error_rows"], delta_color="inverse")
-                        
-                        # Alertas de duplicados
-                        if import_result.get("duplicates"):
-                            st.warning(f"⚠️ Se detectaron {len(import_result['duplicates'])} posibles duplicados")
-                            with st.expander("Ver duplicados detectados"):
-                                for dup in import_result["duplicates"]:
-                                    st.caption(f"• Nueva: '{dup['new']}' → Existente: '{dup['existing']}' (similitud: {dup['ratio']:.0%})")
-                        
-                        # Reporte de validación
-                        with st.expander("📋 Reporte de Validación Completo"):
-                            st.markdown(format_validation_report(report))
-                        
-                        # Preview editable
-                        st.subheader("👀 Preview - Edita antes de confirmar")
-                        st.caption("Puedes modificar los datos antes de importarlos")
-                        
-                        # Preparar datos para el editor
-                        preview_data = []
-                        for line in import_result["lines"]:
-                            preview_data.append({
-                                "SKU": line.get("sku", ""),
-                                "Descripción": line.get("description_original", ""),
-                                "Cantidad": line.get("_cantidad", 1),
-                                "Costo": line.get("cost_unit", 0),
-                                "Margen%": line.get("margin_pct", 0),
-                                "Precio": line.get("final_price_unit", 0),
-                                "Tipo": line.get("line_type", "product"),
-                                "Origen": line.get("service_origin", "profesional"),
-                                "Estrategia": line.get("strategy", "penetration")
-                            })
-                        
-                        preview_df = pd.DataFrame(preview_data)
-                        
-                        # Editor interactivo
-                        edited_data = st.data_editor(
-                            preview_df,
-                            column_config={
-                                "SKU": st.column_config.TextColumn("SKU", width="small"),
-                                "Descripción": st.column_config.TextColumn("Descripción", width="large"),
-                                "Cantidad": st.column_config.NumberColumn("Cantidad", min_value=1, format="%d"),
-                                "Costo": st.column_config.NumberColumn("Costo", min_value=0, format="$%.2f"),
-                                "Margen%": st.column_config.NumberColumn("Margen%", min_value=0, max_value=99, format="%.1f"),
-                                "Precio": st.column_config.NumberColumn("Precio", min_value=0, format="$%.2f"),
-                                "Tipo": st.column_config.SelectboxColumn("Tipo", options=["product", "service"]),
-                                "Origen": st.column_config.SelectboxColumn(
-                                    "Clasificación",
-                                    options=["doméstico", "profesional", "accesorios", "refacciones", "servicios", "póliza"]
-                                ),
-                                "Estrategia": st.column_config.SelectboxColumn(
-                                    "Estrategia",
-                                    options=["penetration", "defense", "upsell", "renewal"]
-                                )
-                            },
-                            num_rows="dynamic",
-                            width='stretch',
-                            hide_index=False,
-                            key=f"preview_editor_{import_result['import_batch_id']}"
-                        )
-                        
-                        # Guardar cambios en session_state
-                        st.session_state.edited_import_data = edited_data
-                        
-                        # Recalcular con datos editados
-                        st.markdown("---")
-                        st.subheader("💰 Resumen Final (con datos editados)")
-                        
-                        final_data = []
-                        for idx in range(len(edited_data)):
-                            costo = float(edited_data.iloc[idx]["Costo"])
-                            margen = float(edited_data.iloc[idx]["Margen%"])
-                            precio = float(edited_data.iloc[idx]["Precio"])
-                            
-                            # Recalcular precio basado en costo y margen
-                            if costo > 0 and margen > 0:
-                                precio_calculado = round(costo / (1 - margen / 100), 2)
-                                # Verificar coherencia
-                                if abs(precio - precio_calculado) > 0.01:
-                                    # Usar precio calculado
-                                    precio = precio_calculado
-                                    margen_final = margen
-                                else:
-                                    margen_final = margen
-                            else:
-                                margen_final = margen
-                            
-                            final_data.append({
-                                "SKU": edited_data.iloc[idx]["SKU"],
-                                "Descripción": edited_data.iloc[idx]["Descripción"],
-                                "Cantidad": int(edited_data.iloc[idx]["Cantidad"]),
-                                "Costo": f"${costo:.2f}",
-                                "Margen": f"{margen_final:.1f}%",
-                                "Precio": f"${precio:.2f}",
-                                "Tipo": edited_data.iloc[idx]["Tipo"]
-                            })
-                        
-                        final_df = pd.DataFrame(final_data)
-                        st.dataframe(final_df, width='stretch', hide_index=False)
-                        
-                        st.success(f"✅ {len(final_df)} líneas listas para importar")
-                        
-                        # Botones de acción final
-                        col_confirm, col_cancel = st.columns(2)
-                        
-                        with col_confirm:
-                            if st.button("✅ Confirmar e Importar Todo", type="primary", key="confirm_import"):
-                                # Aplicar ediciones finales
-                                updated_lines = []
-                                for idx in range(len(edited_data)):
-                                    if idx < len(import_result["lines"]):
-                                        line = import_result["lines"][idx].copy()
-                                        
-                                        # Aplicar cambios del editor
-                                        costo = float(edited_data.iloc[idx]["Costo"])
-                                        margen = float(edited_data.iloc[idx]["Margen%"])
-                                        precio_calculado = round(costo / (1 - margen / 100), 2) if costo > 0 and margen > 0 else 0
-                                        
-                                        line["sku"] = str(edited_data.iloc[idx]["SKU"])
-                                        line["description_original"] = str(edited_data.iloc[idx]["Descripción"])
-                                        line["description_final"] = str(edited_data.iloc[idx]["Descripción"])
-                                        line["description_corrections"] = ""
-                                        line["quantity"] = int(edited_data.iloc[idx]["Cantidad"])
-                                        line["line_type"] = str(edited_data.iloc[idx]["Tipo"])
-                                        line["service_origin"] = str(edited_data.iloc[idx]["Origen"])
-                                        line["strategy"] = str(edited_data.iloc[idx]["Estrategia"])
-                                        line["cost_unit"] = costo
-                                        line["margin_pct"] = margen
-                                        line["final_price_unit"] = precio_calculado
-                                        
-                                        updated_lines.append(line)
-                                
-                                # Agregar a session state
-                                st.session_state.lines.extend(updated_lines)
-                                
-                                # Guardar archivo para auditoría
-                                file_id = import_result["import_batch_id"]
-                                quote_id = st.session_state.quote_id
-                                success_file, msg_file = save_import_file(
-                                    file_id=file_id,
-                                    quote_id=quote_id,
-                                    filename=uploaded_file.name,
-                                    uploaded_at=datetime.now(UTC).isoformat(),
-                                    file_data=uploaded_file.getvalue(),
-                                    file_size=import_result["file_info"]["size"],
-                                    rows_imported=import_result["file_info"]["rows_imported"],
-                                    rows_errors=import_result["file_info"]["rows_errors"]
-                                )
-                                
-                                st.success(f"✅ {len(updated_lines)} líneas importadas correctamente")
-                                st.rerun()
-                        
-                        with col_cancel:
-                            if st.button("❌ Cancelar Importación", key="cancel_import"):
-                                st.rerun()
-            
-            st.divider()
-            
-            # Solo mostrar el formulario de agregar si no hay línea pendiente
             st.subheader("➕ Agregar línea")
 
             col1, col2, col3 = st.columns(3)
@@ -2565,10 +2309,10 @@ with tab_quotes:
                 if not st.session_state.lines:
                     st.error("❌ No hay líneas para guardar")
                 else:
-                    # Usar valores sincronizados directamente
-                    proposal_name_value = st.session_state.get('saved_proposal_name', '') or ''
-                    client_name_value = st.session_state.get('saved_client_name', '') or ''
-                    quoted_by_value = st.session_state.get('saved_quoted_by', '') or ''
+                    # Leer valores del draft directamente (no requiere confirmación previa)
+                    proposal_name_value = st.session_state.get('draft_proposal_name', '') or ''
+                    client_name_value = st.session_state.get('draft_client_name', '') or ''
+                    quoted_by_value = st.session_state.get('draft_quoted_by', '') or ''
 
                     # Preparar datos para guardar
                     quote_data = (
