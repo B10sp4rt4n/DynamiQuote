@@ -1729,12 +1729,12 @@ with tab_quotes:
                 st.markdown("""
                 <div style="border:2px solid #1976D2;border-radius:12px;
                             padding:28px;text-align:center;background:#E3F2FD;">
-                <h3 style="margin:0 0 8px 0;">🆕 Nueva Propuesta</h3>
+                <h3 style="margin:0 0 8px 0;">🆕 Nueva Cotización</h3>
                 <p style="margin:0;color:#555;">Crea una cotización desde cero</p>
                 </div>
                 """, unsafe_allow_html=True)
                 st.markdown("")
-                if st.button("Crear Nueva Propuesta", type="primary",
+                if st.button("Crear Nueva Cotización", type="primary",
                              use_container_width=True, key="btn_modo_nueva"):
                     st.session_state['quote_start_mode'] = 'nueva'
                     st.rerun()
@@ -1742,9 +1742,9 @@ with tab_quotes:
                 st.markdown("""
                 <div style="border:2px solid #F57C00;border-radius:12px;
                             padding:28px;text-align:center;background:#FFF3E0;">
-                <h3 style="margin:0 0 8px 0;">📋 Nueva Versión</h3>
+                <h3 style="margin:0 0 8px 0;">📋 Nueva Versión de Cotización</h3>
                 <p style="margin:0;color:#555;">
-                Toma una propuesta existente como base y crea una versión mejorada
+                Toma una cotización existente como base y crea una versión mejorada
                 </p>
                 </div>
                 """, unsafe_allow_html=True)
@@ -2321,9 +2321,42 @@ with tab_quotes:
                 pb_save = PLAYBOOKS[save_playbook]
                 st.caption(f"Verde ≥{pb_save['green']}% | Amarillo ≥{pb_save['yellow']}%")
 
-            save_button = st.button("💾 Guardar Cotización", type="primary", width='stretch')
+            # Si se acaba de guardar, mostrar opciones en lugar del botón de guardar
+            if st.session_state.get('_quote_just_saved'):
+                st.success("✅ Cotización guardada correctamente")
+                st.markdown("**¿Qué deseas hacer ahora?**")
+                col_prop, col_nueva, col_version = st.columns(3)
+                with col_prop:
+                    if st.button("📄 Generar Propuesta Formal", type="primary", use_container_width=True):
+                        st.session_state['_quote_just_saved'] = False
+                        st.session_state.seccion_activa_quotes = "📄 Generar Propuesta Formal"
+                        st.rerun()
+                with col_nueva:
+                    if st.button("🆕 Nueva Cotización", use_container_width=True):
+                        st.session_state['_quote_just_saved'] = False
+                        _keep_keys = {'authenticated', 'current_user', 'openai_enabled', 'openai_api_key',
+                                      'seccion_activa_quotes', '_startup_db_info_cache', '_openai_key_cache'}
+                        for _k in list(st.session_state.keys()):
+                            if _k not in _keep_keys:
+                                st.session_state.pop(_k, None)
+                        st.rerun()
+                with col_version:
+                    if st.button("📋 Nueva Versión", use_container_width=True):
+                        st.session_state['_quote_just_saved'] = False
+                        current_group_id = st.session_state.quote_group_id
+                        saved_quote_id = st.session_state.quote_id
+                        all_versions_for_group = load_versions_for_group(current_group_id)
+                        max_version = all_versions_for_group["version"].max() if not all_versions_for_group.empty else 0
+                        st.session_state.lines = []
+                        st.session_state.quote_id = str(uuid.uuid4())
+                        st.session_state.quote_group_id = current_group_id
+                        st.session_state.version = max_version + 1
+                        st.session_state.parent_quote_id = saved_quote_id
+                        st.rerun()
+            else:
+                save_button = st.button("💾 Guardar Cotización", type="primary", width='stretch')
 
-            if save_button:
+            if not st.session_state.get('_quote_just_saved') and save_button:
                 refreshed_user = _refresh_current_user_for_final_action()
                 _user_tenant_id = refreshed_user.get('tenant_id')
                 # Verificar que hay líneas
@@ -2393,56 +2426,11 @@ with tab_quotes:
 
                     if success:
                         st.success(message)
-                        # Limpiar solo cachés de búsqueda (más eficiente que limpiar todo)
                         clear_search_caches()
-                        
-                        # Limpiar session_state de datos innecesarios
                         cleanup_session_state()
-
-                        if new_opportunity:
-                            # Nueva oportunidad: reiniciar todo
-                            st.session_state.lines = []
-                            st.session_state.quote_id = str(uuid.uuid4())
-                            st.session_state.quote_group_id = str(uuid.uuid4())
-                            st.session_state.version = 1
-                            st.session_state.parent_quote_id = None
-                            # Limpiar campos de información y sus keys de widget
-                            st.session_state.saved_proposal_name = ""
-                            st.session_state.saved_client_name = ""
-                            st.session_state.saved_quoted_by = ""
-                            st.session_state.draft_proposal_name = ""
-                            st.session_state.draft_client_name = ""
-                            st.session_state.draft_quoted_by = ""
-                            st.session_state.draft_line_sku = ""
-                            st.session_state.draft_line_description = ""
-                            st.session_state.draft_line_quantity = 1.0
-                            st.session_state.draft_line_type = "product"
-                            st.session_state.draft_line_service_origin = "doméstico"
-                            st.session_state.draft_line_cost = 0.0
-                            st.session_state.draft_line_price = 0.0
-                            st.session_state.draft_line_margin_target = 0.0
-                            st.session_state.draft_line_strategy = "penetration"
-                            for k in ['_input_proposal_name', '_input_client_name', '_input_quoted_by']:
-                                st.session_state.pop(k, None)
-                            st.info("🆕 Preparado para nueva oportunidad")
-                            st.rerun()
-                        else:
-                            # Nueva versión de la misma oportunidad
-                            current_group_id = st.session_state.quote_group_id
-                            saved_quote_id = st.session_state.quote_id
-
-                            # Calcular la siguiente versión correctamente: MAX(versiones) + 1
-                            all_versions_for_group = load_versions_for_group(current_group_id)
-                            max_version = all_versions_for_group["version"].max() if not all_versions_for_group.empty else 0
-                            next_version = max_version + 1
-
-                            st.session_state.lines = []
-                            st.session_state.quote_id = str(uuid.uuid4())
-                            st.session_state.quote_group_id = current_group_id
-                            st.session_state.version = next_version
-                            st.session_state.parent_quote_id = saved_quote_id
-                            st.info(f"📝 Preparado para versión v{next_version}")
-
+                        # Guardar el quote_id recién guardado para poder ir a propuesta formal
+                        st.session_state['_last_saved_quote_group_id'] = st.session_state.quote_group_id
+                        st.session_state['_quote_just_saved'] = True
                         st.rerun()
                     else:
                         st.error(message)
