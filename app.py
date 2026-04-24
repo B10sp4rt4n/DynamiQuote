@@ -1720,11 +1720,46 @@ with tab_quotes:
         _qmode = st.session_state.get('quote_start_mode')
 
         # ==========================================================
-        # AUTO-INICIO: ir directamente a nueva cotización
+        # LANDING: elegir tipo de cotización
         # ==========================================================
         if _qmode is None:
-            st.session_state['quote_start_mode'] = 'nueva'
-            st.rerun()
+            st.markdown("### ¿Qué deseas hacer?")
+            st.markdown("")
+            col_l, col_r, _col_sp = st.columns([2, 2, 1])
+            with col_l:
+                st.markdown("""
+                <div style="border:2px solid #1976D2;border-radius:12px;
+                            padding:28px;text-align:center;background:#E3F2FD;">
+                <h3 style="margin:0 0 8px 0;">🆕 Nueva Cotización</h3>
+                <p style="margin:0;color:#555;">Crear una cotización desde cero</p>
+                </div>
+                """, unsafe_allow_html=True)
+                st.markdown("")
+                if st.button("Nueva Cotización", type="primary",
+                             use_container_width=True, key="btn_modo_nueva"):
+                    # Limpiar TODOS los campos — es nueva, no tiene precedente
+                    for _k in ['draft_proposal_name', 'draft_client_name', 'draft_quoted_by',
+                               'saved_proposal_name', 'saved_client_name', 'saved_quoted_by',
+                               'draft_line_sku', 'draft_line_description', 'lines',
+                               'parent_quote_id', 'pending_line', '_quote_just_saved']:
+                        st.session_state.pop(_k, None)
+                    st.session_state['quote_start_mode'] = 'nueva'
+                    st.rerun()
+            with col_r:
+                st.markdown("""
+                <div style="border:2px solid #F57C00;border-radius:12px;
+                            padding:28px;text-align:center;background:#FFF3E0;">
+                <h3 style="margin:0 0 8px 0;">📋 Modificar Cotización</h3>
+                <p style="margin:0;color:#555;">
+                Tomar una cotización existente como base para una nueva versión
+                </p>
+                </div>
+                """, unsafe_allow_html=True)
+                st.markdown("")
+                if st.button("Modificar Cotización Existente", type="secondary",
+                             use_container_width=True, key="btn_modo_v2"):
+                    st.session_state['quote_start_mode'] = 'v2'
+                    st.rerun()
 
 
 
@@ -1846,13 +1881,15 @@ with tab_quotes:
         # MODO COTIZADOR: nueva propuesta o v2 con datos ya cargados
         # ==========================================================
         else:
-            # Botón de reinicio + badge de versión
+            # Botón de reinicio → regresa al landing
             _col_hdr, _col_btn = st.columns([5, 1])
             with _col_btn:
-                if st.button("🔄 Reiniciar", key="btn_reset_cotizador",
-                             help="Descartar esta cotización y volver al inicio"):
-                    _keep_keys = {'authenticated', 'current_user', 'saved_quoted_by',
-                                  'openai_enabled', 'openai_api_key', 'seccion_activa_quotes'}
+                if st.button("↩️ Volver", key="btn_reset_cotizador",
+                             help="Descartar y volver al inicio"):
+                    _keep_keys = {'authenticated', 'current_user',
+                                  'openai_enabled', 'openai_api_key',
+                                  'seccion_activa_quotes',
+                                  '_startup_db_info_cache', '_openai_key_cache'}
                     for _k in list(st.session_state.keys()):
                         if _k not in _keep_keys:
                             st.session_state.pop(_k, None)
