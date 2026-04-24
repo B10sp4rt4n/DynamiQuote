@@ -595,6 +595,16 @@ st.session_state['current_user'] = _refreshed_user
 _current_user = _refreshed_user
 _is_admin = _current_user['role'] == 'admin'
 
+# Flags de UI lazy-load (deben existir antes de cualquier acceso)
+if 'show_admin_panel' not in st.session_state:
+    st.session_state.show_admin_panel = False
+if 'show_proposals_history' not in st.session_state:
+    st.session_state.show_proposals_history = False
+if 'global_quick_results' not in st.session_state:
+    st.session_state.global_quick_results = None
+if 'global_quick_search_executed' not in st.session_state:
+    st.session_state.global_quick_search_executed = False
+
 # Cachear info de BD para evitar una consulta de diagnóstico en cada rerun
 if '_startup_db_info_cache' not in st.session_state:
     st.session_state['_startup_db_info_cache'] = get_database_info()
