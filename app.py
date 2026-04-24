@@ -123,7 +123,10 @@ def cleanup_session_state():
     # Lista de claves que DEBEN mantenerse
     essential_keys = {
         'quote_id', 'quote_group_id', 'version', 'parent_quote_id', 'lines',
-        'pending_line', 'input_proposal_name', 'input_client_name', 'input_quoted_by',
+        'pending_line', 'draft_proposal_name', 'draft_client_name', 'draft_quoted_by',
+        'draft_line_sku', 'draft_line_description', 'draft_line_quantity', 'draft_line_type',
+        'draft_line_service_origin', 'draft_line_cost', 'draft_line_price',
+        'draft_line_margin_target', 'draft_line_strategy',
         'saved_proposal_name', 'saved_client_name', 'saved_quoted_by',
         'openai_enabled', 'openai_api_key'
     }
@@ -1562,14 +1565,41 @@ if "pending_line" not in st.session_state:
     st.session_state.pending_line = None
 
 # Inicializar campos de información de cotización directamente con los keys de los inputs
-if "input_proposal_name" not in st.session_state:
-    st.session_state.input_proposal_name = ""
+if "draft_proposal_name" not in st.session_state:
+    st.session_state.draft_proposal_name = st.session_state.get("saved_proposal_name", "")
 
-if "input_client_name" not in st.session_state:
-    st.session_state.input_client_name = ""
+if "draft_client_name" not in st.session_state:
+    st.session_state.draft_client_name = st.session_state.get("saved_client_name", "")
 
-if "input_quoted_by" not in st.session_state:
-    st.session_state.input_quoted_by = ""
+if "draft_quoted_by" not in st.session_state:
+    st.session_state.draft_quoted_by = st.session_state.get("saved_quoted_by", "")
+
+if "draft_line_sku" not in st.session_state:
+    st.session_state.draft_line_sku = ""
+
+if "draft_line_description" not in st.session_state:
+    st.session_state.draft_line_description = ""
+
+if "draft_line_quantity" not in st.session_state:
+    st.session_state.draft_line_quantity = 1.0
+
+if "draft_line_type" not in st.session_state:
+    st.session_state.draft_line_type = "product"
+
+if "draft_line_service_origin" not in st.session_state:
+    st.session_state.draft_line_service_origin = "doméstico"
+
+if "draft_line_cost" not in st.session_state:
+    st.session_state.draft_line_cost = 0.0
+
+if "draft_line_price" not in st.session_state:
+    st.session_state.draft_line_price = 0.0
+
+if "draft_line_margin_target" not in st.session_state:
+    st.session_state.draft_line_margin_target = 0.0
+
+if "draft_line_strategy" not in st.session_state:
+    st.session_state.draft_line_strategy = "penetration"
 
 # Inicializar variables de respaldo para persistencia
 if "saved_proposal_name" not in st.session_state:
@@ -1747,6 +1777,9 @@ with tab_quotes:
                         st.session_state.saved_proposal_name = group_data.get("proposal_name", "") or ""
                         st.session_state.saved_client_name = group_data.get("client_name", "") or ""
                         st.session_state.saved_quoted_by = group_data.get("quoted_by", "") or ""
+                        st.session_state.draft_proposal_name = st.session_state.saved_proposal_name
+                        st.session_state.draft_client_name = st.session_state.saved_client_name
+                        st.session_state.draft_quoted_by = st.session_state.saved_quoted_by
 
                         st.success(f"✅ {len(quote_lines_raw)} líneas copiadas. "
                                    f"Se creará la v{st.session_state.version}. "
@@ -1788,42 +1821,54 @@ with tab_quotes:
             # Información de la cotización
             st.subheader("📋 Información de la Cotización")
 
-            # Callbacks para persistir en tiempo real (sin necesidad de botón Confirmar)
-            def _sync_proposal_name():
-                st.session_state.saved_proposal_name = st.session_state.get('_input_proposal_name', '')
-            def _sync_client_name():
-                st.session_state.saved_client_name = st.session_state.get('_input_client_name', '')
-            def _sync_quoted_by():
-                st.session_state.saved_quoted_by = st.session_state.get('_input_quoted_by', '')
-
             st.text_input(
                 "Nombre de la Propuesta",
-                value=st.session_state.get('saved_proposal_name', ''),
                 placeholder="Ej: Implementación ERP 2026, Soporte Anual...",
                 help="Dale un nombre identificable a esta propuesta",
-                key="_input_proposal_name",
-                on_change=_sync_proposal_name
+                key="draft_proposal_name",
             )
 
             col_form1, col_form2 = st.columns(2)
             with col_form1:
                 st.text_input(
                     "Cliente / Empresa",
-                    value=st.session_state.get('saved_client_name', ''),
                     placeholder="Ej: Acme Corp, Juan Pérez...",
                     help="Para quién es esta cotización",
-                    key="_input_client_name",
-                    on_change=_sync_client_name
+                    key="draft_client_name",
                 )
             with col_form2:
                 st.text_input(
                     "Cotizado por (User ID / Nombre)",
-                    value=st.session_state.get('saved_quoted_by', ''),
                     placeholder="Ej: jperez, vendedor@empresa.com, Juan Pérez...",
                     help="Identificador de quién crea esta cotización",
-                    key="_input_quoted_by",
-                    on_change=_sync_quoted_by
+                    key="draft_quoted_by",
                 )
+
+            _has_pending_quote_info = (
+                st.session_state.get('draft_proposal_name', '') != st.session_state.get('saved_proposal_name', '')
+                or st.session_state.get('draft_client_name', '') != st.session_state.get('saved_client_name', '')
+                or st.session_state.get('draft_quoted_by', '') != st.session_state.get('saved_quoted_by', '')
+            )
+
+            col_confirm_info, col_revert_info = st.columns(2)
+            with col_confirm_info:
+                if st.button("💾 Confirmar datos de cotización", type="primary", use_container_width=True):
+                    st.session_state.saved_proposal_name = st.session_state.get('draft_proposal_name', '')
+                    st.session_state.saved_client_name = st.session_state.get('draft_client_name', '')
+                    st.session_state.saved_quoted_by = st.session_state.get('draft_quoted_by', '')
+                    st.success("✅ Datos de cotización confirmados")
+            with col_revert_info:
+                if st.button("↩️ Revertir borrador", use_container_width=True):
+                    st.session_state.draft_proposal_name = st.session_state.get('saved_proposal_name', '')
+                    st.session_state.draft_client_name = st.session_state.get('saved_client_name', '')
+                    st.session_state.draft_quoted_by = st.session_state.get('saved_quoted_by', '')
+                    st.info("Borrador restaurado al último valor confirmado")
+                    st.rerun()
+
+            if _has_pending_quote_info:
+                st.caption("⚠️ Hay cambios en borrador. No se guardarán hasta confirmar.")
+            else:
+                st.caption("✅ Datos confirmados.")
     # Mostrar maquinaria del cotizador sólo cuando hay un modo activo con datos cargados
         _qm_outer = st.session_state.get('quote_start_mode')
         _show_cotizador = (_qm_outer is not None and
@@ -2131,32 +2176,41 @@ with tab_quotes:
             # Solo mostrar el formulario de agregar si no hay línea pendiente
             st.subheader("➕ Agregar línea")
 
-            with st.form("add_line", clear_on_submit=True):
-                col1, col2, col3 = st.columns(3)
+            col1, col2, col3 = st.columns(3)
 
-                with col1:
-                    sku = st.text_input("SKU *")
-                    description_input = st.text_input("Descripción *")
-                    quantity = st.number_input("Cantidad *", min_value=0.01, value=1.0, step=1.0)
-                    line_type = st.selectbox("Tipo de línea", ["product", "service"])
+            with col1:
+                st.text_input("SKU *", key="draft_line_sku")
+                st.text_input("Descripción *", key="draft_line_description")
+                st.number_input("Cantidad *", min_value=0.01, step=1.0, key="draft_line_quantity")
+                st.selectbox("Tipo de línea", ["product", "service"], key="draft_line_type")
 
-                with col2:
-                    service_origin = st.selectbox(
-                        "Clasificación",
-                        ["doméstico", "profesional", "accesorios", "refacciones", "servicios", "póliza"],
-                        help="Tipo o categoría del producto/servicio (para análisis de composición)"
-                    )
-                    cost = st.number_input("Costo unitario", min_value=0.0, step=0.01)
-                    price = st.number_input("Precio unitario", min_value=0.0, step=0.01)
+            with col2:
+                st.selectbox(
+                    "Clasificación",
+                    ["doméstico", "profesional", "accesorios", "refacciones", "servicios", "póliza"],
+                    help="Tipo o categoría del producto/servicio (para análisis de composición)",
+                    key="draft_line_service_origin",
+                )
+                st.number_input("Costo unitario", min_value=0.0, step=0.01, key="draft_line_cost")
+                st.number_input("Precio unitario", min_value=0.0, step=0.01, key="draft_line_price")
 
-                with col3:
-                    margin_target = st.number_input("Margen objetivo % (opcional)", min_value=0.0, max_value=99.0, step=0.1)
-                    strategy = st.selectbox("Estrategia", ["penetration", "defense", "upsell", "renewal"])
+            with col3:
+                st.number_input("Margen objetivo % (opcional)", min_value=0.0, max_value=99.0, step=0.1, key="draft_line_margin_target")
+                st.selectbox("Estrategia", ["penetration", "defense", "upsell", "renewal"], key="draft_line_strategy")
 
-                submit = st.form_submit_button("Agregar línea")
+            add_line_btn = st.button("✅ Confirmar y agregar línea", type="primary", use_container_width=True)
 
-            # Procesar submit fuera del formulario
-            if submit:
+            if add_line_btn:
+                sku = st.session_state.get("draft_line_sku", "")
+                description_input = st.session_state.get("draft_line_description", "")
+                quantity = float(st.session_state.get("draft_line_quantity", 1.0))
+                line_type = st.session_state.get("draft_line_type", "product")
+                service_origin = st.session_state.get("draft_line_service_origin", "doméstico")
+                cost = float(st.session_state.get("draft_line_cost", 0.0))
+                price = float(st.session_state.get("draft_line_price", 0.0))
+                margin_target = float(st.session_state.get("draft_line_margin_target", 0.0))
+                strategy = st.session_state.get("draft_line_strategy", "penetration")
+
                 # Validaciones
                 if not sku or not sku.strip():
                     st.error("❌ SKU es obligatorio")
@@ -2218,6 +2272,12 @@ with tab_quotes:
                     # Sin correcciones, agregar directamente
                     new_line["description_final"] = description_input
                     st.session_state.lines.append(new_line)
+                    st.session_state.draft_line_sku = ""
+                    st.session_state.draft_line_description = ""
+                    st.session_state.draft_line_quantity = 1.0
+                    st.session_state.draft_line_cost = 0.0
+                    st.session_state.draft_line_price = 0.0
+                    st.session_state.draft_line_margin_target = 0.0
                     st.success("✅ Línea agregada correctamente")
                     st.rerun()
 
@@ -2506,6 +2566,18 @@ with tab_quotes:
                             st.session_state.saved_proposal_name = ""
                             st.session_state.saved_client_name = ""
                             st.session_state.saved_quoted_by = ""
+                            st.session_state.draft_proposal_name = ""
+                            st.session_state.draft_client_name = ""
+                            st.session_state.draft_quoted_by = ""
+                            st.session_state.draft_line_sku = ""
+                            st.session_state.draft_line_description = ""
+                            st.session_state.draft_line_quantity = 1.0
+                            st.session_state.draft_line_type = "product"
+                            st.session_state.draft_line_service_origin = "doméstico"
+                            st.session_state.draft_line_cost = 0.0
+                            st.session_state.draft_line_price = 0.0
+                            st.session_state.draft_line_margin_target = 0.0
+                            st.session_state.draft_line_strategy = "penetration"
                             for k in ['_input_proposal_name', '_input_client_name', '_input_quoted_by']:
                                 st.session_state.pop(k, None)
                             st.info("🆕 Preparado para nueva oportunidad")
