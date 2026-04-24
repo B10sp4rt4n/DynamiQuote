@@ -657,10 +657,13 @@ with st.sidebar:
 
     st.header("⚙️ Configuración")
 
-    # OpenAI API Key — se carga automáticamente desde secrets o variable de entorno
+    # OpenAI API Key — se carga automáticamente desde secrets o variable de entorno (cacheado)
     st.subheader("🤖 Corrección Inteligente con IA")
 
-    _auto_key, _openai_source = get_openai_api_key()
+    if '_openai_key_cache' not in st.session_state:
+        _auto_key_raw, _openai_source_raw = get_openai_api_key()
+        st.session_state['_openai_key_cache'] = (_auto_key_raw, _openai_source_raw)
+    _auto_key, _openai_source = st.session_state['_openai_key_cache']
     _auto_key = _auto_key or ""
 
     if _auto_key and _auto_key.startswith("sk-"):
@@ -1583,8 +1586,8 @@ migration_success, migration_message = run_migrations()
 if not migration_success:
     st.warning(f"⚠️ Algunas migraciones no se ejecutaron correctamente: {migration_message}")
 
-# Mostrar info de base de datos
-db_info = get_database_info()
+# Mostrar info de base de datos (usar cache, no hacer nueva consulta)
+db_info = st.session_state.get('_startup_db_info_cache') or get_database_info()
 st.sidebar.markdown(f"{db_info['icon']} **Base de datos:** {db_info['type']}")
 st.sidebar.caption(f"Conexión: {db_info['connection']}")
 
