@@ -667,13 +667,15 @@ with st.sidebar:
     _auto_key = _auto_key or ""
 
     if _auto_key and _auto_key.startswith("sk-"):
-        st.session_state.openai_enabled = True
-        st.session_state.openai_api_key = _auto_key
+        if not st.session_state.get('openai_enabled'):
+            st.session_state.openai_enabled = True
+            st.session_state.openai_api_key = _auto_key
         st.success("✅ IA habilitada — Sugerencias y correcciones con GPT disponibles")
         st.caption(f"Fuente OpenAI: {_openai_source}")
     else:
-        st.session_state.openai_enabled = False
-        st.session_state.openai_api_key = None
+        if st.session_state.get('openai_enabled'):
+            st.session_state.openai_enabled = False
+            st.session_state.openai_api_key = None
         st.warning("⚠️ IA no disponible — Configura OPENAI_API_KEY en Secrets")
         st.caption(f"Fuente OpenAI: {_openai_source}")
 
