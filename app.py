@@ -173,6 +173,12 @@ def render_advanced_quote_search(key: str, title: str = "🔍 Buscador de Cotiza
     
     with col_filters:
         show_filters = st.checkbox("Filtros avanzados", key=f"{key}_show_filters", value=False)
+
+    col_action_search, col_action_recent = st.columns(2)
+    with col_action_search:
+        run_search = st.button("🔍 Buscar", key=f"{key}_advanced_search_btn", use_container_width=True)
+    with col_action_recent:
+        load_recent = st.button("📅 Cargar recientes", key=f"{key}_advanced_recent_btn", use_container_width=True)
     
     # Filtros avanzados (colapsables)
     date_from = None
@@ -203,12 +209,17 @@ def render_advanced_quote_search(key: str, title: str = "🔍 Buscador de Cotiza
                 key=f"{key}_status_filter"
             )
     
-    # Realizar búsqueda
-    if search_query and search_query.strip():
+    # Realizar búsqueda solo bajo demanda
+    if run_search and search_query and search_query.strip():
         results = search_quotes(search_query, limit=50)
-    else:
+    elif load_recent:
         st.caption("💡 Mostrando cotizaciones recientes")
         results = get_recent_quotes(limit=30)
+    else:
+        st.caption("Ingresa un criterio y presiona Buscar, o usa Cargar recientes.")
+        if f"{key}_selected_group" in st.session_state:
+            return st.session_state[f"{key}_selected_group"]
+        return None
     
     if not results:
         st.info("💭 No se encontraron resultados. Intenta con otros términos de búsqueda.")
@@ -310,14 +321,21 @@ def render_quote_search_selector(key: str, label: str = "Buscar cotización", sh
     with col_btn:
         st.write("")  # Spacer
         search_clicked = st.button("🔍 Buscar", key=f"{key}_btn")
+
+    load_recent_clicked = False
+    if show_recent:
+        load_recent_clicked = st.button("📅 Cargar recientes", key=f"{key}_recent_btn")
     
-    # Realizar búsqueda
-    if search_query and search_query.strip():
+    # Realizar búsqueda solo bajo demanda (evita consultas al arranque)
+    if search_clicked and search_query and search_query.strip():
         results = search_quotes(search_query, limit=20)
-    elif show_recent:
+    elif load_recent_clicked:
         st.caption("💡 Mostrando cotizaciones recientes")
         results = get_recent_quotes(limit=20)
     else:
+        st.caption("Ingresa un término y presiona Buscar, o usa Cargar recientes.")
+        if f"{key}_selected_group" in st.session_state:
+            return st.session_state[f"{key}_selected_group"]
         return None
     
     if not results:
@@ -355,7 +373,11 @@ def render_quote_search_selector(key: str, label: str = "Buscar cotización", sh
     )
     
     if selected:
+        st.session_state[f"{key}_selected_group"] = options[selected]
         return options[selected]
+
+    if f"{key}_selected_group" in st.session_state:
+        return st.session_state[f"{key}_selected_group"]
     
     return None
 
