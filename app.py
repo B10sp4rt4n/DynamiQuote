@@ -1721,7 +1721,7 @@ with tab_quotes:
             st.markdown("")
             st.markdown("### ¿Cómo deseas comenzar?")
             st.markdown("")
-            col_l, _col_sp = st.columns([2, 3])
+            col_l, col_r, _col_sp = st.columns([2, 2, 1])
             with col_l:
                 st.markdown("""
                 <div style="border:2px solid #1976D2;border-radius:12px;
@@ -1734,6 +1734,21 @@ with tab_quotes:
                 if st.button("Crear Nueva Propuesta", type="primary",
                              use_container_width=True, key="btn_modo_nueva"):
                     st.session_state['quote_start_mode'] = 'nueva'
+                    st.rerun()
+            with col_r:
+                st.markdown("""
+                <div style="border:2px solid #F57C00;border-radius:12px;
+                            padding:28px;text-align:center;background:#FFF3E0;">
+                <h3 style="margin:0 0 8px 0;">📋 Nueva Versión</h3>
+                <p style="margin:0;color:#555;">
+                Toma una propuesta existente como base y crea una versión mejorada
+                </p>
+                </div>
+                """, unsafe_allow_html=True)
+                st.markdown("")
+                if st.button("Nueva Versión de Propuesta Existente", type="secondary",
+                             use_container_width=True, key="btn_modo_v2"):
+                    st.session_state['quote_start_mode'] = 'v2'
                     st.rerun()
 
 
@@ -2278,9 +2293,11 @@ with tab_quotes:
             st.subheader("✅ Cerrar y guardar propuesta")
 
             # Opción para nueva oportunidad o continuar con versiones
-            col_new_opp, col_playbook = st.columns([1, 2])
-
-            with col_new_opp:
+            _es_modo_nueva = _qm_outer == 'nueva'
+            if _es_modo_nueva:
+                # Nueva propuesta desde cero: siempre es oportunidad nueva
+                new_opportunity = True
+            else:
                 new_opportunity = st.checkbox(
                     "🆕 Nueva oportunidad",
                     value=False,
@@ -2291,6 +2308,7 @@ with tab_quotes:
                 else:
                     st.caption(f"📝 Versión actual: v{st.session_state.version}")
 
+            col_playbook = st.columns(1)[0]
             with col_playbook:
                 save_playbook = st.selectbox(
                     "📘 Playbook a aplicar",
