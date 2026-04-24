@@ -2171,6 +2171,20 @@ with tab_quotes:
             if "service_origin" in df.columns:
                 df["service_origin"] = df["service_origin"].astype(str).fillna("Sin especificar").replace("", "Sin especificar")
 
+            # Paleta de colores por línea (consistente entre tabla y gráfica)
+            _LINE_PALETTE = [
+                "#4C9BE8", "#E8834C", "#5CC85C", "#D94F4F", "#9B59B6",
+                "#1ABC9C", "#F39C12", "#2980B9", "#E74C3C", "#27AE60",
+                "#8E44AD", "#16A085", "#D35400", "#2C3E50", "#C0392B",
+            ]
+            _sku_colors = {
+                row["sku"]: _LINE_PALETTE[i % len(_LINE_PALETTE)]
+                for i, row in df.iterrows()
+            }
+
+            # Calcular % aportación al costo total por línea
+            df["pct_costo"] = (df["subtotal_cost"] / total_cost * 100).round(1) if total_cost > 0 else 0.0
+
             # Preparar DataFrame para mostrar con formato
             display_df = df[[
                 "sku",
@@ -2183,16 +2197,19 @@ with tab_quotes:
                 "final_price_unit",
                 "subtotal_price",
                 "margin_pct",
+                "pct_costo",
                 "warnings"
             ]].copy()
 
             # Renombrar columnas para mejor presentación
             display_df.columns = [
                 "SKU", "Descripción", "Cant.", "Tipo", "Origen", "Estrategia",
-                "Costo Unit.", "Precio Unit.", "Subtotal", "Margen %", "Advertencias"
+                "Costo Unit.", "Precio Unit.", "Subtotal", "Margen %", "% Costo", "Advertencias"
             ]
 
-            # Mostrar tabla con opción de edición
+            # Construir color de fondo por fila basado en el SKU
+            _row_colors = [_sku_colors.get(row["sku"], "#FFFFFF") for _, row in df.iterrows()]
+
             st.markdown("**💡 Tip:** Puedes editar las líneas directamente en la tabla. Los cambios se aplican al hacer clic fuera de la celda.")
 
             edited_df = st.data_editor(
@@ -2211,6 +2228,7 @@ with tab_quotes:
                     "Precio Unit.": st.column_config.NumberColumn("Precio Unit.", min_value=0, step=0.01, format="$%.2f"),
                     "Subtotal": st.column_config.NumberColumn("Subtotal", disabled=True, format="$%.2f"),
                     "Margen %": st.column_config.NumberColumn("Margen %", format="%.2f%%"),
+                    "% Costo": st.column_config.ProgressColumn("% Costo", min_value=0, max_value=100, format="%.1f%%"),
                     "Advertencias": st.column_config.TextColumn("Advertencias", disabled=True)
                 }
             )
@@ -2274,19 +2292,25 @@ with tab_quotes:
             col_graph1, col_graph2 = st.columns(2)
 
             with col_graph1:
-                st.markdown("**Aportación por Origen de Servicio**")
-                comp_df = df.groupby("service_origin")["subtotal_price"].sum().reset_index()
-                fig1, ax1 = plt.subplots(figsize=(6, 4))
-                ax1.pie(
-                    comp_df["subtotal_price"],
-                    labels=comp_df["service_origin"],
-                    autopct="%1.1f%%",
-                    startangle=90
+                st.markdown("**Aportación al Costo Total por Línea**")
+                _pie_skus = df["sku"].tolist()
+                _pie_costs = df["subtotal_cost"].tolist()
+                _pie_colors = [_sku_colors[s] for s in _pie_skus]
+                import plotly.graph_objects as _go_pie
+                _fig_lines = _go_pie.Figure(data=[_go_pie.Pie(
+                    labels=_pie_skus,
+                    values=_pie_costs,
+                    marker=dict(colors=_pie_colors),
+                    textinfo="label+percent",
+                    hovertemplate="<b>%{label}</b><br>Costo: $%{value:,.2f}<br>%{percent}<extra></extra>",
+                    hole=0.4,
+                )])
+                _fig_lines.update_layout(
+                    margin=dict(t=10, b=10, l=10, r=10),
+                    height=320,
+                    showlegend=False,
                 )
-                ax1.set_title("Aportación total por origen de servicio")
-                plt.tight_layout()
-                st.pyplot(fig1)
-                plt.close(fig1)  # Cerrar figura para liberar memoria
+                st.plotly_chart(_fig_lines, use_container_width=True, key="line_cost_donut")
 
             with col_graph2:
                 st.markdown("**Costo vs Utilidad Bruta**")
