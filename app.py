@@ -2120,10 +2120,10 @@ with tab_quotes:
                     st.success("✅ Línea agregada correctamente")
                     st.rerun()
 
-        # Mostrar cotización si hay líneas
-        if not st.session_state.lines:
+        # Mostrar cotización si hay líneas (solo en modo activo, no en landing)
+        if _show_cotizador and not st.session_state.lines:
             st.info("Agrega líneas para iniciar una cotización")
-        else:
+        elif _show_cotizador:
             st.divider()
             st.subheader("📊 Cotización en curso")
 
