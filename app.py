@@ -585,15 +585,23 @@ if not _session_user or not _session_user.get('user_id'):
     st.session_state.pop('current_user', None)
     st.rerun()
 
-_refreshed_user = get_user_by_id(_session_user['user_id'])
-if not _refreshed_user:
-    st.session_state['authenticated'] = False
-    st.session_state.pop('current_user', None)
-    st.rerun()
-
-st.session_state['current_user'] = _refreshed_user
-_current_user = _refreshed_user
+# En modo edición, NO refrescar usuario en cada rerun para evitar queries continuas.
+# Se refresca solo en acciones finales (agregar línea / guardar cotización).
+_current_user = _session_user
 _is_admin = _current_user['role'] == 'admin'
+
+def _refresh_current_user_for_final_action() -> dict:
+    """Refresca usuario solo al confirmar acciones finales de negocio."""
+    global _current_user, _is_admin
+    refreshed_user = get_user_by_id(_current_user['user_id'])
+    if not refreshed_user:
+        st.session_state['authenticated'] = False
+        st.session_state.pop('current_user', None)
+        st.rerun()
+    st.session_state['current_user'] = refreshed_user
+    _current_user = refreshed_user
+    _is_admin = _current_user['role'] == 'admin'
+    return refreshed_user
 
 # Flags de UI lazy-load (deben existir antes de cualquier acceso)
 if 'show_admin_panel' not in st.session_state:
@@ -1919,25 +1927,24 @@ with tab_quotes:
                 or st.session_state.get('draft_quoted_by', '') != st.session_state.get('saved_quoted_by', '')
             )
 
-            col_confirm_info, col_revert_info = st.columns(2)
-            with col_confirm_info:
-                if st.button("💾 Confirmar datos de cotización", type="primary", use_container_width=True):
-                    st.session_state.saved_proposal_name = st.session_state.get('draft_proposal_name', '')
-                    st.session_state.saved_client_name = st.session_state.get('draft_client_name', '')
-                    st.session_state.saved_quoted_by = st.session_state.get('draft_quoted_by', '')
-                    st.success("✅ Datos de cotización confirmados")
-            with col_revert_info:
-                if st.button("↩️ Revertir borrador", use_container_width=True):
-                    st.session_state.draft_proposal_name = st.session_state.get('saved_proposal_name', '')
-                    st.session_state.draft_client_name = st.session_state.get('saved_client_name', '')
-                    st.session_state.draft_quoted_by = st.session_state.get('saved_quoted_by', '')
-                    st.info("Borrador restaurado al último valor confirmado")
-                    st.rerun()
-
             if _has_pending_quote_info:
+                col_confirm_info, col_revert_info = st.columns(2)
+                with col_confirm_info:
+                    if st.button("💾 Guardar cambios de cotización", type="primary", use_container_width=True):
+                        st.session_state.saved_proposal_name = st.session_state.get('draft_proposal_name', '')
+                        st.session_state.saved_client_name = st.session_state.get('draft_client_name', '')
+                        st.session_state.saved_quoted_by = st.session_state.get('draft_quoted_by', '')
+                        st.success("✅ Cambios de cotización guardados")
+                with col_revert_info:
+                    if st.button("↩️ Descartar cambios", use_container_width=True):
+                        st.session_state.draft_proposal_name = st.session_state.get('saved_proposal_name', '')
+                        st.session_state.draft_client_name = st.session_state.get('saved_client_name', '')
+                        st.session_state.draft_quoted_by = st.session_state.get('saved_quoted_by', '')
+                        st.info("Cambios descartados")
+                        st.rerun()
                 st.caption("⚠️ Hay cambios en borrador. No se guardarán hasta confirmar.")
             else:
-                st.caption("✅ Datos confirmados.")
+                st.caption("✅ Datos de cotización guardados.")
     # Mostrar maquinaria del cotizador sólo cuando hay un modo activo con datos cargados
         _qm_outer = st.session_state.get('quote_start_mode')
         _show_cotizador = (_qm_outer is not None and
@@ -2270,6 +2277,7 @@ with tab_quotes:
             add_line_btn = st.button("✅ Confirmar y agregar línea", type="primary", use_container_width=True)
 
             if add_line_btn:
+                _refresh_current_user_for_final_action()
                 sku = st.session_state.get("draft_line_sku", "")
                 description_input = st.session_state.get("draft_line_description", "")
                 quantity = float(st.session_state.get("draft_line_quantity", 1.0))
@@ -2551,6 +2559,8 @@ with tab_quotes:
             save_button = st.button("💾 Guardar Cotización", type="primary", width='stretch')
 
             if save_button:
+                refreshed_user = _refresh_current_user_for_final_action()
+                _user_tenant_id = refreshed_user.get('tenant_id')
                 # Verificar que hay líneas
                 if not st.session_state.lines:
                     st.error("❌ No hay líneas para guardar")
