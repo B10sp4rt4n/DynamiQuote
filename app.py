@@ -595,7 +595,11 @@ st.session_state['current_user'] = _refreshed_user
 _current_user = _refreshed_user
 _is_admin = _current_user['role'] == 'admin'
 
-_startup_db_info = get_database_info()
+# Cachear info de BD para evitar una consulta de diagnóstico en cada rerun
+if '_startup_db_info_cache' not in st.session_state:
+    st.session_state['_startup_db_info_cache'] = get_database_info()
+
+_startup_db_info = st.session_state['_startup_db_info_cache']
 _database_source = get_database_config_source()
 if is_streamlit_cloud() and _startup_db_info['type'] == 'SQLite':
     st.error("❌ Streamlit Cloud está corriendo con SQLite porque falta DATABASE_URL en Secrets. Configura DATABASE_URL y reinicia la app.")
@@ -609,12 +613,16 @@ with st.sidebar:
     st.markdown(f"👤 **{_current_user['full_name']}**")
     _seller_code = _current_user.get('seller_code')
     _user_tenant_id = _current_user.get('tenant_id')
-    # Mostrar empresa del usuario
-    if _user_tenant_id:
-        _tenant_info = get_tenant(_user_tenant_id)
-        _tenant_name = _tenant_info['name'] if _tenant_info else "—"
-    else:
-        _tenant_name = None
+    # Mostrar empresa del usuario (cacheado por tenant_id para evitar query repetitiva)
+    if st.session_state.get('_tenant_name_cache_id') != _user_tenant_id:
+        if _user_tenant_id:
+            _tenant_info = get_tenant(_user_tenant_id)
+            st.session_state['_tenant_name_cache_value'] = _tenant_info['name'] if _tenant_info else "—"
+        else:
+            st.session_state['_tenant_name_cache_value'] = None
+        st.session_state['_tenant_name_cache_id'] = _user_tenant_id
+
+    _tenant_name = st.session_state.get('_tenant_name_cache_value')
     _alias_line = f"@{_current_user['alias']} · {'👑 Admin' if _is_admin else '🧑 Usuario'}"
     if _seller_code:
         _alias_line += f" · `{_seller_code}`"
@@ -884,7 +892,20 @@ def render_admin_panel(expanded: bool = True):
 
 
 if _is_admin:
-    render_admin_panel(expanded=True)
+    _admin_col_open, _admin_col_close = st.columns(2)
+    with _admin_col_open:
+        if not st.session_state.show_admin_panel and st.button("⚙️ Cargar administración", use_container_width=True):
+            st.session_state.show_admin_panel = True
+            st.rerun()
+    with _admin_col_close:
+        if st.session_state.show_admin_panel and st.button("✖️ Ocultar administración", use_container_width=True):
+            st.session_state.show_admin_panel = False
+            st.rerun()
+
+    if st.session_state.show_admin_panel:
+        render_admin_panel(expanded=True)
+    else:
+        st.caption("La administración de usuarios y empresas solo se carga bajo demanda.")
 
 # =========================
 # Búsqueda Global (Siempre Visible)
@@ -905,12 +926,16 @@ with st.expander("🔍 **Búsqueda Rápida de Cotizaciones y Propuestas**", expa
     with col_quick_btn:
         quick_search_btn = st.button("🔍 Buscar", key="global_search_btn", width='stretch')
     
-    if quick_search and quick_search.strip():
+    if quick_search_btn and quick_search and quick_search.strip():
         with st.spinner("Buscando..."):
             _search_tenant = None if _is_admin else _user_tenant_id
-            quick_results = search_quotes(quick_search, limit=10, tenant_id=_search_tenant)
-            
-            if quick_results:
+            st.session_state.global_quick_results = search_quotes(quick_search, limit=10, tenant_id=_search_tenant)
+            st.session_state.global_quick_search_executed = True
+
+    if st.session_state.global_quick_search_executed:
+        quick_results = st.session_state.global_quick_results or []
+
+        if quick_results:
                 st.success(f"✅ {len(quick_results)} resultados encontrados")
                 
                 # Mostrar resultados en tarjetas expandibles
@@ -950,8 +975,8 @@ with st.expander("🔍 **Búsqueda Rápida de Cotizaciones y Propuestas**", expa
                             st.caption(f"📦 **{len(lines)} líneas de detalle**")
                             lines_df = build_quote_lines_display_df(lines)
                             st.dataframe(lines_df, use_container_width=True, hide_index=True)
-            else:
-                st.warning("⚠️ No se encontraron resultados. Intenta con otros términos.")
+        else:
+            st.warning("⚠️ No se encontraron resultados. Intenta con otros términos.")
 
 st.divider()
 
@@ -1622,6 +1647,18 @@ if "draft_line_margin_target" not in st.session_state:
 
 if "draft_line_strategy" not in st.session_state:
     st.session_state.draft_line_strategy = "penetration"
+
+if "show_admin_panel" not in st.session_state:
+    st.session_state.show_admin_panel = False
+
+if "show_proposals_history" not in st.session_state:
+    st.session_state.show_proposals_history = False
+
+if "global_quick_results" not in st.session_state:
+    st.session_state.global_quick_results = None
+
+if "global_quick_search_executed" not in st.session_state:
+    st.session_state.global_quick_search_executed = False
 
 # Inicializar variables de respaldo para persistencia
 if "saved_proposal_name" not in st.session_state:
@@ -3339,90 +3376,103 @@ with tab_quotes:
 
             from database import get_formal_proposals, get_formal_proposal, get_quote_lines_full, mark_proposal_as_delivered, get_all_users
 
-            # Filtros
-            col_filter1, col_filter2, col_filter3 = st.columns([1, 1, 2])
-            with col_filter1:
-                status_filter_option = st.selectbox(
-                    "Filtrar por estado:",
-                    options=["Todas", "Borrador", "Entregadas"],
-                    index=0,
-                    key="proposal_status_filter"
+            _history_col1, _history_col2 = st.columns(2)
+            with _history_col1:
+                if not st.session_state.show_proposals_history and st.button("📚 Cargar historial de propuestas", use_container_width=True):
+                    st.session_state.show_proposals_history = True
+                    st.rerun()
+            with _history_col2:
+                if st.session_state.show_proposals_history and st.button("✖️ Ocultar historial", use_container_width=True):
+                    st.session_state.show_proposals_history = False
+                    st.rerun()
+
+            if not st.session_state.show_proposals_history:
+                st.caption("El historial de propuestas y el filtro de usuarios solo se cargan bajo demanda.")
+            else:
+
+                # Filtros
+                col_filter1, col_filter2, col_filter3 = st.columns([1, 1, 2])
+                with col_filter1:
+                    status_filter_option = st.selectbox(
+                        "Filtrar por estado:",
+                        options=["Todas", "Borrador", "Entregadas"],
+                        index=0,
+                        key="proposal_status_filter"
+                    )
+
+                # Filtro por usuario (solo visible para admin)
+                user_filter_alias = None
+                if _is_admin:
+                    with col_filter2:
+                        _users_list = get_all_users()
+                        _user_opts = ["Todos los usuarios"] + [f"{u['full_name']} (@{u['alias']})" for u in _users_list]
+                        _selected_user = st.selectbox("Filtrar por usuario:", options=_user_opts, index=0, key="proposal_user_filter")
+                        if _selected_user != "Todos los usuarios":
+                            _idx = _user_opts.index(_selected_user) - 1
+                            user_filter_alias = _users_list[_idx]['alias']
+
+                # Convertir a valor de BD
+                status_filter_value = None
+                if status_filter_option == "Borrador":
+                    status_filter_value = "draft"
+                elif status_filter_option == "Entregadas":
+                    status_filter_value = "delivered"
+
+                all_proposals = get_formal_proposals(
+                    status_filter=status_filter_value,
+                    created_by_filter=user_filter_alias if _is_admin else _current_user['alias']
                 )
 
-            # Filtro por usuario (solo visible para admin)
-            user_filter_alias = None
-            if _is_admin:
-                with col_filter2:
-                    _users_list = get_all_users()
-                    _user_opts = ["Todos los usuarios"] + [f"{u['full_name']} (@{u['alias']})" for u in _users_list]
-                    _selected_user = st.selectbox("Filtrar por usuario:", options=_user_opts, index=0, key="proposal_user_filter")
-                    if _selected_user != "Todos los usuarios":
-                        _idx = _user_opts.index(_selected_user) - 1
-                        user_filter_alias = _users_list[_idx]['alias']
-
-            # Convertir a valor de BD
-            status_filter_value = None
-            if status_filter_option == "Borrador":
-                status_filter_value = "draft"
-            elif status_filter_option == "Entregadas":
-                status_filter_value = "delivered"
-
-            all_proposals = get_formal_proposals(
-                status_filter=status_filter_value,
-                created_by_filter=user_filter_alias if _is_admin else _current_user['alias']
-            )
-
-            if all_proposals:
-                # Controles de paginación
-                col1, col2, col3 = st.columns([2, 1, 1])
-                
-                with col1:
-                    st.write(f"**Total: {len(all_proposals)} propuestas**")
-                
-                with col2:
-                    items_per_page = st.selectbox(
-                        "Mostrar por página:",
-                        options=[10, 20, 50, len(all_proposals)],
-                        format_func=lambda x: "Todas" if x == len(all_proposals) else str(x),
-                        key="proposals_per_page"
-                    )
-                
-                with col3:
-                    # Calcular número de páginas
-                    total_pages = (len(all_proposals) - 1) // items_per_page + 1
-                    if 'proposals_page' not in st.session_state:
-                        st.session_state.proposals_page = 1
+                if all_proposals:
+                    # Controles de paginación
+                    col1, col2, col3 = st.columns([2, 1, 1])
                     
-                    current_page = st.number_input(
-                        f"Página (de {total_pages}):",
-                        min_value=1,
-                        max_value=total_pages,
-                        value=st.session_state.proposals_page,
-                        key="proposals_page_input"
+                    with col1:
+                        st.write(f"**Total: {len(all_proposals)} propuestas**")
+                    
+                    with col2:
+                        items_per_page = st.selectbox(
+                            "Mostrar por página:",
+                            options=[10, 20, 50, len(all_proposals)],
+                            format_func=lambda x: "Todas" if x == len(all_proposals) else str(x),
+                            key="proposals_per_page"
+                        )
+                    
+                    with col3:
+                        # Calcular número de páginas
+                        total_pages = (len(all_proposals) - 1) // items_per_page + 1
+                        if 'proposals_page' not in st.session_state:
+                            st.session_state.proposals_page = 1
+                        
+                        current_page = st.number_input(
+                            f"Página (de {total_pages}):",
+                            min_value=1,
+                            max_value=total_pages,
+                            value=st.session_state.proposals_page,
+                            key="proposals_page_input"
+                        )
+                        st.session_state.proposals_page = current_page
+                    
+                    # Calcular índices de paginación
+                    start_idx = (current_page - 1) * items_per_page
+                    end_idx = min(start_idx + items_per_page, len(all_proposals))
+                    paginated_proposals = all_proposals[start_idx:end_idx]
+                    
+                    st.write(f"Mostrando {start_idx + 1} - {end_idx} de {len(all_proposals)}")
+                    st.divider()
+                    
+                    # Selector dropdown de propuesta
+                    proposal_options = {
+                        f"{prop['proposal_number']} - {prop['recipient_company']} ({prop['issued_date']})": prop['proposal_doc_id']
+                        for prop in paginated_proposals
+                    }
+                    
+                    selected_proposal_label = st.selectbox(
+                        "Selecciona una propuesta:",
+                        options=list(proposal_options.keys()),
+                        key="selected_proposal_dropdown"
                     )
-                    st.session_state.proposals_page = current_page
-                
-                # Calcular índices de paginación
-                start_idx = (current_page - 1) * items_per_page
-                end_idx = min(start_idx + items_per_page, len(all_proposals))
-                paginated_proposals = all_proposals[start_idx:end_idx]
-                
-                st.write(f"Mostrando {start_idx + 1} - {end_idx} de {len(all_proposals)}")
-                st.divider()
-                
-                # Selector dropdown de propuesta
-                proposal_options = {
-                    f"{prop['proposal_number']} - {prop['recipient_company']} ({prop['issued_date']})": prop['proposal_doc_id']
-                    for prop in paginated_proposals
-                }
-                
-                selected_proposal_label = st.selectbox(
-                    "Selecciona una propuesta:",
-                    options=list(proposal_options.keys()),
-                    key="selected_proposal_dropdown"
-                )
-                
-                if selected_proposal_label:
+                    
                     selected_proposal_id = proposal_options[selected_proposal_label]
                     
                     # Obtener propuesta completa
@@ -3619,8 +3669,8 @@ with tab_quotes:
                                     if st.button("❌ Cancelar", key=f"confirm_no_{selected_proposal_id}"):
                                         del st.session_state.confirm_delivery
                                         st.rerun()
-            else:
-                st.info("No hay propuestas formales generadas aún")
+                else:
+                    st.info("No hay propuestas formales generadas aún")
 
     # =========================
     # TAB: BASE DE DATOS
