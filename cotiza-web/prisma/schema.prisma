@@ -1,0 +1,327 @@
+generator client {
+  provider = "prisma-client-js"
+}
+
+datasource db {
+  provider = "postgresql"
+}
+
+model Tenant {
+  tenant_id        String             @id
+  name             String
+  slug             String             @unique
+  active           Boolean            @default(true)
+  created_at       DateTime           @db.Timestamp(6)
+  app_users        app_users[]
+  company_logos    company_logos[]
+  formal_proposals formal_proposals[]
+  import_files     import_files[]
+  packages         Package[]
+  quotes           Quote[]
+
+  @@map("tenants")
+}
+
+model Package {
+  package_id   String        @id
+  tenant_id    String
+  pkg_number   String        @unique
+  name         String
+  description  String?
+  playbook_tag String?
+  created_at   DateTime      @db.Timestamp(6)
+  updated_at   DateTime?     @db.Timestamp(6)
+  created_by   String?
+  active       Boolean       @default(true)
+  tenant       Tenant        @relation(fields: [tenant_id], references: [tenant_id], onDelete: NoAction, onUpdate: NoAction)
+  lines        PackageLine[]
+
+  @@index([tenant_id], map: "idx_packages_tenant_id")
+  @@map("packages")
+}
+
+model PackageLine {
+  line_id              String   @id
+  package_id           String
+  tenant_id            String
+  line_order           Int      @default(0)
+  sku                  String?
+  description          String
+  quantity             Decimal  @default(1) @db.Decimal(10, 2)
+  cost_unit            Decimal  @default(0) @db.Decimal(12, 4)
+  price_unit           Decimal  @default(0) @db.Decimal(12, 4)
+  margin_pct           Decimal? @db.Decimal(5, 2)
+  classification1      String?
+  classification2      String?
+  package              Package  @relation(fields: [package_id], references: [package_id], onDelete: Cascade, onUpdate: NoAction)
+
+  @@index([package_id], map: "idx_package_lines_package_id")
+  @@index([tenant_id], map: "idx_package_lines_tenant_id")
+  @@map("package_lines")
+}
+
+model Quote {
+  quote_id           String               @id
+  createdAt          DateTime?            @map("created_at") @db.Timestamp(6)
+  status             String?
+  total_cost         Decimal?             @db.Decimal(10, 2)
+  total_revenue      Decimal?             @db.Decimal(10, 2)
+  gross_profit       Decimal?             @db.Decimal(10, 2)
+  avg_margin         Decimal?             @db.Decimal(5, 2)
+  quote_group_id     String?
+  version            Int?                 @default(1)
+  parent_quote_id    String?
+  playbook_name      String?              @default("General")
+  client_name        String?
+  quoted_by          String?
+  proposal_name      String?
+  tenantId           String?              @map("tenant_id")
+  created_by_user_id String?
+  formal_proposals   formal_proposals[]
+  import_files       import_files[]
+  quote_lines        quote_lines[]
+  quote_search_index quote_search_index[]
+  tenant             Tenant?              @relation(fields: [tenantId], references: [tenant_id], onDelete: NoAction, onUpdate: NoAction)
+
+  @@map("quotes")
+}
+
+model app_users {
+  user_id       String   @id
+  alias         String   @unique
+  first_name    String
+  last_name     String
+  password_hash String
+  role          String   @default("user")
+  active        Boolean  @default(true)
+  created_at    DateTime @db.Timestamp(6)
+  tenant_id     String?
+  seller_code   String?
+  tenants       Tenant?  @relation(fields: [tenant_id], references: [tenant_id], onDelete: NoAction, onUpdate: NoAction)
+}
+
+model company_logos {
+  logo_id                                                         String             @id
+  logo_name                                                       String
+  logo_type                                                       String
+  company_name                                                    String?
+  logo_data                                                       Bytes
+  logo_format                                                     String
+  uploaded_at                                                     DateTime           @db.Timestamp(6)
+  is_default                                                      Boolean?           @default(false)
+  tenant_id                                                       String?
+  tenants                                                         Tenant?            @relation(fields: [tenant_id], references: [tenant_id], onDelete: NoAction, onUpdate: NoAction)
+  formal_proposals_formal_proposals_client_logo_idTocompany_logos formal_proposals[] @relation("formal_proposals_client_logo_idTocompany_logos")
+  formal_proposals_formal_proposals_issuer_logo_idTocompany_logos formal_proposals[] @relation("formal_proposals_issuer_logo_idTocompany_logos")
+
+  @@index([logo_type], map: "idx_company_logos_type")
+}
+
+model formal_proposals {
+  proposal_doc_id                                              String         @id
+  quote_id                                                     String?
+  proposal_id                                                  String?
+  proposal_number                                              String         @unique
+  issued_date                                                  DateTime       @db.Date
+  valid_until                                                  DateTime?      @db.Date
+  issuer_company                                               String
+  issuer_contact_name                                          String?
+  issuer_contact_title                                         String?
+  issuer_email                                                 String?
+  issuer_phone                                                 String?
+  recipient_company                                            String
+  recipient_contact_name                                       String?
+  recipient_contact_title                                      String?
+  recipient_email                                              String?
+  client_type                                                  String?
+  market_sector                                                String?
+  subject                                                      String?
+  custom_intro                                                 String?
+  issuer_logo_id                                               String?
+  client_logo_id                                               String?
+  terms_and_conditions                                         String?
+  signature_name                                               String?
+  signature_title                                              String?
+  signature_image_data                                         Bytes?
+  iva_rate                                                     Decimal?       @default(0.16) @db.Decimal
+  iva_included                                                 Boolean?       @default(false)
+  total_pages                                                  Int?
+  pdf_file_data                                                Bytes?
+  status                                                       String?        @default("draft")
+  sent_at                                                      DateTime?      @db.Timestamp(6)
+  created_by                                                   String?
+  created_at                                                   DateTime       @db.Timestamp(6)
+  updated_at                                                   DateTime?      @db.Timestamp(6)
+  delivery_hash                                                String?        @unique
+  delivery_number                                              String?        @unique
+  delivered_at                                                 DateTime?      @db.Timestamp(6)
+  delivered_by                                                 String?
+  project_description                                          String?
+  tenant_id                                                    String?
+  company_logos_formal_proposals_client_logo_idTocompany_logos company_logos? @relation("formal_proposals_client_logo_idTocompany_logos", fields: [client_logo_id], references: [logo_id], onDelete: NoAction, onUpdate: NoAction)
+  company_logos_formal_proposals_issuer_logo_idTocompany_logos company_logos? @relation("formal_proposals_issuer_logo_idTocompany_logos", fields: [issuer_logo_id], references: [logo_id], onDelete: NoAction, onUpdate: NoAction)
+  proposals                                                    proposals?     @relation(fields: [proposal_id], references: [proposal_id], onDelete: NoAction, onUpdate: NoAction)
+  quotes                                                       Quote?         @relation(fields: [quote_id], references: [quote_id], onDelete: NoAction, onUpdate: NoAction)
+  tenants                                                      Tenant?        @relation(fields: [tenant_id], references: [tenant_id], onDelete: NoAction, onUpdate: NoAction)
+
+  @@index([delivery_hash], map: "idx_formal_proposals_delivery_hash")
+  @@index([quote_id], map: "idx_formal_proposals_quote_id")
+  @@index([status], map: "idx_formal_proposals_status")
+  @@index([status, created_at(sort: Desc)], map: "idx_formal_proposals_status_created")
+}
+
+model import_files {
+  file_id       String   @id
+  quote_id      String?
+  filename      String
+  uploaded_at   DateTime @db.Timestamp(6)
+  file_data     Bytes
+  file_size     Int?
+  rows_imported Int?
+  rows_errors   Int?
+  tenant_id     String?
+  quotes        Quote?   @relation(fields: [quote_id], references: [quote_id], onDelete: NoAction, onUpdate: NoAction)
+  tenants       Tenant?  @relation(fields: [tenant_id], references: [tenant_id], onDelete: NoAction, onUpdate: NoAction)
+}
+
+model project_expenses {
+  expense_id  String    @id
+  tenant_id   String
+  proposal_id String
+  category    String
+  description String?
+  amount      Decimal   @db.Decimal
+  created_at  DateTime  @db.Timestamp(6)
+  proposals   proposals @relation(fields: [proposal_id], references: [proposal_id], onDelete: NoAction, onUpdate: NoAction)
+}
+
+model proposal_audit_events {
+  event_id    String    @id
+  tenant_id   String
+  proposal_id String
+  event_type  String
+  event_hash  String
+  created_at  DateTime  @db.Timestamp(6)
+  payload     String?
+  proposals   proposals @relation(fields: [proposal_id], references: [proposal_id], onDelete: NoAction, onUpdate: NoAction)
+}
+
+/// The underlying table does not contain a valid unique identifier and can therefore currently not be handled by Prisma Client.
+model proposal_derivations {
+  base_proposal_id                                              String
+  derived_proposal_id                                           String
+  tenant_id                                                     String
+  created_at                                                    DateTime  @db.Timestamp(6)
+  proposals_proposal_derivations_base_proposal_idToproposals    proposals @relation("proposal_derivations_base_proposal_idToproposals", fields: [base_proposal_id], references: [proposal_id], onDelete: NoAction, onUpdate: NoAction)
+  proposals_proposal_derivations_derived_proposal_idToproposals proposals @relation("proposal_derivations_derived_proposal_idToproposals", fields: [derived_proposal_id], references: [proposal_id], onDelete: NoAction, onUpdate: NoAction)
+
+  @@ignore
+}
+
+model proposal_integrated_node {
+  proposal_id  String    @id
+  tenant_id    String
+  total_cost   Decimal?  @db.Decimal
+  total_price  Decimal?  @db.Decimal
+  gross_profit Decimal?  @db.Decimal
+  margin_pct   Decimal?  @db.Decimal
+  health       String?
+  status       String
+  updated_at   DateTime  @db.Timestamp(6)
+  proposals    proposals @relation(fields: [proposal_id], references: [proposal_id], onDelete: NoAction, onUpdate: NoAction)
+}
+
+model proposal_items {
+  item_id        String    @id
+  tenant_id      String
+  proposal_id    String
+  item_number    Int
+  quantity       Decimal   @db.Decimal
+  sku            String?
+  description    String?
+  cost_unit      Decimal   @db.Decimal
+  price_unit     Decimal?  @db.Decimal
+  subtotal_cost  Decimal   @db.Decimal
+  subtotal_price Decimal?  @db.Decimal
+  status         String
+  origin         String?
+  component_type String?
+  created_at     DateTime  @db.Timestamp(6)
+  updated_at     DateTime? @db.Timestamp(6)
+  proposals      proposals @relation(fields: [proposal_id], references: [proposal_id], onDelete: NoAction, onUpdate: NoAction)
+}
+
+model proposal_profitability_node {
+  proposal_id    String    @id
+  tenant_id      String
+  total_sales    Decimal?  @db.Decimal
+  total_cost     Decimal?  @db.Decimal
+  total_expenses Decimal?  @db.Decimal
+  net_profit     Decimal?  @db.Decimal
+  net_margin_pct Decimal?  @db.Decimal
+  health         String?
+  updated_at     DateTime  @db.Timestamp(6)
+  proposals      proposals @relation(fields: [proposal_id], references: [proposal_id], onDelete: NoAction, onUpdate: NoAction)
+}
+
+model proposals {
+  proposal_id                                                              String                       @id
+  tenant_id                                                                String
+  origin                                                                   String?
+  status                                                                   String
+  created_by                                                               String
+  created_at                                                               DateTime                     @db.Timestamp(6)
+  closed_at                                                                DateTime?                    @db.Timestamp(6)
+  formal_proposals                                                         formal_proposals[]
+  project_expenses                                                         project_expenses[]
+  proposal_audit_events                                                    proposal_audit_events[]
+  proposal_derivations_proposal_derivations_base_proposal_idToproposals    proposal_derivations[]       @relation("proposal_derivations_base_proposal_idToproposals") @ignore
+  proposal_derivations_proposal_derivations_derived_proposal_idToproposals proposal_derivations[]       @relation("proposal_derivations_derived_proposal_idToproposals") @ignore
+  proposal_integrated_node                                                 proposal_integrated_node?
+  proposal_items                                                           proposal_items[]
+  proposal_profitability_node                                              proposal_profitability_node?
+}
+
+model quote_lines {
+  line_id                 String    @id
+  quote_id                String?
+  sku                     String?
+  description_original    String?
+  description_final       String?
+  description_corrections String?
+  line_type               String?
+  service_origin          String?
+  cost_unit               Decimal?  @db.Decimal(10, 2)
+  final_price_unit        Decimal?  @db.Decimal(10, 2)
+  margin_pct              Decimal?  @db.Decimal(5, 2)
+  strategy                String?
+  warnings                String?
+  created_at              DateTime? @db.Timestamp(6)
+  import_source           String?   @default("manual")
+  import_batch_id         String?
+  quantity                Decimal?  @default(1.0) @db.Decimal
+  quotes                  Quote?    @relation(fields: [quote_id], references: [quote_id], onDelete: NoAction, onUpdate: NoAction)
+}
+
+/// This model contains an expression index which requires additional setup for migrations. Visit https://pris.ly/d/expression-indexes for more info.
+model quote_search_index {
+  quote_group_id  String   @id
+  latest_quote_id String
+  latest_version  Int
+  client_name     String?
+  proposal_name   String?
+  quoted_by       String?
+  total_revenue   Decimal? @db.Decimal(10, 2)
+  avg_margin      Decimal? @db.Decimal(5, 2)
+  status          String?
+  playbook_name   String?
+  created_at      DateTime @db.Timestamp(6)
+  updated_at      DateTime @db.Timestamp(6)
+  version_count   Int?     @default(1)
+  search_text     String?
+  quotes          Quote    @relation(fields: [latest_quote_id], references: [quote_id], onDelete: NoAction, onUpdate: NoAction)
+
+  @@index([client_name], map: "idx_client_name")
+  @@index([created_at(sort: Desc)], map: "idx_created_at")
+  @@index([proposal_name], map: "idx_proposal_name")
+}
