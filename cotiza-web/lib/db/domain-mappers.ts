@@ -1,10 +1,4 @@
-import type {
-  Quote,
-  quote_lines,
-  proposals,
-  formal_proposals,
-  company_logos,
-} from "@prisma/client";
+import type { Prisma } from "@prisma/client";
 
 import type {
   EmisorProfileEntity,
@@ -14,6 +8,12 @@ import type {
   QuoteLineEntity,
 } from "@/lib/domain/entities";
 
+type QuoteRecord = Prisma.QuoteGetPayload<{}>;
+type QuoteLineRecord = Prisma.quote_linesGetPayload<{}>;
+type ProposalRecord = Prisma.proposalsGetPayload<{}>;
+type FormalProposalRecord = Prisma.formal_proposalsGetPayload<{}>;
+type CompanyLogoRecord = Prisma.company_logosGetPayload<{}>;
+
 function parseDecimal(value: { toNumber: () => number } | null | undefined): number | null {
   return value ? value.toNumber() : null;
 }
@@ -22,7 +22,7 @@ function resolveClassificationOne(lineType: string | null): QuoteClassificationO
   return lineType?.toLowerCase() === "service" ? "service" : "product";
 }
 
-export function mapQuoteToDomain(quote: Quote): QuoteEntity {
+export function mapQuoteToDomain(quote: QuoteRecord): QuoteEntity {
   return {
     id: quote.quote_id,
     groupId: quote.quote_group_id ?? quote.quote_id,
@@ -40,7 +40,7 @@ export function mapQuoteToDomain(quote: Quote): QuoteEntity {
   };
 }
 
-export function mapQuoteLineToDomain(line: quote_lines): QuoteLineEntity {
+export function mapQuoteLineToDomain(line: QuoteLineRecord): QuoteLineEntity {
   return {
     id: line.line_id,
     quoteId: line.quote_id ?? "",
@@ -55,7 +55,7 @@ export function mapQuoteLineToDomain(line: quote_lines): QuoteLineEntity {
   };
 }
 
-export function mapProposalToDomain(proposal: proposals): ProposalEntity {
+export function mapProposalToDomain(proposal: ProposalRecord): ProposalEntity {
   return {
     id: proposal.proposal_id,
     tenantId: proposal.tenant_id,
@@ -69,8 +69,8 @@ export function mapProposalToDomain(proposal: proposals): ProposalEntity {
 }
 
 export function mapFormalProposalToEmisorProfile(
-  proposal: formal_proposals,
-  logo: company_logos | null,
+  proposal: FormalProposalRecord,
+  logo: CompanyLogoRecord | null,
 ): EmisorProfileEntity | null {
   if (!proposal.tenant_id || !proposal.issuer_company) {
     return null;
