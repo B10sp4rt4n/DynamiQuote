@@ -1,0 +1,166 @@
+import "server-only";
+
+import { prisma } from "@/lib/db/prisma";
+
+export type AppUserSummary = {
+  active: boolean;
+  alias: string;
+  createdAt: string;
+  firstName: string;
+  lastName: string;
+  role: string;
+  sellerCode: string | null;
+  userId: string;
+};
+
+export type IssuerProfileSummary = {
+  companyName: string | null;
+  isDefault: boolean;
+  logoFormat: string;
+  logoId: string;
+  logoName: string;
+  logoType: string;
+  uploadedAt: string;
+};
+
+export async function getAppUsersByTenant(tenantId: string): Promise<AppUserSummary[]> {
+  const rows = await prisma.app_users.findMany({
+    orderBy: [{ active: "desc" }, { created_at: "asc" }],
+    select: {
+      active: true,
+      alias: true,
+      created_at: true,
+      first_name: true,
+      last_name: true,
+      role: true,
+      seller_code: true,
+      user_id: true,
+    },
+    where: { tenant_id: tenantId },
+  });
+
+  return rows.map((row) => ({
+    active: row.active,
+    alias: row.alias,
+    createdAt: row.created_at.toISOString(),
+    firstName: row.first_name,
+    lastName: row.last_name,
+    role: row.role,
+    sellerCode: row.seller_code,
+    userId: row.user_id,
+  }));
+}
+
+export async function toggleAppUserActivationByTenant(
+  tenantId: string,
+  userId: string,
+): Promise<AppUserSummary | null> {
+  const user = await prisma.app_users.findFirst({
+    select: { active: true, user_id: true },
+    where: { tenant_id: tenantId, user_id: userId },
+  });
+
+  if (!user) return null;
+
+  const updated = await prisma.app_users.update({
+    data: { active: !user.active },
+    select: {
+      active: true,
+      alias: true,
+      created_at: true,
+      first_name: true,
+      last_name: true,
+      role: true,
+      seller_code: true,
+      user_id: true,
+    },
+    where: { user_id: userId },
+  });
+
+  return {
+    active: updated.active,
+    alias: updated.alias,
+    createdAt: updated.created_at.toISOString(),
+    firstName: updated.first_name,
+    lastName: updated.last_name,
+    role: updated.role,
+    sellerCode: updated.seller_code,
+    userId: updated.user_id,
+  };
+}
+
+export async function getIssuerProfilesByTenant(
+  tenantId: string,
+): Promise<IssuerProfileSummary[]> {
+  const rows = await prisma.company_logos.findMany({
+    orderBy: [{ is_default: "desc" }, { uploaded_at: "desc" }],
+    select: {
+      company_name: true,
+      is_default: true,
+      logo_format: true,
+      logo_id: true,
+      logo_name: true,
+      logo_type: true,
+      uploaded_at: true,
+    },
+    where: { tenant_id: tenantId },
+  });
+
+  return rows.map((row) => ({
+    companyName: row.company_name,
+    isDefault: row.is_default ?? false,
+    logoFormat: row.logo_format,
+    logoId: row.logo_id,
+    logoName: row.logo_name,
+    logoType: row.logo_type,
+    uploadedAt: row.uploaded_at.toISOString(),
+  }));
+}
+
+export async function setDefaultIssuerProfileByTenant(
+  tenantId: string,
+  logoId: string,
+): Promise<IssuerProfileSummary | null> {
+  const logo = await prisma.company_logos.findFirst({
+    select: { logo_id: true },
+    where: { logo_id: logoId, tenant_id: tenantId },
+  });
+
+  if (!logo) return null;
+
+  await prisma.$transaction(async (tx) => {
+    await tx.company_logos.updateMany({
+      data: { is_default: false },
+      where: { tenant_id: tenantId },
+    });
+    await tx.company_logos.update({
+      data: { is_default: true },
+      where: { logo_id: logoId },
+    });
+  });
+
+  const updated = await prisma.company_logos.findFirst({
+    select: {
+      company_name: true,
+      is_default: true,
+      logo_format: true,
+      logo_id: true,
+      logo_name: true,
+      logo_type: true,
+      uploaded_at: true,
+    },
+    where: { logo_id: logoId },
+  });
+
+  if (!updated) return null;
+
+  return {
+    companyName: updated.company_name,
+    isDefault: updated.is_default ?? true,
+    logoFormat: updated.logo_format,
+    logoId: updated.logo_id,
+    logoName: updated.logo_name,
+    logoType: updated.logo_type,
+    uploadedAt: updated.uploaded_at.toISOString(),
+  };
+}
