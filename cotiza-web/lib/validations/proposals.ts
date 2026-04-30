@@ -9,22 +9,6 @@ export const proposalStatusSchema = z.enum([
   "expired",
 ]);
 
-export const updateProposalWorkflowSchema = z
-  .object({
-    status: proposalStatusSchema.optional(),
-    termsAndConditions: z.string().trim().max(12000).optional(),
-  })
-  .refine((value) => value.status !== undefined || value.termsAndConditions !== undefined, {
-    message: "Debes enviar status o termsAndConditions",
-    path: ["status"],
-  });
-
-export const createProposalFromQuoteSchema = z.object({
-  quoteId: z.string().min(1),
-  recipientCompany: z.string().trim().max(200).optional(),
-  subject: z.string().trim().max(300).optional(),
-});
-
 export const proposalImportItemSchema = z.object({
   componentType: z.string().trim().max(120).optional().default(""),
   costUnit: z.number().min(0),
@@ -35,6 +19,45 @@ export const proposalImportItemSchema = z.object({
   quantity: z.number().positive(),
   sku: z.string().trim().max(120).optional().default(""),
   status: z.string().trim().max(60).optional().default("active"),
+});
+
+export const updateProposalWorkflowSchema = z
+  .object({
+    issuerCompany: z.string().trim().max(200).optional(),
+    issuerEmail: z.string().trim().max(200).optional(),
+    issuerPhone: z.string().trim().max(80).optional(),
+    items: z.array(proposalImportItemSchema).min(1).optional(),
+    recipientCompany: z.string().trim().max(200).optional(),
+    recipientContactName: z.string().trim().max(200).optional(),
+    recipientEmail: z.string().trim().max(200).optional(),
+    recipientContactTitle: z.string().trim().max(200).optional(),
+    status: proposalStatusSchema.optional(),
+    subject: z.string().trim().max(300).optional(),
+    termsAndConditions: z.string().trim().max(12000).optional(),
+  })
+  .refine(
+    (value) =>
+      value.status !== undefined ||
+      value.termsAndConditions !== undefined ||
+      value.subject !== undefined ||
+      value.issuerCompany !== undefined ||
+      value.issuerEmail !== undefined ||
+      value.issuerPhone !== undefined ||
+      value.recipientCompany !== undefined ||
+      value.recipientContactName !== undefined ||
+      value.recipientEmail !== undefined ||
+      value.recipientContactTitle !== undefined ||
+      value.items !== undefined,
+    {
+      message: "Debes enviar al menos un campo para actualizar",
+      path: ["status"],
+    },
+  );
+
+export const createProposalFromQuoteSchema = z.object({
+  quoteId: z.string().min(1),
+  recipientCompany: z.string().trim().max(200).optional(),
+  subject: z.string().trim().max(300).optional(),
 });
 
 export const proposalImportPayloadSchema = z.object({

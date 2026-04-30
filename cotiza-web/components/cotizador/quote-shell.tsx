@@ -8,9 +8,17 @@ import {
 } from "@/components/cotizador/quote-line-editor";
 import type { QuoteGroupSummary } from "@/lib/db/quotes";
 
+type TenantOption = {
+  id: string;
+  name: string;
+  slug: string;
+};
+
 type QuoteShellProps = {
+  currentTenantSlug: string;
   items: QuoteGroupSummary[];
   tenantName: string;
+  tenantOptions: TenantOption[];
 };
 
 function formatCurrency(value: number | null): string {
@@ -30,11 +38,18 @@ function sortQuotes(items: QuoteGroupSummary[]): QuoteGroupSummary[] {
   });
 }
 
-export function QuoteShell({ items, tenantName }: QuoteShellProps) {
+export function QuoteShell({
+  currentTenantSlug,
+  items,
+  tenantName,
+  tenantOptions,
+}: QuoteShellProps) {
   const [quoteItems, setQuoteItems] = useState<QuoteGroupSummary[]>(() => sortQuotes(items));
   const [activeQuoteId, setActiveQuoteId] = useState<string | null>(items[0]?.quoteId ?? null);
   const [isQuotesPanelOpen, setIsQuotesPanelOpen] = useState(false);
   const [quoteSearch, setQuoteSearch] = useState("");
+  const [selectedTenantSlug, setSelectedTenantSlug] = useState(currentTenantSlug);
+  const [switchingTenant, setSwitchingTenant] = useState(false);
   const [clientName, setClientName] = useState("");
   const [proposalName, setProposalName] = useState("");
   const [playbookName, setPlaybookName] = useState("General");
@@ -115,11 +130,65 @@ export function QuoteShell({ items, tenantName }: QuoteShellProps) {
     }
   }
 
+  async function handleTenantAssociation(slug: string) {
+    if (!slug || slug === selectedTenantSlug) {
+      return;
+    }
+
+    setSwitchingTenant(true);
+    setCreateMessage(null);
+
+    try {
+      const response = await fetch("/api/context/tenant", {
+        body: JSON.stringify({ slug }),
+        headers: {
+          "Content-Type": "application/json",
+        },
+        method: "POST",
+      });
+
+      const data = (await response.json()) as { error?: string; ok?: boolean };
+
+      if (!response.ok || !data.ok) {
+        throw new Error(data.error ?? "No fue posible asociar la empresa");
+      }
+
+      setSelectedTenantSlug(slug);
+      setCreateMessage("Empresa asociada correctamente. Recargando...");
+      window.location.reload();
+    } catch (error) {
+      setCreateState("error");
+      setCreateMessage(error instanceof Error ? error.message : "Error interno");
+      setSwitchingTenant(false);
+    }
+  }
+
   return (
     <section className="rounded-xl border border-zinc-200 bg-white p-6 shadow-sm">
       <div className="flex flex-col gap-2 border-b border-zinc-200 pb-4">
         <p className="text-sm uppercase tracking-[0.18em] text-zinc-500">Tenant activo</p>
         <h1 className="text-2xl font-semibold text-zinc-900">Cotizaciones de {tenantName}</h1>
+        <div className="mt-2 flex flex-wrap items-center gap-2">
+          <label className="text-xs font-medium uppercase tracking-[0.12em] text-zinc-500" htmlFor="tenant-selector">
+            Asociar a empresa
+          </label>
+          <select
+            className="min-w-[260px] rounded-lg border border-zinc-300 bg-white px-3 py-2 text-sm text-zinc-900"
+            disabled={switchingTenant}
+            id="tenant-selector"
+            onChange={(event) => {
+              void handleTenantAssociation(event.target.value);
+            }}
+            value={selectedTenantSlug}
+          >
+            {tenantOptions.map((tenantOption) => (
+              <option key={tenantOption.id} value={tenantOption.slug}>
+                {tenantOption.name} ({tenantOption.slug})
+              </option>
+            ))}
+          </select>
+          {switchingTenant ? <p className="text-xs text-zinc-500">Actualizando contexto...</p> : null}
+        </div>
       </div>
       <p className="mt-2 text-zinc-600">
         Esta vista ya consume Neon con aislamiento por tenant y muestra la ultima version de cada

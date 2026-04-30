@@ -12,6 +12,14 @@ type RouteContext = {
   params: Promise<{ proposalId: string }>;
 };
 
+function looksLikeOpaqueUserId(value: string | null | undefined): boolean {
+  if (!value) {
+    return false;
+  }
+
+  return /^(ser|user|sess|org)_[A-Za-z0-9]+$/.test(value.trim());
+}
+
 function sanitizeFilename(value: string): string {
   return value.replace(/[^a-zA-Z0-9-_]/g, "_");
 }
@@ -44,8 +52,26 @@ export async function GET(_: Request, context: RouteContext) {
     return NextResponse.json({ error: "Propuesta no encontrada" }, { status: 404 });
   }
 
+  const issuerContact = proposal.formal?.issuerContactName?.trim().toLowerCase() ?? "";
+  const shouldUseSessionName =
+    Boolean(tenant.userDisplayName) &&
+    (issuerContact.length === 0 || issuerContact === "sin asignar" || looksLikeOpaqueUserId(issuerContact));
+
+  const normalizedProposal = shouldUseSessionName
+    ? {
+        ...proposal,
+        formal: proposal.formal
+          ? {
+              ...proposal.formal,
+              issuerContactName: tenant.userDisplayName ?? proposal.formal.issuerContactName,
+            }
+          : proposal.formal,
+        salesOwner: tenant.userDisplayName ?? proposal.salesOwner,
+      }
+    : proposal;
+
   const document = ProposalPdfDocument({
-    proposal,
+    proposal: normalizedProposal,
     tenantName: tenant.name,
   });
 

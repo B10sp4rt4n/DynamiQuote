@@ -1,6 +1,7 @@
 import { QuoteShell } from "@/components/cotizador/quote-shell";
 import { getCurrentTenantContext } from "@/lib/auth/tenant-context";
 import { getQuoteGroupsSummaryByTenant } from "@/lib/db/quotes";
+import { getActiveTenants } from "@/lib/db/tenants";
 
 export const dynamic = "force-dynamic";
 
@@ -16,6 +17,14 @@ export default async function QuotesPage() {
   }
 
   const items = await getQuoteGroupsSummaryByTenant(tenant.id);
+  const tenantOptions = await getActiveTenants();
 
-  return <QuoteShell items={items} tenantName={tenant.name} />;
+  return (
+    <QuoteShell
+      currentTenantSlug={tenant.slug}
+      items={items}
+      tenantName={tenant.name}
+      tenantOptions={tenantOptions}
+    />
+  );
 }

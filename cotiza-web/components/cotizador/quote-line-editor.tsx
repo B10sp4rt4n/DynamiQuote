@@ -1,6 +1,7 @@
 "use client";
 
 import { useEffect, useMemo, useState } from "react";
+import { useRouter } from "next/navigation";
 
 import type { QuoteGroupSummary } from "@/lib/db/quotes";
 import { resolveBidirectionalPricing } from "@/lib/domain/pricing-engine";
@@ -282,6 +283,7 @@ export function QuoteLineEditor({
   onQuoteVersionSaved,
   quotes,
 }: QuoteLineEditorProps) {
+  const router = useRouter();
   const [selectedQuoteId, setSelectedQuoteId] = useState<string>(quotes[0]?.quoteId ?? "");
   const [lines, setLines] = useState<EditableQuoteLine[]>([]);
   const [lineDiffMap, setLineDiffMap] = useState<LineDiffMap>({});
@@ -614,6 +616,7 @@ export function QuoteLineEditor({
 
   async function createProposalFromSelectedQuote() {
     if (!selectedQuoteId || !selectedQuote) {
+      setMessage("Selecciona una cotizacion valida antes de crear la propuesta");
       return;
     }
 
@@ -633,7 +636,7 @@ export function QuoteLineEditor({
         method: "POST",
       });
 
-      const data = (await response.json()) as {
+      let data: {
         error?: string;
         proposal?: {
           formal: {
@@ -641,15 +644,30 @@ export function QuoteLineEditor({
           } | null;
           proposalId: string;
         };
-      };
+      } = {};
+
+      try {
+        data = (await response.json()) as {
+          error?: string;
+          proposal?: {
+            formal: {
+              proposalNumber: string;
+            } | null;
+            proposalId: string;
+          };
+        };
+      } catch {
+        // Si el backend regresa un HTML de error, mostramos un mensaje claro.
+      }
 
       if (!response.ok || !data.proposal) {
         throw new Error(data.error ?? "No fue posible generar la propuesta");
       }
 
-      setMessage(
-        `Propuesta ${data.proposal.formal?.proposalNumber ?? data.proposal.proposalId} creada correctamente. Revisa la seccion de propuestas.`,
-      );
+      const proposalLabel = data.proposal.formal?.proposalNumber ?? data.proposal.proposalId;
+      setMessage(`Propuesta ${proposalLabel} creada correctamente. Redirigiendo a Propuestas...`);
+      router.push(`/propuestas?proposalId=${encodeURIComponent(data.proposal.proposalId)}`);
+      router.refresh();
     } catch (error) {
       setMessage(error instanceof Error ? error.message : "Error interno al generar la propuesta");
     } finally {

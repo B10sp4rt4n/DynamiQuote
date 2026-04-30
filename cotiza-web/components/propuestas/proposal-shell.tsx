@@ -1,6 +1,6 @@
 "use client";
 
-import { useMemo, useState } from "react";
+import { useEffect, useMemo, useState } from "react";
 
 import type { ProposalSummary } from "@/lib/db/proposals";
 import type { ProposalStatus } from "@/lib/validations/proposals";
@@ -35,6 +35,7 @@ function formatDate(value: string | null): string {
 
   return new Intl.DateTimeFormat("es-MX", {
     dateStyle: "medium",
+    timeZone: "UTC",
   }).format(new Date(value));
 }
 
@@ -43,12 +44,41 @@ export function ProposalShell({ proposals, tenantName }: ProposalShellProps) {
   const [selectedProposalId, setSelectedProposalId] = useState<string | null>(
     proposals[0]?.proposalId ?? null,
   );
+  const [issuerCompany, setIssuerCompany] = useState<string>(proposals[0]?.formal?.issuerCompany ?? "");
+  const [issuerEmail, setIssuerEmail] = useState<string>(proposals[0]?.formal?.issuerEmail ?? "");
+  const [issuerPhone, setIssuerPhone] = useState<string>(proposals[0]?.formal?.issuerPhone ?? "");
+  const [salesOwner, setSalesOwner] = useState<string>("");
+  const [recipientCompany, setRecipientCompany] = useState<string>(
+    proposals[0]?.formal?.recipientCompany ?? "",
+  );
+  const [recipientContactName, setRecipientContactName] = useState<string>(
+    proposals[0]?.formal?.recipientContactName ?? "",
+  );
+  const [recipientEmail, setRecipientEmail] = useState<string>(proposals[0]?.formal?.recipientEmail ?? "");
+  const [recipientContactTitle, setRecipientContactTitle] = useState<string>(
+    proposals[0]?.formal?.recipientContactTitle ?? "",
+  );
+  const [subject, setSubject] = useState<string>(proposals[0]?.formal?.subject ?? "");
   const [selectedStatus, setSelectedStatus] = useState<ProposalStatus>(
     proposals[0]?.status ?? "draft",
   );
   const [termsAndConditions, setTermsAndConditions] = useState<string>(
     proposals[0]?.formal?.termsAndConditions ?? "",
   );
+  const [proposalItems, setProposalItems] = useState<
+    Array<{
+      componentType: string;
+      costUnit: number;
+      description: string;
+      itemNumber: number;
+      origin: string;
+      priceUnit: number;
+      quantity: number;
+      sku: string;
+      status: string;
+    }>
+  >([]);
+  const [loadingDetail, setLoadingDetail] = useState(false);
   const [saveStatus, setSaveStatus] = useState<"idle" | "saving" | "success" | "error">("idle");
   const [errorMessage, setErrorMessage] = useState<string | null>(null);
   const [importFile, setImportFile] = useState<File | null>(null);
@@ -62,14 +92,179 @@ export function ProposalShell({ proposals, tenantName }: ProposalShellProps) {
     [items, selectedProposalId],
   );
 
+  useEffect(() => {
+    if (!selectedProposalId) {
+      setProposalItems([]);
+      return;
+    }
+
+    void loadProposalDetail(selectedProposalId);
+  }, [selectedProposalId]);
+
   function handleSelectProposal(proposalId: string) {
     const found = items.find((item) => item.proposalId === proposalId);
 
     setSelectedProposalId(proposalId);
+    setIssuerCompany(found?.formal?.issuerCompany ?? "");
+    setIssuerEmail(found?.formal?.issuerEmail ?? "");
+    setIssuerPhone(found?.formal?.issuerPhone ?? "");
+    setRecipientCompany(found?.formal?.recipientCompany ?? "");
+    setRecipientContactName(found?.formal?.recipientContactName ?? "");
+    setRecipientEmail(found?.formal?.recipientEmail ?? "");
+    setRecipientContactTitle(found?.formal?.recipientContactTitle ?? "");
+    setSubject(found?.formal?.subject ?? "");
     setSelectedStatus(found?.status ?? "draft");
     setTermsAndConditions(found?.formal?.termsAndConditions ?? "");
     setSaveStatus("idle");
     setErrorMessage(null);
+  }
+
+  async function loadProposalDetail(proposalId: string) {
+    setLoadingDetail(true);
+    setErrorMessage(null);
+
+    try {
+      const response = await fetch(`/api/proposals/${proposalId}`, { method: "GET" });
+      const data = (await response.json()) as {
+        error?: string;
+        proposal?: {
+          formal: {
+            issuerCompany: string;
+            issuerContactName: string;
+            issuerEmail: string;
+            issuerPhone: string;
+            recipientCompany: string;
+            recipientContactName: string;
+            recipientContactTitle: string;
+            recipientEmail: string;
+            subject: string;
+            termsAndConditions: string;
+          } | null;
+          items: Array<{
+            componentType: string;
+            costUnit: number;
+            description: string;
+            itemNumber: number;
+            origin: string;
+            priceUnit: number;
+            quantity: number;
+            sku: string;
+            status: string;
+          }>;
+          salesOwner: string;
+          proposalId: string;
+          status: ProposalStatus;
+        };
+      };
+
+      if (!response.ok || !data.proposal) {
+        throw new Error(data.error ?? "No fue posible cargar la propuesta");
+      }
+
+      setIssuerCompany(data.proposal.formal?.issuerCompany ?? "");
+      setIssuerEmail(data.proposal.formal?.issuerEmail ?? "");
+      setIssuerPhone(data.proposal.formal?.issuerPhone ?? "");
+      setRecipientCompany(data.proposal.formal?.recipientCompany ?? "");
+      setRecipientContactName(data.proposal.formal?.recipientContactName ?? "");
+      setRecipientEmail(data.proposal.formal?.recipientEmail ?? "");
+      setRecipientContactTitle(data.proposal.formal?.recipientContactTitle ?? "");
+      setSubject(data.proposal.formal?.subject ?? "");
+      setTermsAndConditions(data.proposal.formal?.termsAndConditions ?? "");
+      setSelectedStatus(data.proposal.status);
+      setSalesOwner(data.proposal.salesOwner ?? data.proposal.formal?.issuerContactName ?? "");
+      setProposalItems(
+        data.proposal.items.map((row, index) => ({
+          ...row,
+          itemNumber: index + 1,
+        })),
+      );
+
+      setItems((current) =>
+        current.map((item) =>
+          item.proposalId === data.proposal?.proposalId
+            ? {
+                ...item,
+                formal: item.formal
+                  ? {
+                      ...item.formal,
+                      issuerCompany: data.proposal?.formal?.issuerCompany ?? item.formal.issuerCompany,
+                      issuerContactName:
+                        data.proposal?.formal?.issuerContactName ?? item.formal.issuerContactName,
+                    }
+                  : item.formal,
+                status: data.proposal?.status ?? item.status,
+              }
+            : item,
+        ),
+      );
+    } catch (error) {
+      setErrorMessage(error instanceof Error ? error.message : "Error interno");
+    } finally {
+      setLoadingDetail(false);
+    }
+  }
+
+  function updateProposalItem(
+    index: number,
+    field:
+      | "componentType"
+      | "costUnit"
+      | "description"
+      | "origin"
+      | "priceUnit"
+      | "quantity"
+      | "sku"
+      | "status",
+    value: string,
+  ) {
+    setProposalItems((current) =>
+      current.map((item, itemIndex) => {
+        if (itemIndex !== index) {
+          return item;
+        }
+
+        if (field === "costUnit" || field === "priceUnit" || field === "quantity") {
+          const parsed = Number(value);
+          return {
+            ...item,
+            [field]: Number.isFinite(parsed) ? parsed : 0,
+          };
+        }
+
+        return {
+          ...item,
+          [field]: value,
+        };
+      }),
+    );
+  }
+
+  function addProposalItem() {
+    setProposalItems((current) => [
+      ...current,
+      {
+        componentType: "",
+        costUnit: 0,
+        description: "",
+        itemNumber: current.length + 1,
+        origin: "manual",
+        priceUnit: 0,
+        quantity: 1,
+        sku: "",
+        status: "active",
+      },
+    ]);
+  }
+
+  function removeProposalItem(index: number) {
+    setProposalItems((current) =>
+      current
+        .filter((_, itemIndex) => itemIndex !== index)
+        .map((item, itemIndex) => ({
+          ...item,
+          itemNumber: itemIndex + 1,
+        })),
+    );
   }
 
   async function handleSave() {
@@ -83,7 +278,19 @@ export function ProposalShell({ proposals, tenantName }: ProposalShellProps) {
     try {
       const response = await fetch(`/api/proposals/${selectedProposal.proposalId}`, {
         body: JSON.stringify({
+          issuerCompany,
+          issuerEmail,
+          issuerPhone,
+          items: proposalItems.map((item, index) => ({
+            ...item,
+            itemNumber: index + 1,
+          })),
+          recipientCompany,
+          recipientContactName,
+          recipientContactTitle,
+          recipientEmail,
           status: selectedStatus,
+          subject,
           termsAndConditions,
         }),
         headers: {
@@ -96,8 +303,28 @@ export function ProposalShell({ proposals, tenantName }: ProposalShellProps) {
         error?: string;
         proposal?: {
           formal: {
+            issuerCompany: string;
+            issuerContactName: string;
+            issuerEmail: string;
+            issuerPhone: string;
+            recipientCompany: string;
+            recipientContactName: string;
+            recipientContactTitle: string;
+            recipientEmail: string;
+            subject: string;
             termsAndConditions: string;
           } | null;
+          items: Array<{
+            componentType: string;
+            costUnit: number;
+            description: string;
+            itemNumber: number;
+            origin: string;
+            priceUnit: number;
+            quantity: number;
+            sku: string;
+            status: string;
+          }>;
           proposalId: string;
           status: ProposalStatus;
         };
@@ -115,14 +342,40 @@ export function ProposalShell({ proposals, tenantName }: ProposalShellProps) {
                 formal: item.formal
                   ? {
                       ...item.formal,
+                    recipientCompany:
+                      data.proposal?.formal?.recipientCompany ?? item.formal.recipientCompany,
+                    recipientContactName:
+                      data.proposal?.formal?.recipientContactName ??
+                      item.formal.recipientContactName,
+                    recipientContactTitle:
+                      data.proposal?.formal?.recipientContactTitle ??
+                      item.formal.recipientContactTitle,
+                    recipientEmail:
+                      data.proposal?.formal?.recipientEmail ?? item.formal.recipientEmail,
+                    issuerCompany:
+                      data.proposal?.formal?.issuerCompany ?? item.formal.issuerCompany,
+                    issuerContactName:
+                      data.proposal?.formal?.issuerContactName ?? item.formal.issuerContactName,
+                    issuerEmail:
+                      data.proposal?.formal?.issuerEmail ?? item.formal.issuerEmail,
+                    issuerPhone:
+                      data.proposal?.formal?.issuerPhone ?? item.formal.issuerPhone,
+                    subject: data.proposal?.formal?.subject ?? item.formal.subject,
                       termsAndConditions:
-                        data.proposal?.formal?.termsAndConditions ?? item.formal.termsAndConditions,
-                    }
+                      data.proposal?.formal?.termsAndConditions ?? item.formal.termsAndConditions,
+                  }
                   : item.formal,
                 status: data.proposal?.status ?? item.status,
               }
             : item,
         ),
+      );
+
+      setProposalItems(
+        (data.proposal.items ?? []).map((row, index) => ({
+          ...row,
+          itemNumber: index + 1,
+        })),
       );
 
       setSaveStatus("success");
@@ -222,10 +475,125 @@ export function ProposalShell({ proposals, tenantName }: ProposalShellProps) {
                 <h2 className="mt-1 text-lg font-semibold text-zinc-900">
                   {selectedProposal.formal?.proposalNumber ?? selectedProposal.proposalId}
                 </h2>
-                <p className="text-sm text-zinc-600">
-                  {selectedProposal.formal?.subject ?? "Sin asunto"}
-                </p>
               </div>
+
+              <label className="block text-sm font-medium text-zinc-700" htmlFor="recipient-company">
+                Empresa emisora
+              </label>
+              <input
+                className="w-full rounded-lg border border-zinc-300 bg-white px-3 py-2 text-sm text-zinc-800"
+                id="issuer-company"
+                onChange={(event) => setIssuerCompany(event.target.value)}
+                placeholder="Empresa emisora"
+                value={issuerCompany}
+              />
+
+              <div className="grid gap-3 md:grid-cols-2">
+                <div>
+                  <label className="block text-sm font-medium text-zinc-700" htmlFor="issuer-contact-name">
+                    Contacto emisor (fijo por vendedor)
+                  </label>
+                  <input
+                    className="w-full rounded-lg border border-zinc-200 bg-zinc-100 px-3 py-2 text-sm text-zinc-700"
+                    disabled
+                    id="issuer-contact-name"
+                    value={salesOwner || selectedProposal.formal?.issuerContactName || "Sin asignar"}
+                  />
+                </div>
+                <div>
+                  <label className="block text-sm font-medium text-zinc-700" htmlFor="issuer-phone">
+                    Telefono emisor
+                  </label>
+                  <input
+                    className="w-full rounded-lg border border-zinc-300 bg-white px-3 py-2 text-sm text-zinc-800"
+                    id="issuer-phone"
+                    onChange={(event) => setIssuerPhone(event.target.value)}
+                    placeholder="Telefono emisor"
+                    value={issuerPhone}
+                  />
+                </div>
+              </div>
+
+              <label className="block text-sm font-medium text-zinc-700" htmlFor="issuer-email">
+                Email emisor
+              </label>
+              <input
+                className="w-full rounded-lg border border-zinc-300 bg-white px-3 py-2 text-sm text-zinc-800"
+                id="issuer-email"
+                onChange={(event) => setIssuerEmail(event.target.value)}
+                placeholder="correo@empresa.com"
+                value={issuerEmail}
+              />
+
+              <label className="block text-sm font-medium text-zinc-700" htmlFor="sales-owner">
+                Vendedor (tenant)
+              </label>
+              <input
+                className="w-full rounded-lg border border-zinc-200 bg-zinc-100 px-3 py-2 text-sm text-zinc-700"
+                disabled
+                id="sales-owner"
+                value={salesOwner || "Sin asignar"}
+              />
+
+              <label className="block text-sm font-medium text-zinc-700" htmlFor="recipient-company">
+                Empresa receptora
+              </label>
+              <input
+                className="w-full rounded-lg border border-zinc-300 bg-white px-3 py-2 text-sm text-zinc-800"
+                id="recipient-company"
+                onChange={(event) => setRecipientCompany(event.target.value)}
+                placeholder="Nombre de empresa cliente"
+                value={recipientCompany}
+              />
+
+              <div className="grid gap-3 md:grid-cols-2">
+                <div>
+                  <label className="block text-sm font-medium text-zinc-700" htmlFor="recipient-contact-name">
+                    Contacto receptor
+                  </label>
+                  <input
+                    className="w-full rounded-lg border border-zinc-300 bg-white px-3 py-2 text-sm text-zinc-800"
+                    id="recipient-contact-name"
+                    onChange={(event) => setRecipientContactName(event.target.value)}
+                    placeholder="Nombre contacto receptor"
+                    value={recipientContactName}
+                  />
+                </div>
+                <div>
+                  <label className="block text-sm font-medium text-zinc-700" htmlFor="recipient-contact-title">
+                    Cargo receptor
+                  </label>
+                  <input
+                    className="w-full rounded-lg border border-zinc-300 bg-white px-3 py-2 text-sm text-zinc-800"
+                    id="recipient-contact-title"
+                    onChange={(event) => setRecipientContactTitle(event.target.value)}
+                    placeholder="Cargo o area del contacto"
+                    value={recipientContactTitle}
+                  />
+                </div>
+              </div>
+
+              <label className="block text-sm font-medium text-zinc-700" htmlFor="recipient-email">
+                Email receptor
+              </label>
+              <input
+                className="w-full rounded-lg border border-zinc-300 bg-white px-3 py-2 text-sm text-zinc-800"
+                id="recipient-email"
+                onChange={(event) => setRecipientEmail(event.target.value)}
+                placeholder="contacto@cliente.com"
+                value={recipientEmail}
+              />
+
+              <label className="block text-sm font-medium text-zinc-700" htmlFor="proposal-subject">
+                Asunto
+              </label>
+              <input
+                className="w-full rounded-lg border border-zinc-300 bg-white px-3 py-2 text-sm text-zinc-800"
+                id="proposal-subject"
+                onChange={(event) => setSubject(event.target.value)}
+                placeholder="Asunto de la propuesta"
+                value={subject}
+              />
 
               <label className="block text-sm font-medium text-zinc-700" htmlFor="proposal-status">
                 Estado
@@ -254,11 +622,102 @@ export function ProposalShell({ proposals, tenantName }: ProposalShellProps) {
                 value={termsAndConditions}
               />
 
+              <div className="rounded-lg border border-zinc-200 bg-white p-3">
+                <div className="mb-2 flex items-center justify-between gap-2">
+                  <p className="text-xs uppercase tracking-[0.18em] text-zinc-500">Partidas de la propuesta</p>
+                  <button
+                    className="rounded-lg border border-zinc-300 px-3 py-1.5 text-xs font-medium text-zinc-700 hover:bg-zinc-100"
+                    onClick={addProposalItem}
+                    type="button"
+                  >
+                    + Partida
+                  </button>
+                </div>
+                {loadingDetail ? <p className="text-sm text-zinc-500">Cargando partidas...</p> : null}
+                <div className="max-h-72 overflow-auto">
+                  <table className="min-w-full divide-y divide-zinc-200 text-sm">
+                    <thead className="bg-zinc-50 text-left text-zinc-600">
+                      <tr>
+                        <th className="px-2 py-2 font-medium">#</th>
+                        <th className="px-2 py-2 font-medium">SKU</th>
+                        <th className="px-2 py-2 font-medium">Descripcion</th>
+                        <th className="px-2 py-2 font-medium">Cantidad</th>
+                        <th className="px-2 py-2 font-medium">Costo</th>
+                        <th className="px-2 py-2 font-medium">Precio</th>
+                        <th className="px-2 py-2 font-medium"></th>
+                      </tr>
+                    </thead>
+                    <tbody className="divide-y divide-zinc-100">
+                      {proposalItems.map((item, index) => (
+                        <tr key={`${item.itemNumber}-${index}`}>
+                          <td className="px-2 py-2 text-zinc-500">{index + 1}</td>
+                          <td className="px-2 py-2">
+                            <input
+                              className="w-28 rounded border border-zinc-300 px-2 py-1"
+                              onChange={(event) => updateProposalItem(index, "sku", event.target.value)}
+                              value={item.sku}
+                            />
+                          </td>
+                          <td className="px-2 py-2">
+                            <input
+                              className="w-56 rounded border border-zinc-300 px-2 py-1"
+                              onChange={(event) =>
+                                updateProposalItem(index, "description", event.target.value)
+                              }
+                              value={item.description}
+                            />
+                          </td>
+                          <td className="px-2 py-2">
+                            <input
+                              className="w-20 rounded border border-zinc-300 px-2 py-1"
+                              min={0}
+                              onChange={(event) => updateProposalItem(index, "quantity", event.target.value)}
+                              step={1}
+                              type="number"
+                              value={item.quantity}
+                            />
+                          </td>
+                          <td className="px-2 py-2">
+                            <input
+                              className="w-24 rounded border border-zinc-300 px-2 py-1"
+                              min={0}
+                              onChange={(event) => updateProposalItem(index, "costUnit", event.target.value)}
+                              step={0.01}
+                              type="number"
+                              value={item.costUnit}
+                            />
+                          </td>
+                          <td className="px-2 py-2">
+                            <input
+                              className="w-24 rounded border border-zinc-300 px-2 py-1"
+                              min={0}
+                              onChange={(event) => updateProposalItem(index, "priceUnit", event.target.value)}
+                              step={0.01}
+                              type="number"
+                              value={item.priceUnit}
+                            />
+                          </td>
+                          <td className="px-2 py-2">
+                            <button
+                              className="rounded border border-rose-300 px-2 py-1 text-xs text-rose-700 hover:bg-rose-50"
+                              onClick={() => removeProposalItem(index)}
+                              type="button"
+                            >
+                              Eliminar
+                            </button>
+                          </td>
+                        </tr>
+                      ))}
+                    </tbody>
+                  </table>
+                </div>
+              </div>
+
               <div className="flex items-center justify-between gap-3">
                 <div className="flex items-center gap-2">
                   <button
                     className="rounded-lg bg-zinc-900 px-4 py-2 text-sm font-medium text-white transition hover:bg-zinc-700 disabled:cursor-not-allowed disabled:bg-zinc-400"
-                    disabled={saveStatus === "saving"}
+                    disabled={saveStatus === "saving" || loadingDetail}
                     onClick={handleSave}
                     type="button"
                   >

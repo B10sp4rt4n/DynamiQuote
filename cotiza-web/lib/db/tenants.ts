@@ -8,6 +8,12 @@ export type BootstrapTenant = {
   slug: string;
 };
 
+export type ActiveTenantOption = {
+  id: string;
+  name: string;
+  slug: string;
+};
+
 export async function getBootstrapTenant(): Promise<BootstrapTenant | null> {
   const slug = process.env["DEFAULT_TENANT_SLUG"];
 
@@ -39,4 +45,24 @@ export async function getBootstrapTenant(): Promise<BootstrapTenant | null> {
     name: tenant.name,
     slug: tenant.slug,
   };
+}
+
+export async function getActiveTenants(): Promise<ActiveTenantOption[]> {
+  const tenants = await prisma.tenant.findMany({
+    orderBy: { name: "asc" },
+    select: {
+      tenant_id: true,
+      name: true,
+      slug: true,
+    },
+    where: {
+      active: true,
+    },
+  });
+
+  return tenants.map((tenant) => ({
+    id: tenant.tenant_id,
+    name: tenant.name,
+    slug: tenant.slug,
+  }));
 }
