@@ -78,6 +78,22 @@ function extractUserDisplayName(claims: unknown): string | null {
   );
 }
 
+function extractUserIdentity(claims: unknown): {
+  emailAlias: string | null;
+  firstName: string | null;
+  lastName: string | null;
+} {
+  const typedClaims = (claims ?? {}) as TenantClaims;
+  const email = readString(typedClaims.email)?.toLowerCase() ?? null;
+  const emailAlias = email?.split("@")[0] ?? null;
+
+  return {
+    emailAlias,
+    firstName: readString(typedClaims.first_name),
+    lastName: readString(typedClaims.last_name),
+  };
+}
+
 function looksLikeOpaqueId(value: string | null): boolean {
   if (!value) {
     return false;
@@ -188,8 +204,9 @@ export async function getCurrentTenantContext(): Promise<TenantContext | null> {
 
   const { tenantId, tenantSlug } = extractTenantReference(sessionClaims);
   const claimDisplayName = extractUserDisplayName(sessionClaims);
+  const identity = extractUserIdentity(sessionClaims);
 
-  const appUser = await prisma.app_users.findUnique({
+  let appUser = await prisma.app_users.findUnique({
     select: {
       alias: true,
       first_name: true,
@@ -197,11 +214,61 @@ export async function getCurrentTenantContext(): Promise<TenantContext | null> {
       role: true,
       tenant_id: true,
       user_id: true,
+      active: true,
     },
     where: {
       user_id: userId,
     },
   });
+
+  const fallbackCandidates =
+    appUser || (!identity.emailAlias && !(identity.firstName && identity.lastName))
+      ? []
+      : await prisma.app_users.findMany({
+          select: {
+            active: true,
+            alias: true,
+            first_name: true,
+            last_name: true,
+            role: true,
+            tenant_id: true,
+            user_id: true,
+          },
+          where: {
+            active: true,
+            OR: [
+              identity.emailAlias
+                ? {
+                    alias: identity.emailAlias,
+                  }
+                : undefined,
+              identity.firstName && identity.lastName
+                ? {
+                    first_name: identity.firstName,
+                    last_name: identity.lastName,
+                  }
+                : undefined,
+            ].filter((value): value is NonNullable<typeof value> => Boolean(value)),
+          },
+        });
+
+  if (!appUser && fallbackCandidates.length > 0) {
+    const roleWeight = (role: string): number => {
+      const normalized = normalizeRole(role);
+      if (normalized === "superadmin") return 100;
+      if (normalized === "owner") return 80;
+      if (normalized === "admin") return 60;
+      return 20;
+    };
+
+    const sorted = [...fallbackCandidates].sort((a, b) => {
+      const aTenantBonus = a.tenant_id === tenant?.id ? 10 : 0;
+      const bTenantBonus = b.tenant_id === tenant?.id ? 10 : 0;
+      return roleWeight(b.role) + bTenantBonus - (roleWeight(a.role) + aTenantBonus);
+    });
+
+    appUser = sorted[0] ?? null;
+  }
 
   const userRole = normalizeRole(appUser?.role);
   const isSuperAdmin = userRole === "superadmin";
