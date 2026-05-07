@@ -120,6 +120,16 @@ function normalizeRole(value: string | null | undefined): AppUserRole {
   return "user";
 }
 
+function extractRoleFromClaims(claims: unknown): AppUserRole {
+  const typedClaims = (claims ?? {}) as TenantClaims;
+  const role =
+    readString(typedClaims.metadata?.role) ??
+    readString(typedClaims.publicMetadata?.role) ??
+    readString(typedClaims.unsafeMetadata?.role);
+
+  return normalizeRole(role);
+}
+
 async function resolveTenantByReference(reference: {
   tenantId: string | null;
   tenantSlug: string | null;
@@ -204,7 +214,26 @@ export async function getCurrentTenantContext(): Promise<TenantContext | null> {
 
   const { tenantId, tenantSlug } = extractTenantReference(sessionClaims);
   const claimDisplayName = extractUserDisplayName(sessionClaims);
-  const identity = extractUserIdentity(sessionClaims);
+  let identity = extractUserIdentity(sessionClaims);
+
+  if (!identity.emailAlias || !identity.firstName || !identity.lastName) {
+    try {
+      const client = await clerkClient();
+      const clerkUser = await client.users.getUser(userId);
+      const primaryEmail = clerkUser.emailAddresses.find(
+        (item) => item.id === clerkUser.primaryEmailAddressId,
+      )?.emailAddress;
+      const emailAlias = primaryEmail?.split("@")[0]?.trim().toLowerCase() ?? null;
+
+      identity = {
+        emailAlias: identity.emailAlias ?? emailAlias,
+        firstName: identity.firstName ?? readString(clerkUser.firstName),
+        lastName: identity.lastName ?? readString(clerkUser.lastName),
+      };
+    } catch {
+      // Si Clerk no responde, seguimos con claims para no romper autenticacion.
+    }
+  }
 
   let appUser = await prisma.app_users.findUnique({
     select: {
@@ -221,6 +250,7 @@ export async function getCurrentTenantContext(): Promise<TenantContext | null> {
     },
   });
 
+  // Fallback: search by alias or name if direct user_id lookup failed
   const fallbackCandidates =
     appUser || (!identity.emailAlias && !(identity.firstName && identity.lastName))
       ? []
@@ -261,17 +291,55 @@ export async function getCurrentTenantContext(): Promise<TenantContext | null> {
       return 20;
     };
 
-    const sorted = [...fallbackCandidates].sort((a, b) => {
-      const aTenantBonus = a.tenant_id === tenant?.id ? 10 : 0;
-      const bTenantBonus = b.tenant_id === tenant?.id ? 10 : 0;
-      return roleWeight(b.role) + bTenantBonus - (roleWeight(a.role) + aTenantBonus);
-    });
+    // Si hay tenantId en claims, preferir ese tenant
+    let candidates = [...fallbackCandidates];
+    if (tenantId) {
+      const tenantMatches = candidates.filter((c) => c.tenant_id === tenantId);
+      if (tenantMatches.length > 0) {
+        candidates = tenantMatches;
+      }
+    }
 
+    const sorted = candidates.sort((a, b) => roleWeight(b.role) - roleWeight(a.role));
     appUser = sorted[0] ?? null;
+      // Sync Clerk userId to app_users if matched via fallback
+      if (appUser && appUser.user_id !== userId) {
+        try {
+          await prisma.app_users.update({
+            where: { user_id: appUser.user_id },
+            data: { user_id: userId },
+          });
+          // Update local appUser record to reflect the change
+          appUser.user_id = userId;
+        } catch {
+          // If update fails, continue with current user_id to avoid breaking auth
+        }
+      }
   }
 
-  const userRole = normalizeRole(appUser?.role);
+  const userRole = appUser ? normalizeRole(appUser.role) : extractRoleFromClaims(sessionClaims);
   const isSuperAdmin = userRole === "superadmin";
+
+    // Sync user role to Clerk metadata if not already synced or if changed
+    if (appUser && hasClerkCredentials()) {
+      try {
+        const client = await clerkClient();
+        const clerkUser = await client.users.getUser(userId);
+        const clerkRoleMetadata = (clerkUser.publicMetadata?.role as string) || null;
+
+        // Update if role changed or wasn't synced yet
+        if (clerkRoleMetadata !== appUser.role) {
+          await client.users.updateUserMetadata(userId, {
+            publicMetadata: {
+              role: appUser.role,
+              tenantId: appUser.tenant_id,
+            },
+          });
+        }
+      } catch {
+        // Continue without sync if Clerk is unavailable
+      }
+    }
 
   const shouldUseOverride = Boolean(tenantOverrideSlug) && (isSuperAdmin || process.env.NODE_ENV !== "production");
 
@@ -343,7 +411,7 @@ export async function getCurrentTenantContext(): Promise<TenantContext | null> {
       })
     : null;
 
-  const isTenantPrimaryAdmin = Boolean(isTenantAdmin && primaryAdmin?.user_id === userId);
+  const isTenantPrimaryAdmin = Boolean(isTenantAdmin && primaryAdmin?.user_id === appUser?.user_id);
 
   const accessScope: AccessScope = isSuperAdmin ? "global" : "subtenant";
   const subtenantKey = isSuperAdmin ? `superadmin:${userId}` : `${tenant.id}:${userId}`;

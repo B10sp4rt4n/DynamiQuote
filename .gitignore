@@ -10,3 +10,5 @@ venv/
 # Streamlit - ignore secrets but keep config
 .streamlit/secrets.toml
 .streamlit/credentials.toml
+.vercel
+.env*.local
