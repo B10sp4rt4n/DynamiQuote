@@ -7,8 +7,16 @@ import { hasClerkCredentials } from "@/lib/auth/clerk";
 import { prisma } from "@/lib/db/prisma";
 import { getBootstrapTenant, type BootstrapTenant } from "@/lib/db/tenants";
 
+type AppUserRole = "superadmin" | "owner" | "admin" | "user";
+type AccessScope = "global" | "tenant" | "subtenant";
+
 export type TenantContext = BootstrapTenant & {
+  accessScope: AccessScope;
   authMode: "bootstrap" | "clerk";
+  isSuperAdmin: boolean;
+  isTenantPrimaryAdmin: boolean;
+  subtenantKey: string | null;
+  userRole: AppUserRole;
   userDisplayName: string | null;
   userId: string | null;
 };
@@ -33,6 +41,8 @@ type TenantClaims = {
 };
 
 const TENANT_OVERRIDE_COOKIE = "tenant_override_slug";
+const SUPER_ADMIN_ROLES = new Set<string>(["superadmin", "super_admin", "platform_admin", "root"]);
+const TENANT_ADMIN_ROLES = new Set<string>(["owner", "admin"]);
 
 function readString(value: unknown): string | null {
   return typeof value === "string" && value.trim().length > 0 ? value.trim() : null;
@@ -74,6 +84,24 @@ function looksLikeOpaqueId(value: string | null): boolean {
   }
 
   return /^(ser|user|sess|org)_[A-Za-z0-9]+$/.test(value.trim());
+}
+
+function normalizeRole(value: string | null | undefined): AppUserRole {
+  const role = value?.trim().toLowerCase();
+
+  if (role && SUPER_ADMIN_ROLES.has(role)) {
+    return "superadmin";
+  }
+
+  if (role === "owner") {
+    return "owner";
+  }
+
+  if (role === "admin") {
+    return "admin";
+  }
+
+  return "user";
 }
 
 async function resolveTenantByReference(reference: {
@@ -139,8 +167,13 @@ export async function getCurrentTenantContext(): Promise<TenantContext | null> {
 
     return tenant
       ? {
+          accessScope: "tenant",
           ...tenant,
           authMode: "bootstrap",
+          isSuperAdmin: false,
+          isTenantPrimaryAdmin: false,
+          subtenantKey: null,
+          userRole: "user",
           userDisplayName: null,
           userId: null,
         }
@@ -156,30 +189,43 @@ export async function getCurrentTenantContext(): Promise<TenantContext | null> {
   const { tenantId, tenantSlug } = extractTenantReference(sessionClaims);
   const claimDisplayName = extractUserDisplayName(sessionClaims);
 
-  const shouldUseOverride = process.env.NODE_ENV !== "production" && Boolean(tenantOverrideSlug);
+  const appUser = await prisma.app_users.findUnique({
+    select: {
+      alias: true,
+      first_name: true,
+      last_name: true,
+      role: true,
+      tenant_id: true,
+      user_id: true,
+    },
+    where: {
+      user_id: userId,
+    },
+  });
+
+  const userRole = normalizeRole(appUser?.role);
+  const isSuperAdmin = userRole === "superadmin";
+
+  const shouldUseOverride = Boolean(tenantOverrideSlug) && (isSuperAdmin || process.env.NODE_ENV !== "production");
+
+  const fallbackTenantId = appUser?.tenant_id ?? null;
 
   const tenant =
     (shouldUseOverride
       ? await resolveTenantByReference({ tenantId: null, tenantSlug: tenantOverrideSlug ?? null })
       : null) ??
-    (await resolveTenantByReference({ tenantId, tenantSlug })) ??
+    (await resolveTenantByReference({ tenantId: tenantId ?? fallbackTenantId, tenantSlug })) ??
     (process.env["DEFAULT_TENANT_SLUG"] ? await getBootstrapTenant() : null);
 
   if (!tenant) {
     return null;
   }
 
-  const appUser = await prisma.app_users.findFirst({
-    select: {
-      alias: true,
-      first_name: true,
-      last_name: true,
-    },
-    where: {
-      tenant_id: tenant.id,
-      user_id: userId,
-    },
-  });
+  const isCrossTenantContext = !isSuperAdmin && Boolean(appUser?.tenant_id) && appUser?.tenant_id !== tenant.id;
+
+  if (isCrossTenantContext) {
+    return null;
+  }
 
   const appUserDisplayName = [appUser?.first_name, appUser?.last_name]
     .filter((value) => typeof value === "string" && value.trim().length > 0)
@@ -212,11 +258,39 @@ export async function getCurrentTenantContext(): Promise<TenantContext | null> {
     userDisplayName = null;
   }
 
+  const isTenantAdmin = TENANT_ADMIN_ROLES.has(userRole);
+
+  const primaryAdmin = isTenantAdmin
+    ? await prisma.app_users.findFirst({
+        orderBy: [{ created_at: "asc" }],
+        select: {
+          user_id: true,
+        },
+        where: {
+          active: true,
+          role: {
+            in: ["owner", "admin"],
+          },
+          tenant_id: tenant.id,
+        },
+      })
+    : null;
+
+  const isTenantPrimaryAdmin = Boolean(isTenantAdmin && primaryAdmin?.user_id === userId);
+
+  const accessScope: AccessScope = isSuperAdmin ? "global" : "subtenant";
+  const subtenantKey = isSuperAdmin ? `superadmin:${userId}` : `${tenant.id}:${userId}`;
+
   return {
+    accessScope,
     authMode: "clerk",
     id: tenant.id,
+    isSuperAdmin,
+    isTenantPrimaryAdmin,
     name: tenant.name,
     slug: tenant.slug,
+    subtenantKey,
+    userRole,
     userDisplayName,
     userId,
   };

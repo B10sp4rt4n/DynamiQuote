@@ -1,6 +1,7 @@
 import "server-only";
 
 import { prisma } from "@/lib/db/prisma";
+import type { CreateManagedUserInput } from "@/lib/validations/users";
 
 export type AppUserSummary = {
   active: boolean;
@@ -10,6 +11,9 @@ export type AppUserSummary = {
   lastName: string;
   role: string;
   sellerCode: string | null;
+  subtenantKey: string;
+  tenantId: string | null;
+  tenantName: string | null;
   userId: string;
 };
 
@@ -23,6 +27,11 @@ export type IssuerProfileSummary = {
   uploadedAt: string;
 };
 
+type CreateManagedUserArgs = {
+  targetTenantId: string;
+  payload: CreateManagedUserInput;
+};
+
 export async function getAppUsersByTenant(tenantId: string): Promise<AppUserSummary[]> {
   const rows = await prisma.app_users.findMany({
     orderBy: [{ active: "desc" }, { created_at: "asc" }],
@@ -34,6 +43,12 @@ export async function getAppUsersByTenant(tenantId: string): Promise<AppUserSumm
       last_name: true,
       role: true,
       seller_code: true,
+      tenant_id: true,
+      tenants: {
+        select: {
+          name: true,
+        },
+      },
       user_id: true,
     },
     where: { tenant_id: tenantId },
@@ -47,20 +62,68 @@ export async function getAppUsersByTenant(tenantId: string): Promise<AppUserSumm
     lastName: row.last_name,
     role: row.role,
     sellerCode: row.seller_code,
+    subtenantKey: `${row.tenant_id ?? "sin-tenant"}:${row.user_id}`,
+    tenantId: row.tenant_id,
+    tenantName: row.tenants?.name ?? null,
+    userId: row.user_id,
+  }));
+}
+
+export async function getAppUsersForSuperAdmin(): Promise<AppUserSummary[]> {
+  const rows = await prisma.app_users.findMany({
+    orderBy: [{ active: "desc" }, { tenant_id: "asc" }, { created_at: "asc" }],
+    select: {
+      active: true,
+      alias: true,
+      created_at: true,
+      first_name: true,
+      last_name: true,
+      role: true,
+      seller_code: true,
+      tenant_id: true,
+      tenants: {
+        select: {
+          name: true,
+        },
+      },
+      user_id: true,
+    },
+  });
+
+  return rows.map((row) => ({
+    active: row.active,
+    alias: row.alias,
+    createdAt: row.created_at.toISOString(),
+    firstName: row.first_name,
+    lastName: row.last_name,
+    role: row.role,
+    sellerCode: row.seller_code,
+    subtenantKey: `${row.tenant_id ?? "sin-tenant"}:${row.user_id}`,
+    tenantId: row.tenant_id,
+    tenantName: row.tenants?.name ?? null,
     userId: row.user_id,
   }));
 }
 
 export async function toggleAppUserActivationByTenant(
-  tenantId: string,
+  tenantId: string | null,
   userId: string,
 ): Promise<AppUserSummary | null> {
   const user = await prisma.app_users.findFirst({
-    select: { active: true, user_id: true },
-    where: { tenant_id: tenantId, user_id: userId },
+    select: { active: true, role: true, tenant_id: true, user_id: true },
+    where: {
+      user_id: userId,
+      ...(tenantId ? { tenant_id: tenantId } : {}),
+    },
   });
 
   if (!user) return null;
+
+  const normalizedRole = user.role.trim().toLowerCase();
+
+  if (normalizedRole === "superadmin" || normalizedRole === "super_admin" || normalizedRole === "platform_admin") {
+    return null;
+  }
 
   const updated = await prisma.app_users.update({
     data: { active: !user.active },
@@ -72,6 +135,12 @@ export async function toggleAppUserActivationByTenant(
       last_name: true,
       role: true,
       seller_code: true,
+      tenant_id: true,
+      tenants: {
+        select: {
+          name: true,
+        },
+      },
       user_id: true,
     },
     where: { user_id: userId },
@@ -85,7 +154,89 @@ export async function toggleAppUserActivationByTenant(
     lastName: updated.last_name,
     role: updated.role,
     sellerCode: updated.seller_code,
+    subtenantKey: `${updated.tenant_id ?? "sin-tenant"}:${updated.user_id}`,
+    tenantId: updated.tenant_id,
+    tenantName: updated.tenants?.name ?? null,
     userId: updated.user_id,
+  };
+}
+
+export async function createManagedUserByTenant({
+  targetTenantId,
+  payload,
+}: CreateManagedUserArgs): Promise<AppUserSummary | null> {
+  const tenant = await prisma.tenant.findFirst({
+    select: {
+      name: true,
+      tenant_id: true,
+    },
+    where: {
+      active: true,
+      tenant_id: targetTenantId,
+    },
+  });
+
+  if (!tenant) {
+    return null;
+  }
+
+  const existing = await prisma.app_users.findFirst({
+    select: {
+      user_id: true,
+    },
+    where: {
+      OR: [{ alias: payload.alias }, { user_id: payload.userId }],
+    },
+  });
+
+  if (existing) {
+    return null;
+  }
+
+  // Cada subtenant nuevo se registra como usuario estandar.
+  const created = await prisma.app_users.create({
+    data: {
+      active: true,
+      alias: payload.alias,
+      created_at: new Date(),
+      first_name: payload.firstName,
+      last_name: payload.lastName,
+      password_hash: "CLERK_MANAGED",
+      role: "user",
+      seller_code: payload.sellerCode?.trim() || null,
+      tenant_id: targetTenantId,
+      user_id: payload.userId,
+    },
+    select: {
+      active: true,
+      alias: true,
+      created_at: true,
+      first_name: true,
+      last_name: true,
+      role: true,
+      seller_code: true,
+      tenant_id: true,
+      tenants: {
+        select: {
+          name: true,
+        },
+      },
+      user_id: true,
+    },
+  });
+
+  return {
+    active: created.active,
+    alias: created.alias,
+    createdAt: created.created_at.toISOString(),
+    firstName: created.first_name,
+    lastName: created.last_name,
+    role: created.role,
+    sellerCode: created.seller_code,
+    subtenantKey: `${created.tenant_id ?? "sin-tenant"}:${created.user_id}`,
+    tenantId: created.tenant_id,
+    tenantName: created.tenants?.name ?? tenant.name,
+    userId: created.user_id,
   };
 }
 
