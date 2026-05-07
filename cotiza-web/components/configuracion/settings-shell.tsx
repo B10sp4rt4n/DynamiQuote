@@ -172,6 +172,10 @@ function CreateUserForm({
       setLastName("");
       setSellerCode("");
       setUserId("");
+
+      if (!data.user.userId.startsWith("user_") && !data.user.userId.startsWith("ser_")) {
+        setError("Usuario creado en BD, pero revisa que el userId sea el de Clerk para vincular metadata.");
+      }
     } catch (err) {
       setError(err instanceof Error ? err.message : "Error desconocido");
     } finally {

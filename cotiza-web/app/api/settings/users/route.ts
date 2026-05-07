@@ -1,11 +1,14 @@
 import { NextResponse } from "next/server";
+import { clerkClient } from "@clerk/nextjs/server";
 
 import { getCurrentTenantContext } from "@/lib/auth/tenant-context";
+import { hasClerkCredentials } from "@/lib/auth/clerk";
 import {
   createManagedUserByTenant,
   getAppUsersByTenant,
   getAppUsersForSuperAdmin,
 } from "@/lib/db/settings";
+import { prisma } from "@/lib/db/prisma";
 import { createManagedUserSchema } from "@/lib/validations/users";
 
 export async function GET() {
@@ -45,6 +48,44 @@ export async function POST(request: Request) {
     ? parsed.data.tenantId ?? tenant.id
     : tenant.id;
 
+  const targetTenant = await prisma.tenant.findFirst({
+    select: {
+      slug: true,
+      tenant_id: true,
+    },
+    where: {
+      active: true,
+      tenant_id: targetTenantId,
+    },
+  });
+
+  if (!targetTenant) {
+    return NextResponse.json({ error: "Tenant destino invalido" }, { status: 422 });
+  }
+
+  let clerkSynced = false;
+
+  if (hasClerkCredentials()) {
+    try {
+      const client = await clerkClient();
+      await client.users.getUser(parsed.data.userId);
+      await client.users.updateUserMetadata(parsed.data.userId, {
+        publicMetadata: {
+          role: "user",
+          subtenantKey: `${targetTenant.tenant_id}:${parsed.data.userId}`,
+          tenantId: targetTenant.tenant_id,
+          tenantSlug: targetTenant.slug,
+        },
+      });
+      clerkSynced = true;
+    } catch {
+      return NextResponse.json(
+        { error: "No se pudo vincular el userId en Clerk. Verifica que exista en Clerk." },
+        { status: 422 },
+      );
+    }
+  }
+
   const created = await createManagedUserByTenant({
     payload: parsed.data,
     targetTenantId,
@@ -57,5 +98,5 @@ export async function POST(request: Request) {
     );
   }
 
-  return NextResponse.json({ user: created }, { status: 201 });
+  return NextResponse.json({ clerkSynced, user: created }, { status: 201 });
 }
