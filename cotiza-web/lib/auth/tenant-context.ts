@@ -44,6 +44,25 @@ const TENANT_OVERRIDE_COOKIE = "tenant_override_slug";
 const SUPER_ADMIN_ROLES = new Set<string>(["superadmin", "super_admin", "platform_admin", "root"]);
 const TENANT_ADMIN_ROLES = new Set<string>(["owner", "admin"]);
 
+function normalizeIdentityToken(value: string | null | undefined): string {
+  return (value ?? "")
+    .normalize("NFD")
+    .replace(/[\u0300-\u036f]/g, "")
+    .toLowerCase()
+    .replace(/[^a-z0-9]/g, "");
+}
+
+function namesLookEquivalent(a: string | null, b: string | null): boolean {
+  const left = normalizeIdentityToken(a);
+  const right = normalizeIdentityToken(b);
+
+  if (!left || !right) {
+    return false;
+  }
+
+  return left === right || left.startsWith(right) || right.startsWith(left);
+}
+
 function readString(value: unknown): string | null {
   return typeof value === "string" && value.trim().length > 0 ? value.trim() : null;
 }
@@ -316,6 +335,46 @@ export async function getCurrentTenantContext(): Promise<TenantContext | null> {
         }
       }
   }
+
+    if (!appUser) {
+      const superAdminCandidates = await prisma.app_users.findMany({
+        select: {
+          active: true,
+          alias: true,
+          first_name: true,
+          last_name: true,
+          role: true,
+          tenant_id: true,
+          user_id: true,
+        },
+        where: {
+          active: true,
+          role: {
+            in: ["superadmin", "super_admin", "platform_admin", "root"],
+          },
+        },
+      });
+
+      const identityAlias = normalizeIdentityToken(identity.emailAlias);
+      const identityFirst = normalizeIdentityToken(identity.firstName);
+      const identityLast = normalizeIdentityToken(identity.lastName);
+
+      const rescued = superAdminCandidates.find((candidate) => {
+        const candidateAlias = normalizeIdentityToken(candidate.alias);
+        const candidateFirst = normalizeIdentityToken(candidate.first_name);
+        const candidateLast = normalizeIdentityToken(candidate.last_name);
+
+        const aliasMatch = Boolean(identityAlias) && identityAlias === candidateAlias;
+        const firstMatch = Boolean(identityFirst) && identityFirst === candidateFirst;
+        const lastMatch = namesLookEquivalent(identity.lastName, candidate.last_name);
+
+        return aliasMatch || (firstMatch && lastMatch);
+      });
+
+      if (rescued) {
+        appUser = rescued;
+      }
+    }
 
   const userRole = appUser ? normalizeRole(appUser.role) : extractRoleFromClaims(sessionClaims);
   const isSuperAdmin = userRole === "superadmin";
