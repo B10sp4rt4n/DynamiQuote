@@ -63,15 +63,19 @@ export async function POST(request: Request) {
     return NextResponse.json({ error: "Tenant destino invalido" }, { status: 422 });
   }
 
+  // Si no se proporcionó userId, generar uno temporal (se sincronizará cuando el usuario entre por primera vez)
+  const resolvedUserId = parsed.data.userId?.trim() || `pending_${crypto.randomUUID()}`;
+  const assignedRole = parsed.data.role ?? "user";
+
   let clerkSynced = false;
 
-  if (hasClerkCredentials()) {
+  if (hasClerkCredentials() && parsed.data.userId) {
     try {
       const client = await clerkClient();
       await client.users.getUser(parsed.data.userId);
       await client.users.updateUserMetadata(parsed.data.userId, {
         publicMetadata: {
-          role: "user",
+          role: assignedRole,
           subtenantKey: `${targetTenant.tenant_id}:${parsed.data.userId}`,
           tenantId: targetTenant.tenant_id,
           tenantSlug: targetTenant.slug,
@@ -79,15 +83,13 @@ export async function POST(request: Request) {
       });
       clerkSynced = true;
     } catch {
-      return NextResponse.json(
-        { error: "No se pudo vincular el userId en Clerk. Verifica que exista en Clerk." },
-        { status: 422 },
-      );
+      // userId no existe en Clerk — se guarda igual, se sincronizará después
+      clerkSynced = false;
     }
   }
 
   const created = await createManagedUserByTenant({
-    payload: parsed.data,
+    payload: { ...parsed.data, userId: resolvedUserId, role: assignedRole },
     targetTenantId,
   });
 

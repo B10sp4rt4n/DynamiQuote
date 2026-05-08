@@ -132,14 +132,17 @@ function CreateUserForm({
   const [firstName, setFirstName] = useState("");
   const [lastName, setLastName] = useState("");
   const [sellerCode, setSellerCode] = useState("");
+  const [role, setRole] = useState<"user" | "admin" | "owner">("user");
   const [tenantId, setTenantId] = useState(tenantOptions[0]?.id ?? "");
   const [userId, setUserId] = useState("");
   const [pending, setPending] = useState(false);
   const [error, setError] = useState<string | null>(null);
+  const [success, setSuccess] = useState<string | null>(null);
 
   async function onSubmit(event: FormEvent<HTMLFormElement>) {
     event.preventDefault();
     setError(null);
+    setSuccess(null);
     setPending(true);
 
     try {
@@ -147,20 +150,19 @@ function CreateUserForm({
         alias,
         firstName,
         lastName,
+        role,
         sellerCode: sellerCode || null,
         tenantId: canManageAllTenants ? tenantId : undefined,
-        userId,
+        userId: userId.trim() || undefined,
       };
 
       const res = await fetch("/api/settings/users", {
         body: JSON.stringify(payload),
-        headers: {
-          "Content-Type": "application/json",
-        },
+        headers: { "Content-Type": "application/json" },
         method: "POST",
       });
 
-      const data = (await res.json()) as { error?: string; user?: AppUserSummary };
+      const data = (await res.json()) as { error?: string; user?: AppUserSummary; clerkSynced?: boolean };
 
       if (!res.ok || !data.user) {
         throw new Error(data.error ?? "No fue posible crear el usuario");
@@ -172,10 +174,12 @@ function CreateUserForm({
       setLastName("");
       setSellerCode("");
       setUserId("");
-
-      if (!data.user.userId.startsWith("user_") && !data.user.userId.startsWith("ser_")) {
-        setError("Usuario creado en BD, pero revisa que el userId sea el de Clerk para vincular metadata.");
-      }
+      setRole("user");
+      setSuccess(
+        data.clerkSynced
+          ? "Usuario creado y vinculado a Clerk."
+          : "Usuario creado. Cuando el usuario entre por primera vez se vinculará automáticamente.",
+      );
     } catch (err) {
       setError(err instanceof Error ? err.message : "Error desconocido");
     } finally {
@@ -185,45 +189,53 @@ function CreateUserForm({
 
   return (
     <form className="grid gap-3 rounded-xl border border-zinc-200 bg-zinc-50 p-4" onSubmit={onSubmit}>
-      <p className="text-sm font-medium text-zinc-800">Alta de subtenant (usuario estandar)</p>
+      <p className="text-sm font-medium text-zinc-800">Nuevo usuario</p>
       <div className="grid gap-3 md:grid-cols-2">
         <input
           className="rounded-lg border border-zinc-300 bg-white px-3 py-2 text-sm"
-          onChange={(event) => setUserId(event.target.value)}
-          placeholder="userId de Clerk"
-          required
-          value={userId}
-        />
-        <input
-          className="rounded-lg border border-zinc-300 bg-white px-3 py-2 text-sm"
-          onChange={(event) => setAlias(event.target.value)}
-          placeholder="Alias"
-          required
-          value={alias}
-        />
-        <input
-          className="rounded-lg border border-zinc-300 bg-white px-3 py-2 text-sm"
           onChange={(event) => setFirstName(event.target.value)}
-          placeholder="Nombre"
+          placeholder="Nombre *"
           required
           value={firstName}
         />
         <input
           className="rounded-lg border border-zinc-300 bg-white px-3 py-2 text-sm"
           onChange={(event) => setLastName(event.target.value)}
-          placeholder="Apellidos"
+          placeholder="Apellidos *"
           required
           value={lastName}
         />
         <input
           className="rounded-lg border border-zinc-300 bg-white px-3 py-2 text-sm"
+          onChange={(event) => setAlias(event.target.value)}
+          placeholder="Alias (ej. j.perez) *"
+          required
+          value={alias}
+        />
+        <select
+          className="rounded-lg border border-zinc-300 bg-white px-3 py-2 text-sm"
+          onChange={(event) => setRole(event.target.value as "user" | "admin" | "owner")}
+          value={role}
+        >
+          <option value="user">Usuario estándar</option>
+          <option value="admin">Administrador</option>
+          <option value="owner">Owner</option>
+        </select>
+        <input
+          className="rounded-lg border border-zinc-300 bg-white px-3 py-2 text-sm"
           onChange={(event) => setSellerCode(event.target.value)}
-          placeholder="Codigo vendedor (opcional)"
+          placeholder="Código vendedor (opcional)"
           value={sellerCode}
+        />
+        <input
+          className="rounded-lg border border-zinc-300 bg-white px-3 py-2 text-sm text-zinc-500"
+          onChange={(event) => setUserId(event.target.value)}
+          placeholder="ID de Clerk (opcional)"
+          value={userId}
         />
         {canManageAllTenants ? (
           <select
-            className="rounded-lg border border-zinc-300 bg-white px-3 py-2 text-sm"
+            className="rounded-lg border border-zinc-300 bg-white px-3 py-2 text-sm md:col-span-2"
             onChange={(event) => setTenantId(event.target.value)}
             required
             value={tenantId}
@@ -237,13 +249,14 @@ function CreateUserForm({
         ) : null}
       </div>
       {error ? <p className="text-xs text-rose-700">{error}</p> : null}
+      {success ? <p className="text-xs text-emerald-700">{success}</p> : null}
       <div>
         <button
-          className="rounded-lg bg-zinc-900 px-3 py-2 text-sm font-medium text-white transition hover:bg-zinc-700 disabled:opacity-60"
+          className="rounded-lg bg-zinc-900 px-4 py-2 text-sm font-medium text-white transition hover:bg-zinc-700 disabled:opacity-60"
           disabled={pending}
           type="submit"
         >
-          {pending ? "Creando..." : "Crear usuario subtenant"}
+          {pending ? "Creando..." : "Crear usuario"}
         </button>
       </div>
     </form>

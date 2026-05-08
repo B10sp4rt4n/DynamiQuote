@@ -193,7 +193,7 @@ export async function createManagedUserByTenant({
     return null;
   }
 
-  // Cada subtenant nuevo se registra como usuario estandar.
+  // Crear con el rol indicado (default: user)
   const created = await prisma.app_users.create({
     data: {
       active: true,
@@ -202,10 +202,10 @@ export async function createManagedUserByTenant({
       first_name: payload.firstName,
       last_name: payload.lastName,
       password_hash: "CLERK_MANAGED",
-      role: "user",
+      role: payload.role ?? "user",
       seller_code: payload.sellerCode?.trim() || null,
       tenant_id: targetTenantId,
-      user_id: payload.userId,
+      user_id: payload.userId ?? `pending_${crypto.randomUUID()}`,
     },
     select: {
       active: true,
