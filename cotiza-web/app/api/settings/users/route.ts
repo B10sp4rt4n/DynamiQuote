@@ -10,6 +10,7 @@ import {
 } from "@/lib/db/settings";
 import { prisma } from "@/lib/db/prisma";
 import { createManagedUserSchema } from "@/lib/validations/users";
+import { sendInvitationEmail } from "@/lib/email/send-invitation";
 
 export async function GET() {
   const tenant = await getCurrentTenantContext();
@@ -40,6 +41,7 @@ export async function POST(request: Request) {
 
   const targetTenant = await prisma.tenant.findFirst({
     select: {
+      name: true,
       slug: true,
       tenant_id: true,
     },
@@ -118,5 +120,15 @@ export async function POST(request: Request) {
     );
   }
 
-  return NextResponse.json({ clerkSynced, invitationSent, user: created }, { status: 201 });
+  // Enviar correo de invitación con Resend independientemente de Clerk
+  const appUrl = process.env["NEXT_PUBLIC_APP_URL"] ?? "https://dynami-quote.vercel.app";
+  const emailSent = await sendInvitationEmail({
+    to: normalizedEmail,
+    firstName: parsed.data.firstName,
+    tenantName: targetTenant.name ?? parsed.data.tenantId ?? "tu empresa",
+    inviterName: tenant.userDisplayName ?? "El administrador",
+    signUpUrl: `${appUrl}/sign-up?email=${encodeURIComponent(normalizedEmail)}`,
+  });
+
+  return NextResponse.json({ clerkSynced, emailSent, invitationSent, user: created }, { status: 201 });
 }
