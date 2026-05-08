@@ -53,33 +53,61 @@ export async function POST(request: Request) {
     return NextResponse.json({ error: "Tenant destino invalido" }, { status: 422 });
   }
 
-  // Si no se proporcionó userId, generar uno temporal (se sincronizará cuando el usuario entre por primera vez)
-  const resolvedUserId = parsed.data.userId?.trim() || `pending_${crypto.randomUUID()}`;
   const assignedRole = parsed.data.role ?? "user";
+  const normalizedEmail = parsed.data.email.trim().toLowerCase();
+  let resolvedUserId = parsed.data.userId?.trim() || null;
 
   let clerkSynced = false;
+  let invitationSent = false;
 
-  if (hasClerkCredentials() && parsed.data.userId) {
+  if (hasClerkCredentials()) {
     try {
       const client = await clerkClient();
-      await client.users.getUser(parsed.data.userId);
-      await client.users.updateUserMetadata(parsed.data.userId, {
-        publicMetadata: {
-          role: assignedRole,
-          subtenantKey: `${targetTenant.tenant_id}:${parsed.data.userId}`,
-          tenantId: targetTenant.tenant_id,
-          tenantSlug: targetTenant.slug,
-        },
-      });
-      clerkSynced = true;
+
+      if (!resolvedUserId) {
+        const byEmail = await client.users.getUserList({
+          emailAddress: [normalizedEmail],
+          limit: 1,
+        });
+
+        const existing = byEmail.data[0];
+        if (existing?.id) {
+          resolvedUserId = existing.id;
+        }
+      }
+
+      if (resolvedUserId) {
+        await client.users.getUser(resolvedUserId);
+        await client.users.updateUserMetadata(resolvedUserId, {
+          publicMetadata: {
+            role: assignedRole,
+            subtenantKey: `${targetTenant.tenant_id}:${resolvedUserId}`,
+            tenantId: targetTenant.tenant_id,
+            tenantSlug: targetTenant.slug,
+          },
+        });
+        clerkSynced = true;
+      } else {
+        await client.invitations.createInvitation({
+          emailAddress: normalizedEmail,
+          publicMetadata: {
+            role: assignedRole,
+            tenantId: targetTenant.tenant_id,
+            tenantSlug: targetTenant.slug,
+          },
+        });
+        invitationSent = true;
+      }
     } catch {
-      // userId no existe en Clerk — se guarda igual, se sincronizará después
-      clerkSynced = false;
+      return NextResponse.json(
+        { error: "No se pudo vincular/enviar invitación en Clerk. Verifica correo o configuración de Clerk." },
+        { status: 422 },
+      );
     }
   }
 
   const created = await createManagedUserByTenant({
-    payload: { ...parsed.data, userId: resolvedUserId, role: assignedRole },
+    payload: { ...parsed.data, userId: resolvedUserId ?? `pending_${crypto.randomUUID()}`, role: assignedRole },
     targetTenantId,
   });
 
@@ -90,5 +118,5 @@ export async function POST(request: Request) {
     );
   }
 
-  return NextResponse.json({ clerkSynced, user: created }, { status: 201 });
+  return NextResponse.json({ clerkSynced, invitationSent, user: created }, { status: 201 });
 }

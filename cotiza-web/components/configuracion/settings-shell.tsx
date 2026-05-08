@@ -129,6 +129,7 @@ function CreateUserForm({
   tenantOptions: ActiveTenantOption[];
 }) {
   const [alias, setAlias] = useState("");
+  const [email, setEmail] = useState("");
   const [firstName, setFirstName] = useState("");
   const [lastName, setLastName] = useState("");
   const [sellerCode, setSellerCode] = useState("");
@@ -149,6 +150,7 @@ function CreateUserForm({
     try {
       const payload = {
         alias,
+        email,
         firstName,
         lastName,
         role,
@@ -163,7 +165,12 @@ function CreateUserForm({
         method: "POST",
       });
 
-      const data = (await res.json()) as { error?: string; user?: AppUserSummary; clerkSynced?: boolean };
+      const data = (await res.json()) as {
+        error?: string;
+        user?: AppUserSummary;
+        clerkSynced?: boolean;
+        invitationSent?: boolean;
+      };
 
       if (!res.ok || !data.user) {
         throw new Error(data.error ?? "No fue posible crear el usuario");
@@ -171,6 +178,7 @@ function CreateUserForm({
 
       onCreated(data.user);
       setAlias("");
+      setEmail("");
       setFirstName("");
       setLastName("");
       setSellerCode("");
@@ -179,7 +187,9 @@ function CreateUserForm({
       setSuccess(
         data.clerkSynced
           ? "Usuario creado y vinculado a Clerk."
-          : "Usuario creado. Cuando el usuario entre por primera vez se vinculará automáticamente.",
+          : data.invitationSent
+            ? "Usuario creado e invitación enviada al correo."
+            : "Usuario creado. Quedó pendiente de vinculación con Clerk.",
       );
     } catch (err) {
       setError(err instanceof Error ? err.message : "Error desconocido");
@@ -212,6 +222,14 @@ function CreateUserForm({
           placeholder="Alias (ej. j.perez) *"
           required
           value={alias}
+        />
+        <input
+          className="rounded-lg border border-zinc-300 bg-white px-3 py-2 text-sm"
+          onChange={(event) => setEmail(event.target.value)}
+          placeholder="Correo del usuario *"
+          required
+          type="email"
+          value={email}
         />
         <select
           className="rounded-lg border border-zinc-300 bg-white px-3 py-2 text-sm"
