@@ -8,6 +8,11 @@ export type InvitationEmailPayload = {
   signUpUrl: string;
 };
 
+export type InvitationEmailResult = {
+  sent: boolean;
+  warning: string | null;
+};
+
 function buildInvitationHtml(payload: InvitationEmailPayload): string {
   const { firstName, tenantName, inviterName, signUpUrl } = payload;
 
@@ -75,13 +80,16 @@ function buildInvitationHtml(payload: InvitationEmailPayload): string {
 </html>`;
 }
 
-export async function sendInvitationEmail(payload: InvitationEmailPayload): Promise<boolean> {
+export async function sendInvitationEmail(payload: InvitationEmailPayload): Promise<InvitationEmailResult> {
   const apiKey =
     process.env["RESEND_API_KEY"]?.trim() || process.env["API_RESEND_API_KEY"]?.trim() || "";
 
   if (!apiKey) {
     console.warn("[email] RESEND_API_KEY/API_RESEND_API_KEY no configurada, correo de invitación omitido.");
-    return false;
+    return {
+      sent: false,
+      warning: "No hay API key de Resend configurada en Vercel (RESEND_API_KEY).",
+    };
   }
 
   try {
@@ -102,12 +110,27 @@ export async function sendInvitationEmail(payload: InvitationEmailPayload): Prom
 
     if (error) {
       console.error("[email] Error enviando invitación:", error);
-      return false;
+
+      const message = typeof error.message === "string" ? error.message : "Error desconocido al enviar correo";
+      const domainHint = message.includes("verify a domain")
+        ? "Resend requiere verificar dominio para enviar a correos externos."
+        : null;
+
+      return {
+        sent: false,
+        warning: domainHint ?? message,
+      };
     }
 
-    return true;
+    return {
+      sent: true,
+      warning: null,
+    };
   } catch (err) {
     console.error("[email] Excepción enviando invitación:", err);
-    return false;
+    return {
+      sent: false,
+      warning: "Excepción al enviar correo con Resend.",
+    };
   }
 }

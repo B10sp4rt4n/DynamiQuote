@@ -121,7 +121,7 @@ export async function POST(request: Request) {
 
   // Enviar correo de invitación con Resend independientemente de Clerk
   const appUrl = process.env["NEXT_PUBLIC_APP_URL"] ?? "https://dynami-quote.vercel.app";
-  const emailSent = await sendInvitationEmail({
+  const emailResult = await sendInvitationEmail({
     to: normalizedEmail,
     firstName: parsed.data.firstName,
     tenantName: targetTenant.name ?? parsed.data.tenantId ?? "tu empresa",
@@ -129,5 +129,15 @@ export async function POST(request: Request) {
     signUpUrl: `${appUrl}/sign-up?email=${encodeURIComponent(normalizedEmail)}`,
   });
 
-  return NextResponse.json({ clerkSynced, clerkWarning, emailSent, invitationSent, user: created }, { status: 201 });
+  return NextResponse.json(
+    {
+      clerkSynced,
+      clerkWarning,
+      emailSent: emailResult.sent,
+      emailWarning: emailResult.warning,
+      invitationSent,
+      user: created,
+    },
+    { status: 201 },
+  );
 }
