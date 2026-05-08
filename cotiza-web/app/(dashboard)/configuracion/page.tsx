@@ -16,14 +16,6 @@ export default async function SettingsPage() {
     );
   }
 
-  if (!tenant.isSuperAdmin && !tenant.isTenantPrimaryAdmin) {
-    return (
-      <section className="rounded-xl border border-dashed border-zinc-300 bg-white p-6 text-zinc-600">
-        No tienes permisos para administrar usuarios de esta empresa.
-      </section>
-    );
-  }
-
   const [users, issuerProfiles, tenantOptions] = await Promise.all([
     tenant.isSuperAdmin ? getAppUsersForSuperAdmin() : getAppUsersByTenant(tenant.id),
     getIssuerProfilesByTenant(tenant.id),

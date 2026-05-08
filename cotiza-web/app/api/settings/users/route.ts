@@ -15,10 +15,6 @@ export async function GET() {
   const tenant = await getCurrentTenantContext();
   if (!tenant) return NextResponse.json({ error: "No autorizado" }, { status: 401 });
 
-  if (!tenant.isSuperAdmin && !tenant.isTenantPrimaryAdmin) {
-    return NextResponse.json({ error: "No tienes permisos para gestionar usuarios" }, { status: 403 });
-  }
-
   const users = tenant.isSuperAdmin
     ? await getAppUsersForSuperAdmin()
     : await getAppUsersByTenant(tenant.id);
@@ -32,10 +28,6 @@ export async function GET() {
 export async function POST(request: Request) {
   const tenant = await getCurrentTenantContext();
   if (!tenant) return NextResponse.json({ error: "No autorizado" }, { status: 401 });
-
-  if (!tenant.isSuperAdmin && !tenant.isTenantPrimaryAdmin) {
-    return NextResponse.json({ error: "No tienes permisos para gestionar usuarios" }, { status: 403 });
-  }
 
   const body = (await request.json().catch(() => null)) as unknown;
   const parsed = createManagedUserSchema.safeParse(body);

@@ -10,10 +10,6 @@ export async function PATCH(request: Request, context: RouteContext) {
   const tenant = await getCurrentTenantContext();
   if (!tenant) return NextResponse.json({ error: "No autorizado" }, { status: 401 });
 
-  if (!tenant.isSuperAdmin && !tenant.isTenantPrimaryAdmin) {
-    return NextResponse.json({ error: "No tienes permisos para gestionar usuarios" }, { status: 403 });
-  }
-
   const identity = getRequestIdentity(request, tenant.id);
   const rl = enforceRateLimit(`settings:users:${tenant.id}:${identity}`, 30, 60_000);
   if (!rl.allowed) {
