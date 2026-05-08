@@ -310,7 +310,6 @@ export async function getCurrentTenantContext(): Promise<TenantContext | null> {
       return 20;
     };
 
-    // Si hay tenantId en claims, preferir ese tenant
     let candidates = [...fallbackCandidates];
     if (tenantId) {
       const tenantMatches = candidates.filter((c) => c.tenant_id === tenantId);
@@ -321,84 +320,81 @@ export async function getCurrentTenantContext(): Promise<TenantContext | null> {
 
     const sorted = candidates.sort((a, b) => roleWeight(b.role) - roleWeight(a.role));
     appUser = sorted[0] ?? null;
-      // Sync Clerk userId to app_users if matched via fallback
-      if (appUser && appUser.user_id !== userId) {
-        try {
-          await prisma.app_users.update({
-            where: { user_id: appUser.user_id },
-            data: { user_id: userId },
-          });
-          // Update local appUser record to reflect the change
-          appUser.user_id = userId;
-        } catch {
-          // If update fails, continue with current user_id to avoid breaking auth
-        }
-      }
-  }
 
-    if (!appUser) {
-      const superAdminCandidates = await prisma.app_users.findMany({
-        select: {
-          active: true,
-          alias: true,
-          first_name: true,
-          last_name: true,
-          role: true,
-          tenant_id: true,
-          user_id: true,
-        },
-        where: {
-          active: true,
-          role: {
-            in: ["superadmin", "super_admin", "platform_admin", "root"],
-          },
-        },
-      });
-
-      const identityAlias = normalizeIdentityToken(identity.emailAlias);
-      const identityFirst = normalizeIdentityToken(identity.firstName);
-      const identityLast = normalizeIdentityToken(identity.lastName);
-
-      const rescued = superAdminCandidates.find((candidate) => {
-        const candidateAlias = normalizeIdentityToken(candidate.alias);
-        const candidateFirst = normalizeIdentityToken(candidate.first_name);
-        const candidateLast = normalizeIdentityToken(candidate.last_name);
-
-        const aliasMatch = Boolean(identityAlias) && identityAlias === candidateAlias;
-        const firstMatch = Boolean(identityFirst) && identityFirst === candidateFirst;
-        const lastMatch = namesLookEquivalent(identity.lastName, candidate.last_name);
-
-        return aliasMatch || (firstMatch && lastMatch);
-      });
-
-      if (rescued) {
-        appUser = rescued;
+    if (appUser && appUser.user_id !== userId) {
+      try {
+        await prisma.app_users.update({
+          where: { user_id: appUser.user_id },
+          data: { user_id: userId },
+        });
+        appUser.user_id = userId;
+      } catch {
+        // no-op: no bloqueamos autenticacion por falla de sync
       }
     }
+  }
+
+  if (!appUser) {
+    const superAdminCandidates = await prisma.app_users.findMany({
+      select: {
+        active: true,
+        alias: true,
+        first_name: true,
+        last_name: true,
+        role: true,
+        tenant_id: true,
+        user_id: true,
+      },
+      where: {
+        active: true,
+        role: {
+          in: ["superadmin", "super_admin", "platform_admin", "root"],
+        },
+      },
+    });
+
+    const identityAlias = normalizeIdentityToken(identity.emailAlias);
+    const identityFirst = normalizeIdentityToken(identity.firstName);
+
+    const rescued = superAdminCandidates.find((candidate) => {
+      const candidateAlias = normalizeIdentityToken(candidate.alias);
+      const candidateFirst = normalizeIdentityToken(candidate.first_name);
+
+      const aliasMatch = Boolean(identityAlias) && identityAlias === candidateAlias;
+      const firstMatch = Boolean(identityFirst) && identityFirst === candidateFirst;
+      const lastMatch = namesLookEquivalent(identity.lastName, candidate.last_name);
+
+      return aliasMatch || (firstMatch && lastMatch);
+    });
+
+    if (rescued) {
+      appUser = rescued;
+    } else if (superAdminCandidates.length === 1) {
+      appUser = superAdminCandidates[0];
+    }
+  }
 
   const userRole = appUser ? normalizeRole(appUser.role) : extractRoleFromClaims(sessionClaims);
   const isSuperAdmin = userRole === "superadmin";
 
-    // Sync user role to Clerk metadata if not already synced or if changed
-    if (appUser && hasClerkCredentials()) {
-      try {
-        const client = await clerkClient();
-        const clerkUser = await client.users.getUser(userId);
-        const clerkRoleMetadata = (clerkUser.publicMetadata?.role as string) || null;
+  if (appUser && hasClerkCredentials()) {
+    try {
+      const client = await clerkClient();
+      const clerkUser = await client.users.getUser(userId);
+      const clerkRoleMetadata = (clerkUser.publicMetadata?.role as string) || null;
 
-        // Update if role changed or wasn't synced yet
-        if (clerkRoleMetadata !== appUser.role) {
-          await client.users.updateUserMetadata(userId, {
-            publicMetadata: {
-              role: appUser.role,
-              tenantId: appUser.tenant_id,
-            },
-          });
-        }
-      } catch {
-        // Continue without sync if Clerk is unavailable
+      if (clerkRoleMetadata !== appUser.role) {
+        await client.users.updateUserMetadata(userId, {
+          publicMetadata: {
+            role: appUser.role,
+            tenantId: appUser.tenant_id,
+          },
+        });
       }
+    } catch {
+      // no-op: no bloqueamos autenticacion por falla de sync con Clerk
     }
+  }
 
   const shouldUseOverride = Boolean(tenantOverrideSlug) && (isSuperAdmin || process.env.NODE_ENV !== "production");
 
