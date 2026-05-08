@@ -269,7 +269,7 @@ export async function getCurrentTenantContext(): Promise<TenantContext | null> {
     },
   });
 
-  // Fallback: search by alias or name if direct user_id lookup failed
+  // Fallback robusto: comparar identidad normalizada dentro del tenant para reconciliar Clerk con app_users.
   const fallbackCandidates =
     appUser || (!identity.emailAlias && !(identity.firstName && identity.lastName))
       ? []
@@ -285,20 +285,13 @@ export async function getCurrentTenantContext(): Promise<TenantContext | null> {
           },
           where: {
             active: true,
-            OR: [
-              identity.emailAlias
-                ? {
-                    alias: identity.emailAlias,
-                  }
-                : undefined,
-              identity.firstName && identity.lastName
-                ? {
-                    first_name: identity.firstName,
-                    last_name: identity.lastName,
-                  }
-                : undefined,
-            ].filter((value): value is NonNullable<typeof value> => Boolean(value)),
+            ...(tenantId
+              ? {
+                  tenant_id: tenantId,
+                }
+              : {}),
           },
+          take: 300,
         });
 
   if (!appUser && fallbackCandidates.length > 0) {
@@ -310,16 +303,56 @@ export async function getCurrentTenantContext(): Promise<TenantContext | null> {
       return 20;
     };
 
-    let candidates = [...fallbackCandidates];
-    if (tenantId) {
-      const tenantMatches = candidates.filter((c) => c.tenant_id === tenantId);
-      if (tenantMatches.length > 0) {
-        candidates = tenantMatches;
-      }
-    }
+    const identityAlias = normalizeIdentityToken(identity.emailAlias);
+    const identityFirst = normalizeIdentityToken(identity.firstName);
+    const identityLast = normalizeIdentityToken(identity.lastName);
 
-    const sorted = candidates.sort((a, b) => roleWeight(b.role) - roleWeight(a.role));
-    appUser = sorted[0] ?? null;
+    const scored = fallbackCandidates
+      .map((candidate) => {
+        const alias = normalizeIdentityToken(candidate.alias);
+        const first = normalizeIdentityToken(candidate.first_name);
+        const last = normalizeIdentityToken(candidate.last_name);
+
+        let score = 0;
+
+        if (identityAlias && alias === identityAlias) {
+          score += 120;
+        } else if (identityAlias && alias && (alias.startsWith(identityAlias) || identityAlias.startsWith(alias))) {
+          score += 85;
+        }
+
+        if (identityFirst && first && identityFirst === first) {
+          score += 35;
+        }
+
+        if (identityLast && last && identityLast === last) {
+          score += 35;
+        }
+
+        if (
+          namesLookEquivalent(identity.firstName, candidate.first_name) &&
+          namesLookEquivalent(identity.lastName, candidate.last_name)
+        ) {
+          score += 40;
+        }
+
+        if (identityAlias && first && last && identityAlias.includes(first) && identityAlias.includes(last.slice(0, 5))) {
+          score += 20;
+        }
+
+        score += roleWeight(candidate.role) / 10;
+
+        return { candidate, score };
+      })
+      .filter((entry) => entry.score > 0)
+      .sort((a, b) => b.score - a.score);
+
+    const best = scored[0] ?? null;
+    const second = scored[1] ?? null;
+    const minScore = tenantId ? 70 : 95;
+    const unambiguous = !best ? false : !second || best.score - second.score >= 15;
+
+    appUser = best && best.score >= minScore && unambiguous ? best.candidate : null;
 
     if (appUser && appUser.user_id !== userId) {
       try {
