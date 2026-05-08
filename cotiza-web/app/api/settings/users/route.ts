@@ -61,6 +61,7 @@ export async function POST(request: Request) {
 
   let clerkSynced = false;
   let invitationSent = false;
+  let clerkWarning: string | null = null;
 
   if (hasClerkCredentials()) {
     try {
@@ -101,10 +102,8 @@ export async function POST(request: Request) {
         invitationSent = true;
       }
     } catch {
-      return NextResponse.json(
-        { error: "No se pudo vincular/enviar invitación en Clerk. Verifica correo o configuración de Clerk." },
-        { status: 422 },
-      );
+      // No bloqueamos el alta local si Clerk falla.
+      clerkWarning = "No se pudo vincular/enviar invitación en Clerk. Se creó el usuario local y se intentó correo por Resend.";
     }
   }
 
@@ -130,5 +129,5 @@ export async function POST(request: Request) {
     signUpUrl: `${appUrl}/sign-up?email=${encodeURIComponent(normalizedEmail)}`,
   });
 
-  return NextResponse.json({ clerkSynced, emailSent, invitationSent, user: created }, { status: 201 });
+  return NextResponse.json({ clerkSynced, clerkWarning, emailSent, invitationSent, user: created }, { status: 201 });
 }

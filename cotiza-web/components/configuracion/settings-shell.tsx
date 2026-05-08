@@ -169,6 +169,7 @@ function CreateUserForm({
         error?: string;
         user?: AppUserSummary;
         clerkSynced?: boolean;
+        clerkWarning?: string | null;
         emailSent?: boolean;
         invitationSent?: boolean;
       };
@@ -187,10 +188,12 @@ function CreateUserForm({
       setRole("user");
       setSuccess(
         data.emailSent
-          ? `Usuario creado. Invitación enviada a ${email}.`
+          ? data.clerkWarning
+            ? `Usuario creado. Invitación enviada a ${email}. Nota: ${data.clerkWarning}`
+            : `Usuario creado. Invitación enviada a ${email}.`
           : data.clerkSynced
             ? "Usuario creado y vinculado a Clerk correctamente."
-            : "Usuario creado. Configura RESEND_API_KEY en Vercel para activar envío de correos.",
+            : data.clerkWarning ?? "Usuario creado. Configura RESEND_API_KEY en Vercel para activar envío de correos.",
       );
     } catch (err) {
       setError(err instanceof Error ? err.message : "Error desconocido");
