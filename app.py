@@ -2285,44 +2285,6 @@ with tab_quotes:
                         st.rerun()
 
             # =========================
-            # Gráficas lado a lado
-            # =========================
-            st.subheader("📊 Visualizaciones")
-
-            col_graph1, col_graph2 = st.columns(2)
-
-            with col_graph1:
-                st.markdown("**Aportación al Costo Total por Línea**")
-                _pie_skus = df["sku"].tolist()
-                _pie_costs = df["subtotal_cost"].tolist()
-                _pie_colors = [_sku_colors[s] for s in _pie_skus]
-                import plotly.graph_objects as _go_pie
-                _fig_lines = _go_pie.Figure(data=[_go_pie.Pie(
-                    labels=_pie_skus,
-                    values=_pie_costs,
-                    marker=dict(colors=_pie_colors),
-                    textinfo="label+percent",
-                    hovertemplate="<b>%{label}</b><br>Costo: $%{value:,.2f}<br>%{percent}<extra></extra>",
-                    hole=0.4,
-                )])
-                _fig_lines.update_layout(
-                    margin=dict(t=10, b=10, l=10, r=10),
-                    height=320,
-                    showlegend=False,
-                )
-                st.plotly_chart(_fig_lines, use_container_width=True, key="line_cost_donut")
-
-            with col_graph2:
-                st.markdown("**Costo vs Utilidad Bruta**")
-                render_plotly_donut(
-                    [total_cost, gross_profit],
-                    ["Costo", "Utilidad Bruta"],
-                    colors=["#ef4444", "#22c55e"],
-                    height=320,
-                    center_title="Finanzas",
-                    key="main_financial_donut",
-                )
-
             # =========================
             # Cerrar propuesta
             # =========================
