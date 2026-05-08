@@ -19,7 +19,7 @@ export default async function SettingsPage() {
   const [users, issuerProfiles, tenantOptions] = await Promise.all([
     tenant.isSuperAdmin ? getAppUsersForSuperAdmin() : getAppUsersByTenant(tenant.id),
     getIssuerProfilesByTenant(tenant.id),
-    tenant.isSuperAdmin ? getActiveTenants() : Promise.resolve([]),
+    getActiveTenants(),
   ]);
 
   return (

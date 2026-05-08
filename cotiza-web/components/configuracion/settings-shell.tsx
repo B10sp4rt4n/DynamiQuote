@@ -138,6 +138,7 @@ function CreateUserForm({
   const [pending, setPending] = useState(false);
   const [error, setError] = useState<string | null>(null);
   const [success, setSuccess] = useState<string | null>(null);
+  const canSelectTenant = tenantOptions.length > 0;
 
   async function onSubmit(event: FormEvent<HTMLFormElement>) {
     event.preventDefault();
@@ -152,7 +153,7 @@ function CreateUserForm({
         lastName,
         role,
         sellerCode: sellerCode || null,
-        tenantId: canManageAllTenants ? tenantId : undefined,
+        tenantId: canSelectTenant ? tenantId : undefined,
         userId: userId.trim() || undefined,
       };
 
@@ -233,7 +234,7 @@ function CreateUserForm({
           placeholder="ID de Clerk (opcional)"
           value={userId}
         />
-        {canManageAllTenants ? (
+        {canSelectTenant ? (
           <select
             className="rounded-lg border border-zinc-300 bg-white px-3 py-2 text-sm md:col-span-2"
             onChange={(event) => setTenantId(event.target.value)}

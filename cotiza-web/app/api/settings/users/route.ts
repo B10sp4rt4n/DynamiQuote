@@ -36,9 +36,7 @@ export async function POST(request: Request) {
     return NextResponse.json({ error: parsed.error.issues[0]?.message ?? "Payload invalido" }, { status: 422 });
   }
 
-  const targetTenantId = tenant.isSuperAdmin
-    ? parsed.data.tenantId ?? tenant.id
-    : tenant.id;
+  const targetTenantId = parsed.data.tenantId ?? tenant.id;
 
   const targetTenant = await prisma.tenant.findFirst({
     select: {
