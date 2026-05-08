@@ -76,10 +76,11 @@ function buildInvitationHtml(payload: InvitationEmailPayload): string {
 }
 
 export async function sendInvitationEmail(payload: InvitationEmailPayload): Promise<boolean> {
-  const apiKey = process.env["RESEND_API_KEY"];
+  const apiKey =
+    process.env["RESEND_API_KEY"]?.trim() || process.env["API_RESEND_API_KEY"]?.trim() || "";
 
   if (!apiKey) {
-    console.warn("[email] RESEND_API_KEY no configurada, correo de invitación omitido.");
+    console.warn("[email] RESEND_API_KEY/API_RESEND_API_KEY no configurada, correo de invitación omitido.");
     return false;
   }
 
@@ -87,7 +88,10 @@ export async function sendInvitationEmail(payload: InvitationEmailPayload): Prom
     const { Resend } = await import("resend");
     const resend = new Resend(apiKey);
 
-    const from = process.env["RESEND_FROM"] ?? "Cotiza <noreply@cotiza.app>";
+    const configuredFrom = process.env["RESEND_FROM"]?.trim() || "";
+    const from = configuredFrom.includes("@")
+      ? configuredFrom
+      : "Cotiza <onboarding@resend.dev>";
 
     const { error } = await resend.emails.send({
       from,
