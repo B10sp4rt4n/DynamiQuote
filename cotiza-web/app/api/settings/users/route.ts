@@ -36,6 +36,21 @@ function extractClerkErrorMessage(error: unknown): string {
   return "Error desconocido en Clerk";
 }
 
+function extractClerkErrorCode(error: unknown): string | null {
+  if (typeof error === "object" && error !== null) {
+    const maybeError = error as {
+      errors?: Array<{ code?: string }>;
+    };
+
+    const code = maybeError.errors?.[0]?.code;
+    if (typeof code === "string" && code.trim().length > 0) {
+      return code.trim();
+    }
+  }
+
+  return null;
+}
+
 export async function GET() {
   const tenant = await getCurrentTenantContext();
   if (!tenant) return NextResponse.json({ error: "No autorizado" }, { status: 401 });
@@ -126,10 +141,17 @@ export async function POST(request: Request) {
         invitationSent = true;
       }
     } catch (error) {
-      // No bloqueamos el alta local si Clerk falla.
       const clerkDetail = extractClerkErrorMessage(error);
+      const clerkCode = extractClerkErrorCode(error);
+
+      if (clerkCode === "duplicate_record" && clerkDetail.toLowerCase().includes("pending invitations")) {
+        invitationSent = true;
+        clerkWarning = "Clerk ya tenía una invitación pendiente para este correo.";
+      } else {
+        clerkWarning = `No se pudo vincular/enviar invitación en Clerk: ${clerkDetail}`;
+      }
+
       console.error("[clerk] Error en vinculación/invitación:", error);
-      clerkWarning = `No se pudo vincular/enviar invitación en Clerk: ${clerkDetail}`;
     }
   }
 
