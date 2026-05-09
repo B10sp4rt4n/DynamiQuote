@@ -35,15 +35,26 @@ function RoleBadge({ role }: { role: string }) {
 
 function UsersTab({
   canManageAllTenants = false,
+  onUserDeleted,
   onUserUpdated,
+  tenantOptions,
   users,
 }: {
   canManageAllTenants?: boolean;
+  onUserDeleted: (userId: string) => void;
   onUserUpdated: (user: AppUserSummary) => void;
+  tenantOptions: ActiveTenantOption[];
   users: AppUserSummary[];
 }) {
   const [pending, setPending] = useState<string | null>(null);
   const [error, setError] = useState<string | null>(null);
+  const [editingUserId, setEditingUserId] = useState<string | null>(null);
+  const [editFirstName, setEditFirstName] = useState("");
+  const [editLastName, setEditLastName] = useState("");
+  const [editAlias, setEditAlias] = useState("");
+  const [editRole, setEditRole] = useState<"user" | "admin" | "owner">("user");
+  const [editSellerCode, setEditSellerCode] = useState("");
+  const [editTenantId, setEditTenantId] = useState(tenantOptions[0]?.id ?? "");
 
   async function toggleActive(userId: string) {
     setPending(userId);
@@ -60,9 +71,154 @@ function UsersTab({
     }
   }
 
+  function beginEdit(user: AppUserSummary) {
+    setError(null);
+    setEditingUserId(user.userId);
+    setEditFirstName(user.firstName);
+    setEditLastName(user.lastName);
+    setEditAlias(user.alias);
+    setEditRole((user.role === "admin" || user.role === "owner" ? user.role : "user") as "user" | "admin" | "owner");
+    setEditSellerCode(user.sellerCode ?? "");
+    setEditTenantId(user.tenantId ?? tenantOptions[0]?.id ?? "");
+  }
+
+  function cancelEdit() {
+    setEditingUserId(null);
+  }
+
+  async function submitEdit(event: FormEvent<HTMLFormElement>) {
+    event.preventDefault();
+
+    if (!editingUserId) return;
+
+    setPending(`edit:${editingUserId}`);
+    setError(null);
+
+    try {
+      const payload = {
+        alias: editAlias,
+        firstName: editFirstName,
+        lastName: editLastName,
+        role: editRole,
+        sellerCode: editSellerCode || null,
+        tenantId: canManageAllTenants ? editTenantId : undefined,
+      };
+
+      const res = await fetch(`/api/settings/users/${editingUserId}`, {
+        body: JSON.stringify(payload),
+        headers: { "Content-Type": "application/json" },
+        method: "PATCH",
+      });
+
+      const data = (await res.json()) as { error?: string; user?: AppUserSummary };
+      if (!res.ok || !data.user) throw new Error(data.error ?? "No se pudo editar el usuario");
+
+      onUserUpdated(data.user);
+      setEditingUserId(null);
+    } catch (err) {
+      setError(err instanceof Error ? err.message : "Error desconocido");
+    } finally {
+      setPending(null);
+    }
+  }
+
+  async function deleteUser(user: AppUserSummary) {
+    if (!confirm(`Se eliminará definitivamente a ${user.firstName} ${user.lastName}. ¿Continuar?`)) {
+      return;
+    }
+
+    setPending(`delete:${user.userId}`);
+    setError(null);
+
+    try {
+      const res = await fetch(`/api/settings/users/${user.userId}`, { method: "DELETE" });
+      const data = (await res.json()) as { deleted?: boolean; error?: string };
+
+      if (!res.ok || !data.deleted) throw new Error(data.error ?? "No se pudo borrar el usuario");
+      onUserDeleted(user.userId);
+    } catch (err) {
+      setError(err instanceof Error ? err.message : "Error desconocido");
+    } finally {
+      setPending(null);
+    }
+  }
+
   return (
     <div className="space-y-3">
       {error ? <p className="text-sm text-rose-700">{error}</p> : null}
+
+      {canManageAllTenants && editingUserId ? (
+        <form className="grid gap-3 rounded-xl border border-zinc-200 bg-zinc-50 p-4" onSubmit={submitEdit}>
+          <p className="text-sm font-medium text-zinc-800">Editar usuario</p>
+          <div className="grid gap-3 md:grid-cols-2">
+            <input
+              className="rounded-lg border border-zinc-300 bg-white px-3 py-2 text-sm"
+              onChange={(event) => setEditFirstName(event.target.value)}
+              placeholder="Nombre"
+              required
+              value={editFirstName}
+            />
+            <input
+              className="rounded-lg border border-zinc-300 bg-white px-3 py-2 text-sm"
+              onChange={(event) => setEditLastName(event.target.value)}
+              placeholder="Apellidos"
+              required
+              value={editLastName}
+            />
+            <input
+              className="rounded-lg border border-zinc-300 bg-white px-3 py-2 text-sm"
+              onChange={(event) => setEditAlias(event.target.value)}
+              placeholder="Alias"
+              required
+              value={editAlias}
+            />
+            <select
+              className="rounded-lg border border-zinc-300 bg-white px-3 py-2 text-sm"
+              onChange={(event) => setEditRole(event.target.value as "user" | "admin" | "owner")}
+              value={editRole}
+            >
+              <option value="user">Usuario estándar</option>
+              <option value="admin">Administrador</option>
+              <option value="owner">Owner</option>
+            </select>
+            <input
+              className="rounded-lg border border-zinc-300 bg-white px-3 py-2 text-sm"
+              onChange={(event) => setEditSellerCode(event.target.value)}
+              placeholder="Código vendedor"
+              value={editSellerCode}
+            />
+            <select
+              className="rounded-lg border border-zinc-300 bg-white px-3 py-2 text-sm"
+              onChange={(event) => setEditTenantId(event.target.value)}
+              required
+              value={editTenantId}
+            >
+              {tenantOptions.map((tenant) => (
+                <option key={tenant.id} value={tenant.id}>
+                  {tenant.name}
+                </option>
+              ))}
+            </select>
+          </div>
+          <div className="flex gap-2">
+            <button
+              className="rounded-lg bg-zinc-900 px-3 py-2 text-sm font-medium text-white transition hover:bg-zinc-700 disabled:opacity-60"
+              disabled={pending === `edit:${editingUserId}`}
+              type="submit"
+            >
+              {pending === `edit:${editingUserId}` ? "Guardando..." : "Guardar cambios"}
+            </button>
+            <button
+              className="rounded-lg bg-zinc-100 px-3 py-2 text-sm font-medium text-zinc-700 transition hover:bg-zinc-200"
+              onClick={cancelEdit}
+              type="button"
+            >
+              Cancelar
+            </button>
+          </div>
+        </form>
+      ) : null}
+
       <div className="overflow-hidden rounded-xl border border-zinc-200">
         <table className="min-w-full divide-y divide-zinc-200 text-sm">
           <thead className="bg-zinc-50 text-left text-zinc-600">
@@ -75,6 +231,7 @@ function UsersTab({
               <th className="px-4 py-3 font-medium">Código vendedor</th>
               <th className="px-4 py-3 font-medium">Alta</th>
               <th className="px-4 py-3 font-medium">Estado</th>
+              {canManageAllTenants ? <th className="px-4 py-3 font-medium">Acciones</th> : null}
             </tr>
           </thead>
           <tbody className="divide-y divide-zinc-200 bg-white">
@@ -107,6 +264,31 @@ function UsersTab({
                     {pending === user.userId ? "..." : user.active ? "Activo" : "Inactivo"}
                   </button>
                 </td>
+                {canManageAllTenants ? (
+                  <td className="px-4 py-3">
+                    {user.role.toLowerCase().includes("superadmin") ? (
+                      <span className="text-xs text-zinc-400">Protegido</span>
+                    ) : (
+                      <div className="flex gap-2">
+                        <button
+                          className="rounded-lg bg-zinc-100 px-3 py-1 text-xs font-medium text-zinc-700 transition hover:bg-zinc-200"
+                          onClick={() => beginEdit(user)}
+                          type="button"
+                        >
+                          Editar
+                        </button>
+                        <button
+                          className="rounded-lg bg-rose-100 px-3 py-1 text-xs font-medium text-rose-700 transition hover:bg-rose-200 disabled:opacity-60"
+                          disabled={pending === `delete:${user.userId}`}
+                          onClick={() => deleteUser(user)}
+                          type="button"
+                        >
+                          {pending === `delete:${user.userId}` ? "..." : "Borrar"}
+                        </button>
+                      </div>
+                    )}
+                  </td>
+                ) : null}
               </tr>
             ))}
           </tbody>
@@ -412,9 +594,13 @@ export function SettingsShell({
             />
             <UsersTab
               canManageAllTenants={canManageAllTenants}
+              onUserDeleted={(userId) => {
+                setUsersState((prev) => prev.filter((user) => user.userId !== userId));
+              }}
               onUserUpdated={(updated) => {
                 setUsersState((prev) => prev.map((user) => (user.userId === updated.userId ? updated : user)));
               }}
+              tenantOptions={tenantOptions}
               users={usersState}
             />
           </div>

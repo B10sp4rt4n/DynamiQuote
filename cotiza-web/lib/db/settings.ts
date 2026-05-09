@@ -1,7 +1,7 @@
 import "server-only";
 
 import { prisma } from "@/lib/db/prisma";
-import type { CreateManagedUserInput } from "@/lib/validations/users";
+import type { CreateManagedUserInput, UpdateManagedUserInput } from "@/lib/validations/users";
 
 export type AppUserSummary = {
   active: boolean;
@@ -30,6 +30,12 @@ export type IssuerProfileSummary = {
 type CreateManagedUserArgs = {
   targetTenantId: string;
   payload: CreateManagedUserInput;
+};
+
+type UpdateManagedUserArgs = {
+  tenantId: string | null;
+  userId: string;
+  payload: UpdateManagedUserInput;
 };
 
 export async function getAppUsersByTenant(tenantId: string): Promise<AppUserSummary[]> {
@@ -159,6 +165,106 @@ export async function toggleAppUserActivationByTenant(
     tenantName: updated.tenants?.name ?? null,
     userId: updated.user_id,
   };
+}
+
+export async function updateManagedUserByTenant({
+  tenantId,
+  userId,
+  payload,
+}: UpdateManagedUserArgs): Promise<AppUserSummary | null> {
+  const current = await prisma.app_users.findFirst({
+    select: { role: true, tenant_id: true, user_id: true },
+    where: {
+      user_id: userId,
+      ...(tenantId ? { tenant_id: tenantId } : {}),
+    },
+  });
+
+  if (!current) return null;
+
+  const normalizedRole = current.role.trim().toLowerCase();
+  if (normalizedRole === "superadmin" || normalizedRole === "super_admin" || normalizedRole === "platform_admin") {
+    return null;
+  }
+
+  if (payload.tenantId !== undefined) {
+    const nextTenant = await prisma.tenant.findFirst({
+      select: { tenant_id: true },
+      where: {
+        active: true,
+        tenant_id: payload.tenantId,
+      },
+    });
+
+    if (!nextTenant) {
+      throw new Error("INVALID_TENANT");
+    }
+  }
+
+  const updated = await prisma.app_users.update({
+    data: {
+      ...(payload.active !== undefined ? { active: payload.active } : {}),
+      ...(payload.alias !== undefined ? { alias: payload.alias.trim() } : {}),
+      ...(payload.firstName !== undefined ? { first_name: payload.firstName.trim() } : {}),
+      ...(payload.lastName !== undefined ? { last_name: payload.lastName.trim() } : {}),
+      ...(payload.role !== undefined ? { role: payload.role } : {}),
+      ...(payload.sellerCode !== undefined
+        ? { seller_code: payload.sellerCode ? payload.sellerCode.trim() : null }
+        : {}),
+      ...(payload.tenantId !== undefined ? { tenant_id: payload.tenantId } : {}),
+    },
+    select: {
+      active: true,
+      alias: true,
+      created_at: true,
+      first_name: true,
+      last_name: true,
+      role: true,
+      seller_code: true,
+      tenant_id: true,
+      tenants: {
+        select: {
+          name: true,
+        },
+      },
+      user_id: true,
+    },
+    where: { user_id: userId },
+  });
+
+  return {
+    active: updated.active,
+    alias: updated.alias,
+    createdAt: updated.created_at.toISOString(),
+    firstName: updated.first_name,
+    lastName: updated.last_name,
+    role: updated.role,
+    sellerCode: updated.seller_code,
+    subtenantKey: `${updated.tenant_id ?? "sin-tenant"}:${updated.user_id}`,
+    tenantId: updated.tenant_id,
+    tenantName: updated.tenants?.name ?? null,
+    userId: updated.user_id,
+  };
+}
+
+export async function deleteManagedUserByTenant(tenantId: string | null, userId: string): Promise<boolean> {
+  const current = await prisma.app_users.findFirst({
+    select: { role: true, user_id: true },
+    where: {
+      user_id: userId,
+      ...(tenantId ? { tenant_id: tenantId } : {}),
+    },
+  });
+
+  if (!current) return false;
+
+  const normalizedRole = current.role.trim().toLowerCase();
+  if (normalizedRole === "superadmin" || normalizedRole === "super_admin" || normalizedRole === "platform_admin") {
+    return false;
+  }
+
+  await prisma.app_users.delete({ where: { user_id: userId } });
+  return true;
 }
 
 export async function createManagedUserByTenant({
