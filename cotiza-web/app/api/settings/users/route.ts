@@ -12,6 +12,30 @@ import { prisma } from "@/lib/db/prisma";
 import { createManagedUserSchema } from "@/lib/validations/users";
 import { sendInvitationEmail } from "@/lib/email/send-invitation";
 
+function extractClerkErrorMessage(error: unknown): string {
+  if (typeof error === "string" && error.trim().length > 0) {
+    return error;
+  }
+
+  if (error instanceof Error && error.message.trim().length > 0) {
+    return error.message;
+  }
+
+  if (typeof error === "object" && error !== null) {
+    const maybeError = error as {
+      errors?: Array<{ longMessage?: string; message?: string }>;
+      message?: string;
+    };
+
+    const first = maybeError.errors?.[0];
+    if (first?.longMessage?.trim()) return first.longMessage;
+    if (first?.message?.trim()) return first.message;
+    if (maybeError.message?.trim()) return maybeError.message;
+  }
+
+  return "Error desconocido en Clerk";
+}
+
 export async function GET() {
   const tenant = await getCurrentTenantContext();
   if (!tenant) return NextResponse.json({ error: "No autorizado" }, { status: 401 });
@@ -101,9 +125,11 @@ export async function POST(request: Request) {
         });
         invitationSent = true;
       }
-    } catch {
+    } catch (error) {
       // No bloqueamos el alta local si Clerk falla.
-      clerkWarning = "No se pudo vincular/enviar invitación en Clerk. Se creó el usuario local y se intentó correo por Resend.";
+      const clerkDetail = extractClerkErrorMessage(error);
+      console.error("[clerk] Error en vinculación/invitación:", error);
+      clerkWarning = `No se pudo vincular/enviar invitación en Clerk: ${clerkDetail}`;
     }
   }
 
