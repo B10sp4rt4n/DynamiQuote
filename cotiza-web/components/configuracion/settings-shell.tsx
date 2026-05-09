@@ -219,8 +219,8 @@ function UsersTab({
         </form>
       ) : null}
 
-      <div className="overflow-hidden rounded-xl border border-zinc-200">
-        <table className="min-w-full divide-y divide-zinc-200 text-sm">
+      <div className="overflow-x-auto overflow-y-hidden rounded-xl border border-zinc-200">
+        <table className="min-w-[1200px] divide-y divide-zinc-200 text-sm">
           <thead className="bg-zinc-50 text-left text-zinc-600">
             <tr>
               {canManageAllTenants ? <th className="px-4 py-3 font-medium">Empresa</th> : null}
@@ -265,11 +265,11 @@ function UsersTab({
                   </button>
                 </td>
                 {canManageAllTenants ? (
-                  <td className="px-4 py-3">
+                  <td className="px-4 py-3 whitespace-nowrap">
                     {user.role.toLowerCase().includes("superadmin") ? (
                       <span className="text-xs font-medium text-zinc-600">Protegido</span>
                     ) : (
-                      <div className="flex gap-2">
+                      <div className="flex gap-2 whitespace-nowrap pr-2">
                         <button
                           className="rounded-lg bg-zinc-100 px-3 py-1 text-xs font-medium text-zinc-700 transition hover:bg-zinc-200"
                           onClick={() => beginEdit(user)}
