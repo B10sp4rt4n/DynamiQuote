@@ -21,8 +21,8 @@ function formatDate(value: string): string {
 
 function RoleBadge({ role }: { role: string }) {
   const colors: Record<string, string> = {
-    admin: "bg-violet-100 text-violet-800",
-    user: "bg-zinc-100 text-zinc-700",
+    admin: "bg-violet-100 text-violet-900",
+    user: "bg-zinc-200 text-zinc-900",
   };
   return (
     <span
@@ -145,35 +145,35 @@ function UsersTab({
 
   return (
     <div className="space-y-3">
-      {error ? <p className="text-sm text-rose-700">{error}</p> : null}
+      {error ? <p className="text-sm font-medium text-rose-800">{error}</p> : null}
 
       {canManageAllTenants && editingUserId ? (
         <form className="grid gap-3 rounded-xl border border-zinc-200 bg-zinc-50 p-4" onSubmit={submitEdit}>
-          <p className="text-sm font-medium text-zinc-800">Editar usuario</p>
+          <p className="text-sm font-semibold text-zinc-900">Editar usuario</p>
           <div className="grid gap-3 md:grid-cols-2">
             <input
-              className="rounded-lg border border-zinc-300 bg-white px-3 py-2 text-sm"
+              className="rounded-lg border border-zinc-400 bg-white px-3 py-2 text-sm text-zinc-900 placeholder:text-zinc-500"
               onChange={(event) => setEditFirstName(event.target.value)}
               placeholder="Nombre"
               required
               value={editFirstName}
             />
             <input
-              className="rounded-lg border border-zinc-300 bg-white px-3 py-2 text-sm"
+              className="rounded-lg border border-zinc-400 bg-white px-3 py-2 text-sm text-zinc-900 placeholder:text-zinc-500"
               onChange={(event) => setEditLastName(event.target.value)}
               placeholder="Apellidos"
               required
               value={editLastName}
             />
             <input
-              className="rounded-lg border border-zinc-300 bg-white px-3 py-2 text-sm"
+              className="rounded-lg border border-zinc-400 bg-white px-3 py-2 text-sm text-zinc-900 placeholder:text-zinc-500"
               onChange={(event) => setEditAlias(event.target.value)}
               placeholder="Alias"
               required
               value={editAlias}
             />
             <select
-              className="rounded-lg border border-zinc-300 bg-white px-3 py-2 text-sm"
+              className="rounded-lg border border-zinc-400 bg-white px-3 py-2 text-sm text-zinc-900"
               onChange={(event) => setEditRole(event.target.value as "user" | "admin" | "owner")}
               value={editRole}
             >
@@ -182,13 +182,13 @@ function UsersTab({
               <option value="owner">Owner</option>
             </select>
             <input
-              className="rounded-lg border border-zinc-300 bg-white px-3 py-2 text-sm"
+              className="rounded-lg border border-zinc-400 bg-white px-3 py-2 text-sm text-zinc-900 placeholder:text-zinc-500"
               onChange={(event) => setEditSellerCode(event.target.value)}
               placeholder="Código vendedor"
               value={editSellerCode}
             />
             <select
-              className="rounded-lg border border-zinc-300 bg-white px-3 py-2 text-sm"
+              className="rounded-lg border border-zinc-400 bg-white px-3 py-2 text-sm text-zinc-900"
               onChange={(event) => setEditTenantId(event.target.value)}
               required
               value={editTenantId}
@@ -267,7 +267,7 @@ function UsersTab({
                 {canManageAllTenants ? (
                   <td className="px-4 py-3">
                     {user.role.toLowerCase().includes("superadmin") ? (
-                      <span className="text-xs text-zinc-400">Protegido</span>
+                      <span className="text-xs font-medium text-zinc-600">Protegido</span>
                     ) : (
                       <div className="flex gap-2">
                         <button
@@ -387,31 +387,31 @@ function CreateUserForm({
 
   return (
     <form className="grid gap-3 rounded-xl border border-zinc-200 bg-zinc-50 p-4" onSubmit={onSubmit}>
-      <p className="text-sm font-medium text-zinc-800">Nuevo usuario</p>
+      <p className="text-sm font-semibold text-zinc-900">Nuevo usuario</p>
       <div className="grid gap-3 md:grid-cols-2">
         <input
-          className="rounded-lg border border-zinc-300 bg-white px-3 py-2 text-sm"
+          className="rounded-lg border border-zinc-400 bg-white px-3 py-2 text-sm text-zinc-900 placeholder:text-zinc-500"
           onChange={(event) => setFirstName(event.target.value)}
           placeholder="Nombre *"
           required
           value={firstName}
         />
         <input
-          className="rounded-lg border border-zinc-300 bg-white px-3 py-2 text-sm"
+          className="rounded-lg border border-zinc-400 bg-white px-3 py-2 text-sm text-zinc-900 placeholder:text-zinc-500"
           onChange={(event) => setLastName(event.target.value)}
           placeholder="Apellidos *"
           required
           value={lastName}
         />
         <input
-          className="rounded-lg border border-zinc-300 bg-white px-3 py-2 text-sm"
+          className="rounded-lg border border-zinc-400 bg-white px-3 py-2 text-sm text-zinc-900 placeholder:text-zinc-500"
           onChange={(event) => setAlias(event.target.value)}
           placeholder="Alias (ej. j.perez) *"
           required
           value={alias}
         />
         <input
-          className="rounded-lg border border-zinc-300 bg-white px-3 py-2 text-sm"
+          className="rounded-lg border border-zinc-400 bg-white px-3 py-2 text-sm text-zinc-900 placeholder:text-zinc-500"
           onChange={(event) => setEmail(event.target.value)}
           placeholder="Correo del usuario *"
           required
@@ -419,7 +419,7 @@ function CreateUserForm({
           value={email}
         />
         <select
-          className="rounded-lg border border-zinc-300 bg-white px-3 py-2 text-sm"
+          className="rounded-lg border border-zinc-400 bg-white px-3 py-2 text-sm text-zinc-900"
           onChange={(event) => setRole(event.target.value as "user" | "admin" | "owner")}
           value={role}
         >
@@ -428,20 +428,20 @@ function CreateUserForm({
           <option value="owner">Owner</option>
         </select>
         <input
-          className="rounded-lg border border-zinc-300 bg-white px-3 py-2 text-sm"
+          className="rounded-lg border border-zinc-400 bg-white px-3 py-2 text-sm text-zinc-900 placeholder:text-zinc-500"
           onChange={(event) => setSellerCode(event.target.value)}
           placeholder="Código vendedor (opcional)"
           value={sellerCode}
         />
         <input
-          className="rounded-lg border border-zinc-300 bg-white px-3 py-2 text-sm text-zinc-500"
+          className="rounded-lg border border-zinc-400 bg-white px-3 py-2 text-sm text-zinc-900 placeholder:text-zinc-500"
           onChange={(event) => setUserId(event.target.value)}
           placeholder="ID de Clerk (opcional)"
           value={userId}
         />
         {canSelectTenant ? (
           <select
-            className="rounded-lg border border-zinc-300 bg-white px-3 py-2 text-sm md:col-span-2"
+            className="rounded-lg border border-zinc-400 bg-white px-3 py-2 text-sm text-zinc-900 md:col-span-2"
             onChange={(event) => setTenantId(event.target.value)}
             required
             value={tenantId}
@@ -454,8 +454,8 @@ function CreateUserForm({
           </select>
         ) : null}
       </div>
-      {error ? <p className="text-xs text-rose-700">{error}</p> : null}
-      {success ? <p className="text-xs text-emerald-700">{success}</p> : null}
+      {error ? <p className="text-xs font-medium text-rose-800">{error}</p> : null}
+      {success ? <p className="text-xs font-medium text-emerald-800">{success}</p> : null}
       <div>
         <button
           className="rounded-lg bg-zinc-900 px-4 py-2 text-sm font-medium text-white transition hover:bg-zinc-700 disabled:opacity-60"
