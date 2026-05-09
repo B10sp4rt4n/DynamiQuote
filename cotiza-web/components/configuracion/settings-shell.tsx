@@ -17,6 +17,23 @@ type Tab = "users" | "issuer";
 
 type TestEmailTemplate = "alta" | "mantenimiento" | "promocion";
 
+type TestEmailHistoryItem = {
+  createdAt: string;
+  id: string;
+  sent: boolean;
+  subject: string | null;
+  template: string;
+  to: string;
+  warning: string | null;
+};
+
+function templateLabel(template: string): string {
+  if (template === "alta") return "Alta";
+  if (template === "mantenimiento") return "Mantenimiento";
+  if (template === "promocion") return "Promoción";
+  return template;
+}
+
 function formatDate(value: string): string {
   return new Intl.DateTimeFormat("es-MX", { dateStyle: "medium" }).format(new Date(value));
 }
@@ -477,8 +494,30 @@ function TestEmailForm({ tenantName }: { tenantName: string }) {
   const [customSubject, setCustomSubject] = useState("");
   const [customMessage, setCustomMessage] = useState("");
   const [pending, setPending] = useState(false);
+  const [historyPending, setHistoryPending] = useState(false);
   const [error, setError] = useState<string | null>(null);
+  const [history, setHistory] = useState<TestEmailHistoryItem[]>([]);
   const [success, setSuccess] = useState<string | null>(null);
+
+  async function loadHistory() {
+    setHistoryPending(true);
+    setError(null);
+
+    try {
+      const res = await fetch("/api/settings/test-email", { method: "GET" });
+      const data = (await res.json()) as { error?: string; history?: TestEmailHistoryItem[] };
+
+      if (!res.ok) {
+        throw new Error(data.error ?? "No se pudo cargar el historial");
+      }
+
+      setHistory(data.history ?? []);
+    } catch (err) {
+      setError(err instanceof Error ? err.message : "Error desconocido");
+    } finally {
+      setHistoryPending(false);
+    }
+  }
 
   async function onSubmit(event: FormEvent<HTMLFormElement>) {
     event.preventDefault();
@@ -498,9 +537,18 @@ function TestEmailForm({ tenantName }: { tenantName: string }) {
         method: "POST",
       });
 
-      const data = (await res.json()) as { error?: string; sent?: boolean; warning?: string | null };
+      const data = (await res.json()) as {
+        error?: string;
+        history?: TestEmailHistoryItem[];
+        sent?: boolean;
+        warning?: string | null;
+      };
       if (!res.ok) {
         throw new Error(data.error ?? "No se pudo enviar el correo de prueba");
+      }
+
+      if (data.history) {
+        setHistory(data.history);
       }
 
       if (data.sent) {
@@ -565,7 +613,51 @@ function TestEmailForm({ tenantName }: { tenantName: string }) {
         >
           {pending ? "Enviando..." : "Enviar correo de prueba"}
         </button>
+        <button
+          className="ml-2 rounded-lg bg-zinc-100 px-4 py-2 text-sm font-medium text-zinc-800 transition hover:bg-zinc-200 disabled:opacity-60"
+          disabled={historyPending}
+          onClick={loadHistory}
+          type="button"
+        >
+          {historyPending ? "Actualizando..." : "Actualizar historial"}
+        </button>
       </div>
+
+      <div className="overflow-x-auto overflow-y-hidden rounded-xl border border-zinc-200 bg-white">
+        <table className="min-w-[900px] divide-y divide-zinc-200 text-sm">
+          <thead className="bg-zinc-50 text-left text-zinc-700">
+            <tr>
+              <th className="px-4 py-3 font-medium">Fecha</th>
+              <th className="px-4 py-3 font-medium">Destino</th>
+              <th className="px-4 py-3 font-medium">Tipo</th>
+              <th className="px-4 py-3 font-medium">Asunto</th>
+              <th className="px-4 py-3 font-medium">Estatus</th>
+              <th className="px-4 py-3 font-medium">Detalle</th>
+            </tr>
+          </thead>
+          <tbody className="divide-y divide-zinc-200 bg-white">
+            {history.map((item) => (
+              <tr key={item.id}>
+                <td className="px-4 py-3 text-zinc-700">{formatDate(item.createdAt)}</td>
+                <td className="px-4 py-3 text-zinc-900">{item.to}</td>
+                <td className="px-4 py-3 text-zinc-700">{templateLabel(item.template)}</td>
+                <td className="px-4 py-3 text-zinc-700">{item.subject ?? "—"}</td>
+                <td className="px-4 py-3">
+                  <span
+                    className={`rounded-full px-2 py-0.5 text-xs font-medium ${
+                      item.sent ? "bg-emerald-100 text-emerald-900" : "bg-rose-100 text-rose-900"
+                    }`}
+                  >
+                    {item.sent ? "Enviado" : "Falló"}
+                  </span>
+                </td>
+                <td className="px-4 py-3 text-zinc-600">{item.warning ?? "Sin errores"}</td>
+              </tr>
+            ))}
+          </tbody>
+        </table>
+      </div>
+      {history.length === 0 ? <p className="text-xs text-zinc-600">Aún no hay correos de prueba registrados.</p> : null}
     </form>
   );
 }
