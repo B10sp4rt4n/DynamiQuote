@@ -15,6 +15,8 @@ type SettingsShellProps = {
 
 type Tab = "users" | "issuer";
 
+type TestEmailTemplate = "alta" | "mantenimiento" | "promocion";
+
 function formatDate(value: string): string {
   return new Intl.DateTimeFormat("es-MX", { dateStyle: "medium" }).format(new Date(value));
 }
@@ -469,6 +471,105 @@ function CreateUserForm({
   );
 }
 
+function TestEmailForm({ tenantName }: { tenantName: string }) {
+  const [to, setTo] = useState("");
+  const [template, setTemplate] = useState<TestEmailTemplate>("alta");
+  const [customSubject, setCustomSubject] = useState("");
+  const [customMessage, setCustomMessage] = useState("");
+  const [pending, setPending] = useState(false);
+  const [error, setError] = useState<string | null>(null);
+  const [success, setSuccess] = useState<string | null>(null);
+
+  async function onSubmit(event: FormEvent<HTMLFormElement>) {
+    event.preventDefault();
+    setError(null);
+    setSuccess(null);
+    setPending(true);
+
+    try {
+      const res = await fetch("/api/settings/test-email", {
+        body: JSON.stringify({
+          customMessage: customMessage.trim() || undefined,
+          customSubject: customSubject.trim() || undefined,
+          template,
+          to,
+        }),
+        headers: { "Content-Type": "application/json" },
+        method: "POST",
+      });
+
+      const data = (await res.json()) as { error?: string; sent?: boolean; warning?: string | null };
+      if (!res.ok) {
+        throw new Error(data.error ?? "No se pudo enviar el correo de prueba");
+      }
+
+      if (data.sent) {
+        setSuccess(`Correo de prueba enviado a ${to}.`);
+      } else {
+        setError(data.warning ?? "No se pudo enviar el correo de prueba.");
+      }
+    } catch (err) {
+      setError(err instanceof Error ? err.message : "Error desconocido");
+    } finally {
+      setPending(false);
+    }
+  }
+
+  return (
+    <form className="grid gap-3 rounded-xl border border-zinc-200 bg-zinc-50 p-4" onSubmit={onSubmit}>
+      <p className="text-sm font-semibold text-zinc-900">Correo de pruebas</p>
+      <p className="text-xs text-zinc-600">
+        Envía mensajes de alta, mantenimiento o promoción para validar plantillas de {tenantName}.
+      </p>
+
+      <div className="grid gap-3 md:grid-cols-2">
+        <input
+          className="rounded-lg border border-zinc-400 bg-white px-3 py-2 text-sm text-zinc-900 placeholder:text-zinc-500"
+          onChange={(event) => setTo(event.target.value)}
+          placeholder="Correo destino *"
+          required
+          type="email"
+          value={to}
+        />
+        <select
+          className="rounded-lg border border-zinc-400 bg-white px-3 py-2 text-sm text-zinc-900"
+          onChange={(event) => setTemplate(event.target.value as TestEmailTemplate)}
+          value={template}
+        >
+          <option value="alta">Alta de usuario</option>
+          <option value="mantenimiento">Mantenimiento</option>
+          <option value="promocion">Promoción</option>
+        </select>
+        <input
+          className="rounded-lg border border-zinc-400 bg-white px-3 py-2 text-sm text-zinc-900 placeholder:text-zinc-500 md:col-span-2"
+          onChange={(event) => setCustomSubject(event.target.value)}
+          placeholder="Asunto personalizado (opcional)"
+          value={customSubject}
+        />
+        <textarea
+          className="min-h-24 rounded-lg border border-zinc-400 bg-white px-3 py-2 text-sm text-zinc-900 placeholder:text-zinc-500 md:col-span-2"
+          onChange={(event) => setCustomMessage(event.target.value)}
+          placeholder="Mensaje personalizado (opcional)"
+          value={customMessage}
+        />
+      </div>
+
+      {error ? <p className="text-xs font-medium text-rose-800">{error}</p> : null}
+      {success ? <p className="text-xs font-medium text-emerald-800">{success}</p> : null}
+
+      <div>
+        <button
+          className="rounded-lg bg-zinc-900 px-4 py-2 text-sm font-medium text-white transition hover:bg-zinc-700 disabled:opacity-60"
+          disabled={pending}
+          type="submit"
+        >
+          {pending ? "Enviando..." : "Enviar correo de prueba"}
+        </button>
+      </div>
+    </form>
+  );
+}
+
 function IssuerProfilesTab({ issuerProfiles: initial }: { issuerProfiles: IssuerProfileSummary[] }) {
   const [profiles, setProfiles] = useState(initial);
   const [pending, setPending] = useState<string | null>(null);
@@ -592,6 +693,7 @@ export function SettingsShell({
               onCreated={pushUser}
               tenantOptions={tenantOptions}
             />
+            {canManageAllTenants ? <TestEmailForm tenantName={tenantName} /> : null}
             <UsersTab
               canManageAllTenants={canManageAllTenants}
               onUserDeleted={(userId) => {
