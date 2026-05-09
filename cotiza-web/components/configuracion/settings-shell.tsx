@@ -493,11 +493,34 @@ function TestEmailForm({ tenantName }: { tenantName: string }) {
   const [template, setTemplate] = useState<TestEmailTemplate>("alta");
   const [customSubject, setCustomSubject] = useState("");
   const [customMessage, setCustomMessage] = useState("");
+  const [historyFilterTemplate, setHistoryFilterTemplate] = useState<"all" | TestEmailTemplate>("all");
+  const [historyFilterStatus, setHistoryFilterStatus] = useState<"all" | "sent" | "failed">("all");
+  const [historySearchTo, setHistorySearchTo] = useState("");
   const [pending, setPending] = useState(false);
   const [historyPending, setHistoryPending] = useState(false);
   const [error, setError] = useState<string | null>(null);
   const [history, setHistory] = useState<TestEmailHistoryItem[]>([]);
   const [success, setSuccess] = useState<string | null>(null);
+
+  const filteredHistory = history.filter((item) => {
+    if (historyFilterTemplate !== "all" && item.template !== historyFilterTemplate) {
+      return false;
+    }
+
+    if (historyFilterStatus === "sent" && !item.sent) {
+      return false;
+    }
+
+    if (historyFilterStatus === "failed" && item.sent) {
+      return false;
+    }
+
+    if (historySearchTo.trim().length > 0 && !item.to.toLowerCase().includes(historySearchTo.trim().toLowerCase())) {
+      return false;
+    }
+
+    return true;
+  });
 
   async function loadHistory() {
     setHistoryPending(true);
@@ -623,6 +646,36 @@ function TestEmailForm({ tenantName }: { tenantName: string }) {
         </button>
       </div>
 
+      <div className="grid gap-3 rounded-xl border border-zinc-200 bg-zinc-100/60 p-3 md:grid-cols-3">
+        <select
+          className="rounded-lg border border-zinc-400 bg-white px-3 py-2 text-sm text-zinc-900"
+          onChange={(event) => setHistoryFilterTemplate(event.target.value as "all" | TestEmailTemplate)}
+          value={historyFilterTemplate}
+        >
+          <option value="all">Tipo: todos</option>
+          <option value="alta">Tipo: alta</option>
+          <option value="mantenimiento">Tipo: mantenimiento</option>
+          <option value="promocion">Tipo: promoción</option>
+        </select>
+
+        <select
+          className="rounded-lg border border-zinc-400 bg-white px-3 py-2 text-sm text-zinc-900"
+          onChange={(event) => setHistoryFilterStatus(event.target.value as "all" | "sent" | "failed")}
+          value={historyFilterStatus}
+        >
+          <option value="all">Estatus: todos</option>
+          <option value="sent">Estatus: enviados</option>
+          <option value="failed">Estatus: fallidos</option>
+        </select>
+
+        <input
+          className="rounded-lg border border-zinc-400 bg-white px-3 py-2 text-sm text-zinc-900 placeholder:text-zinc-500"
+          onChange={(event) => setHistorySearchTo(event.target.value)}
+          placeholder="Buscar por correo destino"
+          value={historySearchTo}
+        />
+      </div>
+
       <div className="overflow-x-auto overflow-y-hidden rounded-xl border border-zinc-200 bg-white">
         <table className="min-w-[900px] divide-y divide-zinc-200 text-sm">
           <thead className="bg-zinc-50 text-left text-zinc-700">
@@ -636,7 +689,7 @@ function TestEmailForm({ tenantName }: { tenantName: string }) {
             </tr>
           </thead>
           <tbody className="divide-y divide-zinc-200 bg-white">
-            {history.map((item) => (
+            {filteredHistory.map((item) => (
               <tr key={item.id}>
                 <td className="px-4 py-3 text-zinc-700">{formatDate(item.createdAt)}</td>
                 <td className="px-4 py-3 text-zinc-900">{item.to}</td>
@@ -658,6 +711,9 @@ function TestEmailForm({ tenantName }: { tenantName: string }) {
         </table>
       </div>
       {history.length === 0 ? <p className="text-xs text-zinc-600">Aún no hay correos de prueba registrados.</p> : null}
+      {history.length > 0 && filteredHistory.length === 0 ? (
+        <p className="text-xs text-zinc-600">No hay resultados con los filtros actuales.</p>
+      ) : null}
     </form>
   );
 }
