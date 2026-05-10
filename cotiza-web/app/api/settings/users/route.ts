@@ -7,6 +7,7 @@ import {
   createManagedUserByTenant,
   getAppUsersByTenant,
   getAppUsersForSuperAdmin,
+  relinkManagedUserIdByTenant,
 } from "@/lib/db/settings";
 import { prisma } from "@/lib/db/prisma";
 import { createManagedUserSchema } from "@/lib/validations/users";
@@ -23,12 +24,13 @@ function extractClerkErrorMessage(error: unknown): string {
 
   if (typeof error === "object" && error !== null) {
     const maybeError = error as {
-      errors?: Array<{ longMessage?: string; message?: string }>;
+      errors?: Array<{ longMessage?: string; long_message?: string; message?: string }>;
       message?: string;
     };
 
     const first = maybeError.errors?.[0];
     if (first?.longMessage?.trim()) return first.longMessage;
+    if (first?.long_message?.trim()) return first.long_message;
     if (first?.message?.trim()) return first.message;
     if (maybeError.message?.trim()) return maybeError.message;
   }
@@ -49,6 +51,10 @@ function extractClerkErrorCode(error: unknown): string | null {
   }
 
   return null;
+}
+
+function isClerkUserId(value: string): boolean {
+  return value.startsWith("user_");
 }
 
 export async function GET() {
@@ -96,67 +102,11 @@ export async function POST(request: Request) {
 
   const assignedRole = parsed.data.role ?? "user";
   const normalizedEmail = parsed.data.email.trim().toLowerCase();
-  let resolvedUserId = parsed.data.userId?.trim() || null;
-
-  let clerkSynced = false;
-  let invitationSent = false;
-  let clerkWarning: string | null = null;
-
-  if (hasClerkCredentials()) {
-    try {
-      const client = await clerkClient();
-
-      if (!resolvedUserId) {
-        const byEmail = await client.users.getUserList({
-          emailAddress: [normalizedEmail],
-          limit: 1,
-        });
-
-        const existing = byEmail.data[0];
-        if (existing?.id) {
-          resolvedUserId = existing.id;
-        }
-      }
-
-      if (resolvedUserId) {
-        await client.users.getUser(resolvedUserId);
-        await client.users.updateUserMetadata(resolvedUserId, {
-          publicMetadata: {
-            role: assignedRole,
-            subtenantKey: `${targetTenant.tenant_id}:${resolvedUserId}`,
-            tenantId: targetTenant.tenant_id,
-            tenantSlug: targetTenant.slug,
-          },
-        });
-        clerkSynced = true;
-      } else {
-        await client.invitations.createInvitation({
-          emailAddress: normalizedEmail,
-          publicMetadata: {
-            role: assignedRole,
-            tenantId: targetTenant.tenant_id,
-            tenantSlug: targetTenant.slug,
-          },
-        });
-        invitationSent = true;
-      }
-    } catch (error) {
-      const clerkDetail = extractClerkErrorMessage(error);
-      const clerkCode = extractClerkErrorCode(error);
-
-      if (clerkCode === "duplicate_record" && clerkDetail.toLowerCase().includes("pending invitations")) {
-        invitationSent = true;
-        clerkWarning = "Clerk ya tenía una invitación pendiente para este correo.";
-      } else {
-        clerkWarning = `No se pudo vincular/enviar invitación en Clerk: ${clerkDetail}`;
-      }
-
-      console.error("[clerk] Error en vinculación/invitación:", error);
-    }
-  }
+  const adminProvidedUserId = parsed.data.userId?.trim() || null;
+  const provisionalUserId = adminProvidedUserId || `pending_${crypto.randomUUID()}`;
 
   const created = await createManagedUserByTenant({
-    payload: { ...parsed.data, userId: resolvedUserId ?? `pending_${crypto.randomUUID()}`, role: assignedRole },
+    payload: { ...parsed.data, userId: provisionalUserId, role: assignedRole },
     targetTenantId,
   });
 
@@ -165,6 +115,145 @@ export async function POST(request: Request) {
       { error: "No fue posible crear el usuario. Verifica tenant, alias y userId unicos." },
       { status: 409 },
     );
+  }
+
+  let responseUser = created;
+
+  let clerkSynced = false;
+  let invitationSent = false;
+  let clerkWarning: string | null = null;
+
+  if (hasClerkCredentials()) {
+    try {
+      const client = await clerkClient();
+      let clerkUserId: string | null = null;
+
+      if (adminProvidedUserId && isClerkUserId(adminProvidedUserId)) {
+        clerkUserId = adminProvidedUserId;
+      }
+
+      if (!clerkUserId) {
+        const byEmail = await client.users.getUserList({
+          emailAddress: [normalizedEmail],
+          limit: 1,
+        });
+
+        const existing = byEmail.data[0];
+        if (existing?.id) {
+          clerkUserId = existing.id;
+        }
+      }
+
+      if (!clerkUserId) {
+        try {
+          const createdInClerk = await client.users.createUser({
+            emailAddress: [normalizedEmail],
+            externalId: adminProvidedUserId ?? undefined,
+            firstName: parsed.data.firstName,
+            lastName: parsed.data.lastName,
+            publicMetadata: {
+              localUserId: responseUser.userId,
+              role: assignedRole,
+              tenantId: targetTenant.tenant_id,
+              tenantSlug: targetTenant.slug,
+            },
+          });
+
+          clerkUserId = createdInClerk.id;
+        } catch (error) {
+          const clerkDetail = extractClerkErrorMessage(error);
+          const clerkCode = extractClerkErrorCode(error);
+
+          if (clerkCode === "duplicate_record") {
+            const retry = await client.users.getUserList({
+              emailAddress: [normalizedEmail],
+              limit: 1,
+            });
+            const existing = retry.data[0];
+            if (existing?.id) {
+              clerkUserId = existing.id;
+            }
+          }
+
+          if (!clerkUserId) {
+            clerkWarning = `No se pudo crear usuario en Clerk: ${clerkDetail}`;
+          }
+        }
+      }
+
+      if (clerkUserId) {
+        try {
+          await client.users.getUser(clerkUserId);
+          await client.users.updateUserMetadata(clerkUserId, {
+            publicMetadata: {
+              localUserId: responseUser.userId,
+              role: assignedRole,
+              subtenantKey: `${targetTenant.tenant_id}:${clerkUserId}`,
+              tenantId: targetTenant.tenant_id,
+              tenantSlug: targetTenant.slug,
+            },
+          });
+          clerkSynced = true;
+
+          if (responseUser.userId !== clerkUserId) {
+            try {
+              const relinked = await relinkManagedUserIdByTenant({
+                currentUserId: responseUser.userId,
+                newUserId: clerkUserId,
+                tenantId: targetTenantId,
+              });
+
+              if (relinked) {
+                responseUser = relinked;
+              }
+            } catch (error) {
+              if (error instanceof Error && error.message === "DUPLICATE_USER_ID") {
+                clerkWarning = "Se creó en Clerk, pero no se pudo vincular en BD porque el userId de Clerk ya existe localmente.";
+              } else {
+                const relinkDetail = extractClerkErrorMessage(error);
+                clerkWarning = `Se creó en Clerk, pero no se pudo actualizar userId local: ${relinkDetail}`;
+              }
+            }
+          }
+        } catch (error) {
+          const clerkDetail = extractClerkErrorMessage(error);
+          clerkWarning = `No se pudo vincular el userId en Clerk: ${clerkDetail}`;
+          console.error("[clerk] Error al vincular userId:", error);
+        }
+      } else {
+        try {
+          const appUrl = process.env.NEXT_PUBLIC_APP_URL ?? "https://dynami-quote.vercel.app";
+          await client.invitations.createInvitation({
+            emailAddress: normalizedEmail,
+            redirectUrl: `${appUrl}/sign-up`,
+            publicMetadata: {
+              localUserId: responseUser.userId,
+              role: assignedRole,
+              tenantId: targetTenant.tenant_id,
+              tenantSlug: targetTenant.slug,
+            },
+          });
+          invitationSent = true;
+        } catch (error) {
+          const clerkDetail = extractClerkErrorMessage(error);
+          const clerkCode = extractClerkErrorCode(error);
+
+          if (clerkCode === "duplicate_record") {
+            invitationSent = true;
+            clerkWarning = "Clerk ya tenía una invitación pendiente para este correo.";
+          } else {
+            clerkWarning = `No se pudo enviar invitación en Clerk: ${clerkDetail}`;
+          }
+
+          console.error("[clerk] Error en invitación:", error);
+        }
+      }
+    } catch (error) {
+      const clerkDetail = extractClerkErrorMessage(error);
+      clerkWarning = `Error general al conectar con Clerk: ${clerkDetail}`;
+
+      console.error("[clerk] Error general de integración:", error);
+    }
   }
 
   // Enviar correo de invitación con Resend independientemente de Clerk
@@ -184,7 +273,7 @@ export async function POST(request: Request) {
       emailSent: emailResult.sent,
       emailWarning: emailResult.warning,
       invitationSent,
-      user: created,
+      user: responseUser,
     },
     { status: 201 },
   );

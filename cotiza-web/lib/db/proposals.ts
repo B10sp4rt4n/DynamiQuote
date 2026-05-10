@@ -3,24 +3,36 @@ import "server-only";
 import { randomUUID } from "crypto";
 import { Prisma } from "@prisma/client";
 
+import { getMarginPolicyByTenant } from "@/lib/db/margin-policies";
+import {
+  clearProposalApprovalsByTenant,
+  evaluateApprovalGate,
+  getProposalApprovalsByTenant,
+  registerProposalApprovalDecisionByTenant,
+  type ProposalApprovalGate,
+  type ProposalApprovalRecord,
+  type ProposalApproverRole,
+} from "@/lib/db/proposal-approvals";
 import { prisma } from "@/lib/db/prisma";
+import {
+  evaluateProposalLiberation,
+  type ProposalLiberationEvaluation,
+} from "@/lib/domain/proposal-liberation";
+import {
+  assertApprovalActorEligibility,
+  assertProposalWorkflowGuard,
+  resolveApprovalGateError,
+  shouldClearProposalApprovals,
+} from "@/lib/domain/proposal-workflow-guard";
 import type {
   CreateProposalFromQuoteInput,
   ProposalImportItemInput,
   ProposalStatus,
+  RegisterProposalApprovalInput,
   UpdateProposalWorkflowInput,
 } from "@/lib/validations/proposals";
 
 const terminalStatuses: ProposalStatus[] = ["approved", "rejected", "expired"];
-
-const allowedTransitions: Record<ProposalStatus, ProposalStatus[]> = {
-  approved: ["approved"],
-  draft: ["draft", "sent"],
-  expired: ["expired"],
-  in_review: ["in_review", "approved", "rejected", "expired"],
-  rejected: ["rejected"],
-  sent: ["sent", "in_review", "approved", "rejected", "expired"],
-};
 
 const legacyStatusMap: Record<string, ProposalStatus> = {
   "aprobada": "approved",
@@ -202,11 +214,15 @@ export type ProposalSummary = {
   origin: string | null;
   proposalId: string;
   status: ProposalStatus;
+  marginEvaluation?: ProposalLiberationEvaluation | null;
 };
 
 export type ProposalWorkflowDetail = {
+  approvalGate: ProposalApprovalGate;
+  approvals: ProposalApprovalRecord[];
   formal: FormalProposalSlice | null;
   items: ProposalExcelItem[];
+  marginEvaluation: ProposalLiberationEvaluation;
   origin: string | null;
   proposalId: string;
   salesOwner: string;
@@ -288,8 +304,23 @@ function toFormalSlice(row: {
   };
 }
 
-function canTransition(current: ProposalStatus, next: ProposalStatus): boolean {
-  return allowedTransitions[current].includes(next);
+function resolveApproverRole(actor: {
+  isSuperAdmin: boolean;
+  userRole: "superadmin" | "owner" | "admin" | "user";
+}): ProposalApproverRole {
+  if (actor.isSuperAdmin) {
+    return "superadmin";
+  }
+
+  if (actor.userRole === "owner") {
+    return "owner";
+  }
+
+  if (actor.userRole === "admin") {
+    return "admin";
+  }
+
+  return "user";
 }
 
 async function nextProposalNumber(year: number): Promise<string> {
@@ -645,6 +676,26 @@ export async function getProposalWorkflowByTenant(
   const latestFormal = row.formal_proposals[0];
   const resolvedSalesOwner = await resolveUserDisplayNameByTenant(tenantId, row.created_by);
   const normalizedFormal = latestFormal ? toFormalSlice(latestFormal) : null;
+  const marginPolicy = await getMarginPolicyByTenant(tenantId);
+  const proposalItems = row.proposal_items.map((item) => ({
+    componentType: item.component_type ?? "",
+    costUnit: decimalToNumber(item.cost_unit),
+    description: item.description ?? "",
+    itemNumber: item.item_number,
+    origin: item.origin ?? "",
+    priceUnit: decimalToNumber(item.price_unit),
+    quantity: decimalToNumber(item.quantity),
+    sku: item.sku ?? "",
+    status: item.status,
+    subtotalCost: decimalToNumber(item.subtotal_cost),
+    subtotalPrice: decimalToNumber(item.subtotal_price),
+  }));
+  const marginEvaluation = evaluateProposalLiberation(marginPolicy, proposalItems);
+  const approvals = await getProposalApprovalsByTenant(tenantId, proposalId);
+  const approvalGate = evaluateApprovalGate({
+    approvals,
+    requireObserverApproval: marginPolicy.requireObserverApproval,
+  });
 
   const issuerLooksOpaque = looksLikeOpaqueUserId(normalizedFormal?.issuerContactName);
   const resolvedIssuerContact =
@@ -654,25 +705,16 @@ export async function getProposalWorkflowByTenant(
     (await getTenantDefaultIssuerName(tenantId));
 
   return {
+    approvalGate,
+    approvals,
     formal: normalizedFormal
       ? {
           ...normalizedFormal,
           issuerContactName: resolvedIssuerContact,
         }
       : null,
-    items: row.proposal_items.map((item) => ({
-      componentType: item.component_type ?? "",
-      costUnit: decimalToNumber(item.cost_unit),
-      description: item.description ?? "",
-      itemNumber: item.item_number,
-      origin: item.origin ?? "",
-      priceUnit: decimalToNumber(item.price_unit),
-      quantity: decimalToNumber(item.quantity),
-      sku: item.sku ?? "",
-      status: item.status,
-      subtotalCost: decimalToNumber(item.subtotal_cost),
-      subtotalPrice: decimalToNumber(item.subtotal_price),
-    })),
+    items: proposalItems,
+    marginEvaluation,
     origin: row.origin,
     proposalId: row.proposal_id,
     salesOwner: resolvedSalesOwner ?? resolvedIssuerContact,
@@ -684,6 +726,11 @@ export async function updateProposalWorkflowByTenant(
   tenantId: string,
   proposalId: string,
   input: UpdateProposalWorkflowInput,
+  actor?: {
+    isSuperAdmin: boolean;
+    userId: string | null;
+    userRole: "superadmin" | "owner" | "admin" | "user";
+  },
 ): Promise<ProposalWorkflowDetail | null> {
   const current = await getProposalWorkflowByTenant(tenantId, proposalId);
 
@@ -693,9 +740,86 @@ export async function updateProposalWorkflowByTenant(
 
   const currentStatus = current.status;
   const nextStatus = input.status ?? currentStatus;
+  const hasTermsUpdate = input.termsAndConditions !== undefined;
+  const hasSubjectUpdate = input.subject !== undefined;
+  const hasRecipientUpdate = input.recipientCompany !== undefined;
+  const hasIssuerCompanyUpdate = input.issuerCompany !== undefined;
+  const hasIssuerEmailUpdate = input.issuerEmail !== undefined;
+  const hasIssuerPhoneUpdate = input.issuerPhone !== undefined;
+  const hasRecipientContactNameUpdate = input.recipientContactName !== undefined;
+  const hasRecipientEmailUpdate = input.recipientEmail !== undefined;
+  const hasRecipientContactTitleUpdate = input.recipientContactTitle !== undefined;
+  const hasItemsUpdate = input.items !== undefined;
+  const hasContentUpdate =
+    hasTermsUpdate ||
+    hasSubjectUpdate ||
+    hasRecipientUpdate ||
+    hasIssuerCompanyUpdate ||
+    hasIssuerEmailUpdate ||
+    hasIssuerPhoneUpdate ||
+    hasRecipientContactNameUpdate ||
+    hasRecipientEmailUpdate ||
+    hasRecipientContactTitleUpdate ||
+    hasItemsUpdate;
 
-  if (!canTransition(currentStatus, nextStatus)) {
-    throw new Error(`Transicion invalida: ${currentStatus} -> ${nextStatus}`);
+  const policy = await getMarginPolicyByTenant(tenantId);
+  const candidateItems = input.items ?? current.items;
+  const marginEvaluation = evaluateProposalLiberation(policy, candidateItems);
+
+  assertProposalWorkflowGuard({
+    currentStatus,
+    hasContentUpdate,
+    marginCanAuthorizeFinal: marginEvaluation.canAuthorizeFinal,
+    nextStatus,
+  });
+
+  if (shouldClearProposalApprovals(hasContentUpdate, current.approvals.length)) {
+    await clearProposalApprovalsByTenant(tenantId, proposalId);
+  }
+
+  if (nextStatus === "approved") {
+    const actorUserId = actor?.userId ?? null;
+    const approverRole = resolveApproverRole(
+      actor ?? {
+        isSuperAdmin: false,
+        userRole: "user",
+      },
+    );
+    assertApprovalActorEligibility({ approverRole, userId: actorUserId });
+    if (!actorUserId) {
+      throw new Error("No se pudo identificar al aprobador.");
+    }
+
+    const existingApprovals = await getProposalApprovalsByTenant(tenantId, proposalId);
+    const hasCurrentActorApproval = existingApprovals.some(
+      (row) =>
+        row.decision === "approved" &&
+        row.approverRole === approverRole &&
+        row.approverUserId === actorUserId,
+    );
+
+    if (!hasCurrentActorApproval) {
+      await registerProposalApprovalDecisionByTenant({
+        approverRole,
+        approverUserId: actorUserId,
+        decision: "approved",
+        proposalId,
+        tenantId,
+      });
+    }
+
+    const approvals = await getProposalApprovalsByTenant(tenantId, proposalId);
+    const gate = evaluateApprovalGate({
+      approvals,
+      requireObserverApproval: policy.requireObserverApproval,
+    });
+
+    if (!gate.canAuthorizeFinal) {
+      const gateError = resolveApprovalGateError(gate.missingRoles);
+      if (gateError) {
+        throw new Error(gateError);
+      }
+    }
   }
 
   const now = new Date();
@@ -722,17 +846,7 @@ export async function updateProposalWorkflowByTenant(
     const recipientEmailToPersist = input.recipientEmail;
     const recipientContactTitleToPersist = input.recipientContactTitle;
     const itemsToPersist = input.items;
-    const hasIssuerCompanyUpdate = issuerCompanyToPersist !== undefined;
-    const hasIssuerEmailUpdate = issuerEmailToPersist !== undefined;
-    const hasIssuerPhoneUpdate = issuerPhoneToPersist !== undefined;
-    const hasTermsUpdate = termsToPersist !== undefined;
-    const hasSubjectUpdate = subjectToPersist !== undefined;
-    const hasRecipientUpdate = recipientToPersist !== undefined;
-    const hasRecipientContactNameUpdate = recipientContactNameToPersist !== undefined;
-    const hasRecipientEmailUpdate = recipientEmailToPersist !== undefined;
-    const hasRecipientContactTitleUpdate = recipientContactTitleToPersist !== undefined;
-    const hasItemsUpdate = itemsToPersist !== undefined;
-    const hasStatusUpdate = input.status !== undefined;
+    const hasStatusUpdate = nextStatus !== currentStatus;
 
     if (
       !hasTermsUpdate &&
@@ -826,6 +940,53 @@ export async function updateProposalWorkflowByTenant(
       },
     });
   });
+
+  return getProposalWorkflowByTenant(tenantId, proposalId);
+}
+
+export async function registerProposalApprovalByTenant(
+  tenantId: string,
+  proposalId: string,
+  input: RegisterProposalApprovalInput,
+  actor: {
+    isSuperAdmin: boolean;
+    userId: string | null;
+    userRole: "superadmin" | "owner" | "admin" | "user";
+  },
+): Promise<ProposalWorkflowDetail | null> {
+  const current = await getProposalWorkflowByTenant(tenantId, proposalId);
+
+  if (!current) {
+    return null;
+  }
+
+  if (!actor.userId) {
+    throw new Error("No se pudo identificar al aprobador.");
+  }
+
+  const approverRole = resolveApproverRole(actor);
+
+  if (approverRole === "user") {
+    throw new Error("Solo Owner, Admin o Superadmin pueden participar en aprobaciones.");
+  }
+
+  const hasSameDecision = current.approvals.some(
+    (row) =>
+      row.approverUserId === actor.userId &&
+      row.approverRole === approverRole &&
+      row.decision === input.decision,
+  );
+
+  if (!hasSameDecision) {
+    await registerProposalApprovalDecisionByTenant({
+      approverRole,
+      approverUserId: actor.userId,
+      decision: input.decision,
+      proposalId,
+      reason: input.reason ?? null,
+      tenantId,
+    });
+  }
 
   return getProposalWorkflowByTenant(tenantId, proposalId);
 }
@@ -1005,4 +1166,48 @@ export async function getProposalStatusCountsByTenant(
     sent: counts["sent"] ?? 0,
     total,
   };
+}
+
+export async function getProposalMarginBlockedCountByTenant(tenantId: string): Promise<number> {
+  const activeStatuses = ["draft", "sent", "in_review"];
+
+  const rows = await prisma.proposals.findMany({
+    select: {
+      proposal_id: true,
+      proposal_items: {
+        select: {
+          cost_unit: true,
+          price_unit: true,
+          quantity: true,
+        },
+      },
+    },
+    where: {
+      tenant_id: tenantId,
+      status: { in: activeStatuses },
+    },
+  });
+
+  if (rows.length === 0) {
+    return 0;
+  }
+
+  const policy = await getMarginPolicyByTenant(tenantId);
+  let blocked = 0;
+
+  for (const row of rows) {
+    const items = row.proposal_items.map((item) => ({
+      costUnit: decimalToNumber(item.cost_unit),
+      priceUnit: decimalToNumber(item.price_unit),
+      quantity: decimalToNumber(item.quantity),
+    }));
+
+    const evaluation = evaluateProposalLiberation(policy, items);
+
+    if (!evaluation.canAuthorizeFinal) {
+      blocked += 1;
+    }
+  }
+
+  return blocked;
 }

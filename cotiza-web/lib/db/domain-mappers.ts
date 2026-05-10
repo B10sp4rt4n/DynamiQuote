@@ -8,11 +8,11 @@ import type {
   QuoteLineEntity,
 } from "@/lib/domain/entities";
 
-type QuoteRecord = Prisma.QuoteGetPayload<{}>;
-type QuoteLineRecord = Prisma.quote_linesGetPayload<{}>;
-type ProposalRecord = Prisma.proposalsGetPayload<{}>;
-type FormalProposalRecord = Prisma.formal_proposalsGetPayload<{}>;
-type CompanyLogoRecord = Prisma.company_logosGetPayload<{}>;
+type QuoteRecord = Prisma.QuoteGetPayload<Record<string, never>>;
+type QuoteLineRecord = Prisma.quote_linesGetPayload<Record<string, never>>;
+type ProposalRecord = Prisma.proposalsGetPayload<Record<string, never>>;
+type FormalProposalRecord = Prisma.formal_proposalsGetPayload<Record<string, never>>;
+type CompanyLogoRecord = Prisma.company_logosGetPayload<Record<string, never>>;
 
 function parseDecimal(value: { toNumber: () => number } | null | undefined): number | null {
   return value ? value.toNumber() : null;

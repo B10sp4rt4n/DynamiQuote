@@ -1,5 +1,6 @@
 import { SettingsShell } from "@/components/configuracion/settings-shell";
 import { getCurrentTenantContext } from "@/lib/auth/tenant-context";
+import { getMarginPolicyByTenant } from "@/lib/db/margin-policies";
 import { getAppUsersByTenant, getAppUsersForSuperAdmin, getIssuerProfilesByTenant } from "@/lib/db/settings";
 import { getActiveTenants } from "@/lib/db/tenants";
 
@@ -16,15 +17,18 @@ export default async function SettingsPage() {
     );
   }
 
-  const [users, issuerProfiles, tenantOptions] = await Promise.all([
+  const [users, issuerProfiles, marginPolicy, tenantOptions] = await Promise.all([
     tenant.isSuperAdmin ? getAppUsersForSuperAdmin() : getAppUsersByTenant(tenant.id),
     getIssuerProfilesByTenant(tenant.id),
+    getMarginPolicyByTenant(tenant.id),
     getActiveTenants(),
   ]);
 
   return (
     <SettingsShell
       canManageAllTenants={tenant.isSuperAdmin}
+      canManagePolicy={tenant.isSuperAdmin || tenant.userRole === "owner" || tenant.userRole === "admin"}
+      marginPolicy={marginPolicy}
       issuerProfiles={issuerProfiles}
       tenantOptions={tenantOptions}
       tenantName={tenant.name}

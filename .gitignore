@@ -12,3 +12,4 @@ venv/
 .streamlit/credentials.toml
 .vercel
 .env*.local
+node_modules

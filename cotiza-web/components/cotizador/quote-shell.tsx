@@ -1,12 +1,19 @@
 "use client";
 
-import { useState } from "react";
+import { useEffect, useMemo, useState } from "react";
+import { usePathname, useRouter, useSearchParams } from "next/navigation";
 
 import {
   QuoteLineEditor,
   type QuoteVersionSaved,
 } from "@/components/cotizador/quote-line-editor";
 import type { QuoteGroupSummary } from "@/lib/db/quotes";
+import {
+  normalizeQuotePanelState,
+  normalizeQuoteSort,
+  resolveSelectedQuoteId,
+  type QuoteSort,
+} from "@/lib/domain/quote-list-state";
 
 type TenantOption = {
   id: string;
@@ -44,10 +51,14 @@ export function QuoteShell({
   tenantName,
   tenantOptions,
 }: QuoteShellProps) {
+  const router = useRouter();
+  const pathname = usePathname();
+  const searchParams = useSearchParams();
   const [quoteItems, setQuoteItems] = useState<QuoteGroupSummary[]>(() => sortQuotes(items));
   const [activeQuoteId, setActiveQuoteId] = useState<string | null>(items[0]?.quoteId ?? null);
   const [isQuotesPanelOpen, setIsQuotesPanelOpen] = useState(false);
   const [quoteSearch, setQuoteSearch] = useState("");
+  const [quoteSort, setQuoteSort] = useState<QuoteSort>("date_desc");
   const [selectedTenantSlug, setSelectedTenantSlug] = useState(currentTenantSlug);
   const [switchingTenant, setSwitchingTenant] = useState(false);
   const [clientName, setClientName] = useState("");
@@ -57,16 +68,154 @@ export function QuoteShell({
   const [createState, setCreateState] = useState<"idle" | "saving" | "error">("idle");
   const [createMessage, setCreateMessage] = useState<string | null>(null);
 
-  const normalizedSearch = quoteSearch.trim().toLowerCase();
-  const filteredQuoteItems = quoteItems.filter((item) => {
-    if (normalizedSearch.length === 0) {
-      return true;
+  const filteredQuoteItems = useMemo(() => {
+    const normalizedSearch = quoteSearch.trim().toLowerCase();
+    const searchedItems = quoteItems.filter((item) => {
+      if (normalizedSearch.length === 0) {
+        return true;
+      }
+
+      return [item.clientName, item.proposalName, item.quoteGroupId].some((field) =>
+        field.toLowerCase().includes(normalizedSearch),
+      );
+    });
+
+    return [...searchedItems].sort((left, right) => {
+      if (quoteSort === "date_asc" || quoteSort === "date_desc") {
+        const leftTime = left.createdAt ? Date.parse(left.createdAt) : 0;
+        const rightTime = right.createdAt ? Date.parse(right.createdAt) : 0;
+
+        return quoteSort === "date_asc" ? leftTime - rightTime : rightTime - leftTime;
+      }
+
+      if (quoteSort === "client_asc") {
+        return left.clientName.localeCompare(right.clientName, "es");
+      }
+
+      return (right.totalRevenue ?? 0) - (left.totalRevenue ?? 0);
+    });
+  }, [quoteItems, quoteSearch, quoteSort]);
+
+  useEffect(() => {
+    const nextQuoteId = searchParams.get("quoteId");
+    const validQuoteId = resolveSelectedQuoteId(quoteItems, nextQuoteId);
+
+    // eslint-disable-next-line react-hooks/set-state-in-effect
+    setActiveQuoteId((current) => (current === validQuoteId ? current : validQuoteId));
+  }, [quoteItems, searchParams]);
+
+  useEffect(() => {
+    const nextSearch = searchParams.get("q") ?? "";
+    // eslint-disable-next-line react-hooks/set-state-in-effect
+    setQuoteSearch((current) => (current === nextSearch ? current : nextSearch));
+  }, [searchParams]);
+
+  useEffect(() => {
+    const panelFromQuery = searchParams.get("panel");
+    const nextPanelOpen = normalizeQuotePanelState(panelFromQuery);
+
+    // eslint-disable-next-line react-hooks/set-state-in-effect
+    setIsQuotesPanelOpen((current) => (current === nextPanelOpen ? current : nextPanelOpen));
+  }, [searchParams]);
+
+  useEffect(() => {
+    const sortFromQuery = searchParams.get("sort") ?? "date_desc";
+    const nextSort = normalizeQuoteSort(sortFromQuery);
+
+    // eslint-disable-next-line react-hooks/set-state-in-effect
+    setQuoteSort((current) => (current === nextSort ? current : nextSort));
+  }, [searchParams]);
+
+  useEffect(() => {
+    const currentQuoteId = searchParams.get("quoteId");
+
+    if ((activeQuoteId ?? null) === (currentQuoteId ?? null)) {
+      return;
     }
 
-    return [item.clientName, item.proposalName, item.quoteGroupId].some((field) =>
-      field.toLowerCase().includes(normalizedSearch),
-    );
-  });
+    const nextParams = new URLSearchParams(searchParams.toString());
+
+    if (activeQuoteId) {
+      nextParams.set("quoteId", activeQuoteId);
+    } else {
+      nextParams.delete("quoteId");
+    }
+
+    const nextQuery = nextParams.toString();
+    router.replace(nextQuery.length > 0 ? `${pathname}?${nextQuery}` : pathname, { scroll: false });
+  }, [activeQuoteId, pathname, router, searchParams]);
+
+  useEffect(() => {
+    const currentSearch = searchParams.get("q") ?? "";
+    const expectedSearch = quoteSearch.trim();
+
+    if (currentSearch === expectedSearch) {
+      return;
+    }
+
+    const nextParams = new URLSearchParams(searchParams.toString());
+
+    if (expectedSearch.length > 0) {
+      nextParams.set("q", expectedSearch);
+    } else {
+      nextParams.delete("q");
+    }
+
+    const nextQuery = nextParams.toString();
+    router.replace(nextQuery.length > 0 ? `${pathname}?${nextQuery}` : pathname, { scroll: false });
+  }, [pathname, quoteSearch, router, searchParams]);
+
+  useEffect(() => {
+    const currentPanel = searchParams.get("panel") ?? "closed";
+    const expectedPanel = isQuotesPanelOpen ? "open" : "closed";
+
+    if (currentPanel === expectedPanel) {
+      return;
+    }
+
+    const nextParams = new URLSearchParams(searchParams.toString());
+
+    if (isQuotesPanelOpen) {
+      nextParams.set("panel", "open");
+    } else {
+      nextParams.delete("panel");
+    }
+
+    const nextQuery = nextParams.toString();
+    router.replace(nextQuery.length > 0 ? `${pathname}?${nextQuery}` : pathname, { scroll: false });
+  }, [isQuotesPanelOpen, pathname, router, searchParams]);
+
+  useEffect(() => {
+    const currentSort = searchParams.get("sort") ?? "date_desc";
+
+    if (currentSort === quoteSort) {
+      return;
+    }
+
+    const nextParams = new URLSearchParams(searchParams.toString());
+
+    if (quoteSort === "date_desc") {
+      nextParams.delete("sort");
+    } else {
+      nextParams.set("sort", quoteSort);
+    }
+
+    const nextQuery = nextParams.toString();
+    router.replace(nextQuery.length > 0 ? `${pathname}?${nextQuery}` : pathname, { scroll: false });
+  }, [pathname, quoteSort, router, searchParams]);
+
+  useEffect(() => {
+    if (filteredQuoteItems.length === 0) {
+      return;
+    }
+
+    const selectedIsVisible = filteredQuoteItems.some((item) => item.quoteId === activeQuoteId);
+
+    if (!selectedIsVisible) {
+      // eslint-disable-next-line react-hooks/set-state-in-effect
+      setActiveQuoteId(filteredQuoteItems[0].quoteId);
+    }
+  }, [activeQuoteId, filteredQuoteItems]);
 
   function handleQuoteVersionSaved(savedQuote: QuoteVersionSaved) {
     setQuoteItems((current) => {
@@ -266,12 +415,24 @@ export function QuoteShell({
         {isQuotesPanelOpen ? (
           <div className="border-t border-zinc-200">
             <div className="border-b border-zinc-200 bg-zinc-50 px-4 py-3">
-              <input
-                className="w-full rounded-lg border border-zinc-300 bg-white px-3 py-2 text-sm text-zinc-900"
-                onChange={(event) => setQuoteSearch(event.target.value)}
-                placeholder="Buscar por cliente, propuesta o folio"
-                value={quoteSearch}
-              />
+              <div className="flex flex-col gap-2 md:flex-row md:items-center">
+                <input
+                  className="w-full rounded-lg border border-zinc-300 bg-white px-3 py-2 text-sm text-zinc-900"
+                  onChange={(event) => setQuoteSearch(event.target.value)}
+                  placeholder="Buscar por cliente, propuesta o folio"
+                  value={quoteSearch}
+                />
+                <select
+                  className="rounded-lg border border-zinc-300 bg-white px-3 py-2 text-sm text-zinc-900 md:w-56"
+                  onChange={(event) => setQuoteSort(event.target.value as QuoteSort)}
+                  value={quoteSort}
+                >
+                  <option value="date_desc">Mas recientes</option>
+                  <option value="date_asc">Mas antiguas</option>
+                  <option value="client_asc">Cliente A-Z</option>
+                  <option value="revenue_desc">Mayor revenue</option>
+                </select>
+              </div>
             </div>
             <div className="overflow-hidden">
               <table className="min-w-full divide-y divide-zinc-200 text-sm">
@@ -287,7 +448,11 @@ export function QuoteShell({
                 </thead>
                 <tbody className="divide-y divide-zinc-200 bg-white">
                   {filteredQuoteItems.map((item) => (
-                    <tr key={item.quoteId}>
+                    <tr
+                      className={activeQuoteId === item.quoteId ? "bg-emerald-50/60" : "hover:bg-zinc-50"}
+                      key={item.quoteId}
+                      onClick={() => setActiveQuoteId(item.quoteId)}
+                    >
                       <td className="px-4 py-3 text-zinc-900">{item.clientName}</td>
                       <td className="px-4 py-3 text-zinc-600">{item.proposalName}</td>
                       <td className="px-4 py-3 font-mono text-xs text-zinc-500">{item.quoteGroupId}</td>

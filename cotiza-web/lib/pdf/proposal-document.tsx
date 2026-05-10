@@ -422,27 +422,55 @@ export function ProposalPdfDocument({ proposal, tenantName }: ProposalPdfInput) 
       </Page>
 
       <Page size="A4" style={styles.page}>
-        <Text style={styles.sectionHeader}>Anexo tecnico y alcance</Text>
+        <Text style={styles.sectionHeader}>Hoja de trazabilidad y cierre</Text>
         <Text style={styles.narrativeText}>
-          Este anexo se entrega en modo prueba para validar el flujo completo de propuesta formal. El objetivo es asegurar que la informacion de emisor, receptor, vendedor, partidas y terminos se conserve correctamente en cada version del documento, con trazabilidad por tenant y consistencia operativa durante el ciclo cotizacion-propuesta.
-        </Text>
-        <Text style={styles.narrativeText}>
-          El contenido de este documento puede adaptarse por industria sin modificar el motor base. Para un despliegue productivo, se recomienda cargar logotipo oficial del emisor, reglas fiscales definitivas y condiciones comerciales estandarizadas por tenant.
+          Este documento acredita la propuesta comercial emitida por {formal?.issuerCompany || tenantName} con destino a {formal?.recipientCompany || "cliente sin definir"}. La propuesta mantiene trazabilidad completa desde la cotizacion de origen hasta el documento formal, incluyendo vendedor responsable, partidas valoradas y condiciones comerciales acordadas.
         </Text>
         <View style={styles.totalsWrap}>
           <View style={styles.totalLine}>
-            <Text style={styles.rowText}>Referencia propuesta:</Text>
+            <Text style={styles.rowText}>Propuesta:</Text>
             <Text style={styles.rowText}>{formal?.proposalNumber ?? proposal.proposalId}</Text>
           </View>
           <View style={styles.totalLine}>
             <Text style={styles.rowText}>Cotizacion origen:</Text>
             <Text style={styles.rowText}>{proposal.origin ?? "N/D"}</Text>
           </View>
-          <View style={styles.totalLineStrong}>
+          <View style={styles.totalLine}>
+            <Text style={styles.rowText}>Fecha de emision:</Text>
+            <Text style={styles.rowText}>{formatDate(formal?.issuedDate)}</Text>
+          </View>
+          <View style={styles.totalLine}>
+            <Text style={styles.rowText}>Vendedor responsable:</Text>
+            <Text style={styles.rowText}>{formal?.issuerContactName || proposal.salesOwner || "Sin asignar"}</Text>
+          </View>
+          <View style={styles.totalLine}>
             <Text style={styles.rowText}>Emisor:</Text>
             <Text style={styles.rowText}>{formal?.issuerCompany || tenantName}</Text>
           </View>
+          <View style={styles.totalLine}>
+            <Text style={styles.rowText}>Cliente:</Text>
+            <Text style={styles.rowText}>{formal?.recipientCompany || "Sin definir"}</Text>
+          </View>
+          <View style={styles.totalLine}>
+            <Text style={styles.rowText}>Contacto receptor:</Text>
+            <Text style={styles.rowText}>{formal?.recipientContactName || "N/D"} {formal?.recipientContactTitle ? `· ${formal.recipientContactTitle}` : ""}</Text>
+          </View>
+          <View style={styles.totalLine}>
+            <Text style={styles.rowText}>Partidas incluidas:</Text>
+            <Text style={styles.rowText}>{lines.length}</Text>
+          </View>
+          <View style={styles.totalLine}>
+            <Text style={styles.rowText}>Subtotal sin IVA:</Text>
+            <Text style={styles.rowText}>{formatCurrency(totalRevenue)}</Text>
+          </View>
+          <View style={styles.totalLineStrong}>
+            <Text style={styles.rowText}>Total con IVA (16%):</Text>
+            <Text style={styles.rowText}>{formatCurrency(grandTotal)}</Text>
+          </View>
         </View>
+        <Text style={styles.narrativeText}>
+          Para cualquier aclaracion relacionada con esta propuesta, favor de contactar a {formal?.issuerContactName || proposal.salesOwner || "el representante comercial"} al correo {formal?.issuerEmail || "no disponible"}{formal?.issuerPhone ? ` o al telefono ${formal.issuerPhone}` : ""}.
+        </Text>
         <Text
           fixed
           render={({ pageNumber, totalPages }: { pageNumber: number; totalPages: number }) =>

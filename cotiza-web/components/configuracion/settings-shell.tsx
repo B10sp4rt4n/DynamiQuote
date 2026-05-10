@@ -2,18 +2,21 @@
 
 import { useState, type FormEvent } from "react";
 
+import type { MarginPolicySummary } from "@/lib/db/margin-policies";
 import type { AppUserSummary, IssuerProfileSummary } from "@/lib/db/settings";
 import type { ActiveTenantOption } from "@/lib/db/tenants";
 
 type SettingsShellProps = {
   canManageAllTenants?: boolean;
+  canManagePolicy?: boolean;
   issuerProfiles: IssuerProfileSummary[];
+  marginPolicy: MarginPolicySummary;
   tenantOptions?: ActiveTenantOption[];
   tenantName: string;
   users: AppUserSummary[];
 };
 
-type Tab = "users" | "issuer";
+type Tab = "users" | "issuer" | "policy";
 
 type TestEmailTemplate = "alta" | "mantenimiento" | "promocion";
 
@@ -321,11 +324,9 @@ function UsersTab({
 }
 
 function CreateUserForm({
-  canManageAllTenants,
   onCreated,
   tenantOptions,
 }: {
-  canManageAllTenants: boolean;
   onCreated: (user: AppUserSummary) => void;
   tenantOptions: ActiveTenantOption[];
 }) {
@@ -455,7 +456,7 @@ function CreateUserForm({
         <input
           className="rounded-lg border border-zinc-400 bg-white px-3 py-2 text-sm text-zinc-900 placeholder:text-zinc-500"
           onChange={(event) => setUserId(event.target.value)}
-          placeholder="ID de Clerk (opcional)"
+          placeholder="ID interno/admin (opcional)"
           value={userId}
         />
         {canSelectTenant ? (
@@ -718,6 +719,156 @@ function TestEmailForm({ tenantName }: { tenantName: string }) {
   );
 }
 
+function MarginPolicyTab({
+  canManagePolicy = false,
+  initial,
+}: {
+  canManagePolicy?: boolean;
+  initial: MarginPolicySummary;
+}) {
+  const [minMarginPct, setMinMarginPct] = useState(String(initial.minMarginPct));
+  const [maxMarginPct, setMaxMarginPct] = useState(String(initial.maxMarginPct));
+  const [highPreapprovalMarginPct, setHighPreapprovalMarginPct] = useState(String(initial.highPreapprovalMarginPct));
+  const [requireObserverApproval, setRequireObserverApproval] = useState(initial.requireObserverApproval);
+  const [policy, setPolicy] = useState(initial);
+  const [pending, setPending] = useState(false);
+  const [error, setError] = useState<string | null>(null);
+  const [success, setSuccess] = useState<string | null>(null);
+
+  async function onSubmit(event: FormEvent<HTMLFormElement>) {
+    event.preventDefault();
+
+    if (!canManagePolicy) {
+      setError("No tienes permisos para editar la politica de margen.");
+      return;
+    }
+
+    setPending(true);
+    setError(null);
+    setSuccess(null);
+
+    try {
+      const payload = {
+        highPreapprovalMarginPct: Number(highPreapprovalMarginPct),
+        maxMarginPct: Number(maxMarginPct),
+        minMarginPct: Number(minMarginPct),
+        requireObserverApproval,
+      };
+
+      const res = await fetch("/api/settings/margin-policy", {
+        body: JSON.stringify(payload),
+        headers: { "Content-Type": "application/json" },
+        method: "PUT",
+      });
+
+      const data = (await res.json()) as { error?: string; policy?: MarginPolicySummary };
+
+      if (!res.ok || !data.policy) {
+        throw new Error(data.error ?? "No se pudo actualizar la politica de margen");
+      }
+
+      setPolicy(data.policy);
+      setSuccess("Politica de margen guardada correctamente.");
+    } catch (err) {
+      setError(err instanceof Error ? err.message : "Error desconocido");
+    } finally {
+      setPending(false);
+    }
+  }
+
+  return (
+    <form className="grid gap-4 rounded-xl border border-zinc-200 bg-zinc-50 p-4" onSubmit={onSubmit}>
+      <div className="flex flex-col gap-1">
+        <p className="text-sm font-semibold text-zinc-900">Politica de margen del tenant</p>
+        <p className="text-xs text-zinc-600">
+          Define el rango de liberacion y el umbral alto para preaprobacion informativa.
+        </p>
+      </div>
+
+      <div className="grid gap-3 md:grid-cols-2">
+        <label className="grid gap-1 text-sm text-zinc-700">
+          Margen minimo permitido
+          <input
+            className="rounded-lg border border-zinc-400 bg-white px-3 py-2 text-sm text-zinc-900"
+            disabled={!canManagePolicy}
+            max={99.99}
+            min={0}
+            onChange={(event) => setMinMarginPct(event.target.value)}
+            step={0.01}
+            type="number"
+            value={minMarginPct}
+          />
+        </label>
+        <label className="grid gap-1 text-sm text-zinc-700">
+          Margen maximo permitido
+          <input
+            className="rounded-lg border border-zinc-400 bg-white px-3 py-2 text-sm text-zinc-900"
+            disabled={!canManagePolicy}
+            max={99.99}
+            min={0}
+            onChange={(event) => setMaxMarginPct(event.target.value)}
+            step={0.01}
+            type="number"
+            value={maxMarginPct}
+          />
+        </label>
+        <label className="grid gap-1 text-sm text-zinc-700">
+          Umbral alto para preaprobacion informativa
+          <input
+            className="rounded-lg border border-zinc-400 bg-white px-3 py-2 text-sm text-zinc-900"
+            disabled={!canManagePolicy}
+            max={99.99}
+            min={0}
+            onChange={(event) => setHighPreapprovalMarginPct(event.target.value)}
+            step={0.01}
+            type="number"
+            value={highPreapprovalMarginPct}
+          />
+        </label>
+        <label className="flex items-center gap-3 rounded-lg border border-zinc-200 bg-white px-3 py-2 text-sm text-zinc-700">
+          <input
+            checked={requireObserverApproval}
+            disabled={!canManagePolicy}
+            onChange={(event) => setRequireObserverApproval(event.target.checked)}
+            type="checkbox"
+          />
+          Requerir observador adicional para autorizacion final
+        </label>
+      </div>
+
+      <div className="rounded-lg border border-zinc-200 bg-white px-3 py-3 text-xs text-zinc-600">
+        <p className="font-medium text-zinc-800">Owner obligatorio siempre</p>
+        <p>
+          El sistema fuerza la aprobacion de Owner para autorizar propuestas. Este control no es editable desde la UI.
+        </p>
+      </div>
+
+      <div className="grid gap-2 text-xs text-zinc-600 md:grid-cols-2">
+        <div>
+          <span className="font-medium text-zinc-800">Tenant:</span> {policy.tenantId}
+        </div>
+        <div>
+          <span className="font-medium text-zinc-800">Actualizado:</span>{" "}
+          {policy.updatedAt ? formatDate(policy.updatedAt) : "Sin cambios guardados"}
+        </div>
+      </div>
+
+      {error ? <p className="text-xs font-medium text-rose-800">{error}</p> : null}
+      {success ? <p className="text-xs font-medium text-emerald-800">{success}</p> : null}
+
+      <div>
+        <button
+          className="rounded-lg bg-zinc-900 px-4 py-2 text-sm font-medium text-white transition hover:bg-zinc-700 disabled:opacity-60"
+          disabled={!canManagePolicy || pending}
+          type="submit"
+        >
+          {pending ? "Guardando..." : "Guardar politica"}
+        </button>
+      </div>
+    </form>
+  );
+}
+
 function IssuerProfilesTab({ issuerProfiles: initial }: { issuerProfiles: IssuerProfileSummary[] }) {
   const [profiles, setProfiles] = useState(initial);
   const [pending, setPending] = useState<string | null>(null);
@@ -799,8 +950,10 @@ function IssuerProfilesTab({ issuerProfiles: initial }: { issuerProfiles: Issuer
 export function SettingsShell({
   users,
   issuerProfiles,
+  marginPolicy,
   tenantName,
   canManageAllTenants = false,
+  canManagePolicy = false,
   tenantOptions = [],
 }: SettingsShellProps) {
   const [tab, setTab] = useState<Tab>("users");
@@ -828,6 +981,9 @@ export function SettingsShell({
         <button className={tabClass("users")} onClick={() => setTab("users")} type="button">
           Usuarios ({usersState.length})
         </button>
+        <button className={tabClass("policy")} onClick={() => setTab("policy")} type="button">
+          Política margen
+        </button>
         <button className={tabClass("issuer")} onClick={() => setTab("issuer")} type="button">
           Perfiles emisor ({issuerProfiles.length})
         </button>
@@ -837,7 +993,6 @@ export function SettingsShell({
         {tab === "users" && (
           <div className="space-y-4">
             <CreateUserForm
-              canManageAllTenants={canManageAllTenants}
               onCreated={pushUser}
               tenantOptions={tenantOptions}
             />
@@ -855,6 +1010,7 @@ export function SettingsShell({
             />
           </div>
         )}
+        {tab === "policy" && <MarginPolicyTab canManagePolicy={canManagePolicy} initial={marginPolicy} />}
         {tab === "issuer" && <IssuerProfilesTab issuerProfiles={issuerProfiles} />}
       </div>
     </section>

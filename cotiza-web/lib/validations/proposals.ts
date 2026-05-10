@@ -64,7 +64,21 @@ export const proposalImportPayloadSchema = z.object({
   items: z.array(proposalImportItemSchema).min(1),
 });
 
+export const proposalApprovalDecisionSchema = z.enum(["approved", "rejected"]);
+
+export const registerProposalApprovalSchema = z
+  .object({
+    decision: proposalApprovalDecisionSchema,
+    reason: z.string().trim().max(1000).optional(),
+  })
+  .refine((value) => value.decision === "approved" || Boolean(value.reason?.trim()), {
+    message: "Debes incluir motivo cuando rechazas una propuesta",
+    path: ["reason"],
+  });
+
 export type ProposalStatus = z.infer<typeof proposalStatusSchema>;
 export type CreateProposalFromQuoteInput = z.infer<typeof createProposalFromQuoteSchema>;
 export type UpdateProposalWorkflowInput = z.infer<typeof updateProposalWorkflowSchema>;
 export type ProposalImportItemInput = z.infer<typeof proposalImportItemSchema>;
+export type ProposalApprovalDecision = z.infer<typeof proposalApprovalDecisionSchema>;
+export type RegisterProposalApprovalInput = z.infer<typeof registerProposalApprovalSchema>;

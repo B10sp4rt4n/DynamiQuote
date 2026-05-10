@@ -317,6 +317,7 @@ export function QuoteLineEditor({
       return;
     }
 
+    // eslint-disable-next-line react-hooks/set-state-in-effect
     setCompareState(null);
     setLineDeltaMap({});
     setSelectedQuoteId(forcedSelectedQuoteId);

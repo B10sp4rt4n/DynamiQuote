@@ -38,6 +38,23 @@ type UpdateManagedUserArgs = {
   payload: UpdateManagedUserInput;
 };
 
+type RelinkManagedUserIdArgs = {
+  currentUserId: string;
+  newUserId: string;
+  tenantId: string;
+};
+
+type SyncManagedUserFromClerkArgs = {
+  clerkUserId: string;
+  externalId: string | null;
+  firstName: string;
+  lastName: string;
+  localUserId: string | null;
+  normalizedEmail: string;
+  role: "admin" | "owner" | "user";
+  tenantId: string;
+};
+
 export async function getAppUsersByTenant(tenantId: string): Promise<AppUserSummary[]> {
   const rows = await prisma.app_users.findMany({
     orderBy: [{ active: "desc" }, { created_at: "asc" }],
@@ -344,6 +361,179 @@ export async function createManagedUserByTenant({
     tenantName: created.tenants?.name ?? tenant.name,
     userId: created.user_id,
   };
+}
+
+export async function relinkManagedUserIdByTenant({
+  currentUserId,
+  newUserId,
+  tenantId,
+}: RelinkManagedUserIdArgs): Promise<AppUserSummary | null> {
+  const current = await prisma.app_users.findFirst({
+    select: {
+      user_id: true,
+    },
+    where: {
+      tenant_id: tenantId,
+      user_id: currentUserId,
+    },
+  });
+
+  if (!current) return null;
+
+  const duplicate = await prisma.app_users.findFirst({
+    select: {
+      user_id: true,
+    },
+    where: {
+      user_id: newUserId,
+    },
+  });
+
+  if (duplicate && duplicate.user_id !== currentUserId) {
+    throw new Error("DUPLICATE_USER_ID");
+  }
+
+  const updated = await prisma.app_users.update({
+    data: { user_id: newUserId },
+    select: {
+      active: true,
+      alias: true,
+      created_at: true,
+      first_name: true,
+      last_name: true,
+      role: true,
+      seller_code: true,
+      tenant_id: true,
+      tenants: {
+        select: {
+          name: true,
+        },
+      },
+      user_id: true,
+    },
+    where: { user_id: currentUserId },
+  });
+
+  return {
+    active: updated.active,
+    alias: updated.alias,
+    createdAt: updated.created_at.toISOString(),
+    firstName: updated.first_name,
+    lastName: updated.last_name,
+    role: updated.role,
+    sellerCode: updated.seller_code,
+    subtenantKey: `${updated.tenant_id ?? "sin-tenant"}:${updated.user_id}`,
+    tenantId: updated.tenant_id,
+    tenantName: updated.tenants?.name ?? null,
+    userId: updated.user_id,
+  };
+}
+
+function normalizeAliasFromEmail(email: string): string {
+  const localPart = email.split("@")[0] ?? "usuario";
+  const sanitized = localPart.toLowerCase().replace(/[^a-z0-9._-]/g, "");
+  return sanitized.length >= 3 ? sanitized : `user_${crypto.randomUUID().slice(0, 8)}`;
+}
+
+export async function syncManagedUserFromClerkUserCreated({
+  clerkUserId,
+  externalId,
+  firstName,
+  lastName,
+  localUserId,
+  normalizedEmail,
+  role,
+  tenantId,
+}: SyncManagedUserFromClerkArgs): Promise<AppUserSummary | null> {
+  const updatePayload: UpdateManagedUserInput = {
+    active: true,
+    firstName,
+    lastName,
+    role,
+  };
+
+  const existingByClerkId = await prisma.app_users.findFirst({
+    select: { user_id: true },
+    where: {
+      tenant_id: tenantId,
+      user_id: clerkUserId,
+    },
+  });
+
+  if (existingByClerkId) {
+    return updateManagedUserByTenant({
+      tenantId,
+      userId: clerkUserId,
+      payload: updatePayload,
+    });
+  }
+
+  const candidateIds = Array.from(
+    new Set(
+      [localUserId, externalId]
+        .filter((value): value is string => typeof value === "string" && value.trim().length > 0)
+        .map((value) => value.trim())
+        .filter((value) => value !== clerkUserId),
+    ),
+  );
+
+  for (const candidateId of candidateIds) {
+    const existingCandidate = await prisma.app_users.findFirst({
+      select: { user_id: true },
+      where: {
+        tenant_id: tenantId,
+        user_id: candidateId,
+      },
+    });
+
+    if (!existingCandidate) continue;
+
+    try {
+      await relinkManagedUserIdByTenant({
+        currentUserId: candidateId,
+        newUserId: clerkUserId,
+        tenantId,
+      });
+    } catch (error) {
+      if (!(error instanceof Error) || error.message !== "DUPLICATE_USER_ID") {
+        throw error;
+      }
+    }
+
+    const relinkedUpdated = await updateManagedUserByTenant({
+      tenantId,
+      userId: clerkUserId,
+      payload: updatePayload,
+    });
+
+    if (relinkedUpdated) {
+      return relinkedUpdated;
+    }
+  }
+
+  const baseAlias = normalizeAliasFromEmail(normalizedEmail);
+  for (let attempt = 0; attempt < 5; attempt += 1) {
+    const alias = attempt === 0 ? baseAlias : `${baseAlias}_${attempt}`;
+    const created = await createManagedUserByTenant({
+      payload: {
+        alias,
+        email: normalizedEmail,
+        firstName,
+        lastName,
+        role,
+        sellerCode: null,
+        tenantId,
+        userId: clerkUserId,
+      },
+      targetTenantId: tenantId,
+    });
+
+    if (created) {
+      return created;
+    }
+  }
+
+  return null;
 }
 
 export async function getIssuerProfilesByTenant(

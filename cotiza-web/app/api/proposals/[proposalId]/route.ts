@@ -96,7 +96,11 @@ export async function PUT(request: Request, context: RouteContext) {
   }
 
   try {
-    const updated = await updateProposalWorkflowByTenant(tenant.id, proposalId, parsed.data);
+    const updated = await updateProposalWorkflowByTenant(tenant.id, proposalId, parsed.data, {
+      isSuperAdmin: tenant.isSuperAdmin,
+      userId: tenant.userId,
+      userRole: tenant.userRole,
+    });
 
     if (!updated) {
       return NextResponse.json({ error: "Propuesta no encontrada" }, { status: 404 });
