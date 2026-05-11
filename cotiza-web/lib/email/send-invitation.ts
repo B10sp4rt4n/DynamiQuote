@@ -1,5 +1,7 @@
 import "server-only";
 
+import { resolveResendConfig } from "@/lib/email/resend";
+
 export type InvitationEmailPayload = {
   to: string;
   firstName: string;
@@ -81,10 +83,9 @@ function buildInvitationHtml(payload: InvitationEmailPayload): string {
 }
 
 export async function sendInvitationEmail(payload: InvitationEmailPayload): Promise<InvitationEmailResult> {
-  const apiKey =
-    process.env["RESEND_API_KEY"]?.trim() || process.env["API_RESEND_API_KEY"]?.trim() || "";
+  const resendClient = await resolveResendConfig();
 
-  if (!apiKey) {
+  if (!resendClient.client) {
     console.warn("[email] RESEND_API_KEY/API_RESEND_API_KEY no configurada, correo de invitación omitido.");
     return {
       sent: false,
@@ -93,15 +94,9 @@ export async function sendInvitationEmail(payload: InvitationEmailPayload): Prom
   }
 
   try {
-    const { Resend } = await import("resend");
-    const resend = new Resend(apiKey);
+    const from = resendClient.from;
 
-    const configuredFrom = process.env["RESEND_FROM"]?.trim() || "";
-    const from = configuredFrom.includes("@")
-      ? configuredFrom
-      : "Cotiza <onboarding@resend.dev>";
-
-    const { error } = await resend.emails.send({
+    const { error } = await resendClient.client.emails.send({
       from,
       to: [payload.to],
       subject: `${payload.inviterName} te invitó a ${payload.tenantName} en Cotiza`,

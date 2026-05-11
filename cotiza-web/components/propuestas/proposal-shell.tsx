@@ -198,6 +198,8 @@ export function ProposalShell({ proposals, tenantName }: ProposalShellProps) {
   const [approvalGate, setApprovalGate] = useState<ProposalApprovalGateView | null>(null);
   const [approvalPending, setApprovalPending] = useState(false);
   const [approvalReason, setApprovalReason] = useState("");
+  const [emailStatus, setEmailStatus] = useState<"idle" | "sending" | "success" | "error">("idle");
+  const [emailMessage, setEmailMessage] = useState<string | null>(null);
   const [listFilter, setListFilter] = useState<ProposalListFilter>("all");
   const [searchQuery, setSearchQuery] = useState("");
   const [sortBy, setSortBy] = useState<ProposalSort>("date_desc");
@@ -402,6 +404,8 @@ export function ProposalShell({ proposals, tenantName }: ProposalShellProps) {
     setSaveStatus("idle");
     setErrorMessage(null);
     setApprovalReason("");
+    setEmailStatus("idle");
+    setEmailMessage(null);
   }
 
   async function loadProposalDetail(proposalId: string) {
@@ -781,6 +785,41 @@ export function ProposalShell({ proposals, tenantName }: ProposalShellProps) {
     } catch (error) {
       setImportStatus("error");
       setImportMessage(error instanceof Error ? error.message : "Error interno");
+    }
+  }
+
+  async function handleSendEmailProposal() {
+    if (!selectedProposal || !recipientEmail) {
+      setEmailStatus("error");
+      setEmailMessage("Falta correo del destinatario");
+      return;
+    }
+
+    setEmailStatus("sending");
+    setEmailMessage(null);
+
+    try {
+      const response = await fetch(`/api/proposals/${selectedProposal.proposalId}/send-email`, {
+        body: JSON.stringify({
+          recipientEmail: recipientEmail.trim(),
+        }),
+        headers: {
+          "Content-Type": "application/json",
+        },
+        method: "POST",
+      });
+
+      const data = (await response.json().catch(() => null)) as { error?: string } | null;
+
+      if (!response.ok) {
+        throw new Error(data?.error ?? "No fue posible enviar el correo al cliente");
+      }
+
+      setEmailStatus("success");
+      setEmailMessage("Correo enviado correctamente al cliente.");
+    } catch (error) {
+      setEmailStatus("error");
+      setEmailMessage(error instanceof Error ? error.message : "Error interno al enviar correo");
     }
   }
 
@@ -1278,6 +1317,17 @@ export function ProposalShell({ proposals, tenantName }: ProposalShellProps) {
                   >
                     Descargar Excel
                   </a>
+                  {(selectedStatus === "approved" || selectedStatus === "sent") ? (
+                    <button
+                      className="rounded-lg border border-purple-300 bg-purple-50 px-4 py-2 text-sm font-medium text-purple-700 transition hover:bg-purple-100 disabled:cursor-not-allowed disabled:opacity-60"
+                      disabled={emailStatus === "sending" || !recipientEmail}
+                      onClick={handleSendEmailProposal}
+                      title={!recipientEmail ? "Falta correo del destinatario" : ""}
+                      type="button"
+                    >
+                      {emailStatus === "sending" ? "Enviando correo..." : "Enviar propuesta por correo"}
+                    </button>
+                  ) : null}
                 </div>
                 {saveStatus === "success" ? (
                   <p className="text-sm text-emerald-700">Cambios guardados correctamente.</p>
@@ -1286,6 +1336,11 @@ export function ProposalShell({ proposals, tenantName }: ProposalShellProps) {
                   <p className="text-sm text-rose-700">{errorMessage ?? "Error desconocido"}</p>
                 ) : null}
               </div>
+              {emailMessage ? (
+                <p className={`text-sm ${emailStatus === "error" ? "text-rose-700" : "text-emerald-700"}`}>
+                  {emailMessage}
+                </p>
+              ) : null}
 
               <div className="rounded-lg border border-dashed border-zinc-300 bg-white p-3">
                 <p className="text-xs uppercase tracking-[0.18em] text-zinc-500">Importar partidas</p>

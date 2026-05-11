@@ -5,6 +5,7 @@ import { auth } from "@clerk/nextjs/server";
 import { prisma } from "@/lib/db/prisma";
 
 const TENANT_OVERRIDE_COOKIE = "tenant_override_slug";
+const DEV_CLERK_SESSION_COOKIE = "dev_clerk_client_session";
 
 export async function POST(request: Request) {
   if (process.env.NODE_ENV === "production") {
@@ -12,8 +13,11 @@ export async function POST(request: Request) {
   }
 
   const { userId } = await auth();
+  const hasDevClientSession =
+    process.env.NODE_ENV === "development" &&
+    request.headers.get("cookie")?.includes(`${DEV_CLERK_SESSION_COOKIE}=1`);
 
-  if (!userId) {
+  if (!userId && !hasDevClientSession) {
     return NextResponse.json({ error: "No autorizado" }, { status: 401 });
   }
 

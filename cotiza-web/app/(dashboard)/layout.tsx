@@ -1,5 +1,6 @@
 import { UserButton } from "@clerk/nextjs";
 import { auth } from "@clerk/nextjs/server";
+import { cookies } from "next/headers";
 import Link from "next/link";
 import { redirect } from "next/navigation";
 
@@ -10,13 +11,19 @@ type DashboardLayoutProps = {
   children: React.ReactNode;
 };
 
+const DEV_CLERK_SESSION_COOKIE = "dev_clerk_client_session";
+
 export default async function DashboardLayout({ children }: DashboardLayoutProps) {
   const clerkEnabled = hasClerkCredentials();
 
   if (clerkEnabled) {
     const { userId } = await auth();
+    const cookieStore = await cookies();
+    const hasDevClientSession =
+      process.env.NODE_ENV === "development" &&
+      cookieStore.get(DEV_CLERK_SESSION_COOKIE)?.value === "1";
 
-    if (!userId) {
+    if (!userId && !hasDevClientSession) {
       redirect("/sign-in");
     }
   }

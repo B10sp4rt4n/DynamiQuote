@@ -1,5 +1,7 @@
 import "server-only";
 
+import { resolveResendConfig } from "@/lib/email/resend";
+
 export type TestEmailTemplate = "alta" | "mantenimiento" | "promocion";
 
 export type SendTestEmailPayload = {
@@ -84,9 +86,9 @@ function buildTestEmailHtml(payload: SendTestEmailPayload): string {
 }
 
 export async function sendTestEmail(payload: SendTestEmailPayload): Promise<SendTestEmailResult> {
-  const apiKey = process.env["RESEND_API_KEY"]?.trim() || process.env["API_RESEND_API_KEY"]?.trim() || "";
+  const resendClient = await resolveResendConfig();
 
-  if (!apiKey) {
+  if (!resendClient.client) {
     return {
       sent: false,
       warning: "No hay API key de Resend configurada en Vercel (RESEND_API_KEY).",
@@ -94,16 +96,12 @@ export async function sendTestEmail(payload: SendTestEmailPayload): Promise<Send
   }
 
   try {
-    const { Resend } = await import("resend");
-    const resend = new Resend(apiKey);
-
-    const configuredFrom = process.env["RESEND_FROM"]?.trim() || "";
-    const from = configuredFrom.includes("@") ? configuredFrom : "Cotiza <onboarding@resend.dev>";
+    const from = resendClient.from;
 
     const templateCopy = getTemplateCopy(payload.template);
     const subject = payload.customSubject?.trim() || `[Cotiza] ${templateCopy.title}`;
 
-    const { error } = await resend.emails.send({
+    const { error } = await resendClient.client.emails.send({
       from,
       to: [payload.to],
       subject,

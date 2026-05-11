@@ -1,8 +1,11 @@
 import { SignUp } from "@clerk/nextjs";
+import { auth } from "@clerk/nextjs/server";
+import { redirect } from "next/navigation";
 
+import { ClientAuthRedirect } from "@/components/auth/client-auth-redirect";
 import { hasClerkCredentials } from "@/lib/auth/clerk";
 
-export default function SignUpPage() {
+export default async function SignUpPage() {
   if (!hasClerkCredentials()) {
     return (
       <main className="flex min-h-screen items-center justify-center bg-zinc-50 px-6">
@@ -16,9 +19,18 @@ export default function SignUpPage() {
     );
   }
 
+  const { userId } = await auth();
+
+  if (userId) {
+    redirect("/cotizaciones");
+  }
+
   return (
     <main className="flex min-h-screen items-center justify-center bg-zinc-50 px-6">
-      <SignUp forceRedirectUrl="/cotizaciones" path="/sign-up" routing="path" signInUrl="/sign-in" />
+      <div className="w-full max-w-md">
+        <ClientAuthRedirect target="/cotizaciones" />
+        <SignUp fallbackRedirectUrl="/cotizaciones" path="/sign-up" routing="path" signInUrl="/sign-in" />
+      </div>
     </main>
   );
 }

@@ -1,8 +1,15 @@
 import { SignIn } from "@clerk/nextjs";
+import { auth } from "@clerk/nextjs/server";
+import { redirect } from "next/navigation";
 
+import { ClientAuthRedirect } from "@/components/auth/client-auth-redirect";
 import { hasClerkCredentials } from "@/lib/auth/clerk";
 
-export default function SignInPage() {
+type SignInPageProps = {
+  searchParams: Promise<{ redirect_url?: string }>;
+};
+
+export default async function SignInPage({ searchParams }: SignInPageProps) {
   if (!hasClerkCredentials()) {
     return (
       <main className="flex min-h-screen items-center justify-center bg-zinc-50 px-6">
@@ -16,9 +23,23 @@ export default function SignInPage() {
     );
   }
 
+  const { userId } = await auth();
+  const params = await searchParams;
+  const requestedRedirect = typeof params.redirect_url === "string" ? params.redirect_url : null;
+
+  if (userId) {
+    const target = requestedRedirect && requestedRedirect.startsWith("/")
+      ? requestedRedirect
+      : "/cotizaciones";
+    redirect(target);
+  }
+
   return (
     <main className="flex min-h-screen items-center justify-center bg-zinc-50 px-6">
-      <SignIn forceRedirectUrl="/cotizaciones" path="/sign-in" routing="path" signUpUrl="/sign-up" />
+      <div className="w-full max-w-md">
+        <ClientAuthRedirect target={requestedRedirect && requestedRedirect.startsWith("/") ? requestedRedirect : "/cotizaciones"} />
+        <SignIn fallbackRedirectUrl="/cotizaciones" path="/sign-in" routing="path" signUpUrl="/sign-up" />
+      </div>
     </main>
   );
 }

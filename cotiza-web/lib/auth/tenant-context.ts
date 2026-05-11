@@ -41,8 +41,159 @@ type TenantClaims = {
 };
 
 const TENANT_OVERRIDE_COOKIE = "tenant_override_slug";
+const DEV_CLERK_SESSION_COOKIE = "dev_clerk_client_session";
+const DEV_CLERK_USER_ID_COOKIE = "dev_clerk_user_id";
+const DEV_CLERK_TENANT_ID_COOKIE = "dev_clerk_tenant_id";
+const DEV_CLERK_TENANT_SLUG_COOKIE = "dev_clerk_tenant_slug";
+const DEV_CLERK_EMAIL_ALIAS_COOKIE = "dev_clerk_email_alias";
+const DEV_CLERK_FIRST_NAME_COOKIE = "dev_clerk_first_name";
+const DEV_CLERK_LAST_NAME_COOKIE = "dev_clerk_last_name";
 const SUPER_ADMIN_ROLES = new Set<string>(["superadmin", "super_admin", "platform_admin", "root"]);
 const TENANT_ADMIN_ROLES = new Set<string>(["owner", "admin"]);
+
+async function resolveBootstrapTenantContext(
+  tenantOverrideSlug: string | null,
+): Promise<TenantContext | null> {
+  const tenant =
+    (tenantOverrideSlug
+      ? await resolveTenantByReference({ tenantId: null, tenantSlug: tenantOverrideSlug })
+      : null) ?? (await getBootstrapTenant());
+
+  return tenant
+    ? {
+        accessScope: "tenant",
+        ...tenant,
+        authMode: "bootstrap",
+        isSuperAdmin: false,
+        isTenantPrimaryAdmin: false,
+        subtenantKey: null,
+        userRole: "user",
+        userDisplayName: null,
+        userId: null,
+      }
+    : null;
+}
+
+async function resolveDevelopmentTenantContextFromCookies(
+  cookieStore: Awaited<ReturnType<typeof cookies>>,
+  tenantOverrideSlug: string | null,
+): Promise<TenantContext | null> {
+  const userId = readString(cookieStore.get(DEV_CLERK_USER_ID_COOKIE)?.value);
+  const tenantId = readString(cookieStore.get(DEV_CLERK_TENANT_ID_COOKIE)?.value);
+  const tenantSlug = readString(cookieStore.get(DEV_CLERK_TENANT_SLUG_COOKIE)?.value);
+  const emailAlias = readString(cookieStore.get(DEV_CLERK_EMAIL_ALIAS_COOKIE)?.value)?.toLowerCase() ?? null;
+  const firstName = readString(cookieStore.get(DEV_CLERK_FIRST_NAME_COOKIE)?.value);
+  const lastName = readString(cookieStore.get(DEV_CLERK_LAST_NAME_COOKIE)?.value);
+
+  let appUser = userId
+    ? await prisma.app_users.findUnique({
+        select: {
+          active: true,
+          alias: true,
+          first_name: true,
+          last_name: true,
+          role: true,
+          tenant_id: true,
+          user_id: true,
+        },
+        where: {
+          user_id: userId,
+        },
+      })
+    : null;
+
+  if (!appUser && emailAlias) {
+    appUser = await prisma.app_users.findFirst({
+      orderBy: [{ created_at: "asc" }],
+      select: {
+        active: true,
+        alias: true,
+        first_name: true,
+        last_name: true,
+        role: true,
+        tenant_id: true,
+        user_id: true,
+      },
+      where: {
+        active: true,
+        alias: emailAlias,
+      },
+    });
+  }
+
+  if (!appUser && firstName && lastName) {
+    const candidates = await prisma.app_users.findMany({
+      select: {
+        active: true,
+        alias: true,
+        first_name: true,
+        last_name: true,
+        role: true,
+        tenant_id: true,
+        user_id: true,
+      },
+      where: {
+        active: true,
+        ...(tenantId
+          ? {
+              tenant_id: tenantId,
+            }
+          : {}),
+      },
+      take: 200,
+    });
+
+    appUser =
+      candidates.find(
+        (candidate) =>
+          namesLookEquivalent(firstName, candidate.first_name) && namesLookEquivalent(lastName, candidate.last_name),
+      ) ?? null;
+  }
+
+  const userRole = normalizeRole(appUser?.role);
+  const isSuperAdmin = userRole === "superadmin";
+  const shouldUseOverride = Boolean(tenantOverrideSlug) && (isSuperAdmin || process.env.NODE_ENV !== "production");
+  const fallbackTenantId = tenantId ?? appUser?.tenant_id ?? null;
+
+  const tenant =
+    (shouldUseOverride
+      ? await resolveTenantByReference({ tenantId: null, tenantSlug: tenantOverrideSlug ?? null })
+      : null) ??
+    (await resolveTenantByReference({ tenantId: fallbackTenantId, tenantSlug })) ??
+    (process.env["DEFAULT_TENANT_SLUG"] ? await getBootstrapTenant() : null);
+
+  if (!tenant) {
+    return null;
+  }
+
+  const isCrossTenantContext = !isSuperAdmin && Boolean(appUser?.tenant_id) && appUser?.tenant_id !== tenant.id;
+
+  if (isCrossTenantContext) {
+    return null;
+  }
+
+  const userDisplayName =
+    [appUser?.first_name ?? firstName, appUser?.last_name ?? lastName]
+      .filter((value) => typeof value === "string" && value.trim().length > 0)
+      .join(" ")
+      .trim() ||
+    appUser?.alias ||
+    emailAlias;
+
+  return {
+    accessScope: isSuperAdmin ? "global" : "subtenant",
+    authMode: "clerk",
+    id: tenant.id,
+    isSuperAdmin,
+    isTenantPrimaryAdmin: false,
+    name: tenant.name,
+    slug: tenant.slug,
+    subtenantKey: userId ? `${tenant.id}:${userId}` : tenant.id,
+    userDisplayName: userDisplayName || null,
+    userId,
+    userRole,
+  };
+}
 
 function normalizeIdentityToken(value: string | null | undefined): string {
   return (value ?? "")
@@ -203,31 +354,21 @@ async function resolveTenantByReference(reference: {
 export async function getCurrentTenantContext(): Promise<TenantContext | null> {
   const cookieStore = await cookies();
   const tenantOverrideSlug = readString(cookieStore.get(TENANT_OVERRIDE_COOKIE)?.value);
+  const hasDevClientSession =
+    process.env.NODE_ENV === "development" &&
+    cookieStore.get(DEV_CLERK_SESSION_COOKIE)?.value === "1";
 
   if (!hasClerkCredentials()) {
-    const tenant =
-      (tenantOverrideSlug
-        ? await resolveTenantByReference({ tenantId: null, tenantSlug: tenantOverrideSlug })
-        : null) ?? (await getBootstrapTenant());
-
-    return tenant
-      ? {
-          accessScope: "tenant",
-          ...tenant,
-          authMode: "bootstrap",
-          isSuperAdmin: false,
-          isTenantPrimaryAdmin: false,
-          subtenantKey: null,
-          userRole: "user",
-          userDisplayName: null,
-          userId: null,
-        }
-      : null;
+    return resolveBootstrapTenantContext(tenantOverrideSlug);
   }
 
   const { sessionClaims, userId } = await auth();
 
   if (!userId) {
+    if (hasDevClientSession) {
+      return resolveDevelopmentTenantContextFromCookies(cookieStore, tenantOverrideSlug);
+    }
+
     return null;
   }
 
