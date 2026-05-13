@@ -346,7 +346,7 @@ export function ProposalPdfDocument({ proposal, tenantName }: ProposalPdfInput) 
         </View>
 
         <Text style={styles.narrativeText}>
-          C. {formal?.recipientContactName || "Cliente"}: por medio de la presente, {formal?.issuerCompany || tenantName} presenta esta propuesta comercial con base en la informacion vigente de la cotizacion {proposal.origin ?? "N/D"}. Esta propuesta mantiene trazabilidad por tenant, vendedor responsable y estructura de costos/venta por partida.
+          {formal?.recipientContactName || "Cliente"}: Adjuntamos la propuesta comercial para {formal?.recipientCompany || "su negocio"}. A continuación encontrará el detalle de partidas, precios y condiciones de negociación.
         </Text>
 
         <Text style={styles.sectionHeader}>Detalle de la propuesta</Text>
@@ -385,10 +385,6 @@ export function ProposalPdfDocument({ proposal, tenantName }: ProposalPdfInput) 
             <View style={styles.totalLine}>
               <Text style={styles.rowText}>IVA (16%):</Text>
               <Text style={styles.rowText}>{formatCurrency(iva)}</Text>
-            </View>
-            <View style={styles.totalLine}>
-              <Text style={styles.rowText}>Utilidad:</Text>
-              <Text style={styles.rowText}>{formatCurrency(grossProfit)}</Text>
             </View>
             <View style={styles.totalLineStrong}>
               <Text style={styles.rowText}>TOTAL:</Text>

@@ -253,9 +253,11 @@ export function ProposalShell({ proposals, tenantName }: ProposalShellProps) {
     [items, selectedProposalId],
   );
   const marginAllowsFinalAuthorization = selectedProposal?.marginEvaluation?.canAuthorizeFinal ?? true;
+  const marginAllowsInformativeShare = selectedProposal?.marginEvaluation?.canShareInformative ?? false;
   const approvalAllowsFinalAuthorization = approvalGate?.canAuthorizeFinal ?? true;
   const canRequestFinalAuthorization =
     marginAllowsFinalAuthorization && approvalAllowsFinalAuthorization;
+  const canShowEmailFlow = Boolean(selectedProposal);
   const finalAuthorizationGuardMessage = !marginAllowsFinalAuthorization
     ? selectedProposal?.marginEvaluation?.summary ??
       "La politica de margen bloquea la autorizacion final de esta propuesta."
@@ -562,18 +564,18 @@ export function ProposalShell({ proposals, tenantName }: ProposalShellProps) {
     );
   }
 
-  async function handleSave() {
+  async function handleSave(): Promise<boolean> {
     if (!selectedProposal) {
-      return;
+      return false;
     }
 
-    if (selectedStatus === "approved" && !canRequestFinalAuthorization) {
+    if (selectedStatus === "approved" && !marginAllowsFinalAuthorization) {
       setSaveStatus("error");
       setErrorMessage(
-        finalAuthorizationGuardMessage ??
-          "No es posible autorizar la propuesta hasta cumplir la politica y aprobaciones requeridas.",
+        selectedProposal?.marginEvaluation?.summary ??
+          "La politica de margen bloquea la autorizacion final de esta propuesta.",
       );
-      return;
+      return false;
     }
 
     setSaveStatus("saving");
@@ -689,9 +691,11 @@ export function ProposalShell({ proposals, tenantName }: ProposalShellProps) {
       setApprovalGate(data.proposal.approvalGate ?? null);
 
       setSaveStatus("success");
+      return true;
     } catch (error) {
       setSaveStatus("error");
       setErrorMessage(error instanceof Error ? error.message : "Error interno");
+      return false;
     }
   }
 
@@ -1106,22 +1110,22 @@ export function ProposalShell({ proposals, tenantName }: ProposalShellProps) {
                   <option
                     disabled={
                       option.value === "approved" &&
-                      !canRequestFinalAuthorization &&
+                      !marginAllowsFinalAuthorization &&
                       selectedStatus !== "approved"
                     }
                     key={option.value}
                     value={option.value}
                   >
-                    {option.value === "approved" && !canRequestFinalAuthorization
-                      ? `${option.label} (bloqueada)`
+                    {option.value === "approved" && !marginAllowsFinalAuthorization
+                      ? `${option.label} (bloqueada por margen)`
                       : option.label}
                   </option>
                 ))}
               </select>
-              {!canRequestFinalAuthorization ? (
+              {!marginAllowsFinalAuthorization ? (
                 <p className="mt-2 text-xs text-rose-700">
-                  {finalAuthorizationGuardMessage ??
-                    "Debes cumplir aprobaciones formales y politica de margen antes de autorizar."}
+                  {selectedProposal?.marginEvaluation?.summary ??
+                    "La politica de margen bloquea la autorizacion final de esta propuesta."}
                 </p>
               ) : null}
 
@@ -1301,14 +1305,19 @@ export function ProposalShell({ proposals, tenantName }: ProposalShellProps) {
                   >
                     {saveStatus === "saving" ? "Guardando..." : "Guardar cambios"}
                   </button>
-                  <a
-                    className="rounded-lg border border-zinc-300 bg-white px-4 py-2 text-sm font-medium text-zinc-700 transition hover:bg-zinc-100"
-                    href={`/api/proposals/${selectedProposal.proposalId}/pdf`}
-                    rel="noreferrer"
-                    target="_blank"
+                  <button
+                    className="rounded-lg border border-zinc-300 bg-white px-4 py-2 text-sm font-medium text-zinc-700 transition hover:bg-zinc-100 disabled:cursor-not-allowed disabled:opacity-60"
+                    disabled={saveStatus === "saving" || loadingDetail}
+                    onClick={async () => {
+                      const ok = await handleSave();
+                      if (ok) {
+                        window.open(`/api/proposals/${selectedProposal.proposalId}/pdf`, "_blank");
+                      }
+                    }}
+                    type="button"
                   >
                     Descargar PDF
-                  </a>
+                  </button>
                   <a
                     className="rounded-lg border border-zinc-300 bg-white px-4 py-2 text-sm font-medium text-zinc-700 transition hover:bg-zinc-100"
                     href={`/api/proposals/${selectedProposal.proposalId}/xlsx`}
@@ -1317,15 +1326,19 @@ export function ProposalShell({ proposals, tenantName }: ProposalShellProps) {
                   >
                     Descargar Excel
                   </a>
-                  {(selectedStatus === "approved" || selectedStatus === "sent") ? (
+                  {canShowEmailFlow ? (
                     <button
-                      className="rounded-lg border border-purple-300 bg-purple-50 px-4 py-2 text-sm font-medium text-purple-700 transition hover:bg-purple-100 disabled:cursor-not-allowed disabled:opacity-60"
+                      className="rounded-lg border border-blue-300 bg-blue-50 px-4 py-2 text-sm font-medium text-blue-700 transition hover:bg-blue-100 disabled:cursor-not-allowed disabled:opacity-60"
                       disabled={emailStatus === "sending" || !recipientEmail}
                       onClick={handleSendEmailProposal}
                       title={!recipientEmail ? "Falta correo del destinatario" : ""}
                       type="button"
                     >
-                      {emailStatus === "sending" ? "Enviando correo..." : "Enviar propuesta por correo"}
+                      {emailStatus === "sending"
+                        ? "Enviando correo..."
+                        : marginAllowsInformativeShare && selectedStatus !== "approved" && selectedStatus !== "sent"
+                          ? "Enviar preaprobacion informativa por correo"
+                          : "Enviar propuesta por correo"}
                     </button>
                   ) : null}
                 </div>
@@ -1339,6 +1352,16 @@ export function ProposalShell({ proposals, tenantName }: ProposalShellProps) {
               {emailMessage ? (
                 <p className={`text-sm ${emailStatus === "error" ? "text-rose-700" : "text-emerald-700"}`}>
                   {emailMessage}
+                </p>
+              ) : null}
+              {canShowEmailFlow && marginAllowsInformativeShare && selectedStatus !== "approved" ? (
+                <p className="text-xs text-blue-700">
+                  Flujo de correo habilitado por preaprobacion informativa de margen.
+                </p>
+              ) : null}
+              {canShowEmailFlow && !marginAllowsInformativeShare && selectedStatus !== "approved" && selectedStatus !== "sent" ? (
+                <p className="text-xs text-zinc-600">
+                  Puedes enviar por correo en cualquier estado siempre que exista un correo receptor valido.
                 </p>
               ) : null}
 

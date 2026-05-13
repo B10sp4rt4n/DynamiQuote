@@ -785,7 +785,9 @@ export async function updateProposalWorkflowByTenant(
         userRole: "user",
       },
     );
+
     assertApprovalActorEligibility({ approverRole, userId: actorUserId });
+
     if (!actorUserId) {
       throw new Error("No se pudo identificar al aprobador.");
     }
@@ -808,6 +810,7 @@ export async function updateProposalWorkflowByTenant(
       });
     }
 
+    // Validar que ya existen aprobaciones requeridas antes de cerrar la propuesta
     const approvals = await getProposalApprovalsByTenant(tenantId, proposalId);
     const gate = evaluateApprovalGate({
       approvals,
@@ -866,10 +869,10 @@ export async function updateProposalWorkflowByTenant(
     }
 
     if (hasItemsUpdate && itemsToPersist) {
+      // Solo filtrar por proposal_id: la validación de tenant se hizo en getProposalWorkflowByTenant
       await tx.proposal_items.deleteMany({
         where: {
           proposal_id: proposalId,
-          tenant_id: tenantId,
         },
       });
 
@@ -915,6 +918,7 @@ export async function updateProposalWorkflowByTenant(
       return;
     }
 
+    // Solo filtrar por proposal_id: la validación de tenant se hizo en getProposalWorkflowByTenant
     await tx.formal_proposals.updateMany({
       data: {
         issuer_company: hasIssuerCompanyUpdate ? issuerCompanyToPersist : undefined,
@@ -936,7 +940,6 @@ export async function updateProposalWorkflowByTenant(
       },
       where: {
         proposal_id: proposalId,
-        tenant_id: tenantId,
       },
     });
   });

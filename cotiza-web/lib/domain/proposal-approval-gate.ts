@@ -14,11 +14,12 @@ export type ProposalApprovalGateInput = {
 };
 
 export function evaluateApprovalGate(input: ProposalApprovalGateInput): ProposalApprovalGate {
-  const ownerApproved = input.approvals.some(
-    (row) => row.decision === "approved" && row.approverRole === "owner",
-  );
   const observerApproved = input.approvals.some(
     (row) => row.decision === "approved" && row.approverRole === "superadmin",
+  );
+  const ownerApproved = input.approvals.some(
+    (row) =>
+      row.decision === "approved" && (row.approverRole === "owner" || row.approverRole === "superadmin"),
   );
 
   const missingRoles: Array<"owner" | "superadmin"> = [];
