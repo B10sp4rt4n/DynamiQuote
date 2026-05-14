@@ -1258,19 +1258,16 @@ export function ProposalShell({ proposals, tenantName }: ProposalShellProps) {
                   <button
                     className="rounded-lg bg-zinc-900 px-4 py-2 text-sm font-medium text-white transition hover:bg-zinc-700 disabled:cursor-not-allowed disabled:bg-zinc-400"
                     disabled={saveStatus === "saving" || loadingDetail}
-                    onClick={handleSave}
+                    onClick={() => { void handleSave(); }}
                     type="button"
                   >
                     {saveStatus === "saving" ? "Guardando..." : "Guardar cambios"}
                   </button>
                   <button
                     className="rounded-lg border border-zinc-300 bg-white px-4 py-2 text-sm font-medium text-zinc-700 transition hover:bg-zinc-100 disabled:cursor-not-allowed disabled:opacity-60"
-                    disabled={saveStatus === "saving" || loadingDetail}
-                    onClick={async () => {
-                      const ok = await handleSave();
-                      if (ok) {
-                        window.open(`/api/proposals/${selectedProposal.proposalId}/pdf`, "_blank");
-                      }
+                    disabled={loadingDetail}
+                    onClick={() => {
+                      window.open(`/api/proposals/${selectedProposal.proposalId}/pdf`, "_blank");
                     }}
                     type="button"
                   >

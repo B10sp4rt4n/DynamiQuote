@@ -27,10 +27,6 @@ export function canTransitionProposalStatus(current: ProposalStatus, next: Propo
 }
 
 export function assertProposalWorkflowGuard(input: ProposalWorkflowGuardInput): void {
-  if (input.currentStatus === "approved" && input.hasContentUpdate && input.nextStatus === "approved") {
-    throw new Error("La propuesta ya esta autorizada. Cambia el estado a En revision o Enviada para editarla.");
-  }
-
   if (!canTransitionProposalStatus(input.currentStatus, input.nextStatus)) {
     throw new Error(`Transicion invalida: ${input.currentStatus} -> ${input.nextStatus}`);
   }
