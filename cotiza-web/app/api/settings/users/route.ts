@@ -5,9 +5,11 @@ import { getCurrentTenantContext } from "@/lib/auth/tenant-context";
 import { hasClerkCredentials } from "@/lib/auth/clerk";
 import {
   createManagedUserByTenant,
+  deleteManagedUserByTenant,
   getAppUsersByTenant,
   getAppUsersForSuperAdmin,
   relinkManagedUserIdByTenant,
+  updateManagedUserByTenant,
 } from "@/lib/db/settings";
 import { prisma } from "@/lib/db/prisma";
 import { createManagedUserSchema } from "@/lib/validations/users";
@@ -208,7 +210,29 @@ export async function POST(request: Request) {
               }
             } catch (error) {
               if (error instanceof Error && error.message === "DUPLICATE_USER_ID") {
-                clerkWarning = "Se creó en Clerk, pero no se pudo vincular en BD porque el userId de Clerk ya existe localmente.";
+                const reassigned = await updateManagedUserByTenant({
+                  payload: {
+                    active: true,
+                    alias: parsed.data.alias,
+                    firstName: parsed.data.firstName,
+                    lastName: parsed.data.lastName,
+                    role: assignedRole,
+                    sellerCode: parsed.data.sellerCode ?? null,
+                    tenantId: targetTenantId,
+                  },
+                  tenantId: null,
+                  userId: clerkUserId,
+                });
+
+                if (reassigned) {
+                  await deleteManagedUserByTenant(targetTenantId, responseUser.userId);
+                  responseUser = reassigned;
+                  clerkWarning =
+                    "El correo ya existia en Clerk y en BD. Se reasigno automaticamente al tenant destino.";
+                } else {
+                  clerkWarning =
+                    "El correo ya existe en Clerk, pero no fue posible reasignarlo en BD al tenant destino.";
+                }
               } else {
                 const relinkDetail = extractClerkErrorMessage(error);
                 clerkWarning = `Se creó en Clerk, pero no se pudo actualizar userId local: ${relinkDetail}`;

@@ -139,6 +139,21 @@ function toNumber(value: string): number {
   return Number.isFinite(parsed) ? parsed : 0;
 }
 
+function normalizeQuantity(value: number): number {
+  if (!Number.isFinite(value)) {
+    return 1;
+  }
+
+  return Math.max(1, Math.round(value));
+}
+
+function normalizeLineQuantity(line: EditableQuoteLine): EditableQuoteLine {
+  return {
+    ...line,
+    quantity: normalizeQuantity(line.quantity),
+  };
+}
+
 function formatCurrency(value: number): string {
   return new Intl.NumberFormat("es-MX", {
     currency: "MXN",
@@ -266,7 +281,7 @@ function buildLineDiffMap(
           ? toDelta(baselineLine.priceUnit.toFixed(2), currentLine.priceUnit.toFixed(2))
           : undefined,
         quantity: changed.has("quantity")
-          ? toDelta(baselineLine.quantity.toFixed(2), currentLine.quantity.toFixed(2))
+          ? toDelta(normalizeQuantity(baselineLine.quantity), normalizeQuantity(currentLine.quantity))
           : undefined,
       };
     }
@@ -286,6 +301,7 @@ export function QuoteLineEditor({
   const router = useRouter();
   const [selectedQuoteId, setSelectedQuoteId] = useState<string>(quotes[0]?.quoteId ?? "");
   const [lines, setLines] = useState<EditableQuoteLine[]>([]);
+  const [quantityDrafts, setQuantityDrafts] = useState<Record<string, string>>({});
   const [lineDiffMap, setLineDiffMap] = useState<LineDiffMap>({});
   const [lineDeltaMap, setLineDeltaMap] = useState<LineDeltaMap>({});
   const [versions, setVersions] = useState<QuoteVersionHistoryItem[]>([]);
@@ -349,6 +365,7 @@ export function QuoteLineEditor({
   async function loadLines(quoteId: string) {
     if (!quoteId) {
       setLines([]);
+      setQuantityDrafts({});
       return;
     }
 
@@ -365,13 +382,16 @@ export function QuoteLineEditor({
       if (!response.ok || !hasLines) {
         setMessage(getErrorMessage(data) ?? "No se pudieron cargar las lineas");
         setLines([]);
+        setQuantityDrafts({});
         return;
       }
 
-      setLines(data.lines);
+      setLines(data.lines.map(normalizeLineQuantity));
+      setQuantityDrafts({});
     } catch {
       setMessage("Error de red al cargar lineas");
       setLines([]);
+      setQuantityDrafts({});
     } finally {
       setLoading(false);
     }
@@ -388,7 +408,31 @@ export function QuoteLineEditor({
   }
 
   function onQuantityChange(lineId: string, value: string) {
-    updateLine(lineId, { quantity: Math.max(0.01, toNumber(value)) });
+    const digitsOnly = value.replace(/\D/g, "");
+
+    setQuantityDrafts((current) => ({
+      ...current,
+      [lineId]: digitsOnly,
+    }));
+
+    if (digitsOnly.length === 0) {
+      return;
+    }
+
+    updateLine(lineId, { quantity: normalizeQuantity(toNumber(digitsOnly)) });
+  }
+
+  function commitQuantityDraft(lineId: string) {
+    const draft = quantityDrafts[lineId];
+    const committedValue = normalizeQuantity(toNumber(draft ?? ""));
+
+    updateLine(lineId, { quantity: committedValue });
+
+    setQuantityDrafts((current) => {
+      const next = { ...current };
+      delete next[lineId];
+      return next;
+    });
   }
 
   function addPartida() {
@@ -507,9 +551,9 @@ export function QuoteLineEditor({
     );
   }
 
-  async function saveLines() {
+  async function saveLines(): Promise<string | null> {
     if (!selectedQuoteId || lines.length === 0) {
-      return;
+      return null;
     }
 
     setSaving(true);
@@ -528,7 +572,7 @@ export function QuoteLineEditor({
           marginPct: line.marginPct,
           mode: "price" as const,
           priceUnit: line.priceUnit,
-          quantity: line.quantity,
+          quantity: normalizeQuantity(line.quantity),
           sku: line.sku ?? "",
         })),
       };
@@ -547,12 +591,13 @@ export function QuoteLineEditor({
 
       if (!response.ok || !hasLines || !hasQuote) {
         setMessage(getErrorMessage(data) ?? "No se pudieron guardar las lineas");
-        return;
+        return null;
       }
 
       const nextDiffResult = buildLineDiffMap(previousLines, data.lines);
 
-      setLines(data.lines);
+      setLines(data.lines.map(normalizeLineQuantity));
+      setQuantityDrafts({});
       setLineDiffMap(nextDiffResult.diffMap);
       setLineDeltaMap(nextDiffResult.deltaMap);
       setCompareState({
@@ -564,8 +609,10 @@ export function QuoteLineEditor({
       onQuoteVersionSaved?.(data.quote);
       setSelectedQuoteId(data.quote.quoteId);
       setMessage(`Version v${data.quote.version} creada y guardada correctamente`);
+      return data.quote.quoteId;
     } catch {
       setMessage("Error de red al guardar");
+      return null;
     } finally {
       setSaving(false);
     }
@@ -597,7 +644,8 @@ export function QuoteLineEditor({
       const baseVersion = versions.find((version) => version.quoteId === baseQuoteId);
       const diffResult = buildLineDiffMap(baseData.lines, targetData.lines);
 
-      setLines(targetData.lines);
+      setLines(targetData.lines.map(normalizeLineQuantity));
+      setQuantityDrafts({});
       setSelectedQuoteId(targetQuoteId);
       setLineDiffMap(diffResult.diffMap);
       setLineDeltaMap(diffResult.deltaMap);
@@ -621,13 +669,27 @@ export function QuoteLineEditor({
       return;
     }
 
+    let quoteIdForProposal = selectedQuoteId;
+    const hasUnsavedRevenueChanges = Math.abs((selectedQuote.totalRevenue ?? 0) - totals.totalRevenue) > 0.01;
+
+    if (hasUnsavedRevenueChanges) {
+      setMessage("Guardando cambios antes de generar la propuesta...");
+      const savedQuoteId = await saveLines();
+
+      if (!savedQuoteId) {
+        return;
+      }
+
+      quoteIdForProposal = savedQuoteId;
+    }
+
     setCreatingProposal(true);
     setMessage(null);
 
     try {
       const response = await fetch("/api/proposals", {
         body: JSON.stringify({
-          quoteId: selectedQuoteId,
+          quoteId: quoteIdForProposal,
           recipientCompany: selectedQuote.clientName,
           subject: selectedQuote.proposalName,
         }),
@@ -766,7 +828,7 @@ export function QuoteLineEditor({
         line.lineId,
         line.sku ?? "",
         line.description,
-        line.quantity.toFixed(2),
+        String(normalizeQuantity(line.quantity)),
         line.costUnit.toFixed(2),
         line.priceUnit.toFixed(2),
         line.marginPct.toFixed(2),
@@ -1016,7 +1078,7 @@ export function QuoteLineEditor({
               <th className="px-4 py-3 font-medium">Partida</th>
               <th className="px-4 py-3 font-medium">SKU</th>
               <th className="px-4 py-3 font-medium">Descripcion</th>
-              <th className="px-4 py-3 font-medium">Cantidad</th>
+              <th className="px-4 py-3 font-medium">Cantidad (entero)</th>
               <th className="px-4 py-3 font-medium">Costo unitario</th>
               <th className="px-4 py-3 font-medium">Precio unitario</th>
               <th className="px-4 py-3 font-medium">Subtotal</th>
@@ -1060,14 +1122,22 @@ export function QuoteLineEditor({
                 <td className={`px-4 py-3 ${diffCellClass(Boolean(lineDiffMap[line.lineId]?.has("quantity")))}`}>
                   <input
                     className="w-24 rounded border border-zinc-300 px-2 py-1"
+                    inputMode="numeric"
+                    pattern="[0-9]*"
                     title={lineDeltaMap[line.lineId]?.quantity}
-                    min={0.01}
+                    onBlur={() => {
+                      commitQuantityDraft(line.lineId);
+                    }}
                     onChange={(event) => {
                       onQuantityChange(line.lineId, event.target.value);
                     }}
-                    step={0.01}
-                    type="number"
-                    value={line.quantity}
+                    onKeyDown={(event) => {
+                      if (event.key === "Enter") {
+                        commitQuantityDraft(line.lineId);
+                      }
+                    }}
+                    type="text"
+                    value={quantityDrafts[line.lineId] ?? String(normalizeQuantity(line.quantity))}
                   />
                 </td>
                 <td className={`px-4 py-3 ${diffCellClass(Boolean(lineDiffMap[line.lineId]?.has("costUnit")))}`}>

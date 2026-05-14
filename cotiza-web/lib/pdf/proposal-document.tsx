@@ -420,7 +420,7 @@ export function ProposalPdfDocument({ proposal, tenantName }: ProposalPdfInput) 
       <Page size="A4" style={styles.page}>
         <Text style={styles.sectionHeader}>Hoja de trazabilidad y cierre</Text>
         <Text style={styles.narrativeText}>
-          Este documento acredita la propuesta comercial emitida por {formal?.issuerCompany || tenantName} con destino a {formal?.recipientCompany || "cliente sin definir"}. La propuesta mantiene trazabilidad completa desde la cotizacion de origen hasta el documento formal, incluyendo vendedor responsable, partidas valoradas y condiciones comerciales acordadas.
+          Esta propuesta fue preparada por {formal?.issuerCompany || tenantName} para {formal?.recipientCompany || "cliente sin definir"}. El contenido, precios y condiciones tienen vigencia segun lo indicado en la seccion de condiciones comerciales. Cualquier modificacion posterior a la fecha de emision debera formalizarse por escrito entre las partes.
         </Text>
         <View style={styles.totalsWrap}>
           <View style={styles.totalLine}>

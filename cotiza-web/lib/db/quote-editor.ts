@@ -92,6 +92,14 @@ function round(value: number): number {
   return Math.round(value * 100) / 100;
 }
 
+function normalizeQuantity(value: number): number {
+  if (!Number.isFinite(value)) {
+    return 1;
+  }
+
+  return Math.max(1, Math.round(value));
+}
+
 function resolveClassificationOne(lineType: string | null): "product" | "service" {
   return lineType?.toLowerCase() === "service" ? "service" : "product";
 }
@@ -157,7 +165,7 @@ export async function getEditableQuoteLinesByTenant(
     lineId: line.line_id,
     marginPct: decimalToNumber(line.margin_pct),
     priceUnit: decimalToNumber(line.final_price_unit),
-    quantity: decimalToNumber(line.quantity) || 1,
+    quantity: normalizeQuantity(decimalToNumber(line.quantity)),
     sku: line.sku,
   }));
 }
@@ -250,7 +258,7 @@ export async function updateQuoteLinesByTenant(
       lineId: line.lineId,
       marginPct: round(pricing.marginPct),
       priceUnit: round(pricing.priceUnit),
-      quantity: round(line.quantity),
+      quantity: normalizeQuantity(line.quantity),
       sku,
       sourceLine,
     };

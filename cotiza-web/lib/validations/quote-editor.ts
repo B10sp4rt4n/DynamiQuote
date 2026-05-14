@@ -10,7 +10,7 @@ export const quoteLineEditorInputSchema = z
     marginPct: z.number().min(0).max(99.99).optional(),
     mode: z.enum(["margin", "price"]),
     priceUnit: z.number().min(0).optional(),
-    quantity: z.number().positive(),
+    quantity: z.number().int().positive(),
     sku: z.string().trim().max(120).optional(),
   })
   .refine((value) => value.marginPct !== undefined || value.priceUnit !== undefined, {
