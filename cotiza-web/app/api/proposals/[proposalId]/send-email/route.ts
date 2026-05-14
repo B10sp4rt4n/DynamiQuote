@@ -3,7 +3,7 @@ import { NextResponse } from "next/server";
 import { auth } from "@clerk/nextjs/server";
 
 import { getCurrentTenantContext } from "@/lib/auth/tenant-context";
-import { getProposalWorkflowByTenant } from "@/lib/db/proposals";
+import { getProposalWorkflowByTenant, updateProposalWorkflowByTenant } from "@/lib/db/proposals";
 import { resolveResendConfig } from "@/lib/email/resend";
 import { ProposalPdfDocument } from "@/lib/pdf/proposal-document";
 import { enforceRateLimit, getRequestIdentity } from "@/lib/utils/rate-limit";
@@ -77,7 +77,7 @@ function buildAuthorizedProposalHtml(input: {
                 Adjuntamos la propuesta comercial autorizada para <strong>${input.recipientCompany}</strong>.
               </p>
               <p style="margin:0 0 12px;font-size:15px;line-height:1.65;">
-                El documento incluye alcance, condiciones comerciales y anexos técnicos para su revisión final.
+                El documento detalla alcance, condiciones comerciales y términos de negociación para su revisión.
               </p>
               <p style="margin:0 0 20px;font-size:15px;line-height:1.65;">
                 Quedamos atentos a su confirmación o comentarios.
@@ -207,7 +207,12 @@ export async function POST(request: Request, context: RouteContext) {
   }
 
   const userEmail = await resolveCurrentUserEmail();
-  if (userEmail && userEmail !== recipientEmail) {
+  const issuerEmail = sanitizeEmail(proposal.formal?.issuerEmail);
+  const copyRecipients = Array.from(
+    new Set([issuerEmail, userEmail].filter((email): email is string => Boolean(email && email !== recipientEmail))),
+  );
+
+  if (copyRecipients.length > 0) {
     await resendClient.client.emails.send({
       attachments: [
         pdfAttachment,
@@ -215,9 +220,13 @@ export async function POST(request: Request, context: RouteContext) {
       from,
       html: `<p>Se envio la propuesta <strong>${proposalNumber}</strong> a <strong>${recipientEmail}</strong>.</p>`,
       subject: `[Copia] Propuesta autorizada: ${subjectBase}`,
-      to: [userEmail],
+      to: copyRecipients,
     });
   }
+
+  // Después de enviar con éxito, transicionar el estado a "sent" para registrar
+  // que la propuesta fue entregada al cliente por el sistema.
+  await updateProposalWorkflowByTenant(tenant.id, proposalId, { status: "sent" }).catch(() => null);
 
   return NextResponse.json({ ok: true, success: true }, { status: 200 });
 }

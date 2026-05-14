@@ -1,6 +1,6 @@
 "use client";
 
-import { useEffect, useMemo, useState } from "react";
+import { useEffect, useMemo, useRef, useState } from "react";
 import { usePathname, useRouter, useSearchParams } from "next/navigation";
 
 import {
@@ -56,6 +56,7 @@ export function QuoteShell({
   const searchParams = useSearchParams();
   const [quoteItems, setQuoteItems] = useState<QuoteGroupSummary[]>(() => sortQuotes(items));
   const [activeQuoteId, setActiveQuoteId] = useState<string | null>(items[0]?.quoteId ?? null);
+  const lastHandledQuoteIdFromQueryRef = useRef<string | null>(null);
   const [isQuotesPanelOpen, setIsQuotesPanelOpen] = useState(false);
   const [quoteSearch, setQuoteSearch] = useState("");
   const [quoteSort, setQuoteSort] = useState<QuoteSort>("date_desc");
@@ -67,6 +68,9 @@ export function QuoteShell({
   const [quotedBy, setQuotedBy] = useState("");
   const [createState, setCreateState] = useState<"idle" | "saving" | "error">("idle");
   const [createMessage, setCreateMessage] = useState<string | null>(null);
+  const [importFile, setImportFile] = useState<File | null>(null);
+  const [importStatus, setImportStatus] = useState<"idle" | "uploading" | "success" | "error">("idle");
+  const [importMessage, setImportMessage] = useState<string | null>(null);
 
   const filteredQuoteItems = useMemo(() => {
     const normalizedSearch = quoteSearch.trim().toLowerCase();
@@ -98,6 +102,12 @@ export function QuoteShell({
 
   useEffect(() => {
     const nextQuoteId = searchParams.get("quoteId");
+
+    if (lastHandledQuoteIdFromQueryRef.current === nextQuoteId) {
+      return;
+    }
+
+    lastHandledQuoteIdFromQueryRef.current = nextQuoteId;
     const validQuoteId = resolveSelectedQuoteId(quoteItems, nextQuoteId);
 
     // eslint-disable-next-line react-hooks/set-state-in-effect
@@ -276,6 +286,42 @@ export function QuoteShell({
     } catch (error) {
       setCreateState("error");
       setCreateMessage(error instanceof Error ? error.message : "Error interno");
+    }
+  }
+
+  // Importa partidas desde un Excel y las carga en la cotización activa,
+  // reemplazando las líneas existentes. Después recarga la página para
+  // que el editor refleje las partidas importadas.
+  async function handleImportExcel() {
+    if (!activeQuoteId || !importFile) {
+      return;
+    }
+
+    setImportStatus("uploading");
+    setImportMessage(null);
+
+    const formData = new FormData();
+    formData.append("file", importFile);
+
+    try {
+      const response = await fetch(`/api/quotes/${activeQuoteId}/import`, {
+        body: formData,
+        method: "POST",
+      });
+
+      const data = (await response.json()) as { error?: string; importedCount?: number };
+
+      if (!response.ok) {
+        throw new Error(data.error ?? "No fue posible importar el archivo");
+      }
+
+      setImportStatus("success");
+      setImportMessage(`Se importaron ${data.importedCount ?? 0} partidas. Recargando...`);
+      setImportFile(null);
+      router.refresh();
+    } catch (error) {
+      setImportStatus("error");
+      setImportMessage(error instanceof Error ? error.message : "Error interno");
     }
   }
 
@@ -491,6 +537,39 @@ export function QuoteShell({
           onQuoteVersionSaved={handleQuoteVersionSaved}
           quotes={quoteItems}
         />
+      ) : null}
+      {activeQuoteId ? (
+        <div className="mt-4 rounded-lg border border-dashed border-zinc-300 bg-white p-4">
+          <p className="text-xs uppercase tracking-[0.18em] text-zinc-500">Importar partidas desde Excel</p>
+          <p className="mt-1 text-xs text-zinc-500">
+            Reemplaza las partidas de la cotización activa con las filas del archivo. Columnas esperadas: <code>sku</code>, <code>description</code>, <code>quantity</code>, <code>costUnit</code>, <code>priceUnit</code>.
+          </p>
+          <div className="mt-3 flex flex-wrap items-center gap-2">
+            <input
+              accept=".xlsx"
+              className="block w-full max-w-xs text-sm text-zinc-700"
+              onChange={(event) => {
+                setImportFile(event.target.files?.[0] ?? null);
+                setImportStatus("idle");
+                setImportMessage(null);
+              }}
+              type="file"
+            />
+            <button
+              className="rounded-lg border border-zinc-300 bg-white px-3 py-2 text-sm font-medium text-zinc-700 transition hover:bg-zinc-100 disabled:cursor-not-allowed disabled:text-zinc-400"
+              disabled={!importFile || importStatus === "uploading"}
+              onClick={() => { void handleImportExcel(); }}
+              type="button"
+            >
+              {importStatus === "uploading" ? "Importando..." : "Importar Excel"}
+            </button>
+          </div>
+          {importMessage ? (
+            <p className={`mt-2 text-sm ${importStatus === "error" ? "text-rose-700" : "text-emerald-700"}`}>
+              {importMessage}
+            </p>
+          ) : null}
+        </div>
       ) : null}
     </section>
   );

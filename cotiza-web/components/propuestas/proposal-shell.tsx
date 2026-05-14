@@ -66,6 +66,18 @@ function formatStatus(value: ProposalStatus): string {
   return statusOptions.find((option) => option.value === value)?.label ?? value;
 }
 
+// Clases de color para el badge de estado según su semántica de flujo de trabajo.
+function getStatusBadgeClass(value: ProposalStatus): string {
+  switch (value) {
+    case "draft":     return "bg-zinc-100 text-zinc-700";
+    case "in_review": return "bg-amber-100 text-amber-800";
+    case "approved":  return "bg-emerald-100 text-emerald-800";
+    case "rejected":  return "bg-rose-100 text-rose-800";
+    case "sent":      return "bg-blue-100 text-blue-800";
+    case "expired":   return "bg-zinc-200 text-zinc-600";
+  }
+}
+
 function formatDate(value: string | null): string {
   if (!value) {
     return "N/D";
@@ -564,12 +576,21 @@ export function ProposalShell({ proposals, tenantName }: ProposalShellProps) {
     );
   }
 
-  async function handleSave(): Promise<boolean> {
+  // Guarda todos los campos del formulario en la API.
+  // Acepta un statusOverride opcional para cambiar el estado en el mismo request (usado por handleSendToApproval).
+  // Después de un guardado exitoso sincroniza selectedStatus con el estado real devuelto por la API.
+  async function handleSave(statusOverride?: ProposalStatus): Promise<boolean> {
     if (!selectedProposal) {
       return false;
     }
 
-    if (selectedStatus === "approved" && !marginAllowsFinalAuthorization) {
+    // Usar el override si se proporciona; de lo contrario usar el estado seleccionado en el dropdown.
+    const statusToSend = statusOverride ?? selectedStatus;
+
+    // El guard de margen solo aplica al aprobar desde borrador o revisión.
+    // Si el usuario registra la aceptación del cliente desde el estado "Enviada",
+    // la propuesta ya fue aprobada internamente antes; no se re-valida el margen.
+    if (statusToSend === "approved" && !marginAllowsFinalAuthorization && selectedStatus !== "sent") {
       setSaveStatus("error");
       setErrorMessage(
         selectedProposal?.marginEvaluation?.summary ??
@@ -595,7 +616,7 @@ export function ProposalShell({ proposals, tenantName }: ProposalShellProps) {
           recipientContactName,
           recipientContactTitle,
           recipientEmail,
-          status: selectedStatus,
+          status: statusToSend,
           subject,
           termsAndConditions,
         }),
@@ -690,6 +711,9 @@ export function ProposalShell({ proposals, tenantName }: ProposalShellProps) {
       setApprovals(data.proposal.approvals ?? []);
       setApprovalGate(data.proposal.approvalGate ?? null);
 
+      // Sincronizar el dropdown con el estado real confirmado por la API
+      // (la API puede ajustar el estado si el workflow lo requiere).
+      setSelectedStatus(data.proposal.status);
       setSaveStatus("success");
       return true;
     } catch (error) {
@@ -697,6 +721,19 @@ export function ProposalShell({ proposals, tenantName }: ProposalShellProps) {
       setErrorMessage(error instanceof Error ? error.message : "Error interno");
       return false;
     }
+  }
+
+  // Envía la propuesta al flujo de aprobación con la lógica de pre-aprobación por margen:
+  // - Si el margen cumple los parámetros de autorización final (canAuthorizeFinal): aprueba automáticamente
+  //   sin necesidad de acción del owner. El usuario ve el estado "Aprobada" de inmediato.
+  // - Si el margen NO cumple parámetros: cambia el estado a "En revisión" para que el owner
+  //   evalúe la propuesta y decida aprobar o rechazar manualmente.
+  // NOTA: "Enviada" es el estado que se asigna cuando se envía la propuesta al cliente por correo,
+  //       no cuando se envía a revisión interna.
+  async function handleSendToApproval() {
+    if (!selectedProposal) return;
+    const targetStatus: ProposalStatus = marginAllowsFinalAuthorization ? "approved" : "in_review";
+    await handleSave(targetStatus);
   }
 
   async function handleApprovalDecision(decision: "approved" | "rejected") {
@@ -819,6 +856,9 @@ export function ProposalShell({ proposals, tenantName }: ProposalShellProps) {
         throw new Error(data?.error ?? "No fue posible enviar el correo al cliente");
       }
 
+      // Al enviar por correo, la propuesta transiciona a "Enviada" para registrar
+      // que fue entregada al cliente. El usuario luego registra la decisión del cliente.
+      setSelectedStatus("sent");
       setEmailStatus("success");
       setEmailMessage("Correo enviado correctamente al cliente.");
     } catch (error) {
@@ -964,6 +1004,35 @@ export function ProposalShell({ proposals, tenantName }: ProposalShellProps) {
                 </h2>
               </div>
 
+              {/* Stepper de flujo */}
+              <div className="flex items-center gap-0 rounded-lg border border-zinc-200 bg-white overflow-hidden text-xs font-medium">
+                {([
+                  { step: 1, label: "1. Llenar datos", statuses: ["draft"] as ProposalStatus[] },
+                  { step: 2, label: "2. Enviar / Revisión", statuses: ["sent", "in_review"] as ProposalStatus[] },
+                  { step: 3, label: "3. Aprobación final", statuses: ["approved", "rejected", "expired"] as ProposalStatus[] },
+                ] as const).map(({ step, label, statuses }) => {
+                  const isCurrent = statuses.includes(selectedStatus);
+                  const isDone =
+                    (step === 1 && ["sent", "in_review", "approved", "rejected", "expired"].includes(selectedStatus)) ||
+                    (step === 2 && ["approved", "rejected", "expired"].includes(selectedStatus));
+                  return (
+                    <div
+                      className={`flex flex-1 items-center justify-center gap-1.5 px-3 py-2.5 border-r last:border-r-0 border-zinc-200 ${
+                        isCurrent
+                          ? "bg-zinc-900 text-white"
+                          : isDone
+                            ? "bg-emerald-50 text-emerald-700"
+                            : "text-zinc-400"
+                      }`}
+                      key={step}
+                    >
+                      {isDone ? <span>✓</span> : <span className="opacity-70">{step}.</span>}
+                      <span>{label.replace(/^\d+\.\s/, "")}</span>
+                    </div>
+                  );
+                })}
+              </div>
+
               <label className="block text-sm font-medium text-zinc-700" htmlFor="recipient-company">
                 Empresa emisora
               </label>
@@ -1082,128 +1151,6 @@ export function ProposalShell({ proposals, tenantName }: ProposalShellProps) {
                 value={subject}
               />
 
-              <label className="block text-sm font-medium text-zinc-700" htmlFor="proposal-status">
-                Estado
-              </label>
-              {selectedProposal?.marginEvaluation ? (
-                <div
-                  className={`rounded-lg border px-3 py-3 text-sm ${getMarginToneClass(selectedProposal.marginEvaluation.releaseMode)}`}
-                >
-                  <p className="font-semibold">
-                    {formatMarginLabel(selectedProposal.marginEvaluation.releaseMode)}
-                  </p>
-                  <p className="mt-1 text-xs leading-5 text-current/80">
-                    {selectedProposal.marginEvaluation.summary}
-                  </p>
-                  <p className="mt-2 text-xs text-current/70">
-                    Min {selectedProposal.marginEvaluation.minMarginPct.toFixed(2)}% · Max {selectedProposal.marginEvaluation.maxMarginPct.toFixed(2)}% · Umbral alto {selectedProposal.marginEvaluation.highPreapprovalMarginPct.toFixed(2)}%
-                  </p>
-                </div>
-              ) : null}
-              <select
-                className="w-full rounded-lg border border-zinc-300 bg-white px-3 py-2 text-sm text-zinc-800"
-                id="proposal-status"
-                onChange={(event) => setSelectedStatus(event.target.value as ProposalStatus)}
-                value={selectedStatus}
-              >
-                {statusOptions.map((option) => (
-                  <option
-                    disabled={
-                      option.value === "approved" &&
-                      !marginAllowsFinalAuthorization &&
-                      selectedStatus !== "approved"
-                    }
-                    key={option.value}
-                    value={option.value}
-                  >
-                    {option.value === "approved" && !marginAllowsFinalAuthorization
-                      ? `${option.label} (bloqueada por margen)`
-                      : option.label}
-                  </option>
-                ))}
-              </select>
-              {!marginAllowsFinalAuthorization ? (
-                <p className="mt-2 text-xs text-rose-700">
-                  {selectedProposal?.marginEvaluation?.summary ??
-                    "La politica de margen bloquea la autorizacion final de esta propuesta."}
-                </p>
-              ) : null}
-
-              <div className="rounded-lg border border-zinc-200 bg-white p-3">
-                <p className="text-xs uppercase tracking-[0.18em] text-zinc-500">Aprobaciones formales</p>
-                <p className="mt-2 text-sm text-zinc-700">
-                  {approvalGate?.canAuthorizeFinal
-                    ? "La propuesta cumple aprobaciones requeridas para autorizacion final."
-                    : `Roles faltantes: ${formatMissingApprovalRoles(approvalGate?.missingRoles ?? ["owner"])}`}
-                </p>
-                <div className="mt-3 grid gap-2 md:grid-cols-[1fr_auto_auto]">
-                  <input
-                    className="w-full rounded-lg border border-zinc-300 bg-white px-3 py-2 text-sm text-zinc-800"
-                    onChange={(event) => setApprovalReason(event.target.value)}
-                    placeholder="Motivo (obligatorio para rechazar)"
-                    value={approvalReason}
-                  />
-                  <button
-                    className="rounded-lg border border-emerald-300 bg-emerald-50 px-3 py-2 text-sm font-medium text-emerald-700 hover:bg-emerald-100 disabled:opacity-60"
-                    disabled={approvalPending}
-                    onClick={() => handleApprovalDecision("approved")}
-                    type="button"
-                  >
-                    Aprobar
-                  </button>
-                  <button
-                    className="rounded-lg border border-rose-300 bg-rose-50 px-3 py-2 text-sm font-medium text-rose-700 hover:bg-rose-100 disabled:opacity-60"
-                    disabled={approvalPending}
-                    onClick={() => handleApprovalDecision("rejected")}
-                    type="button"
-                  >
-                    Rechazar
-                  </button>
-                </div>
-
-                <div className="mt-3 max-h-44 overflow-auto rounded-lg border border-zinc-200">
-                  <table className="min-w-full divide-y divide-zinc-200 text-xs">
-                    <thead className="bg-zinc-50 text-left text-zinc-600">
-                      <tr>
-                        <th className="px-3 py-2 font-medium">Fecha</th>
-                        <th className="px-3 py-2 font-medium">Rol</th>
-                        <th className="px-3 py-2 font-medium">Decision</th>
-                        <th className="px-3 py-2 font-medium">Motivo</th>
-                      </tr>
-                    </thead>
-                    <tbody className="divide-y divide-zinc-100">
-                      {approvals.length > 0 ? (
-                        approvals.map((row) => (
-                          <tr key={row.approvalId}>
-                            <td className="px-3 py-2 text-zinc-600">{formatDate(row.createdAt)}</td>
-                            <td className="px-3 py-2 text-zinc-700">{formatApprovalRole(row.approverRole)}</td>
-                            <td className="px-3 py-2 text-zinc-700">{formatApprovalDecision(row.decision)}</td>
-                            <td className="px-3 py-2 text-zinc-600">{row.reason ?? "-"}</td>
-                          </tr>
-                        ))
-                      ) : (
-                        <tr>
-                          <td className="px-3 py-3 text-zinc-500" colSpan={4}>
-                            Aun no hay decisiones registradas.
-                          </td>
-                        </tr>
-                      )}
-                    </tbody>
-                  </table>
-                </div>
-              </div>
-
-              <label className="block text-sm font-medium text-zinc-700" htmlFor="proposal-terms">
-                Condiciones comerciales
-              </label>
-              <textarea
-                className="min-h-56 w-full rounded-lg border border-zinc-300 bg-white px-3 py-2 text-sm text-zinc-800"
-                id="proposal-terms"
-                onChange={(event) => setTermsAndConditions(event.target.value)}
-                placeholder="Plazos, alcances, exclusiones y notas legales"
-                value={termsAndConditions}
-              />
-
               <div className="rounded-lg border border-zinc-200 bg-white p-3">
                 <div className="mb-2 flex items-center justify-between gap-2">
                   <p className="text-xs uppercase tracking-[0.18em] text-zinc-500">Partidas de la propuesta</p>
@@ -1232,7 +1179,7 @@ export function ProposalShell({ proposals, tenantName }: ProposalShellProps) {
                     <tbody className="divide-y divide-zinc-100">
                       {proposalItems.map((item, index) => (
                         <tr key={`${item.itemNumber}-${index}`}>
-                          <td className="px-2 py-2 text-zinc-500">{index + 1}</td>
+                          <td className="px-2 py-2 text-zinc-800 font-medium">{index + 1}</td>
                           <td className="px-2 py-2">
                             <input
                               className="w-28 rounded border border-zinc-300 px-2 py-1"
@@ -1295,6 +1242,17 @@ export function ProposalShell({ proposals, tenantName }: ProposalShellProps) {
                 </div>
               </div>
 
+              <label className="block text-sm font-medium text-zinc-700" htmlFor="proposal-terms">
+                Condiciones comerciales
+              </label>
+              <textarea
+                className="min-h-56 w-full rounded-lg border border-zinc-300 bg-white px-3 py-2 text-sm text-zinc-800"
+                id="proposal-terms"
+                onChange={(event) => setTermsAndConditions(event.target.value)}
+                placeholder="Plazos, alcances, exclusiones y notas legales"
+                value={termsAndConditions}
+              />
+
               <div className="flex items-center justify-between gap-3">
                 <div className="flex items-center gap-2">
                   <button
@@ -1326,21 +1284,6 @@ export function ProposalShell({ proposals, tenantName }: ProposalShellProps) {
                   >
                     Descargar Excel
                   </a>
-                  {canShowEmailFlow ? (
-                    <button
-                      className="rounded-lg border border-blue-300 bg-blue-50 px-4 py-2 text-sm font-medium text-blue-700 transition hover:bg-blue-100 disabled:cursor-not-allowed disabled:opacity-60"
-                      disabled={emailStatus === "sending" || !recipientEmail}
-                      onClick={handleSendEmailProposal}
-                      title={!recipientEmail ? "Falta correo del destinatario" : ""}
-                      type="button"
-                    >
-                      {emailStatus === "sending"
-                        ? "Enviando correo..."
-                        : marginAllowsInformativeShare && selectedStatus !== "approved" && selectedStatus !== "sent"
-                          ? "Enviar preaprobacion informativa por correo"
-                          : "Enviar propuesta por correo"}
-                    </button>
-                  ) : null}
                 </div>
                 {saveStatus === "success" ? (
                   <p className="text-sm text-emerald-700">Cambios guardados correctamente.</p>
@@ -1349,50 +1292,192 @@ export function ProposalShell({ proposals, tenantName }: ProposalShellProps) {
                   <p className="text-sm text-rose-700">{errorMessage ?? "Error desconocido"}</p>
                 ) : null}
               </div>
+
+              {/* Sección de envío a aprobación: visible solo cuando la propuesta está en borrador.
+                  El mensaje y la acción del botón cambian según si el margen pre-aprueba o no:
+                  - marginAllowsFinalAuthorization: dentro de parámetros → aprueba automáticamente.
+                  - Sin pre-aprobación: envía al owner con estado "Enviada" para su decisión. */}
+              {selectedStatus === "draft" ? (
+                <div
+                  className={`rounded-lg border p-3 ${
+                    marginAllowsFinalAuthorization
+                      ? "border-emerald-200 bg-emerald-50"
+                      : "border-amber-200 bg-amber-50"
+                  }`}
+                >
+                  <p
+                    className={`text-sm font-medium ${
+                      marginAllowsFinalAuthorization ? "text-emerald-800" : "text-amber-800"
+                    }`}
+                  >
+                    {marginAllowsFinalAuthorization
+                      ? "Dentro de parámetros — esta propuesta se aprobará automáticamente al enviar."
+                      : "Fuera de parámetros de auto-aprobación — el propietario deberá revisar y decidir."}
+                  </p>
+                  <button
+                    className={`mt-2 rounded-lg px-4 py-2 text-sm font-medium text-white transition disabled:cursor-not-allowed disabled:opacity-60 ${
+                      marginAllowsFinalAuthorization
+                        ? "bg-emerald-700 hover:bg-emerald-600"
+                        : "bg-amber-700 hover:bg-amber-600"
+                    }`}
+                    disabled={saveStatus === "saving" || loadingDetail}
+                    onClick={handleSendToApproval}
+                    type="button"
+                  >
+                    {saveStatus === "saving" ? "Procesando..." : "Solicitud de aprobación"}
+                  </button>
+                </div>
+              ) : null}
               {emailMessage ? (
                 <p className={`text-sm ${emailStatus === "error" ? "text-rose-700" : "text-emerald-700"}`}>
                   {emailMessage}
                 </p>
               ) : null}
-              {canShowEmailFlow && marginAllowsInformativeShare && selectedStatus !== "approved" ? (
-                <p className="text-xs text-blue-700">
-                  Flujo de correo habilitado por preaprobacion informativa de margen.
-                </p>
-              ) : null}
-              {canShowEmailFlow && !marginAllowsInformativeShare && selectedStatus !== "approved" && selectedStatus !== "sent" ? (
-                <p className="text-xs text-zinc-600">
-                  Puedes enviar por correo en cualquier estado siempre que exista un correo receptor valido.
-                </p>
+
+              {/* Estado de la propuesta — solo lectura. El sistema gestiona las transiciones.
+                  Las únicas actualizaciones manuales permitidas son la decisión del cliente
+                  (cuando ya fue enviada) y el bloque de aprobaciones formales del owner. */}
+              <div className="flex items-center gap-3">
+                <span className="text-sm font-medium text-zinc-700">Estado actual:</span>
+                <span className={`inline-flex items-center rounded-full px-3 py-1 text-xs font-semibold ${getStatusBadgeClass(selectedStatus)}`}>
+                  {formatStatus(selectedStatus)}
+                </span>
+              </div>
+
+              {/* Evaluación de margen: informativa, no editable */}
+              {selectedProposal?.marginEvaluation ? (
+                <div
+                  className={`rounded-lg border px-3 py-3 text-sm ${getMarginToneClass(selectedProposal.marginEvaluation.releaseMode)}`}
+                >
+                  <p className="font-semibold">
+                    {formatMarginLabel(selectedProposal.marginEvaluation.releaseMode)}
+                  </p>
+                  <p className="mt-1 text-xs leading-5 text-current/80">
+                    {selectedProposal.marginEvaluation.summary}
+                  </p>
+                  <p className="mt-2 text-xs text-current/70">
+                    Min {selectedProposal.marginEvaluation.minMarginPct.toFixed(2)}% · Max {selectedProposal.marginEvaluation.maxMarginPct.toFixed(2)}% · Umbral alto {selectedProposal.marginEvaluation.highPreapprovalMarginPct.toFixed(2)}%
+                  </p>
+                </div>
               ) : null}
 
-              <div className="rounded-lg border border-dashed border-zinc-300 bg-white p-3">
-                <p className="text-xs uppercase tracking-[0.18em] text-zinc-500">Importar partidas</p>
-                <div className="mt-2 flex flex-wrap items-center gap-2">
-                  <input
-                    accept=".xlsx"
-                    className="block w-full max-w-xs text-sm text-zinc-700"
-                    onChange={(event) => setImportFile(event.target.files?.[0] ?? null)}
-                    type="file"
-                  />
+              {/* Botón de correo: disponible solo cuando la propuesta está aprobada internamente.
+                  Al enviarse por correo, el estado cambia a "Enviada" automáticamente. */}
+              {selectedStatus === "approved" ? (
+                <div className="flex flex-col gap-1">
                   <button
-                    className="rounded-lg border border-zinc-300 bg-white px-3 py-2 text-sm font-medium text-zinc-700 transition hover:bg-zinc-100 disabled:cursor-not-allowed disabled:text-zinc-400"
-                    disabled={!importFile || importStatus === "uploading"}
-                    onClick={handleImportExcel}
+                    className="w-fit rounded-lg border border-blue-300 bg-blue-50 px-4 py-2 text-sm font-medium text-blue-700 transition hover:bg-blue-100 disabled:cursor-not-allowed disabled:opacity-60"
+                    disabled={emailStatus === "sending" || !recipientEmail}
+                    onClick={handleSendEmailProposal}
+                    title={!recipientEmail ? "Falta correo del destinatario" : ""}
                     type="button"
                   >
-                    {importStatus === "uploading" ? "Importando..." : "Importar Excel"}
+                    {emailStatus === "sending" ? "Enviando correo..." : "Enviar propuesta por correo"}
                   </button>
+                  {!recipientEmail ? (
+                    <p className="text-xs text-zinc-500">Agrega el correo del destinatario en los campos de cabecera.</p>
+                  ) : null}
                 </div>
-                {importMessage ? (
-                  <p
-                    className={`mt-2 text-sm ${
-                      importStatus === "error" ? "text-rose-700" : "text-emerald-700"
-                    }`}
-                  >
-                    {importMessage}
+              ) : null}
+
+              {/* Decisión del cliente: una vez que la propuesta fue enviada al cliente (estado "Enviada"),
+                  el usuario registra si el cliente la aceptó o rechazó. */}
+              {selectedStatus === "sent" ? (
+                <div className="flex flex-col gap-2 rounded-lg border border-zinc-200 bg-zinc-50 p-3">
+                  <p className="text-sm font-medium text-zinc-700">Registrar decisión del cliente</p>
+                  <div className="flex gap-2">
+                    <button
+                      className="rounded-lg border border-emerald-300 bg-emerald-50 px-3 py-2 text-sm font-medium text-emerald-700 hover:bg-emerald-100 disabled:opacity-60"
+                      disabled={saveStatus === "saving"}
+                      onClick={() => handleSave("approved")}
+                      type="button"
+                    >
+                      Cliente aceptó
+                    </button>
+                    <button
+                      className="rounded-lg border border-rose-300 bg-rose-50 px-3 py-2 text-sm font-medium text-rose-700 hover:bg-rose-100 disabled:opacity-60"
+                      disabled={saveStatus === "saving"}
+                      onClick={() => handleSave("rejected")}
+                      type="button"
+                    >
+                      Cliente rechazó
+                    </button>
+                  </div>
+                </div>
+              ) : null}
+
+              <div className="rounded-lg border border-zinc-200 bg-white p-3">
+                <p className="text-xs uppercase tracking-[0.18em] text-zinc-500">Aprobaciones formales</p>
+                {selectedStatus === "draft" ? (
+                  <p className="mt-2 text-sm text-zinc-500">
+                    Envía a solicitud de aprobación para habilitar el proceso de aprobación formal.
                   </p>
-                ) : null}
+                ) : (
+                  <>
+                    <p className="mt-2 text-sm text-zinc-700">
+                      {approvalGate?.canAuthorizeFinal
+                        ? "La propuesta cumple aprobaciones requeridas para autorizacion final."
+                        : `Roles faltantes: ${formatMissingApprovalRoles(approvalGate?.missingRoles ?? ["owner"])}`}
+                    </p>
+                    <div className="mt-3 grid gap-2 md:grid-cols-[1fr_auto_auto]">
+                      <input
+                        className="w-full rounded-lg border border-zinc-300 bg-white px-3 py-2 text-sm text-zinc-800"
+                        onChange={(event) => setApprovalReason(event.target.value)}
+                        placeholder="Motivo (obligatorio para rechazar)"
+                        value={approvalReason}
+                      />
+                      <button
+                        className="rounded-lg border border-emerald-300 bg-emerald-50 px-3 py-2 text-sm font-medium text-emerald-700 hover:bg-emerald-100 disabled:opacity-60"
+                        disabled={approvalPending}
+                        onClick={() => handleApprovalDecision("approved")}
+                        type="button"
+                      >
+                        Aprobar
+                      </button>
+                      <button
+                        className="rounded-lg border border-rose-300 bg-rose-50 px-3 py-2 text-sm font-medium text-rose-700 hover:bg-rose-100 disabled:opacity-60"
+                        disabled={approvalPending}
+                        onClick={() => handleApprovalDecision("rejected")}
+                        type="button"
+                      >
+                        Rechazar
+                      </button>
+                    </div>
+                  </>
+                )}
+
+                <div className="mt-3 max-h-44 overflow-auto rounded-lg border border-zinc-200">
+                  <table className="min-w-full divide-y divide-zinc-200 text-xs">
+                    <thead className="bg-zinc-50 text-left text-zinc-600">
+                      <tr>
+                        <th className="px-3 py-2 font-medium">Fecha</th>
+                        <th className="px-3 py-2 font-medium">Rol</th>
+                        <th className="px-3 py-2 font-medium">Decision</th>
+                        <th className="px-3 py-2 font-medium">Motivo</th>
+                      </tr>
+                    </thead>
+                    <tbody className="divide-y divide-zinc-100">
+                      {approvals.length > 0 ? (
+                        approvals.map((row) => (
+                          <tr key={row.approvalId}>
+                            <td className="px-3 py-2 text-zinc-600">{formatDate(row.createdAt)}</td>
+                            <td className="px-3 py-2 text-zinc-700">{formatApprovalRole(row.approverRole)}</td>
+                            <td className="px-3 py-2 text-zinc-700">{formatApprovalDecision(row.decision)}</td>
+                            <td className="px-3 py-2 text-zinc-600">{row.reason ?? "-"}</td>
+                          </tr>
+                        ))
+                      ) : (
+                        <tr>
+                          <td className="px-3 py-3 text-zinc-500" colSpan={4}>
+                            Aun no hay decisiones registradas.
+                          </td>
+                        </tr>
+                      )}
+                    </tbody>
+                  </table>
+                </div>
               </div>
+
             </div>
           ) : (
             <p className="text-sm text-zinc-600">No hay propuestas disponibles para este tenant.</p>

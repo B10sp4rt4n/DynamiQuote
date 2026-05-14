@@ -273,3 +273,62 @@ export async function getQuoteDashboardSnapshotByTenant(
     totalRevenue: decimalToNumber(aggregate._sum.total_revenue) ?? 0,
   };
 }
+
+export type QuoteImportLineInput = {
+  costUnit: number;
+  description: string;
+  lineType: string;
+  priceUnit: number;
+  quantity: number;
+  sku: string;
+};
+
+// Reemplaza todas las partidas de una cotización con las filas importadas desde Excel.
+// Valida que la cotización pertenece al tenant antes de operar.
+export async function importQuoteLinesByTenant(
+  tenantId: string,
+  quoteId: string,
+  items: QuoteImportLineInput[],
+): Promise<{ importedCount: number; quoteId: string } | null> {
+  const quote = await prisma.quote.findFirst({
+    select: { quote_id: true },
+    where: { quote_id: quoteId, tenantId },
+  });
+
+  if (!quote) {
+    return null;
+  }
+
+  const now = new Date();
+
+  await prisma.$transaction(async (tx) => {
+    await tx.quote_lines.deleteMany({ where: { quote_id: quoteId } });
+
+    await tx.quote_lines.createMany({
+      data: items.map((item) => {
+        const marginPct =
+          item.priceUnit > 0
+            ? ((item.priceUnit - item.costUnit) / item.priceUnit) * 100
+            : 0;
+
+        return {
+          cost_unit: item.costUnit,
+          created_at: now,
+          description_final: item.description || "",
+          description_original: item.description || "",
+          final_price_unit: item.priceUnit,
+          import_source: "excel",
+          line_id: randomUUID(),
+          line_type: item.lineType || "product",
+          margin_pct: Number.isFinite(marginPct) ? marginPct : 0,
+          quantity: item.quantity > 0 ? item.quantity : 1,
+          quote_id: quoteId,
+          service_origin: null,
+          sku: item.sku || null,
+        };
+      }),
+    });
+  });
+
+  return { importedCount: items.length, quoteId: quote.quote_id };
+}
