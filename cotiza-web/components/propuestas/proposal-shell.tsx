@@ -714,6 +714,10 @@ export function ProposalShell({ proposals, tenantName }: ProposalShellProps) {
       // Sincronizar el dropdown con el estado real confirmado por la API
       // (la API puede ajustar el estado si el workflow lo requiere).
       setSelectedStatus(data.proposal.status);
+      if (data.proposal.status === "approved") {
+        setEmailStatus("idle");
+        setEmailMessage(null);
+      }
       setSaveStatus("success");
       return true;
     } catch (error) {
@@ -775,6 +779,10 @@ export function ProposalShell({ proposals, tenantName }: ProposalShellProps) {
       setApprovals(data.proposal.approvals ?? []);
       setApprovalGate(data.proposal.approvalGate ?? null);
       setSelectedStatus(data.proposal.status);
+      if (data.proposal.status === "approved") {
+        setEmailStatus("idle");
+        setEmailMessage(null);
+      }
       setItems((current) =>
         current.map((item) =>
           item.proposalId === data.proposal?.proposalId
@@ -856,11 +864,22 @@ export function ProposalShell({ proposals, tenantName }: ProposalShellProps) {
         throw new Error(data?.error ?? "No fue posible enviar el correo al cliente");
       }
 
-      // Al enviar por correo, la propuesta transiciona a "Enviada" para registrar
-      // que fue entregada al cliente. El usuario luego registra la decisión del cliente.
-      setSelectedStatus("sent");
+      // Si la propuesta estaba aprobada, transiciona a "Enviada" para registrar que fue
+      // entregada al cliente. Si ya estaba "Enviada", mantiene el estado (re-envío).
+      if (selectedStatus === "approved") {
+        setSelectedStatus("sent");
+        setItems((current) =>
+          current.map((item) =>
+            item.proposalId === selectedProposal.proposalId ? { ...item, status: "sent" } : item,
+          ),
+        );
+      }
       setEmailStatus("success");
-      setEmailMessage("Correo enviado correctamente al cliente.");
+      setEmailMessage(
+        selectedStatus === "sent"
+          ? "Correo re-enviado correctamente al cliente."
+          : "Correo enviado correctamente al cliente.",
+      );
     } catch (error) {
       setEmailStatus("error");
       setEmailMessage(error instanceof Error ? error.message : "Error interno al enviar correo");
@@ -1358,9 +1377,9 @@ export function ProposalShell({ proposals, tenantName }: ProposalShellProps) {
                 </div>
               ) : null}
 
-              {/* Botón de correo: disponible solo cuando la propuesta está aprobada internamente.
-                  Al enviarse por correo, el estado cambia a "Enviada" automáticamente. */}
-              {selectedStatus === "approved" ? (
+              {/* Botón de correo: disponible cuando la propuesta está aprobada o ya fue enviada (re-envío).
+                  El primer envío cambia el estado a "Enviada". Re-envíos mantienen el estado. */}
+              {selectedStatus === "approved" || selectedStatus === "sent" ? (
                 <div className="flex flex-col gap-1">
                   <button
                     className="w-fit rounded-lg border border-blue-300 bg-blue-50 px-4 py-2 text-sm font-medium text-blue-700 transition hover:bg-blue-100 disabled:cursor-not-allowed disabled:opacity-60"
@@ -1369,7 +1388,11 @@ export function ProposalShell({ proposals, tenantName }: ProposalShellProps) {
                     title={!recipientEmail ? "Falta correo del destinatario" : ""}
                     type="button"
                   >
-                    {emailStatus === "sending" ? "Enviando correo..." : "Enviar propuesta por correo"}
+                    {emailStatus === "sending"
+                      ? "Enviando correo..."
+                      : selectedStatus === "sent"
+                        ? "Re-enviar propuesta por correo"
+                        : "Enviar propuesta por correo"}
                   </button>
                   {!recipientEmail ? (
                     <p className="text-xs text-zinc-500">Agrega el correo del destinatario en los campos de cabecera.</p>
