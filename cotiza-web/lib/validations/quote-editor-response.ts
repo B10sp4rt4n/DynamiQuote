@@ -43,8 +43,11 @@ export const quoteLinesPutResponseSchema = z.object({
 
 export const quoteVersionHistoryItemSchema = z.object({
   avgMargin: z.number().nullable(),
+  closedAt: z.string().nullable(),
   createdAt: z.string().nullable(),
   quoteId: z.string(),
+  rejectedAt: z.string().nullable(),
+  sentAt: z.string().nullable(),
   status: z.string(),
   totalRevenue: z.number().nullable(),
   version: z.number().int().positive(),

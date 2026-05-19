@@ -77,6 +77,13 @@ model Quote {
   proposal_name      String?
   tenantId           String?              @map("tenant_id")
   created_by_user_id String?
+  sent_at            DateTime?            @map("sent_at") @db.Timestamp(6)
+  sent_by            String?              @map("sent_by")
+  closed_at          DateTime?            @map("closed_at") @db.Timestamp(6)
+  closed_by          String?              @map("closed_by")
+  rejected_at        DateTime?            @map("rejected_at") @db.Timestamp(6)
+  rejected_by        String?              @map("rejected_by")
+  closed_reason      String?              @map("closed_reason")
   formal_proposals   formal_proposals[]
   import_files       import_files[]
   quote_lines        quote_lines[]

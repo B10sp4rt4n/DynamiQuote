@@ -238,23 +238,65 @@ function createLocalLineId(): string {
   return `tmp-${Date.now()}-${Math.floor(Math.random() * 100_000)}`;
 }
 
-function getLineMatchKey(line: EditableQuoteLine, index: number): string {
-  return `${index}`;
-}
-
 function buildLineDiffMap(
   baselineLines: EditableQuoteLine[],
   currentLines: EditableQuoteLine[],
 ): { deltaMap: LineDeltaMap; diffMap: LineDiffMap } {
-  const baselineByKey = new Map(
-    baselineLines.map((line, index) => [getLineMatchKey(line, index), line]),
-  );
+  // Matching semántico: primero por lineId, luego por sku no vacío, luego por
+  // descripción normalizada, y por último por posición como fallback.
+  const unmatched = new Map(baselineLines.map((line) => [line.lineId, line]));
+
+  function normalizeDesc(value: string): string {
+    return value.trim().toLowerCase().replace(/\s+/g, " ");
+  }
+
+  // Índices auxiliares de búsqueda para baseline
+  const bySku = new Map<string, EditableQuoteLine>();
+  const byDesc = new Map<string, EditableQuoteLine>();
+
+  for (const line of baselineLines) {
+    if (line.sku && line.sku.trim().length > 0) {
+      bySku.set(line.sku.trim(), line);
+    }
+    const desc = normalizeDesc(line.description);
+    if (desc.length > 0 && !byDesc.has(desc)) {
+      byDesc.set(desc, line);
+    }
+  }
+
+  function findBaseline(current: EditableQuoteLine, positionIndex: number): EditableQuoteLine | undefined {
+    // 1. Mismo lineId
+    if (unmatched.has(current.lineId)) {
+      const match = unmatched.get(current.lineId);
+      unmatched.delete(current.lineId);
+      return match;
+    }
+
+    // 2. Mismo sku
+    const sku = current.sku?.trim();
+    if (sku && sku.length > 0 && bySku.has(sku)) {
+      const match = bySku.get(sku)!;
+      bySku.delete(sku);
+      return match;
+    }
+
+    // 3. Misma descripción normalizada
+    const desc = normalizeDesc(current.description);
+    if (desc.length > 0 && byDesc.has(desc)) {
+      const match = byDesc.get(desc)!;
+      byDesc.delete(desc);
+      return match;
+    }
+
+    // 4. Fallback posicional
+    return baselineLines[positionIndex];
+  }
 
   const nextDiffMap: LineDiffMap = {};
   const nextDeltaMap: LineDeltaMap = {};
 
   for (const [index, currentLine] of currentLines.entries()) {
-    const baselineLine = baselineByKey.get(getLineMatchKey(currentLine, index));
+    const baselineLine = findBaseline(currentLine, index);
 
     if (!baselineLine) {
       continue;
@@ -293,8 +335,32 @@ function buildLineDiffMap(
   };
 }
 
+const STATUS_LABELS: Record<string, string> = {
+  closed: "Cerrada",
+  draft: "Borrador",
+  rejected: "Rechazada",
+  sent: "Enviada",
+};
+
+const STATUS_COLORS: Record<string, string> = {
+  closed: "bg-emerald-100 text-emerald-800 border-emerald-300",
+  draft: "bg-zinc-100 text-zinc-700 border-zinc-300",
+  rejected: "bg-rose-100 text-rose-800 border-rose-300",
+  sent: "bg-sky-100 text-sky-800 border-sky-300",
+};
+
+function StatusBadge({ status }: { status: string }) {
+  const label = STATUS_LABELS[status] ?? status;
+  const colorClass = STATUS_COLORS[status] ?? "bg-zinc-100 text-zinc-700 border-zinc-300";
+
+  return (
+    <span className={`inline-flex items-center rounded-full border px-2.5 py-0.5 text-xs font-medium ${colorClass}`}>
+      {label}
+    </span>
+  );
+}
+
 export function QuoteLineEditor({
-  forcedSelectedQuoteId,
   onQuoteVersionSaved,
   quotes,
 }: QuoteLineEditorProps) {
@@ -802,6 +868,51 @@ export function QuoteLineEditor({
     };
   }, [lineDiffMap]);
 
+  const [actionMessage, setActionMessage] = useState<string | null>(null);
+  const [takingAction, setTakingAction] = useState(false);
+
+  async function handleQuoteAction(action: "send" | "close" | "reject", reason?: string) {
+    if (!selectedQuoteId) return;
+
+    setTakingAction(true);
+    setActionMessage(null);
+
+    try {
+      const response = await fetch(`/api/quotes/${selectedQuoteId}`, {
+        body: JSON.stringify({ action, reason }),
+        headers: { "Content-Type": "application/json" },
+        method: "PATCH",
+      });
+
+      const data = (await response.json()) as { error?: string; status?: string };
+
+      if (!response.ok) {
+        setActionMessage(data.error ?? "No se pudo completar la accion");
+        return;
+      }
+
+      setActionMessage(
+        action === "send"
+          ? "Cotizacion marcada como Enviada"
+          : action === "close"
+            ? "Version cerrada correctamente"
+            : "Version rechazada",
+      );
+      await loadVersions(selectedQuoteId);
+    } catch {
+      setActionMessage("Error de red al ejecutar la accion");
+    } finally {
+      setTakingAction(false);
+    }
+  }
+
+  const currentVersion = useMemo(
+    () => versions.find((v) => v.quoteId === selectedQuoteId),
+    [versions, selectedQuoteId],
+  );
+
+  const currentStatus = currentVersion?.status ?? selectedQuote?.status ?? "draft";
+
   function exportComparisonCsv() {
     if (lines.length === 0) {
       setMessage("No hay lineas para exportar");
@@ -957,6 +1068,42 @@ export function QuoteLineEditor({
             + Partida
           </button>
         </div>
+        <div className="flex flex-wrap items-center gap-3 border-t border-zinc-100 pt-3">
+          <StatusBadge status={currentStatus} />
+          {currentStatus === "draft" && (
+            <button
+              className="rounded-lg border border-sky-300 bg-sky-50 px-3 py-1.5 text-xs font-medium text-sky-800 hover:bg-sky-100 disabled:opacity-50"
+              disabled={takingAction}
+              onClick={() => { void handleQuoteAction("send"); }}
+              type="button"
+            >
+              {takingAction ? "..." : "Marcar enviada"}
+            </button>
+          )}
+          {(currentStatus === "draft" || currentStatus === "sent") && (
+            <>
+              <button
+                className="rounded-lg border border-emerald-300 bg-emerald-50 px-3 py-1.5 text-xs font-medium text-emerald-800 hover:bg-emerald-100 disabled:opacity-50"
+                disabled={takingAction}
+                onClick={() => { void handleQuoteAction("close"); }}
+                type="button"
+              >
+                {takingAction ? "..." : "Cerrar version"}
+              </button>
+              <button
+                className="rounded-lg border border-rose-300 bg-rose-50 px-3 py-1.5 text-xs font-medium text-rose-800 hover:bg-rose-100 disabled:opacity-50"
+                disabled={takingAction}
+                onClick={() => { void handleQuoteAction("reject"); }}
+                type="button"
+              >
+                {takingAction ? "..." : "Rechazar"}
+              </button>
+            </>
+          )}
+          {actionMessage && (
+            <p className="text-xs text-zinc-600">{actionMessage}</p>
+          )}
+        </div>
       </div>
 
       {showPackagePicker && (
@@ -1007,7 +1154,8 @@ export function QuoteLineEditor({
             >
               {versions.map((version) => (
                 <option key={`base-${version.quoteId}`} value={version.quoteId}>
-                  v{version.version}
+                  v{version.version} · {STATUS_LABELS[version.status] ?? version.status}
+                  {version.totalRevenue !== null ? ` · ${new Intl.NumberFormat("es-MX", { currency: "MXN", maximumFractionDigits: 0, style: "currency" }).format(version.totalRevenue)}` : ""}
                 </option>
               ))}
             </select>
@@ -1021,7 +1169,8 @@ export function QuoteLineEditor({
             >
               {versions.map((version) => (
                 <option key={`target-${version.quoteId}`} value={version.quoteId}>
-                  v{version.version} {version.quoteId === selectedQuoteId ? "(actual)" : ""}
+                  v{version.version} · {STATUS_LABELS[version.status] ?? version.status}
+                  {version.quoteId === selectedQuoteId ? " (actual)" : ""}
                 </option>
               ))}
             </select>

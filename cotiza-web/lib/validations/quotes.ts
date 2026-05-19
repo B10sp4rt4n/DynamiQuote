@@ -8,3 +8,10 @@ export const createQuoteSchema = z.object({
 });
 
 export type CreateQuoteInput = z.infer<typeof createQuoteSchema>;
+
+export const quoteActionSchema = z.object({
+  action: z.enum(["send", "close", "reject"]),
+  reason: z.string().trim().max(500).optional(),
+});
+
+export type QuoteActionInput = z.infer<typeof quoteActionSchema>;

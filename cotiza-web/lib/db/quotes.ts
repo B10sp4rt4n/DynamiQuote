@@ -283,15 +283,29 @@ export type QuoteImportLineInput = {
   sku: string;
 };
 
-// Reemplaza todas las partidas de una cotización con las filas importadas desde Excel.
-// Valida que la cotización pertenece al tenant antes de operar.
+function round2(value: number): number {
+  return Math.round(value * 100) / 100;
+}
+
+// Crea una nueva versión de la cotización con las partidas importadas desde Excel.
+// La versión original queda intacta (append-only). El nuevo quoteId se devuelve
+// al caller para que el cliente pueda navegar a la nueva versión.
 export async function importQuoteLinesByTenant(
   tenantId: string,
   quoteId: string,
   items: QuoteImportLineInput[],
 ): Promise<{ importedCount: number; quoteId: string } | null> {
   const quote = await prisma.quote.findFirst({
-    select: { quote_id: true },
+    select: {
+      client_name: true,
+      created_by_user_id: true,
+      playbook_name: true,
+      proposal_name: true,
+      quote_group_id: true,
+      quote_id: true,
+      quoted_by: true,
+      version: true,
+    },
     where: { quote_id: quoteId, tenantId },
   });
 
@@ -299,13 +313,48 @@ export async function importQuoteLinesByTenant(
     return null;
   }
 
+  const quoteGroupId = quote.quote_group_id ?? quote.quote_id;
+
+  const latestInGroup = await prisma.quote.findFirst({
+    orderBy: [{ version: "desc" }, { createdAt: "desc" }],
+    select: { version: true },
+    where: { quote_group_id: quoteGroupId, tenantId },
+  });
+
+  const nextVersion = (latestInGroup?.version ?? quote.version ?? 1) + 1;
+  const newQuoteId = `${quoteGroupId}-v${nextVersion}-${randomUUID().slice(0, 8)}`;
   const now = new Date();
 
+  const totalCost = round2(items.reduce((sum, i) => sum + i.costUnit * (i.quantity > 0 ? i.quantity : 1), 0));
+  const totalRevenue = round2(items.reduce((sum, i) => sum + i.priceUnit * (i.quantity > 0 ? i.quantity : 1), 0));
+  const grossProfit = round2(totalRevenue - totalCost);
+  const avgMargin = totalRevenue > 0 ? round2((grossProfit / totalRevenue) * 100) : 0;
+
   await prisma.$transaction(async (tx) => {
-    await tx.quote_lines.deleteMany({ where: { quote_id: quoteId } });
+    await tx.quote.create({
+      data: {
+        avg_margin: avgMargin,
+        client_name: quote.client_name,
+        created_by_user_id: quote.created_by_user_id,
+        createdAt: now,
+        gross_profit: grossProfit,
+        parent_quote_id: quote.quote_id,
+        playbook_name: quote.playbook_name,
+        proposal_name: quote.proposal_name,
+        quote_group_id: quoteGroupId,
+        quote_id: newQuoteId,
+        quoted_by: quote.quoted_by,
+        status: "draft",
+        tenantId,
+        total_cost: totalCost,
+        total_revenue: totalRevenue,
+        version: nextVersion,
+      },
+    });
 
     await tx.quote_lines.createMany({
       data: items.map((item) => {
+        const qty = item.quantity > 0 ? item.quantity : 1;
         const marginPct =
           item.priceUnit > 0
             ? ((item.priceUnit - item.costUnit) / item.priceUnit) * 100
@@ -320,9 +369,9 @@ export async function importQuoteLinesByTenant(
           import_source: "excel",
           line_id: randomUUID(),
           line_type: item.lineType || "product",
-          margin_pct: Number.isFinite(marginPct) ? marginPct : 0,
-          quantity: item.quantity > 0 ? item.quantity : 1,
-          quote_id: quoteId,
+          margin_pct: Number.isFinite(marginPct) ? round2(marginPct) : 0,
+          quantity: qty,
+          quote_id: newQuoteId,
           service_origin: null,
           sku: item.sku || null,
         };
@@ -330,5 +379,5 @@ export async function importQuoteLinesByTenant(
     });
   });
 
-  return { importedCount: items.length, quoteId: quote.quote_id };
+  return { importedCount: items.length, quoteId: newQuoteId };
 }

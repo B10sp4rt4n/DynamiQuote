@@ -45,8 +45,11 @@ export type UpdatedQuoteVersion = {
 
 export type QuoteVersionHistoryItem = {
   avgMargin: number | null;
+  closedAt: string | null;
   createdAt: string | null;
   quoteId: string;
+  rejectedAt: string | null;
+  sentAt: string | null;
   status: string;
   totalRevenue: number | null;
   version: number;
@@ -288,7 +291,7 @@ export async function updateQuoteLinesByTenant(
         quote_group_id: quoteGroupId,
         quote_id: newQuoteId,
         quoted_by: quote.quoted_by,
-        status: quote.status,
+        status: "draft",
         tenantId,
         total_cost: totalCost,
         total_revenue: totalRevenue,
@@ -378,8 +381,11 @@ export async function getQuoteVersionsByTenant(
     orderBy: [{ version: "desc" }, { createdAt: "desc" }],
     select: {
       avg_margin: true,
+      closed_at: true,
       createdAt: true,
       quote_id: true,
+      rejected_at: true,
+      sent_at: true,
       status: true,
       total_revenue: true,
       version: true,
@@ -395,11 +401,193 @@ export async function getQuoteVersionsByTenant(
     quoteGroupId,
     versions: versions.map((item) => ({
       avgMargin: item.avg_margin ? item.avg_margin.toNumber() : null,
+      closedAt: item.closed_at ? item.closed_at.toISOString() : null,
       createdAt: item.createdAt ? item.createdAt.toISOString() : null,
       quoteId: item.quote_id,
+      rejectedAt: item.rejected_at ? item.rejected_at.toISOString() : null,
+      sentAt: item.sent_at ? item.sent_at.toISOString() : null,
       status: item.status ?? "draft",
       totalRevenue: item.total_revenue ? item.total_revenue.toNumber() : null,
       version: item.version ?? 1,
     })),
   };
+}
+
+// Selecciona los campos de versión extendida reutilizables en varias funciones
+const versionSelect = {
+  avg_margin: true,
+  closed_at: true,
+  createdAt: true,
+  quote_id: true,
+  rejected_at: true,
+  sent_at: true,
+  status: true,
+  total_revenue: true,
+  version: true,
+} as const;
+
+function mapVersionRow(item: {
+  avg_margin: import("@prisma/client").Prisma.Decimal | null;
+  closed_at: Date | null;
+  createdAt: Date | null;
+  quote_id: string;
+  rejected_at: Date | null;
+  sent_at: Date | null;
+  status: string | null;
+  total_revenue: import("@prisma/client").Prisma.Decimal | null;
+  version: number | null;
+}): QuoteVersionHistoryItem {
+  return {
+    avgMargin: item.avg_margin ? item.avg_margin.toNumber() : null,
+    closedAt: item.closed_at ? item.closed_at.toISOString() : null,
+    createdAt: item.createdAt ? item.createdAt.toISOString() : null,
+    quoteId: item.quote_id,
+    rejectedAt: item.rejected_at ? item.rejected_at.toISOString() : null,
+    sentAt: item.sent_at ? item.sent_at.toISOString() : null,
+    status: item.status ?? "draft",
+    totalRevenue: item.total_revenue ? item.total_revenue.toNumber() : null,
+    version: item.version ?? 1,
+  };
+}
+
+// Marca una cotización como enviada. Solo es posible si el estado actual es "draft".
+export async function markQuoteAsSentByTenant(
+  tenantId: string,
+  quoteId: string,
+  userId: string,
+): Promise<{ sentAt: string; status: string } | null> {
+  const quote = await prisma.quote.findFirst({
+    select: { quote_id: true, status: true },
+    where: { quote_id: quoteId, tenantId },
+  });
+
+  if (!quote || quote.status !== "draft") {
+    return null;
+  }
+
+  const sentAt = new Date();
+
+  await prisma.quote.update({
+    data: { sent_at: sentAt, sent_by: userId, status: "sent" },
+    where: { quote_id: quoteId },
+  });
+
+  return { sentAt: sentAt.toISOString(), status: "sent" };
+}
+
+// Cierra una versión de cotización. Solo permite un cierre por grupo.
+// Estado previo admitido: draft o sent.
+export async function closeQuoteVersionByTenant(
+  tenantId: string,
+  quoteId: string,
+  userId: string,
+  reason?: string,
+): Promise<{ closedAt: string; status: string } | null> {
+  const quote = await prisma.quote.findFirst({
+    select: { quote_group_id: true, quote_id: true, status: true },
+    where: { quote_id: quoteId, tenantId },
+  });
+
+  if (!quote || (quote.status !== "draft" && quote.status !== "sent")) {
+    return null;
+  }
+
+  const quoteGroupId = quote.quote_group_id ?? quote.quote_id;
+
+  const existingClosed = await prisma.quote.findFirst({
+    select: { quote_id: true },
+    where: {
+      quote_group_id: quoteGroupId,
+      quote_id: { not: quoteId },
+      status: "closed",
+      tenantId,
+    },
+  });
+
+  if (existingClosed) {
+    return null;
+  }
+
+  const closedAt = new Date();
+
+  await prisma.quote.update({
+    data: {
+      closed_at: closedAt,
+      closed_by: userId,
+      closed_reason: reason ?? null,
+      status: "closed",
+    },
+    where: { quote_id: quoteId },
+  });
+
+  return { closedAt: closedAt.toISOString(), status: "closed" };
+}
+
+// Rechaza una versión de cotización. Estado previo admitido: draft o sent.
+export async function rejectQuoteVersionByTenant(
+  tenantId: string,
+  quoteId: string,
+  userId: string,
+  reason?: string,
+): Promise<{ rejectedAt: string; status: string } | null> {
+  const quote = await prisma.quote.findFirst({
+    select: { quote_id: true, status: true },
+    where: { quote_id: quoteId, tenantId },
+  });
+
+  if (!quote || (quote.status !== "draft" && quote.status !== "sent")) {
+    return null;
+  }
+
+  const rejectedAt = new Date();
+
+  await prisma.quote.update({
+    data: {
+      closed_reason: reason ?? null,
+      rejected_at: rejectedAt,
+      rejected_by: userId,
+      status: "rejected",
+    },
+    where: { quote_id: quoteId },
+  });
+
+  return { rejectedAt: rejectedAt.toISOString(), status: "rejected" };
+}
+
+// Retorna la versión base de comparación para un grupo:
+// Prioridad: closed → sent → versión anterior más reciente → null.
+export async function getComparisonBaseForQuoteGroup(
+  tenantId: string,
+  quoteGroupId: string,
+  excludeQuoteId?: string,
+): Promise<QuoteVersionHistoryItem | null> {
+  const baseWhere = {
+    quote_group_id: quoteGroupId,
+    tenantId,
+    ...(excludeQuoteId ? { quote_id: { not: excludeQuoteId } } : {}),
+  };
+
+  const closed = await prisma.quote.findFirst({
+    orderBy: [{ version: "desc" }],
+    select: versionSelect,
+    where: { ...baseWhere, status: "closed" },
+  });
+
+  if (closed) return mapVersionRow(closed);
+
+  const sent = await prisma.quote.findFirst({
+    orderBy: [{ version: "desc" }],
+    select: versionSelect,
+    where: { ...baseWhere, status: "sent" },
+  });
+
+  if (sent) return mapVersionRow(sent);
+
+  const latest = await prisma.quote.findFirst({
+    orderBy: [{ version: "desc" }],
+    select: versionSelect,
+    where: baseWhere,
+  });
+
+  return latest ? mapVersionRow(latest) : null;
 }

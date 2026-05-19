@@ -36,6 +36,31 @@ function formatCurrency(value: number | null): string {
   }).format(value ?? 0);
 }
 
+const QUOTE_STATUS_LABELS: Record<string, string> = {
+  closed: "Cerrada",
+  draft: "Borrador",
+  rejected: "Rechazada",
+  sent: "Enviada",
+};
+
+const QUOTE_STATUS_COLORS: Record<string, string> = {
+  closed: "bg-emerald-100 text-emerald-800",
+  draft: "bg-zinc-100 text-zinc-700",
+  rejected: "bg-rose-100 text-rose-800",
+  sent: "bg-sky-100 text-sky-800",
+};
+
+function QuoteStatusBadge({ status }: { status: string }) {
+  const label = QUOTE_STATUS_LABELS[status] ?? status;
+  const colorClass = QUOTE_STATUS_COLORS[status] ?? "bg-zinc-100 text-zinc-700";
+
+  return (
+    <span className={`inline-flex items-center rounded-full px-2 py-0.5 text-xs font-medium ${colorClass}`}>
+      {label}
+    </span>
+  );
+}
+
 function sortQuotes(items: QuoteGroupSummary[]): QuoteGroupSummary[] {
   return [...items].sort((a, b) => {
     const aTime = a.createdAt ? Date.parse(a.createdAt) : 0;
@@ -487,6 +512,7 @@ export function QuoteShell({
                     <th className="px-4 py-3 font-medium">Cliente</th>
                     <th className="px-4 py-3 font-medium">Propuesta</th>
                     <th className="px-4 py-3 font-medium">Grupo</th>
+                    <th className="px-4 py-3 font-medium">Estado</th>
                     <th className="px-4 py-3 font-medium">Versiones</th>
                     <th className="px-4 py-3 font-medium">Total</th>
                     <th className="px-4 py-3 font-medium">Margen</th>
@@ -502,6 +528,9 @@ export function QuoteShell({
                       <td className="px-4 py-3 text-zinc-900">{item.clientName}</td>
                       <td className="px-4 py-3 text-zinc-600">{item.proposalName}</td>
                       <td className="px-4 py-3 font-mono text-xs text-zinc-500">{item.quoteGroupId}</td>
+                      <td className="px-4 py-3">
+                        <QuoteStatusBadge status={item.status} />
+                      </td>
                       <td className="px-4 py-3 text-zinc-600">
                         v{item.version} de {item.versionCount}
                       </td>
