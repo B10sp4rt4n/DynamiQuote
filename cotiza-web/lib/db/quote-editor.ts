@@ -482,7 +482,7 @@ export async function closeQuoteVersionByTenant(
   quoteId: string,
   userId: string,
   reason?: string,
-): Promise<{ closedAt: string; status: string } | null> {
+): Promise<{ affectedProposals: NudgedProposalResult[]; closedAt: string; status: string } | null> {
   const quote = await prisma.quote.findFirst({
     select: { quote_group_id: true, quote_id: true, status: true },
     where: { quote_id: quoteId, tenantId },
@@ -520,7 +520,16 @@ export async function closeQuoteVersionByTenant(
     where: { quote_id: quoteId },
   });
 
-  return { closedAt: closedAt.toISOString(), status: "closed" };
+  // Efecto secundario: mover propuestas "sent" vinculadas al grupo a "in_review".
+  // Si falla, no bloquea el cierre de la cotización.
+  let affectedProposals: NudgedProposalResult[] = [];
+  try {
+    affectedProposals = await nudgeLinkedProposalsOnQuoteClosed(tenantId, quoteGroupId, userId);
+  } catch {
+    // intencional: el nudge es best-effort
+  }
+
+  return { affectedProposals, closedAt: closedAt.toISOString(), status: "closed" };
 }
 
 // Rechaza una versión de cotización. Estado previo admitido: draft o sent.
@@ -552,6 +561,84 @@ export async function rejectQuoteVersionByTenant(
   });
 
   return { rejectedAt: rejectedAt.toISOString(), status: "rejected" };
+}
+
+// Tipo que describe una propuesta que fue movida a in_review como efecto del cierre.
+export type NudgedProposalResult = {
+  previousStatus: string;
+  proposalId: string;
+};
+
+// Busca propuestas activas vinculadas al grupo de cotización (por origin o por
+// formal_proposals.quote_id) y transiciona aquellas en estado "sent" a "in_review".
+// Solo "sent → in_review" es una transición válida según allowedTransitions.
+// Draft no puede ir directo a in_review, se deja intacta.
+// Escribe un evento de auditoría en proposal_audit_events por cada propuesta tocada.
+// Esta función nunca lanza — errores se capturan para no bloquear el cierre de la cotización.
+async function nudgeLinkedProposalsOnQuoteClosed(
+  tenantId: string,
+  quoteGroupId: string,
+  closedBy: string,
+): Promise<NudgedProposalResult[]> {
+  // Obtener todos los quote_ids del grupo
+  const quotesInGroup = await prisma.quote.findMany({
+    select: { quote_id: true },
+    where: { quote_group_id: quoteGroupId, tenantId },
+  });
+
+  const quoteIds = quotesInGroup.map((q) => q.quote_id);
+  if (quoteIds.length === 0) return [];
+
+  // Buscar propuestas "sent" vinculadas al grupo.
+  // Vínculo: proposals.origin ∈ quoteIds  O  formal_proposals.quote_id ∈ quoteIds
+  const proposals = await prisma.proposals.findMany({
+    select: { proposal_id: true, status: true },
+    where: {
+      status: "sent", // único estado que puede transicionar a in_review sin pasar por sent
+      tenant_id: tenantId,
+      OR: [
+        { origin: { in: quoteIds } },
+        { formal_proposals: { some: { quote_id: { in: quoteIds } } } },
+      ],
+    },
+  });
+
+  if (proposals.length === 0) return [];
+
+  const now = new Date();
+  const touched: NudgedProposalResult[] = [];
+
+  for (const proposal of proposals) {
+    await prisma.$transaction([
+      prisma.proposals.update({
+        data: { status: "in_review" },
+        where: { proposal_id: proposal.proposal_id },
+      }),
+      prisma.formal_proposals.updateMany({
+        data: { status: "in_review", updated_at: now },
+        where: { proposal_id: proposal.proposal_id, tenant_id: tenantId },
+      }),
+      prisma.proposal_audit_events.create({
+        data: {
+          created_at: now,
+          event_hash: randomUUID(),
+          event_id: randomUUID(),
+          event_type: "quote_closed_nudge",
+          payload: JSON.stringify({
+            closedBy,
+            quoteGroupId,
+            transition: `${proposal.status} → in_review`,
+          }),
+          proposal_id: proposal.proposal_id,
+          tenant_id: tenantId,
+        },
+      }),
+    ]);
+
+    touched.push({ previousStatus: proposal.status, proposalId: proposal.proposal_id });
+  }
+
+  return touched;
 }
 
 // Retorna la versión base de comparación para un grupo:

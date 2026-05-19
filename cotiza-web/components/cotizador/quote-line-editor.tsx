@@ -1050,18 +1050,25 @@ export function QuoteLineEditor({
         method: "PATCH",
       });
 
-      const data = (await response.json()) as { error?: string; status?: string };
+      const data = (await response.json()) as {
+        affectedProposals?: Array<{ proposalId: string; previousStatus: string }>;
+        error?: string;
+        status?: string;
+      };
 
       if (!response.ok) {
         setActionMessage(data.error ?? "No se pudo completar la accion");
         return;
       }
 
+      const nudgedCount = data.affectedProposals?.length ?? 0;
       setActionMessage(
         action === "send"
           ? "Cotizacion marcada como Enviada"
           : action === "close"
-            ? "Version cerrada correctamente"
+            ? nudgedCount > 0
+              ? `Version cerrada. ${nudgedCount} propuesta${nudgedCount > 1 ? "s" : ""} movida${nudgedCount > 1 ? "s" : ""} a En revision.`
+              : "Version cerrada correctamente"
             : "Version rechazada",
       );
       await loadVersions(selectedQuoteId);

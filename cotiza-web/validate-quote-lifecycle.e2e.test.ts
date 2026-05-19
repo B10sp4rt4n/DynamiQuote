@@ -305,6 +305,9 @@ describe("Paso 6 — Cerrar versión", () => {
     expect(result).not.toBeNull();
     expect(result!.status).toBe("closed");
     expect(result!.closedAt).toBeDefined();
+    // Sin propuestas en el grupo → affectedProposals debe ser array vacío
+    expect(Array.isArray(result!.affectedProposals)).toBe(true);
+    expect(result!.affectedProposals).toHaveLength(0);
 
     const v3 = await prisma.quote.findFirst({
       select: { status: true, closed_at: true, closed_by: true, closed_reason: true },
@@ -643,3 +646,124 @@ describe("Paso 13 — Campos del selector de versiones (UI data)", () => {
 
 // Necesario para el mock de vi
 import { vi } from "vitest";
+
+// ────────────────────────────────────────────────────────────
+// PASO 14: Nudge de propuesta al cerrar cotización
+// Usa grupos independientes para no interferir con el closed de Paso 6
+// ────────────────────────────────────────────────────────────
+describe("Paso 14 — Nudge de propuesta al cerrar cotización", () => {
+  it("sin propuestas → affectedProposals vacío (ya verificado en Paso 6)", () => {
+    // Verificado en el Paso 6: result.affectedProposals.length === 0
+    expect(true).toBe(true);
+  });
+
+  it("con propuesta 'sent' vinculada → la mueve a in_review y escribe audit event", async () => {
+    // Grupo independiente para este test (no tiene closed previo)
+    const nudgeQuote = await createQuoteForTenant(TENANT_ID, {
+      clientName: "Cliente Nudge Test",
+      proposalName: "Propuesta Nudge",
+      quotedBy: TEST_USER_ID,
+    });
+    const nudgeGroupId = nudgeQuote.quoteGroupId;
+    const nudgeQuoteId = nudgeQuote.quoteId;
+
+    // Crear propuesta "sent" vinculada a esa cotización
+    const testProposalId = randomUUID();
+    const now = new Date();
+    await prisma.proposals.create({
+      data: {
+        closed_at: null,
+        created_at: now,
+        created_by: TEST_USER_ID,
+        origin: nudgeQuoteId,
+        proposal_id: testProposalId,
+        status: "sent",
+        tenant_id: TENANT_ID,
+      },
+    });
+
+    // Marcar la cotización como sent y luego cerrarla
+    await markQuoteAsSentByTenant(TENANT_ID, nudgeQuoteId, TEST_USER_ID);
+    const closeResult = await closeQuoteVersionByTenant(TENANT_ID, nudgeQuoteId, TEST_USER_ID, "Prueba nudge");
+
+    expect(closeResult).not.toBeNull();
+    expect(Array.isArray(closeResult!.affectedProposals)).toBe(true);
+    expect(closeResult!.affectedProposals.length).toBeGreaterThanOrEqual(1);
+
+    const nudged = closeResult!.affectedProposals.find((p) => p.proposalId === testProposalId);
+    expect(nudged).toBeDefined();
+    expect(nudged!.previousStatus).toBe("sent");
+
+    // Verificar en BD
+    const proposal = await prisma.proposals.findFirst({
+      select: { status: true },
+      where: { proposal_id: testProposalId },
+    });
+    expect(proposal!.status).toBe("in_review");
+
+    // Verificar audit event
+    const auditEvent = await prisma.proposal_audit_events.findFirst({
+      select: { event_type: true, payload: true },
+      where: { proposal_id: testProposalId, event_type: "quote_closed_nudge" },
+    });
+    expect(auditEvent).not.toBeNull();
+    const payload = JSON.parse(auditEvent!.payload ?? "{}") as Record<string, unknown>;
+    expect(payload.transition).toBe("sent → in_review");
+    expect(payload.quoteGroupId).toBe(nudgeGroupId);
+
+    console.log(`  ✅ PASO 14: Propuesta movida a in_review correctamente`);
+    console.log(`     proposalId: ${testProposalId} | audit event: quote_closed_nudge ✓`);
+
+    // Limpiar
+    await prisma.proposal_audit_events.deleteMany({ where: { proposal_id: testProposalId } });
+    await prisma.proposals.delete({ where: { proposal_id: testProposalId } });
+    await prisma.quote_lines.deleteMany({ where: { quote_id: nudgeQuoteId } });
+    await prisma.quote.delete({ where: { quote_id: nudgeQuoteId } });
+  });
+
+  it("propuesta 'draft' vinculada → NO se toca (draft → in_review bloqueado)", async () => {
+    // Grupo independiente
+    const draftNudgeQuote = await createQuoteForTenant(TENANT_ID, {
+      clientName: "Cliente Draft Nudge",
+      proposalName: "Propuesta Draft Nudge",
+      quotedBy: TEST_USER_ID,
+    });
+    const draftNudgeQuoteId = draftNudgeQuote.quoteId;
+
+    const draftProposalId = randomUUID();
+    const now = new Date();
+    await prisma.proposals.create({
+      data: {
+        closed_at: null,
+        created_at: now,
+        created_by: TEST_USER_ID,
+        origin: draftNudgeQuoteId,
+        proposal_id: draftProposalId,
+        status: "draft",
+        tenant_id: TENANT_ID,
+      },
+    });
+
+    await markQuoteAsSentByTenant(TENANT_ID, draftNudgeQuoteId, TEST_USER_ID);
+    const closeResult = await closeQuoteVersionByTenant(TENANT_ID, draftNudgeQuoteId, TEST_USER_ID);
+
+    expect(closeResult).not.toBeNull();
+    // La propuesta draft NO debe aparecer en affectedProposals
+    const nudged = closeResult!.affectedProposals.find((p) => p.proposalId === draftProposalId);
+    expect(nudged).toBeUndefined();
+
+    // Verificar que la propuesta draft sigue en draft
+    const proposal = await prisma.proposals.findFirst({
+      select: { status: true },
+      where: { proposal_id: draftProposalId },
+    });
+    expect(proposal!.status).toBe("draft");
+
+    console.log(`  ✅ PASO 14b: Propuesta draft NO fue tocada ✓`);
+
+    // Limpiar
+    await prisma.proposals.delete({ where: { proposal_id: draftProposalId } });
+    await prisma.quote_lines.deleteMany({ where: { quote_id: draftNudgeQuoteId } });
+    await prisma.quote.delete({ where: { quote_id: draftNudgeQuoteId } });
+  });
+});
