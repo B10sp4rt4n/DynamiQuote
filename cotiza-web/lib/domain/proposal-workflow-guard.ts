@@ -5,8 +5,8 @@ export type ProposalApproverRole = "superadmin" | "owner" | "admin" | "user";
 const allowedTransitions: Record<ProposalStatus, ProposalStatus[]> = {
   // approved puede retroceder a revisión o reenvío para correcciones
   approved: ["approved", "in_review", "sent"],
-  // draft puede aprobarse directo si superadmin + margen prevalidado
-  draft: ["draft", "sent", "approved"],
+  // draft solo puede avanzar a enviada o quedarse en borrador
+  draft: ["draft", "sent"],
   // expirada puede reactivarse para revisión
   expired: ["expired", "in_review", "draft"],
   in_review: ["in_review", "approved", "rejected", "expired"],
@@ -27,6 +27,11 @@ export function canTransitionProposalStatus(current: ProposalStatus, next: Propo
 }
 
 export function assertProposalWorkflowGuard(input: ProposalWorkflowGuardInput): void {
+  // Bloquear edición de contenido en propuesta aprobada sin cambiar estado
+  if (input.currentStatus === "approved" && input.nextStatus === "approved" && input.hasContentUpdate) {
+    throw new Error("La propuesta ya esta autorizada");
+  }
+
   if (!canTransitionProposalStatus(input.currentStatus, input.nextStatus)) {
     throw new Error(`Transicion invalida: ${input.currentStatus} -> ${input.nextStatus}`);
   }

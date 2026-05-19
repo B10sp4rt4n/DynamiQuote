@@ -8,7 +8,7 @@ import {
 import { enforceRateLimit, getRequestIdentity } from "@/lib/utils/rate-limit";
 import { createPackageSchema } from "@/lib/validations/packages";
 
-export async function GET() {
+export async function GET(_req: Request) {
   const tenant = await getCurrentTenantContext();
   if (!tenant) return NextResponse.json({ error: "No autorizado" }, { status: 401 });
 
