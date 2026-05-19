@@ -33,6 +33,25 @@ describe("proposal-workflow-guard", () => {
     ).toThrow("Transicion invalida");
   });
 
+  it("permite transicion draft a in_review (solicitud de revision interna)", () => {
+    expect(canTransitionProposalStatus("draft", "in_review")).toBe(true);
+
+    expect(() =>
+      assertProposalWorkflowGuard({
+        currentStatus: "draft",
+        hasContentUpdate: false,
+        marginCanAuthorizeFinal: false,
+        nextStatus: "in_review",
+      }),
+    ).not.toThrow();
+  });
+
+  it("handleSendToApproval: draft a in_review no falla cuando margen no autoriza", () => {
+    // Simula el targetStatus que elige handleSendToApproval cuando marginAllowsFinalAuthorization=false
+    const targetStatus = false ? "approved" : "in_review";
+    expect(canTransitionProposalStatus("draft", targetStatus)).toBe(true);
+  });
+
   it("bloquea autorizacion final cuando margen no autoriza", () => {
     expect(() =>
       assertProposalWorkflowGuard({

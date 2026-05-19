@@ -1051,7 +1051,7 @@ export function QuoteLineEditor({
       });
 
       const data = (await response.json()) as {
-        affectedProposals?: Array<{ proposalId: string; previousStatus: string }>;
+        affectedProposals?: Array<{ proposalId: string; proposalNumber: string | null; previousStatus: string; newStatus: string }>;
         error?: string;
         status?: string;
       };
@@ -1061,14 +1061,24 @@ export function QuoteLineEditor({
         return;
       }
 
-      const nudgedCount = data.affectedProposals?.length ?? 0;
+      const nudged = data.affectedProposals ?? [];
+      const nudgedCount = nudged.length;
+
+      function buildNudgeMessage(): string {
+        if (nudgedCount === 0) return "Version cerrada correctamente";
+        const allHaveNumber = nudged.every((p) => p.proposalNumber);
+        if (allHaveNumber) {
+          const folios = nudged.map((p) => p.proposalNumber!).join(", ");
+          return `Cotizacion cerrada. ${folios} ${nudgedCount > 1 ? "fueron movidas" : "fue movida"} a En revision.`;
+        }
+        return `Cotizacion cerrada. ${nudgedCount} propuesta${nudgedCount > 1 ? "s" : ""} vinculada${nudgedCount > 1 ? "s" : ""} ${nudgedCount > 1 ? "fueron movidas" : "fue movida"} a En revision.`;
+      }
+
       setActionMessage(
         action === "send"
           ? "Cotizacion marcada como Enviada"
           : action === "close"
-            ? nudgedCount > 0
-              ? `Version cerrada. ${nudgedCount} propuesta${nudgedCount > 1 ? "s" : ""} movida${nudgedCount > 1 ? "s" : ""} a En revision.`
-              : "Version cerrada correctamente"
+            ? buildNudgeMessage()
             : "Version rechazada",
       );
       await loadVersions(selectedQuoteId);

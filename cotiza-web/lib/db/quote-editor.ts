@@ -565,8 +565,11 @@ export async function rejectQuoteVersionByTenant(
 
 // Tipo que describe una propuesta que fue movida a in_review como efecto del cierre.
 export type NudgedProposalResult = {
+  newStatus: string;
   previousStatus: string;
   proposalId: string;
+  // Folio visible (PROP-XXXX) si existe formal_proposals vinculado; null si la propuesta no tiene folio aún.
+  proposalNumber: string | null;
 };
 
 // Busca propuestas activas vinculadas al grupo de cotización (por origin o por
@@ -591,8 +594,17 @@ async function nudgeLinkedProposalsOnQuoteClosed(
 
   // Buscar propuestas "sent" vinculadas al grupo.
   // Vínculo: proposals.origin ∈ quoteIds  O  formal_proposals.quote_id ∈ quoteIds
+  // Se incluye formal_proposals para recuperar el folio visible (PROP-XXXX).
   const proposals = await prisma.proposals.findMany({
-    select: { proposal_id: true, status: true },
+    select: {
+      formal_proposals: {
+        orderBy: { created_at: "desc" },
+        select: { proposal_number: true },
+        take: 1,
+      },
+      proposal_id: true,
+      status: true,
+    },
     where: {
       status: "sent", // único estado que puede transicionar a in_review sin pasar por sent
       tenant_id: tenantId,
@@ -635,7 +647,13 @@ async function nudgeLinkedProposalsOnQuoteClosed(
       }),
     ]);
 
-    touched.push({ previousStatus: proposal.status, proposalId: proposal.proposal_id });
+    const proposalNumber = proposal.formal_proposals[0]?.proposal_number ?? null;
+    touched.push({
+      newStatus: "in_review",
+      previousStatus: proposal.status,
+      proposalId: proposal.proposal_id,
+      proposalNumber,
+    });
   }
 
   return touched;

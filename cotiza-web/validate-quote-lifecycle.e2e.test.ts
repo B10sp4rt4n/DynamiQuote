@@ -693,6 +693,9 @@ describe("Paso 14 — Nudge de propuesta al cerrar cotización", () => {
     const nudged = closeResult!.affectedProposals.find((p) => p.proposalId === testProposalId);
     expect(nudged).toBeDefined();
     expect(nudged!.previousStatus).toBe("sent");
+    expect(nudged!.newStatus).toBe("in_review");
+    // Sin formal_proposals vinculado, proposalNumber debe ser null
+    expect(nudged!.proposalNumber).toBeNull();
 
     // Verificar en BD
     const proposal = await prisma.proposals.findFirst({
@@ -765,5 +768,65 @@ describe("Paso 14 — Nudge de propuesta al cerrar cotización", () => {
     await prisma.proposals.delete({ where: { proposal_id: draftProposalId } });
     await prisma.quote_lines.deleteMany({ where: { quote_id: draftNudgeQuoteId } });
     await prisma.quote.delete({ where: { quote_id: draftNudgeQuoteId } });
+  });
+
+  it("con formal_proposals vinculado → proposalNumber incluido en affectedProposals", async () => {
+    // Grupo independiente
+    const folioQuote = await createQuoteForTenant(TENANT_ID, {
+      clientName: "Cliente Folio Test",
+      proposalName: "Propuesta Folio",
+      quotedBy: TEST_USER_ID,
+    });
+    const folioQuoteId = folioQuote.quoteId;
+
+    // Crear proposals en estado "sent"
+    const folioProposalId = randomUUID();
+    const now = new Date();
+    await prisma.proposals.create({
+      data: {
+        closed_at: null,
+        created_at: now,
+        created_by: TEST_USER_ID,
+        origin: folioQuoteId,
+        proposal_id: folioProposalId,
+        status: "sent",
+        tenant_id: TENANT_ID,
+      },
+    });
+
+    // Crear formal_proposals con número de folio vinculado
+    const testProposalNumber = `PROP-TEST-${Date.now()}`;
+    const formalDocId = randomUUID();
+    await prisma.formal_proposals.create({
+      data: {
+        created_at: now,
+        issuer_company: "Empresa Test",
+        issued_date: now,
+        proposal_doc_id: formalDocId,
+        proposal_id: folioProposalId,
+        proposal_number: testProposalNumber,
+        quote_id: folioQuoteId,
+        recipient_company: "Cliente Test",
+        tenant_id: TENANT_ID,
+      },
+    });
+
+    await markQuoteAsSentByTenant(TENANT_ID, folioQuoteId, TEST_USER_ID);
+    const closeResult = await closeQuoteVersionByTenant(TENANT_ID, folioQuoteId, TEST_USER_ID, "Prueba folio");
+
+    expect(closeResult).not.toBeNull();
+    const nudged = closeResult!.affectedProposals.find((p) => p.proposalId === folioProposalId);
+    expect(nudged).toBeDefined();
+    expect(nudged!.proposalNumber).toBe(testProposalNumber);
+    expect(nudged!.newStatus).toBe("in_review");
+
+    console.log(`  ✅ PASO 14c: proposalNumber incluido → ${testProposalNumber} ✓`);
+
+    // Limpiar
+    await prisma.proposal_audit_events.deleteMany({ where: { proposal_id: folioProposalId } });
+    await prisma.formal_proposals.delete({ where: { proposal_doc_id: formalDocId } });
+    await prisma.proposals.delete({ where: { proposal_id: folioProposalId } });
+    await prisma.quote_lines.deleteMany({ where: { quote_id: folioQuoteId } });
+    await prisma.quote.delete({ where: { quote_id: folioQuoteId } });
   });
 });
