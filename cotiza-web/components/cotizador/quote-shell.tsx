@@ -135,7 +135,6 @@ export function QuoteShell({
     lastHandledQuoteIdFromQueryRef.current = nextQuoteId;
     const validQuoteId = resolveSelectedQuoteId(quoteItems, nextQuoteId);
 
-    // eslint-disable-next-line react-hooks/set-state-in-effect
     setActiveQuoteId((current) => (current === validQuoteId ? current : validQuoteId));
   }, [quoteItems, searchParams]);
 
@@ -511,7 +510,7 @@ export function QuoteShell({
                   <tr>
                     <th className="px-4 py-3 font-medium">Cliente</th>
                     <th className="px-4 py-3 font-medium">Propuesta</th>
-                    <th className="px-4 py-3 font-medium">Grupo</th>
+                    <th className="px-4 py-3 font-medium">Folio</th>
                     <th className="px-4 py-3 font-medium">Estado</th>
                     <th className="px-4 py-3 font-medium">Versiones</th>
                     <th className="px-4 py-3 font-medium">Total</th>
@@ -527,7 +526,7 @@ export function QuoteShell({
                     >
                       <td className="px-4 py-3 text-zinc-900">{item.clientName}</td>
                       <td className="px-4 py-3 text-zinc-600">{item.proposalName}</td>
-                      <td className="px-4 py-3 font-mono text-xs text-zinc-500">{item.quoteGroupId}</td>
+                      <td className="px-4 py-3 font-mono text-sm font-semibold text-zinc-700">{item.quoteGroupId}</td>
                       <td className="px-4 py-3">
                         <QuoteStatusBadge status={item.status} />
                       </td>

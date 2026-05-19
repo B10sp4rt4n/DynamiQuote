@@ -238,19 +238,26 @@ function createLocalLineId(): string {
   return `tmp-${Date.now()}-${Math.floor(Math.random() * 100_000)}`;
 }
 
+type LineDiffMapResult = {
+  addedCount: number;
+  deltaMap: LineDeltaMap;
+  diffMap: LineDiffMap;
+  modifiedCount: number;
+  removedCount: number;
+  unchangedCount: number;
+};
+
 function buildLineDiffMap(
   baselineLines: EditableQuoteLine[],
   currentLines: EditableQuoteLine[],
-): { deltaMap: LineDeltaMap; diffMap: LineDiffMap } {
-  // Matching semántico: primero por lineId, luego por sku no vacío, luego por
-  // descripción normalizada, y por último por posición como fallback.
-  const unmatched = new Map(baselineLines.map((line) => [line.lineId, line]));
-
+): LineDiffMapResult {
+  // Matching semántico: lineId > sku > descripción normalizada.
+  // Fallback posicional solo para diff visual (no cuenta como match semántico).
   function normalizeDesc(value: string): string {
     return value.trim().toLowerCase().replace(/\s+/g, " ");
   }
 
-  // Índices auxiliares de búsqueda para baseline
+  const byId = new Map(baselineLines.map((line) => [line.lineId, line]));
   const bySku = new Map<string, EditableQuoteLine>();
   const byDesc = new Map<string, EditableQuoteLine>();
 
@@ -264,12 +271,18 @@ function buildLineDiffMap(
     }
   }
 
-  function findBaseline(current: EditableQuoteLine, positionIndex: number): EditableQuoteLine | undefined {
+  const semanticMatchedBaselineIds = new Set<string>();
+
+  function findBaseline(
+    current: EditableQuoteLine,
+    positionIndex: number,
+  ): { line: EditableQuoteLine; semantic: boolean } | undefined {
     // 1. Mismo lineId
-    if (unmatched.has(current.lineId)) {
-      const match = unmatched.get(current.lineId);
-      unmatched.delete(current.lineId);
-      return match;
+    if (byId.has(current.lineId)) {
+      const match = byId.get(current.lineId)!;
+      byId.delete(current.lineId);
+      semanticMatchedBaselineIds.add(match.lineId);
+      return { line: match, semantic: true };
     }
 
     // 2. Mismo sku
@@ -277,7 +290,8 @@ function buildLineDiffMap(
     if (sku && sku.length > 0 && bySku.has(sku)) {
       const match = bySku.get(sku)!;
       bySku.delete(sku);
-      return match;
+      semanticMatchedBaselineIds.add(match.lineId);
+      return { line: match, semantic: true };
     }
 
     // 3. Misma descripción normalizada
@@ -285,26 +299,45 @@ function buildLineDiffMap(
     if (desc.length > 0 && byDesc.has(desc)) {
       const match = byDesc.get(desc)!;
       byDesc.delete(desc);
-      return match;
+      semanticMatchedBaselineIds.add(match.lineId);
+      return { line: match, semantic: true };
     }
 
-    // 4. Fallback posicional
-    return baselineLines[positionIndex];
+    // 4. Fallback posicional (solo visual)
+    const positional = baselineLines[positionIndex];
+    if (positional) {
+      return { line: positional, semantic: false };
+    }
+
+    return undefined;
   }
 
   const nextDiffMap: LineDiffMap = {};
   const nextDeltaMap: LineDeltaMap = {};
+  let addedCount = 0;
+  let modifiedCount = 0;
+  let unchangedCount = 0;
 
   for (const [index, currentLine] of currentLines.entries()) {
-    const baselineLine = findBaseline(currentLine, index);
+    const found = findBaseline(currentLine, index);
 
-    if (!baselineLine) {
+    if (!found) {
+      addedCount++;
       continue;
+    }
+
+    const { line: baselineLine, semantic } = found;
+
+    if (!semantic) {
+      // Sin match semántico: cuenta como línea agregada en el panel comercial.
+      // Sigue mostrando diff visual contra fallback posicional.
+      addedCount++;
     }
 
     const changed = getChangedFields(baselineLine, currentLine);
 
     if (changed.size > 0) {
+      if (semantic) modifiedCount++;
       nextDiffMap[currentLine.lineId] = changed;
       nextDeltaMap[currentLine.lineId] = {
         classification1: changed.has("classification1")
@@ -326,13 +359,135 @@ function buildLineDiffMap(
           ? toDelta(normalizeQuantity(baselineLine.quantity), normalizeQuantity(currentLine.quantity))
           : undefined,
       };
+    } else if (semantic) {
+      unchangedCount++;
     }
   }
 
+  const removedCount = baselineLines.filter((l) => !semanticMatchedBaselineIds.has(l.lineId)).length;
+
   return {
+    addedCount,
     deltaMap: nextDeltaMap,
     diffMap: nextDiffMap,
+    modifiedCount,
+    removedCount,
+    unchangedCount,
   };
+}
+
+// ---------------------------------------------------------------------------
+// Panel de resumen comercial de comparación
+// ---------------------------------------------------------------------------
+
+type CompareLineCounts = {
+  addedCount: number;
+  modifiedCount: number;
+  removedCount: number;
+  unchangedCount: number;
+};
+
+function CompareSummaryPanel({
+  compareState,
+  lineCounts,
+  versions,
+}: {
+  compareState: VersionCompareState;
+  lineCounts: CompareLineCounts;
+  versions: QuoteVersionHistoryItem[];
+}) {
+  const base = versions.find((v) => v.quoteId === compareState.baselineQuoteId);
+  const target = versions.find((v) => v.quoteId === compareState.targetQuoteId);
+
+  if (!base || !target) return null;
+
+  const baseTotal = base.totalRevenue ?? 0;
+  const targetTotal = target.totalRevenue ?? 0;
+  const diffAbsolute = targetTotal - baseTotal;
+  const diffPct = baseTotal !== 0 ? (diffAbsolute / baseTotal) * 100 : 0;
+  const baseMargin = base.avgMargin ?? 0;
+  const targetMargin = target.avgMargin ?? 0;
+  const diffMarginPp = targetMargin - baseMargin;
+
+  const STATUS_PANEL: Record<string, string> = {
+    closed: "Cerrada", draft: "Borrador", rejected: "Rechazada", sent: "Enviada",
+  };
+
+  function fmtCur(v: number) {
+    return new Intl.NumberFormat("es-MX", { currency: "MXN", maximumFractionDigits: 0, style: "currency" }).format(v);
+  }
+  function fmtDiff(v: number) { return (v >= 0 ? "+" : "") + fmtCur(v); }
+  function fmtPct(v: number) { return (v >= 0 ? "+" : "") + v.toFixed(2) + "%"; }
+  function fmtPp(v: number) { return (v >= 0 ? "+" : "") + v.toFixed(1) + " pp"; }
+
+  return (
+    <div className="mt-4 rounded-xl border border-sky-200 bg-sky-50 p-4">
+      <p className="mb-3 text-xs font-semibold uppercase tracking-widest text-sky-700">Resumen de comparación</p>
+      <div className="grid gap-4 md:grid-cols-2 lg:grid-cols-4">
+        {/* Versiones */}
+        <div className="space-y-2">
+          <div>
+            <p className="text-xs text-zinc-500">Base</p>
+            <p className="text-sm font-semibold text-zinc-900">
+              v{base.version}{" "}
+              <span className="font-normal text-zinc-600">· {STATUS_PANEL[base.status] ?? base.status}</span>
+            </p>
+          </div>
+          <div>
+            <p className="text-xs text-zinc-500">Nueva</p>
+            <p className="text-sm font-semibold text-zinc-900">
+              v{target.version}{" "}
+              <span className="font-normal text-zinc-600">· {STATUS_PANEL[target.status] ?? target.status}</span>
+            </p>
+          </div>
+        </div>
+        {/* Totales */}
+        <div className="space-y-1.5">
+          <div className="flex items-center justify-between">
+            <span className="text-xs text-zinc-500">Total base</span>
+            <span className="text-sm font-medium text-zinc-900">{fmtCur(baseTotal)}</span>
+          </div>
+          <div className="flex items-center justify-between">
+            <span className="text-xs text-zinc-500">Total nuevo</span>
+            <span className="text-sm font-medium text-zinc-900">{fmtCur(targetTotal)}</span>
+          </div>
+          <div className="flex items-center justify-between border-t border-sky-200 pt-1">
+            <span className="text-xs font-medium text-zinc-600">Diferencia</span>
+            <span className={`text-sm font-semibold ${diffAbsolute >= 0 ? "text-emerald-700" : "text-rose-700"}`}>
+              {fmtDiff(diffAbsolute)} / {fmtPct(diffPct)}
+            </span>
+          </div>
+        </div>
+        {/* Márgenes */}
+        <div className="space-y-1.5">
+          <div className="flex items-center justify-between">
+            <span className="text-xs text-zinc-500">Margen base</span>
+            <span className="text-sm font-medium text-zinc-900">{baseMargin.toFixed(1)}%</span>
+          </div>
+          <div className="flex items-center justify-between">
+            <span className="text-xs text-zinc-500">Margen nuevo</span>
+            <span className="text-sm font-medium text-zinc-900">{targetMargin.toFixed(1)}%</span>
+          </div>
+          <div className="flex items-center justify-between border-t border-sky-200 pt-1">
+            <span className="text-xs font-medium text-zinc-600">Δ Margen</span>
+            <span className={`text-sm font-semibold ${diffMarginPp >= 0 ? "text-emerald-700" : "text-rose-700"}`}>
+              {fmtPp(diffMarginPp)}
+            </span>
+          </div>
+        </div>
+        {/* Líneas */}
+        <div>
+          <p className="mb-2 text-xs font-medium text-zinc-600">Cambios en líneas</p>
+          <div className="flex flex-wrap gap-1.5">
+            <span className="rounded bg-emerald-100 px-2 py-0.5 text-xs text-emerald-800">+{lineCounts.addedCount} agregadas</span>
+            <span className="rounded bg-rose-100 px-2 py-0.5 text-xs text-rose-800">−{lineCounts.removedCount} eliminadas</span>
+            <span className="rounded bg-amber-100 px-2 py-0.5 text-xs text-amber-800">{lineCounts.modifiedCount} modificadas</span>
+            <span className="rounded bg-zinc-100 px-2 py-0.5 text-xs text-zinc-700">{lineCounts.unchangedCount} sin cambio</span>
+          </div>
+        </div>
+      </div>
+    </div>
+  );
 }
 
 const STATUS_LABELS: Record<string, string> = {
@@ -361,6 +516,7 @@ function StatusBadge({ status }: { status: string }) {
 }
 
 export function QuoteLineEditor({
+  forcedSelectedQuoteId,
   onQuoteVersionSaved,
   quotes,
 }: QuoteLineEditorProps) {
@@ -372,13 +528,17 @@ export function QuoteLineEditor({
   const [lineDeltaMap, setLineDeltaMap] = useState<LineDeltaMap>({});
   const [versions, setVersions] = useState<QuoteVersionHistoryItem[]>([]);
   const [compareState, setCompareState] = useState<VersionCompareState | null>(null);
-  const [compareBaseQuoteId, setCompareBaseQuoteId] = useState<string>("");
-  const [compareTargetQuoteId, setCompareTargetQuoteId] = useState<string>("");
   const [loading, setLoading] = useState(false);
   const [saving, setSaving] = useState(false);
   const [creatingProposal, setCreatingProposal] = useState(false);
   const [message, setMessage] = useState<string | null>(null);
   const [showPackagePicker, setShowPackagePicker] = useState(false);
+  const [compareLineCounts, setCompareLineCounts] = useState<CompareLineCounts>({
+    addedCount: 0,
+    modifiedCount: 0,
+    removedCount: 0,
+    unchangedCount: 0,
+  });
 
   const selectedQuote = useMemo(
     () => quotes.find((quote) => quote.quoteId === selectedQuoteId) ?? null,
@@ -416,13 +576,6 @@ export function QuoteLineEditor({
       }
 
       setVersions(data.versions);
-      if (data.versions.length > 0) {
-        setCompareTargetQuoteId(data.currentQuoteId);
-        const defaultBase =
-          data.versions.find((version) => version.quoteId !== data.currentQuoteId)?.quoteId ??
-          data.currentQuoteId;
-        setCompareBaseQuoteId(defaultBase);
-      }
     } catch {
       setVersions([]);
     }
@@ -666,6 +819,12 @@ export function QuoteLineEditor({
       setQuantityDrafts({});
       setLineDiffMap(nextDiffResult.diffMap);
       setLineDeltaMap(nextDiffResult.deltaMap);
+      setCompareLineCounts({
+        addedCount: nextDiffResult.addedCount,
+        modifiedCount: nextDiffResult.modifiedCount,
+        removedCount: nextDiffResult.removedCount,
+        unchangedCount: nextDiffResult.unchangedCount,
+      });
       setCompareState({
         baselineQuoteId: selectedQuoteId,
         baselineVersion: data.quote.version - 1,
@@ -674,6 +833,7 @@ export function QuoteLineEditor({
       });
       onQuoteVersionSaved?.(data.quote);
       setSelectedQuoteId(data.quote.quoteId);
+      void loadVersions(data.quote.quoteId);
       setMessage(`Version v${data.quote.version} creada y guardada correctamente`);
       return data.quote.quoteId;
     } catch {
@@ -715,6 +875,12 @@ export function QuoteLineEditor({
       setSelectedQuoteId(targetQuoteId);
       setLineDiffMap(diffResult.diffMap);
       setLineDeltaMap(diffResult.deltaMap);
+      setCompareLineCounts({
+        addedCount: diffResult.addedCount,
+        modifiedCount: diffResult.modifiedCount,
+        removedCount: diffResult.removedCount,
+        unchangedCount: diffResult.unchangedCount,
+      });
       setCompareState({
         baselineQuoteId: baseQuoteId,
         baselineVersion: baseVersion?.version ?? 0,
@@ -1009,7 +1175,7 @@ export function QuoteLineEditor({
           >
             {quotes.map((quote) => (
               <option key={quote.quoteId} value={quote.quoteId}>
-                {quote.clientName} - {quote.proposalName} ({quote.quoteId})
+                {quote.quoteGroupId} · v{quote.version} · {STATUS_LABELS[quote.status] ?? quote.status} — {quote.clientName}
               </option>
             ))}
           </select>
@@ -1068,6 +1234,14 @@ export function QuoteLineEditor({
             + Partida
           </button>
         </div>
+        {selectedQuote && (
+          <div className="flex items-center gap-2 rounded-lg bg-zinc-50 px-3 py-2 text-sm">
+            <span className="font-mono text-xs font-semibold text-zinc-900">{selectedQuote.quoteGroupId}</span>
+            <span className="text-zinc-400">·</span>
+            <span className="text-xs text-zinc-500">v{currentVersion?.version ?? selectedQuote.version} de {selectedQuote.versionCount}</span>
+            <StatusBadge status={currentStatus} />
+          </div>
+        )}
         <div className="flex flex-wrap items-center gap-3 border-t border-zinc-100 pt-3">
           <StatusBadge status={currentStatus} />
           {currentStatus === "draft" && (
@@ -1104,6 +1278,24 @@ export function QuoteLineEditor({
             <p className="text-xs text-zinc-600">{actionMessage}</p>
           )}
         </div>
+        {currentStatus === "closed" && (
+          <div className="mt-3 rounded-lg border border-amber-200 bg-amber-50 px-4 py-3 text-sm text-amber-800">
+            <strong className="font-semibold">Versión cerrada</strong> — Esta versión se conserva como referencia comercial.
+            Si guardas cambios, se creará automáticamente una nueva versión en borrador.
+          </div>
+        )}
+        {currentStatus === "rejected" && (
+          <div className="mt-3 rounded-lg border border-rose-200 bg-rose-50 px-4 py-3 text-sm text-rose-700">
+            <strong className="font-semibold">Versión rechazada</strong> — Puedes consultarla como referencia.
+            Para generar una nueva versión activa, edita las líneas y guarda.
+          </div>
+        )}
+        {currentStatus === "sent" && (
+          <div className="mt-3 rounded-lg border border-sky-200 bg-sky-50 px-4 py-3 text-sm text-sky-700">
+            <strong className="font-semibold">Versión enviada</strong> — Esta versión fue enviada al cliente.
+            Puedes cerrarla (aprobada) o rechazarla, o editarla para crear una nueva versión.
+          </div>
+        )}
       </div>
 
       {showPackagePicker && (
@@ -1131,6 +1323,14 @@ export function QuoteLineEditor({
 
       {message ? <p className="mt-4 text-sm text-zinc-600">{message}</p> : null}
 
+      {compareState && (
+        <CompareSummaryPanel
+          compareState={compareState}
+          lineCounts={compareLineCounts}
+          versions={versions}
+        />
+      )}
+
       {diffSummary.changedLineCount > 0 ? (
         <div className="mt-4 rounded-lg border border-amber-200 bg-amber-50 px-3 py-2 text-sm text-amber-800">
           Cambios detectados: {diffSummary.changedLineCount} lineas y {diffSummary.changedFieldCount} campos actualizados.
@@ -1141,62 +1341,77 @@ export function QuoteLineEditor({
       ) : null}
 
       {versions.length > 0 ? (
-        <div className="mt-4 rounded-lg border border-zinc-200 bg-zinc-50 p-3">
-          <p className="text-sm font-medium text-zinc-700">Historial de versiones</p>
-          <div className="mt-2 flex flex-wrap items-center gap-2">
-            <span className="text-xs text-zinc-600">Base</span>
-            <select
-              className="rounded-md border border-zinc-300 bg-white px-2 py-1 text-xs text-zinc-700"
-              onChange={(event) => {
-                setCompareBaseQuoteId(event.target.value);
-              }}
-              value={compareBaseQuoteId}
-            >
-              {versions.map((version) => (
-                <option key={`base-${version.quoteId}`} value={version.quoteId}>
-                  v{version.version} · {STATUS_LABELS[version.status] ?? version.status}
-                  {version.totalRevenue !== null ? ` · ${new Intl.NumberFormat("es-MX", { currency: "MXN", maximumFractionDigits: 0, style: "currency" }).format(version.totalRevenue)}` : ""}
-                </option>
-              ))}
-            </select>
-            <span className="text-xs text-zinc-600">Objetivo</span>
-            <select
-              className="rounded-md border border-zinc-300 bg-white px-2 py-1 text-xs text-zinc-700"
-              onChange={(event) => {
-                setCompareTargetQuoteId(event.target.value);
-              }}
-              value={compareTargetQuoteId}
-            >
-              {versions.map((version) => (
-                <option key={`target-${version.quoteId}`} value={version.quoteId}>
-                  v{version.version} · {STATUS_LABELS[version.status] ?? version.status}
-                  {version.quoteId === selectedQuoteId ? " (actual)" : ""}
-                </option>
-              ))}
-            </select>
-            <button
-              className="rounded-md border border-zinc-300 bg-white px-3 py-1 text-xs text-zinc-700 hover:bg-zinc-100"
-              onClick={() => {
-                void compareWithVersion(compareBaseQuoteId, compareTargetQuoteId);
-              }}
-              type="button"
-            >
-              Comparar A vs B
-            </button>
+        <div className="mt-4 rounded-xl border border-zinc-200 bg-zinc-50 p-4">
+          <div className="flex items-center justify-between">
+            <p className="text-sm font-semibold text-zinc-700">Historial de versiones</p>
+            <span className="text-xs text-zinc-400">{versions.length} versión{versions.length !== 1 ? "es" : ""}</span>
           </div>
-          <div className="mt-2 flex flex-wrap gap-2">
-            {versions.map((version) => (
-              <button
-                className="rounded-md border border-zinc-300 bg-white px-3 py-1 text-xs text-zinc-700 hover:bg-zinc-100"
-                key={version.quoteId}
-                onClick={() => {
-                  void compareWithVersion(version.quoteId, selectedQuoteId);
-                }}
-                type="button"
-              >
-                comparar v{version.version} {"->"} actual
-              </button>
-            ))}
+          <div className="mt-3 overflow-x-auto">
+            <table className="min-w-full text-sm">
+              <thead>
+                <tr className="text-left text-xs text-zinc-500">
+                  <th className="pb-2 pr-6 font-medium">Versión</th>
+                  <th className="pb-2 pr-6 font-medium">Estado</th>
+                  <th className="pb-2 pr-6 font-medium">Fecha</th>
+                  <th className="pb-2 pr-6 font-medium">Total</th>
+                  <th className="pb-2 pr-6 font-medium">Margen</th>
+                  <th className="pb-2 font-medium">Acción</th>
+                </tr>
+              </thead>
+              <tbody className="divide-y divide-zinc-100">
+                {versions.map((version) => {
+                  const isActive = version.quoteId === selectedQuoteId;
+                  return (
+                    <tr key={version.quoteId} className={isActive ? "bg-white" : ""}>
+                      <td className="py-2 pr-6">
+                        <span className="font-mono text-xs font-semibold text-zinc-900">v{version.version}</span>
+                        {isActive && <span className="ml-1.5 text-xs text-zinc-400">(actual)</span>}
+                      </td>
+                      <td className="py-2 pr-6">
+                        <StatusBadge status={version.status} />
+                      </td>
+                      <td className="py-2 pr-6 text-xs text-zinc-500">
+                        {version.createdAt
+                          ? new Date(version.createdAt).toLocaleDateString("es-MX", { day: "2-digit", month: "short", year: "numeric" })
+                          : "—"}
+                        {version.sentAt && <span className="ml-1 text-sky-600">· enviada</span>}
+                        {version.closedAt && <span className="ml-1 text-emerald-600">· cerrada</span>}
+                        {version.rejectedAt && <span className="ml-1 text-rose-600">· rechazada</span>}
+                      </td>
+                      <td className="py-2 pr-6 text-xs font-semibold text-zinc-900">
+                        {version.totalRevenue !== null
+                          ? new Intl.NumberFormat("es-MX", { currency: "MXN", maximumFractionDigits: 0, style: "currency" }).format(version.totalRevenue)
+                          : "—"}
+                      </td>
+                      <td className="py-2 pr-6 text-xs text-zinc-600">
+                        {version.avgMargin !== null ? `${version.avgMargin.toFixed(1)}%` : "—"}
+                      </td>
+                      <td className="py-2">
+                        <div className="flex gap-1.5">
+                          {!isActive && (
+                            <button
+                              className="rounded border border-zinc-300 bg-white px-2 py-1 text-xs text-zinc-700 hover:bg-zinc-50"
+                              onClick={() => { void handleQuoteChange(version.quoteId); }}
+                              type="button"
+                            >
+                              Ver
+                            </button>
+                          )}
+                          <button
+                            className="rounded border border-sky-200 bg-sky-50 px-2 py-1 text-xs text-sky-700 hover:bg-sky-100 disabled:opacity-40"
+                            disabled={isActive}
+                            onClick={() => { void compareWithVersion(version.quoteId, selectedQuoteId); }}
+                            type="button"
+                          >
+                            Comparar
+                          </button>
+                        </div>
+                      </td>
+                    </tr>
+                  );
+                })}
+              </tbody>
+            </table>
           </div>
         </div>
       ) : null}

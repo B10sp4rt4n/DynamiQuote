@@ -636,7 +636,7 @@ describe("Paso 13 — Campos del selector de versiones (UI data)", () => {
       const statusLabel = { draft: "Borrador", sent: "Enviada", closed: "Cerrada", rejected: "Rechazada" }[v.status] ?? v.status;
       const revenue = v.totalRevenue != null ? new Intl.NumberFormat("es-MX", { style: "currency", currency: "MXN", maximumFractionDigits: 0 }).format(v.totalRevenue) : "$0";
       const fecha = v.createdAt ? new Date(v.createdAt).toLocaleDateString("es-MX") : "?";
-      console.log(`  → "${v.quoteGroupId ?? quoteGroupId} · v${v.version} · ${statusLabel} · ${fecha} · ${revenue}"`);
+      console.log(`  → "${quoteGroupId} · v${v.version} · ${statusLabel} · ${fecha} · ${revenue}"`);
     }
   });
 });

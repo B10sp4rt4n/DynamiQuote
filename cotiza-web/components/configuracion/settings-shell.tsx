@@ -1,6 +1,6 @@
 "use client";
 
-import { useEffect, useState, type FormEvent } from "react";
+import { startTransition, useEffect, useState, type FormEvent } from "react";
 
 import type { MarginPolicySummary } from "@/lib/db/margin-policies";
 import type { ProposalStatusCounts, ProposalSummary } from "@/lib/db/proposals";
@@ -1326,11 +1326,13 @@ function MarginPolicyTab({
   const [success, setSuccess] = useState<string | null>(null);
 
   useEffect(() => {
-    setMinMarginPct(String(initial.minMarginPct));
-    setMaxMarginPct(String(initial.maxMarginPct));
-    setHighPreapprovalMarginPct(String(initial.highPreapprovalMarginPct));
-    setRequireObserverApproval(initial.requireObserverApproval);
-    setPolicy(initial);
+    startTransition(() => {
+      setMinMarginPct(String(initial.minMarginPct));
+      setMaxMarginPct(String(initial.maxMarginPct));
+      setHighPreapprovalMarginPct(String(initial.highPreapprovalMarginPct));
+      setRequireObserverApproval(initial.requireObserverApproval);
+      setPolicy(initial);
+    });
   }, [initial]);
 
   async function onSubmit(event: FormEvent<HTMLFormElement>) {
@@ -1480,7 +1482,9 @@ function IssuerProfilesTab({
   const [error, setError] = useState<string | null>(null);
 
   useEffect(() => {
-    setProfiles(initial);
+    startTransition(() => {
+      setProfiles(initial);
+    });
   }, [initial]);
 
   async function setDefault(logoId: string) {
