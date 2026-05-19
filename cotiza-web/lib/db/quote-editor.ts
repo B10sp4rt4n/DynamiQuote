@@ -342,7 +342,7 @@ export async function updateQuoteLinesByTenant(
       proposalName: quote.proposal_name ?? "Sin propuesta",
       quoteGroupId,
       quoteId: newQuoteId,
-      status: quote.status ?? "draft",
+      status: "draft",
       totalRevenue,
       version: nextVersion,
       versionCount: quoteCountInGroup + 1,
