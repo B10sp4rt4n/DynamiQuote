@@ -200,10 +200,10 @@ export async function POST(request: Request, context: RouteContext) {
     filename: attachmentFilename,
   };
 
-  // Resolver email del owner para copia — sin bloquear si no está disponible
+  // Resolver email del owner para copia — siempre va en CC aunque coincida con el vendedor
   const ownerEmail = await resolveTenantOwnerEmail(tenant.id);
   const ccRecipients = Array.from(
-    new Set([ownerEmail].filter((e): e is string => Boolean(e && e !== sellerEmail))),
+    new Set([ownerEmail].filter((e): e is string => Boolean(e))),
   );
 
   const html = buildSellerProposalHtml({
