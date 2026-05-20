@@ -838,9 +838,9 @@ export function ProposalShell({ proposals, tenantName }: ProposalShellProps) {
   }
 
   async function handleSendEmailProposal() {
-    if (!selectedProposal || !recipientEmail) {
+    if (!selectedProposal) {
       setEmailStatus("error");
-      setEmailMessage("Falta correo del destinatario");
+      setEmailMessage("No hay propuesta seleccionada");
       return;
     }
 
@@ -849,9 +849,8 @@ export function ProposalShell({ proposals, tenantName }: ProposalShellProps) {
 
     try {
       const response = await fetch(`/api/proposals/${selectedProposal.proposalId}/send-email`, {
-        body: JSON.stringify({
-          recipientEmail: recipientEmail.trim(),
-        }),
+        // El destino se resuelve server-side; no se envía correo del cliente
+        body: JSON.stringify({}),
         headers: {
           "Content-Type": "application/json",
         },
@@ -861,11 +860,11 @@ export function ProposalShell({ proposals, tenantName }: ProposalShellProps) {
       const data = (await response.json().catch(() => null)) as { error?: string } | null;
 
       if (!response.ok) {
-        throw new Error(data?.error ?? "No fue posible enviar el correo al cliente");
+        throw new Error(data?.error ?? "No fue posible enviar el correo");
       }
 
-      // Si la propuesta estaba aprobada, transiciona a "Enviada" para registrar que fue
-      // entregada al cliente. Si ya estaba "Enviada", mantiene el estado (re-envío).
+      // Si la propuesta estaba aprobada, transiciona a "Enviada" para registrar que fue despachada.
+      // Si ya estaba "Enviada", mantiene el estado (re-envío).
       if (selectedStatus === "approved") {
         setSelectedStatus("sent");
         setItems((current) =>
@@ -877,8 +876,8 @@ export function ProposalShell({ proposals, tenantName }: ProposalShellProps) {
       setEmailStatus("success");
       setEmailMessage(
         selectedStatus === "sent"
-          ? "Correo re-enviado correctamente al cliente."
-          : "Correo enviado correctamente al cliente.",
+          ? "PDF re-enviado a tu correo."
+          : "PDF enviado a tu correo.",
       );
     } catch (error) {
       setEmailStatus("error");
@@ -1378,25 +1377,23 @@ export function ProposalShell({ proposals, tenantName }: ProposalShellProps) {
               ) : null}
 
               {/* Botón de correo: disponible cuando la propuesta está aprobada o ya fue enviada (re-envío).
+                  El PDF llega al correo del vendedor (sesión activa) + copia al owner del tenant.
                   El primer envío cambia el estado a "Enviada". Re-envíos mantienen el estado. */}
               {selectedStatus === "approved" || selectedStatus === "sent" ? (
                 <div className="flex flex-col gap-1">
                   <button
                     className="w-fit rounded-lg border border-blue-300 bg-blue-50 px-4 py-2 text-sm font-medium text-blue-700 transition hover:bg-blue-100 disabled:cursor-not-allowed disabled:opacity-60"
-                    disabled={emailStatus === "sending" || !recipientEmail}
+                    disabled={emailStatus === "sending"}
                     onClick={handleSendEmailProposal}
-                    title={!recipientEmail ? "Falta correo del destinatario" : ""}
                     type="button"
                   >
                     {emailStatus === "sending"
-                      ? "Enviando correo..."
+                      ? "Enviando..."
                       : selectedStatus === "sent"
-                        ? "Re-enviar propuesta por correo"
-                        : "Enviar propuesta por correo"}
+                        ? "Re-enviarme el PDF"
+                        : "Enviarme el PDF"}
                   </button>
-                  {!recipientEmail ? (
-                    <p className="text-xs text-zinc-500">Agrega el correo del destinatario en los campos de cabecera.</p>
-                  ) : null}
+                  <p className="text-xs text-zinc-500">El PDF llega a tu correo. El owner recibe copia.</p>
                 </div>
               ) : null}
 
