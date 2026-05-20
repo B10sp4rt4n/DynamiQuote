@@ -5,8 +5,8 @@ export type ProposalApproverRole = "superadmin" | "owner" | "admin" | "user";
 const allowedTransitions: Record<ProposalStatus, ProposalStatus[]> = {
   // approved puede retroceder a revisión o reenvío para correcciones
   approved: ["approved", "in_review", "sent"],
-  // draft puede avanzar a enviada o solicitar revisión/aprobación interna antes de salir al cliente
-  draft: ["draft", "sent", "in_review"],
+  // draft puede avanzar a enviada, solicitar revisión interna, o aprobarse automáticamente cuando el margen lo permite
+  draft: ["draft", "sent", "in_review", "approved"],
   // expirada puede reactivarse para revisión
   expired: ["expired", "in_review", "draft"],
   in_review: ["in_review", "approved", "rejected", "expired"],

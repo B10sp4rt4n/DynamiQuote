@@ -21,14 +21,15 @@ describe("proposal-workflow-guard", () => {
   });
 
   it("bloquea transiciones invalidas", () => {
-    expect(canTransitionProposalStatus("draft", "approved")).toBe(false);
+    // draft → rejected no es una transicion valida
+    expect(canTransitionProposalStatus("draft", "rejected")).toBe(false);
 
     expect(() =>
       assertProposalWorkflowGuard({
         currentStatus: "draft",
         hasContentUpdate: false,
         marginCanAuthorizeFinal: true,
-        nextStatus: "approved",
+        nextStatus: "rejected",
       }),
     ).toThrow("Transicion invalida");
   });
@@ -50,6 +51,30 @@ describe("proposal-workflow-guard", () => {
     // Simula el targetStatus que elige handleSendToApproval cuando marginAllowsFinalAuthorization=false
     const targetStatus = false ? "approved" : "in_review";
     expect(canTransitionProposalStatus("draft", targetStatus)).toBe(true);
+  });
+
+  it("permite transicion draft a approved cuando margen pre-autoriza (auto-aprobacion)", () => {
+    expect(canTransitionProposalStatus("draft", "approved")).toBe(true);
+
+    // El guard de margen protege: si margen NO permite, sigue bloqueando
+    expect(() =>
+      assertProposalWorkflowGuard({
+        currentStatus: "draft",
+        hasContentUpdate: false,
+        marginCanAuthorizeFinal: false,
+        nextStatus: "approved",
+      }),
+    ).toThrow("La politica de margen bloquea la autorizacion final");
+
+    // Si margen SI permite, la transicion es valida
+    expect(() =>
+      assertProposalWorkflowGuard({
+        currentStatus: "draft",
+        hasContentUpdate: false,
+        marginCanAuthorizeFinal: true,
+        nextStatus: "approved",
+      }),
+    ).not.toThrow();
   });
 
   it("bloquea autorizacion final cuando margen no autoriza", () => {
