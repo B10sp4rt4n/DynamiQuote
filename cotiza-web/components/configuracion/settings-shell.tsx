@@ -658,6 +658,7 @@ function UsersTab({
 }) {
   const [pending, setPending] = useState<string | null>(null);
   const [error, setError] = useState<string | null>(null);
+  const [resendSuccess, setResendSuccess] = useState<string | null>(null);
   const [editingUserId, setEditingUserId] = useState<string | null>(null);
   const [editFirstName, setEditFirstName] = useState("");
   const [editLastName, setEditLastName] = useState("");
@@ -732,6 +733,37 @@ function UsersTab({
     }
   }
 
+  async function resendAccess(user: AppUserSummary) {
+    setPending(`resend:${user.userId}`);
+    setError(null);
+    setResendSuccess(null);
+
+    try {
+      const res = await fetch(`/api/settings/users/${user.userId}/resend-access`, {
+        method: "POST",
+      });
+      const data = (await res.json()) as {
+        error?: string;
+        emailSent?: boolean;
+        emailWarning?: string;
+        sent?: boolean;
+      };
+
+      if (!res.ok || !data.sent) {
+        throw new Error(data.error ?? "No se pudo reenviar el acceso");
+      }
+
+      const warn = data.emailWarning ? ` (${data.emailWarning})` : "";
+      setResendSuccess(
+        `Acceso de Clerk reenviado correctamente a ${user.firstName} ${user.lastName}.${warn}`,
+      );
+    } catch (err) {
+      setError(err instanceof Error ? err.message : "Error desconocido");
+    } finally {
+      setPending(null);
+    }
+  }
+
   async function deleteUser(user: AppUserSummary) {
     if (!confirm(`Se eliminará definitivamente a ${user.firstName} ${user.lastName}. ¿Continuar?`)) {
       return;
@@ -756,6 +788,9 @@ function UsersTab({
   return (
     <div className="space-y-3">
       {error ? <p className="text-sm font-medium text-rose-800">{error}</p> : null}
+      {resendSuccess ? (
+        <p className="text-sm font-medium text-emerald-700">{resendSuccess}</p>
+      ) : null}
 
       {canManageAllTenants && editingUserId ? (
         <form className="grid gap-3 rounded-xl border border-zinc-200 bg-zinc-50 p-4" onSubmit={submitEdit}>
@@ -877,7 +912,17 @@ function UsersTab({
                 {canManageAllTenants ? (
                   <td className="px-4 py-3 whitespace-nowrap">
                     {user.role.toLowerCase().includes("superadmin") ? (
-                      <span className="text-xs font-medium text-zinc-600">Protegido</span>
+                      <div className="flex gap-2 whitespace-nowrap pr-2">
+                        <span className="text-xs font-medium text-zinc-600">Protegido</span>
+                        <button
+                          className="rounded-lg bg-sky-100 px-3 py-1 text-xs font-medium text-sky-700 transition hover:bg-sky-200 disabled:opacity-60"
+                          disabled={pending === `resend:${user.userId}`}
+                          onClick={() => void resendAccess(user)}
+                          type="button"
+                        >
+                          {pending === `resend:${user.userId}` ? "..." : "Reenviar acceso"}
+                        </button>
+                      </div>
                     ) : (
                       <div className="flex gap-2 whitespace-nowrap pr-2">
                         <button
@@ -888,9 +933,17 @@ function UsersTab({
                           Editar
                         </button>
                         <button
+                          className="rounded-lg bg-sky-100 px-3 py-1 text-xs font-medium text-sky-700 transition hover:bg-sky-200 disabled:opacity-60"
+                          disabled={pending === `resend:${user.userId}`}
+                          onClick={() => void resendAccess(user)}
+                          type="button"
+                        >
+                          {pending === `resend:${user.userId}` ? "..." : "Reenviar acceso"}
+                        </button>
+                        <button
                           className="rounded-lg bg-rose-100 px-3 py-1 text-xs font-medium text-rose-700 transition hover:bg-rose-200 disabled:opacity-60"
                           disabled={pending === `delete:${user.userId}`}
-                          onClick={() => deleteUser(user)}
+                          onClick={() => void deleteUser(user)}
                           type="button"
                         >
                           {pending === `delete:${user.userId}` ? "..." : "Borrar"}
