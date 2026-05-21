@@ -104,9 +104,9 @@ export async function sendInvitationEmail(payload: InvitationEmailPayload): Prom
     });
 
     if (error) {
-      console.error("[email] Error enviando invitación:", error);
-
       const message = typeof error.message === "string" ? error.message : "Error desconocido al enviar correo";
+      console.error("[email] Error enviando invitación:", JSON.stringify({ name: error.name, message, to: payload.to, from }));
+
       const domainHint = message.includes("verify a domain")
         ? "Resend requiere verificar dominio para enviar a correos externos."
         : null;

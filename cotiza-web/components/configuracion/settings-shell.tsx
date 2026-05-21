@@ -659,6 +659,7 @@ function UsersTab({
   const [pending, setPending] = useState<string | null>(null);
   const [error, setError] = useState<string | null>(null);
   const [resendSuccess, setResendSuccess] = useState<string | null>(null);
+  const [resendLink, setResendLink] = useState<string | null>(null);
   const [editingUserId, setEditingUserId] = useState<string | null>(null);
   const [editFirstName, setEditFirstName] = useState("");
   const [editLastName, setEditLastName] = useState("");
@@ -737,6 +738,7 @@ function UsersTab({
     setPending(`resend:${user.userId}`);
     setError(null);
     setResendSuccess(null);
+    setResendLink(null);
 
     try {
       const res = await fetch(`/api/settings/users/${user.userId}/resend-access`, {
@@ -746,6 +748,7 @@ function UsersTab({
         error?: string;
         emailSent?: boolean;
         emailWarning?: string;
+        signInUrl?: string;
         sent?: boolean;
       };
 
@@ -753,10 +756,18 @@ function UsersTab({
         throw new Error(data.error ?? "No se pudo reenviar el acceso");
       }
 
-      const warn = data.emailWarning ? ` (${data.emailWarning})` : "";
-      setResendSuccess(
-        `Acceso de Clerk reenviado correctamente a ${user.firstName} ${user.lastName}.${warn}`,
-      );
+      if (data.emailSent === false) {
+        // El magic link se creó en Clerk pero el correo falló
+        const warn = data.emailWarning ?? "Error desconocido al enviar correo";
+        setError(
+          `Magic link generado pero el correo no se pudo enviar: ${warn}. Copia el enlace de acceso y envíaselo manualmente.`,
+        );
+        if (data.signInUrl) setResendLink(data.signInUrl);
+      } else {
+        setResendSuccess(
+          `Acceso reenviado correctamente a ${user.firstName} ${user.lastName} por correo.`,
+        );
+      }
     } catch (err) {
       setError(err instanceof Error ? err.message : "Error desconocido");
     } finally {
@@ -788,6 +799,25 @@ function UsersTab({
   return (
     <div className="space-y-3">
       {error ? <p className="text-sm font-medium text-rose-800">{error}</p> : null}
+      {resendLink ? (
+        <div className="rounded-lg border border-amber-200 bg-amber-50 p-3 space-y-2">
+          <p className="text-sm font-medium text-amber-800">
+            El correo no se pudo enviar. Copia este enlace y compártelo directamente con el usuario:
+          </p>
+          <div className="flex items-center gap-2">
+            <code className="flex-1 truncate rounded bg-white border border-amber-200 px-2 py-1 text-xs text-amber-900">
+              {resendLink}
+            </code>
+            <button
+              type="button"
+              className="shrink-0 rounded bg-amber-600 px-3 py-1 text-xs font-semibold text-white hover:bg-amber-700"
+              onClick={() => void navigator.clipboard.writeText(resendLink)}
+            >
+              Copiar
+            </button>
+          </div>
+        </div>
+      ) : null}
       {resendSuccess ? (
         <p className="text-sm font-medium text-emerald-700">{resendSuccess}</p>
       ) : null}

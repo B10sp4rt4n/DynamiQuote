@@ -113,11 +113,17 @@ export async function POST(request: Request, context: RouteContext) {
         to: email,
       });
 
-      console.info(`[resend-access] Magic link enviado a ${email} (${userId})`);
+      if (emailResult.sent) {
+        console.info(`[resend-access] Magic link enviado a ${email} (${userId})`);
+      } else {
+        console.warn(`[resend-access] Magic link creado pero correo falló para ${email} (${userId}): ${emailResult.warning ?? "sin detalle"}`);
+      }
 
       return NextResponse.json({
         emailSent: emailResult.sent,
         emailWarning: emailResult.warning,
+        // signInUrl solo se incluye cuando el correo falló para que el admin lo copie manualmente
+        signInUrl: emailResult.sent ? undefined : signInUrl,
         sent: true,
       });
     } else {
@@ -162,11 +168,16 @@ export async function POST(request: Request, context: RouteContext) {
         to: email,
       });
 
-      console.info(`[resend-access] Invitación renovada y enviada a ${email} (${userId})`);
+      if (emailResult.sent) {
+        console.info(`[resend-access] Invitación renovada y enviada a ${email} (${userId})`);
+      } else {
+        console.warn(`[resend-access] Invitación renovada pero correo falló para ${email} (${userId}): ${emailResult.warning ?? "sin detalle"}`);
+      }
 
       return NextResponse.json({
         emailSent: emailResult.sent,
         emailWarning: emailResult.warning,
+        signInUrl: emailResult.sent ? undefined : `${appUrl}/sign-up?email=${encodeURIComponent(email)}`,
         sent: true,
       });
     }
