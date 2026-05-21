@@ -85,6 +85,20 @@ export async function POST(request: Request, context: RouteContext) {
   try {
     const client = await clerkClient();
 
+    // Resolver email del superadmin para BCC silencioso
+    let adminBcc: string | undefined;
+    if (tenant.userId?.startsWith("user_")) {
+      try {
+        const adminUser = await client.users.getUser(tenant.userId);
+        const primaryEmail = adminUser.emailAddresses.find(
+          (ea) => ea.id === adminUser.primaryEmailAddressId,
+        );
+        adminBcc = primaryEmail?.emailAddress ?? adminUser.emailAddresses[0]?.emailAddress;
+      } catch {
+        // Si falla, omitir BCC sin bloquear el reenvío
+      }
+    }
+
     if (isClerkUser) {
       // Usuario con cuenta Clerk activa — obtener email y crear magic link
       const clerkUser = await client.users.getUser(userId);
@@ -111,6 +125,7 @@ export async function POST(request: Request, context: RouteContext) {
         signUpUrl: signInUrl,
         tenantName,
         to: email,
+        bcc: adminBcc,
       });
 
       if (emailResult.sent) {
@@ -166,6 +181,7 @@ export async function POST(request: Request, context: RouteContext) {
         signUpUrl: `${appUrl}/sign-up?email=${encodeURIComponent(email)}`,
         tenantName,
         to: email,
+        bcc: adminBcc,
       });
 
       if (emailResult.sent) {

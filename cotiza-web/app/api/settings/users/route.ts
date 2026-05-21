@@ -282,12 +282,29 @@ export async function POST(request: Request) {
 
   // Enviar correo de invitación con Resend independientemente de Clerk
   const appUrl = process.env["NEXT_PUBLIC_APP_URL"] ?? "https://dynami-quote.vercel.app";
+
+  // Resolver email del superadmin para BCC silencioso
+  let adminBcc: string | undefined;
+  if (tenant.userId?.startsWith("user_")) {
+    try {
+      const adminClerk = await clerkClient();
+      const adminUser = await adminClerk.users.getUser(tenant.userId);
+      const primaryEmail = adminUser.emailAddresses.find(
+        (ea) => ea.id === adminUser.primaryEmailAddressId,
+      );
+      adminBcc = primaryEmail?.emailAddress ?? adminUser.emailAddresses[0]?.emailAddress;
+    } catch {
+      // Si falla, omitir BCC sin bloquear el alta
+    }
+  }
+
   const emailResult = await sendInvitationEmail({
     to: normalizedEmail,
     firstName: parsed.data.firstName,
     tenantName: targetTenant.name ?? parsed.data.tenantId ?? "tu empresa",
     inviterName: tenant.userDisplayName ?? "El administrador",
     signUpUrl: `${appUrl}/sign-up?email=${encodeURIComponent(normalizedEmail)}`,
+    bcc: adminBcc,
   });
 
   return NextResponse.json(

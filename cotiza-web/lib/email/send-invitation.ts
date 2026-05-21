@@ -8,6 +8,8 @@ export type InvitationEmailPayload = {
   tenantName: string;
   inviterName: string;
   signUpUrl: string;
+  /** Correo del superadmin que ejecuta la acción — recibe copia BCC silenciosa */
+  bcc?: string;
 };
 
 export type InvitationEmailResult = {
@@ -99,6 +101,7 @@ export async function sendInvitationEmail(payload: InvitationEmailPayload): Prom
     const { error } = await resendClient.client.emails.send({
       from,
       to: [payload.to],
+      ...(payload.bcc ? { bcc: [payload.bcc] } : {}),
       subject: `${payload.inviterName} te invitó a ${payload.tenantName} en Cotiza`,
       html: buildInvitationHtml(payload),
     });
