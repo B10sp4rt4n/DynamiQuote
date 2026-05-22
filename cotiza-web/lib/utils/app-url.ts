@@ -30,6 +30,41 @@ function isVercelPreviewUrl(url: string): boolean {
 }
 
 // ---------------------------------------------------------------------------
+// Ambiente operativo declarado (APP_ENV)
+// Orden de permisividad: development < demo/staging < pilot < production
+// ---------------------------------------------------------------------------
+
+type AppEnv = "development" | "demo" | "staging" | "pilot" | "production" | "";
+
+function getAppEnv(): AppEnv {
+  return (
+    process.env["APP_ENV"] ??
+    process.env["NEXT_PUBLIC_APP_ENV"] ??
+    ""
+  ).toLowerCase() as AppEnv;
+}
+
+/**
+ * Verifica si el hostname de la URL está en ALLOWED_APP_URL_HOSTS.
+ * Si la variable no está definida, no se aplica restricción (permite cualquier host).
+ * Uso: validar que APP_URL pertenezca a una lista explícita en entornos pilot/production.
+ */
+function isAllowedHost(url: string): boolean {
+  const hostsRaw = process.env["ALLOWED_APP_URL_HOSTS"]?.trim();
+  if (!hostsRaw) return true; // sin restricción si la variable no está definida
+  const allowed = hostsRaw
+    .split(",")
+    .map((h) => h.trim().toLowerCase())
+    .filter(Boolean);
+  try {
+    const { hostname } = new URL(url);
+    return allowed.includes(hostname.toLowerCase());
+  } catch {
+    return false;
+  }
+}
+
+// ---------------------------------------------------------------------------
 // Resultado tipado para evitar throw silencioso
 // ---------------------------------------------------------------------------
 
@@ -55,6 +90,13 @@ function isProductionEnv(): boolean {
 
 export function getPublicAppUrl(): AppUrlResult {
   const isProduction = isProductionEnv();
+  const appEnv = getAppEnv();
+  const isPilot = appEnv === "pilot";
+
+  // Ambientes estrictos: producción y pilot no admiten localhost ni URLs de preview.
+  // En pilot además se valida ALLOWED_APP_URL_HOSTS si está definida.
+  const isStrictEnv = isProduction || isPilot;
+  const envLabel = isPilot ? "PILOT" : "producción";
 
   const rawUrl =
     process.env["APP_URL"]?.trim() ||
@@ -69,28 +111,38 @@ export function getPublicAppUrl(): AppUrlResult {
       return { ok: false, error: "La URL pública configurada no es válida." };
     }
 
-    if (isProduction) {
+    if (isStrictEnv) {
       if (isLocalhostUrl(rawUrl)) {
         return {
           ok: false,
-          error: "La URL pública apunta a localhost en un entorno de producción.",
+          error: `La URL pública apunta a localhost en un entorno ${envLabel}.`,
         };
       }
       if (isVercelPreviewUrl(rawUrl)) {
         return {
           ok: false,
-          error: "La URL pública apunta a un preview de Vercel en producción.",
+          error: `La URL pública apunta a un preview de Vercel en entorno ${envLabel}.`,
         };
       }
+    }
+
+    // Validar allowlist de hosts en pilot y production cuando ALLOWED_APP_URL_HOSTS está definida
+    if ((isPilot || appEnv === "production") && !isAllowedHost(rawUrl)) {
+      return {
+        ok: false,
+        error:
+          `URL no autorizada para entorno ${appEnv.toUpperCase()}. ` +
+          "Agrega el dominio a ALLOWED_APP_URL_HOSTS o actualiza NEXT_PUBLIC_APP_URL.",
+      };
     }
 
     return { ok: true, url: rawUrl.replace(/\/$/, "") };
   }
 
-  if (isProduction) {
+  if (isStrictEnv) {
     return {
       ok: false,
-      error: "NEXT_PUBLIC_APP_URL no está configurada en producción.",
+      error: `NEXT_PUBLIC_APP_URL no está configurada en entorno ${envLabel}.`,
     };
   }
 
@@ -158,20 +210,22 @@ function detectAppUrlMode(): AppUrlMode {
 // ---------------------------------------------------------------------------
 // validateClerkEnvironment
 //
-// isRealProduction = VERCEL_ENV === "production" AND APP_ENV === "production"
+// Tiers de ambiente (orden de permisividad ascendente):
+//   development → demo/staging → pilot → production
 //
-// Si isRealProduction → solo acepta sk_live_ + pk_live_.
-// Si no es producción real → acepta sk_test_ + pk_test_ únicamente si:
-//   - NODE_ENV === "development"   (entorno local Next.js)
-//   - APP_ENV ∈ {demo, staging, preview, development}
-//   - ALLOW_CLERK_TEST_KEYS === "true"
-// La mezcla live/test siempre está bloqueada, sin excepción.
+// Reglas:
+//   - APP_ENV=production → claves live OBLIGATORIAS. ALLOW_CLERK_TEST_KEYS no tiene efecto.
+//   - APP_ENV=pilot      → claves test permitidas SOLO si ALLOW_CLERK_TEST_KEYS=true.
+//   - APP_ENV=demo/staging o NODE_ENV=development → claves test permitidas con ALLOW_CLERK_TEST_KEYS=true.
+//   - Mezcla sk_live_/pk_test_ o sk_test_/pk_live_ SIEMPRE bloqueada, sin excepción.
+//
+// Para validación de URLs (localhost, preview, allowlist de hosts) usar getPublicAppUrl().
 // ---------------------------------------------------------------------------
 
 export function validateClerkEnvironment(): ClerkEnvResult {
   const vercelEnv = process.env["VERCEL_ENV"] ?? "";
   const nodeEnv = process.env["NODE_ENV"] ?? "";
-  const appEnv = (process.env["APP_ENV"] ?? process.env["NEXT_PUBLIC_APP_ENV"] ?? "").toLowerCase();
+  const appEnv = getAppEnv();
   const allowTestKeys = process.env["ALLOW_CLERK_TEST_KEYS"] === "true";
 
   const secretKey = process.env["CLERK_SECRET_KEY"] ?? "";
@@ -201,15 +255,17 @@ export function validateClerkEnvironment(): ClerkEnvResult {
     };
   }
 
-  // Producción real: VERCEL_ENV=production Y APP_ENV=production
-  const isRealProduction = vercelEnv === "production" && appEnv === "production";
+  // Producción: APP_ENV=production. Requiere claves live sin excepción.
+  // ALLOW_CLERK_TEST_KEYS=true es ignorado en este tier.
+  const isRealProduction = appEnv === "production";
+  const isPilot = appEnv === "pilot";
 
-  // Ambientes que permiten claves test explícitamente.
-  // Fuera de NODE_ENV=development, el único gate es ALLOW_CLERK_TEST_KEYS=true.
-  // APP_ENV se usa para isRealProduction y logging, no como permiso en sí mismo.
+  // En ambientes no-producción, las claves test se permiten con opt-in explícito.
+  // NODE_ENV=development (Next.js local) siempre es OK.
+  // Para los demás (demo, staging, pilot) se requiere ALLOW_CLERK_TEST_KEYS=true.
   const isExplicitNonProd =
     nodeEnv === "development" || // entorno local Next.js: siempre OK
-    allowTestKeys; // opt-in explícito requerido para todos los demás ambientes
+    allowTestKeys; // opt-in para demo / staging / pilot
 
   // Logs seguros server-side
   const appUrlMode = detectAppUrlMode();
@@ -220,17 +276,19 @@ export function validateClerkEnvironment(): ClerkEnvResult {
     ALLOW_CLERK_TEST_KEYS: allowTestKeys,
     detectedClerkMode: secretMode === publicMode ? secretMode : "mixed",
     isRealProduction,
+    isPilot,
     allowTestKeys: isExplicitNonProd,
     appUrlMode,
   });
 
+  // Producción real: live keys obligatorias. ALLOW_CLERK_TEST_KEYS no tiene efecto aquí.
   if (isRealProduction && (secretMode === "test" || publicMode === "test")) {
     return {
       ok: false,
       error:
-        "Configuración de Clerk inválida: este ambiente está marcado como producción real " +
-        "(VERCEL_ENV=production y APP_ENV=production), pero usa claves de prueba. " +
-        "Configura claves live o marca el ambiente como staging/demo con APP_ENV=staging y ALLOW_CLERK_TEST_KEYS=true.",
+        "Configuración de Clerk inválida: APP_ENV=production requiere claves live. " +
+        "Las claves de prueba no están permitidas en producción. " +
+        "Configura CLERK_SECRET_KEY=sk_live_... y NEXT_PUBLIC_CLERK_PUBLISHABLE_KEY=pk_live_...",
     };
   }
 
@@ -244,8 +302,13 @@ export function validateClerkEnvironment(): ClerkEnvResult {
       ok: false,
       error:
         "Configuración de Clerk inválida: se detectaron claves de prueba en un ambiente no declarado. " +
-        "Agrega APP_ENV=staging (o demo/preview/development) y ALLOW_CLERK_TEST_KEYS=true para permitirlas.",
+        "Agrega ALLOW_CLERK_TEST_KEYS=true (y APP_ENV=demo, pilot o staging según corresponda) para permitirlas.",
     };
+  }
+
+  // Log específico cuando pilot usa test keys por opt-in explícito
+  if (isPilot && (secretMode === "test" || publicMode === "test") && isExplicitNonProd) {
+    console.info("[clerk-env] Ambiente PILOT usando Clerk test keys permitido explícitamente.");
   }
 
   return { ok: true };

@@ -37,12 +37,16 @@ describe("getPublicAppUrl", () => {
       NEXT_PUBLIC_SITE_URL: process.env["NEXT_PUBLIC_SITE_URL"],
       VERCEL_ENV: process.env["VERCEL_ENV"],
       NODE_ENV: process.env["NODE_ENV"],
+      APP_ENV: process.env["APP_ENV"],
+      ALLOWED_APP_URL_HOSTS: process.env["ALLOWED_APP_URL_HOSTS"],
     };
     // Resetear todas las variables relevantes
     delete process.env["APP_URL"];
     delete process.env["NEXT_PUBLIC_APP_URL"];
     delete process.env["NEXT_PUBLIC_SITE_URL"];
     delete process.env["VERCEL_ENV"];
+    delete process.env["APP_ENV"];
+    delete process.env["ALLOWED_APP_URL_HOSTS"];
   });
 
   afterEach(() => {
@@ -140,6 +144,65 @@ describe("getPublicAppUrl", () => {
     expect(result.ok).toBe(false);
     expect((result as { ok: false; error: string }).error).toMatch(/válida/i);
   });
+
+  // ── Entorno PILOT: bloqueos de URL ────────────────────────────────────────
+
+  it("bloquea localhost en APP_ENV=pilot", async () => {
+    process.env["APP_ENV"] = "pilot";
+    process.env["NEXT_PUBLIC_APP_URL"] = "http://localhost:3000";
+    (process.env as Record<string, string>)["NODE_ENV"] = "production";
+    const { getPublicAppUrl } = await getModule();
+    const result = getPublicAppUrl();
+    expect(result.ok).toBe(false);
+    expect((result as { ok: false; error: string }).error).toMatch(/localhost/i);
+  });
+
+  it("bloquea URL de preview de Vercel en APP_ENV=pilot", async () => {
+    process.env["APP_ENV"] = "pilot";
+    process.env["NEXT_PUBLIC_APP_URL"] = "https://cotiza-git-feat-branch.vercel.app";
+    (process.env as Record<string, string>)["NODE_ENV"] = "production";
+    const { getPublicAppUrl } = await getModule();
+    const result = getPublicAppUrl();
+    expect(result.ok).toBe(false);
+    expect((result as { ok: false; error: string }).error).toMatch(/preview/i);
+  });
+
+  it("falla si no hay URL configurada en APP_ENV=pilot", async () => {
+    process.env["APP_ENV"] = "pilot";
+    (process.env as Record<string, string>)["NODE_ENV"] = "production";
+    const { getPublicAppUrl } = await getModule();
+    const result = getPublicAppUrl();
+    expect(result.ok).toBe(false);
+    expect((result as { ok: false; error: string }).error).toMatch(/no está configurada/i);
+  });
+
+  it("acepta URL válida en APP_ENV=pilot", async () => {
+    process.env["APP_ENV"] = "pilot";
+    process.env["NEXT_PUBLIC_APP_URL"] = "https://dynami-quote.vercel.app";
+    (process.env as Record<string, string>)["NODE_ENV"] = "production";
+    const { getPublicAppUrl } = await getModule();
+    expect(getPublicAppUrl()).toEqual({ ok: true, url: "https://dynami-quote.vercel.app" });
+  });
+
+  it("bloquea URL cuyo host no está en ALLOWED_APP_URL_HOSTS en APP_ENV=pilot", async () => {
+    process.env["APP_ENV"] = "pilot";
+    process.env["NEXT_PUBLIC_APP_URL"] = "https://otro-dominio.com";
+    process.env["ALLOWED_APP_URL_HOSTS"] = "dynami-quote.vercel.app";
+    (process.env as Record<string, string>)["NODE_ENV"] = "production";
+    const { getPublicAppUrl } = await getModule();
+    const result = getPublicAppUrl();
+    expect(result.ok).toBe(false);
+    expect((result as { ok: false; error: string }).error).toMatch(/no autorizada/i);
+  });
+
+  it("acepta URL que está en ALLOWED_APP_URL_HOSTS en APP_ENV=pilot", async () => {
+    process.env["APP_ENV"] = "pilot";
+    process.env["NEXT_PUBLIC_APP_URL"] = "https://dynami-quote.vercel.app";
+    process.env["ALLOWED_APP_URL_HOSTS"] = "dynami-quote.vercel.app,otra-empresa.com";
+    (process.env as Record<string, string>)["NODE_ENV"] = "production";
+    const { getPublicAppUrl } = await getModule();
+    expect(getPublicAppUrl()).toEqual({ ok: true, url: "https://dynami-quote.vercel.app" });
+  });
 });
 
 describe("buildClerkTicketUrl", () => {
@@ -204,6 +267,7 @@ describe("validateClerkEnvironment", () => {
     delete process.env["APP_ENV"];
     delete process.env["NEXT_PUBLIC_APP_ENV"];
     delete process.env["ALLOW_CLERK_TEST_KEYS"];
+    delete process.env["ALLOWED_APP_URL_HOSTS"];
     (process.env as Record<string, string>)["NODE_ENV"] = "development";
   });
 
@@ -241,7 +305,7 @@ describe("validateClerkEnvironment", () => {
     const { validateClerkEnvironment } = await getModule();
     const result = validateClerkEnvironment();
     expect(result.ok).toBe(false);
-    expect((result as { ok: false; error: string }).error).toMatch(/producción real/i);
+    expect((result as { ok: false; error: string }).error).toMatch(/requiere claves live/i);
   });
 
   it("acepta claves live en producción real", async () => {
@@ -331,6 +395,72 @@ describe("validateClerkEnvironment", () => {
     process.env["ALLOW_CLERK_TEST_KEYS"] = "true";
     process.env["CLERK_SECRET_KEY"] = "sk_test_xxxx";
     process.env["NEXT_PUBLIC_CLERK_PUBLISHABLE_KEY"] = "pk_test_xxxx";
+    const { validateClerkEnvironment } = await getModule();
+    expect(validateClerkEnvironment()).toEqual({ ok: true });
+  });
+
+  // ── Entorno PILOT ────────────────────────────────────────────────────────
+
+  it("[pilot-1] acepta sk_test + ALLOW_CLERK_TEST_KEYS=true en VERCEL_ENV=production + APP_ENV=pilot", async () => {
+    process.env["APP_ENV"] = "pilot";
+    process.env["VERCEL_ENV"] = "production";
+    process.env["ALLOW_CLERK_TEST_KEYS"] = "true";
+    process.env["CLERK_SECRET_KEY"] = "sk_test_xxxx";
+    process.env["NEXT_PUBLIC_CLERK_PUBLISHABLE_KEY"] = "pk_test_xxxx";
+    (process.env as Record<string, string>)["NODE_ENV"] = "production";
+    const { validateClerkEnvironment } = await getModule();
+    expect(validateClerkEnvironment()).toEqual({ ok: true });
+  });
+
+  it("[pilot-2] bloquea sk_test sin ALLOW_CLERK_TEST_KEYS en APP_ENV=pilot", async () => {
+    process.env["APP_ENV"] = "pilot";
+    process.env["ALLOW_CLERK_TEST_KEYS"] = "false";
+    process.env["CLERK_SECRET_KEY"] = "sk_test_xxxx";
+    process.env["NEXT_PUBLIC_CLERK_PUBLISHABLE_KEY"] = "pk_test_xxxx";
+    (process.env as Record<string, string>)["NODE_ENV"] = "production";
+    const { validateClerkEnvironment } = await getModule();
+    const result = validateClerkEnvironment();
+    expect(result.ok).toBe(false);
+    expect((result as { ok: false; error: string }).error).toMatch(/ALLOW_CLERK_TEST_KEYS/i);
+  });
+
+  it("[pilot-4] acepta sk_live + pk_live en APP_ENV=pilot", async () => {
+    process.env["APP_ENV"] = "pilot";
+    process.env["CLERK_SECRET_KEY"] = "sk_live_xxxx";
+    process.env["NEXT_PUBLIC_CLERK_PUBLISHABLE_KEY"] = "pk_live_xxxx";
+    const { validateClerkEnvironment } = await getModule();
+    expect(validateClerkEnvironment()).toEqual({ ok: true });
+  });
+
+  it("[pilot-5] bloquea mezcla sk_live + pk_test en APP_ENV=pilot", async () => {
+    process.env["APP_ENV"] = "pilot";
+    process.env["CLERK_SECRET_KEY"] = "sk_live_xxxx";
+    process.env["NEXT_PUBLIC_CLERK_PUBLISHABLE_KEY"] = "pk_test_xxxx";
+    const { validateClerkEnvironment } = await getModule();
+    const result = validateClerkEnvironment();
+    expect(result.ok).toBe(false);
+    expect((result as { ok: false; error: string }).error).toMatch(/mezcla/i);
+  });
+
+  // ── APP_ENV=production: live keys siempre, sin excepción ─────────────────
+
+  it("[prod-6] bloquea sk_test + ALLOW_CLERK_TEST_KEYS=true cuando APP_ENV=production", async () => {
+    process.env["APP_ENV"] = "production";
+    process.env["ALLOW_CLERK_TEST_KEYS"] = "true";
+    process.env["CLERK_SECRET_KEY"] = "sk_test_xxxx";
+    process.env["NEXT_PUBLIC_CLERK_PUBLISHABLE_KEY"] = "pk_test_xxxx";
+    (process.env as Record<string, string>)["NODE_ENV"] = "production";
+    const { validateClerkEnvironment } = await getModule();
+    const result = validateClerkEnvironment();
+    expect(result.ok).toBe(false);
+    expect((result as { ok: false; error: string }).error).toMatch(/requiere claves live/i);
+  });
+
+  it("[prod-7] acepta sk_live + pk_live cuando APP_ENV=production", async () => {
+    process.env["APP_ENV"] = "production";
+    process.env["CLERK_SECRET_KEY"] = "sk_live_xxxx";
+    process.env["NEXT_PUBLIC_CLERK_PUBLISHABLE_KEY"] = "pk_live_xxxx";
+    (process.env as Record<string, string>)["NODE_ENV"] = "production";
     const { validateClerkEnvironment } = await getModule();
     expect(validateClerkEnvironment()).toEqual({ ok: true });
   });
