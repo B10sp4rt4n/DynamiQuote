@@ -1,0 +1,15 @@
+{
+  "name": "dynamiquote-monorepo",
+  "private": true,
+  "workspaces": [
+    "cotiza-web"
+  ],
+  "scripts": {
+    "build": "npm --prefix cotiza-web run build",
+    "dev": "npm --prefix cotiza-web run dev",
+    "start": "npm --prefix cotiza-web run start"
+  },
+  "dependencies": {
+    "next": "16.2.4"
+  }
+}
