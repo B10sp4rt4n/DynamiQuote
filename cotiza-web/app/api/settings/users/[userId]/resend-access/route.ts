@@ -6,6 +6,11 @@ import { hasClerkCredentials } from "@/lib/auth/clerk";
 import { prisma } from "@/lib/db/prisma";
 import { resolveResendConfig } from "@/lib/email/resend";
 import { enforceRateLimit, getRequestIdentity } from "@/lib/utils/rate-limit";
+import {
+  buildClerkTicketUrl,
+  getPublicAppUrl,
+  validateClerkEnvironment,
+} from "@/lib/utils/app-url";
 
 type RouteContext = { params: Promise<{ userId: string }> };
 
@@ -168,13 +173,26 @@ export async function POST(request: Request, context: RouteContext) {
     );
   }
 
+  // Validar que las claves de Clerk coincidan con el entorno
+  const clerkEnvCheck = validateClerkEnvironment();
+  if (!clerkEnvCheck.ok) {
+    console.error("[resend-access] Entorno Clerk inválido:", clerkEnvCheck.error);
+    return NextResponse.json({ error: clerkEnvCheck.error }, { status: 500 });
+  }
+
+  // Resolver URL pública de la aplicación con validación de seguridad
+  const appUrlResult = getPublicAppUrl();
+  if (!appUrlResult.ok) {
+    console.error("[resend-access] URL pública inválida:", appUrlResult.error);
+    return NextResponse.json({ error: appUrlResult.error }, { status: 500 });
+  }
+  const appUrl = appUrlResult.url;
+
   // Resolver Resend directamente — mismo patrón que send-email de propuestas
   const resendClient = await resolveResendConfig();
   if (!resendClient.client) {
     return NextResponse.json({ error: resendClient.error }, { status: 500 });
   }
-
-  const appUrl = process.env["NEXT_PUBLIC_APP_URL"] ?? "https://dynami-quote.vercel.app";
   const tenantName = dbUser.tenants?.name ?? "tu empresa";
   const firstName = dbUser.first_name;
   const from = resendClient.from;
@@ -203,12 +221,18 @@ export async function POST(request: Request, context: RouteContext) {
         );
       }
 
-      // Magic link válido 7 días
+      // Construir link de acceso usando el token de Clerk pero con el dominio de la app.
+      // No usar tokenResult.url: apunta al dominio configurado en la instancia Clerk,
+      // que puede ser localhost o un preview inválido si la instancia es de desarrollo.
       const tokenResult = await client.signInTokens.createSignInToken({
         expiresInSeconds: 604800,
         userId,
       });
-      signInUrl = tokenResult.url ?? null;
+      const ticketUrlResult = buildClerkTicketUrl(tokenResult.token);
+      signInUrl = ticketUrlResult.ok ? ticketUrlResult.url : null;
+      if (!ticketUrlResult.ok) {
+        console.warn("[resend-access] No se pudo construir signInUrl:", ticketUrlResult.error);
+      }
     } else {
       // Usuario pendiente — buscar y renovar invitación Clerk
       const invitationsPage = await client.invitations.getInvitationList({ status: "pending" });

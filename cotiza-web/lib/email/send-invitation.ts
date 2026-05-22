@@ -57,7 +57,7 @@ function buildInvitationHtml(payload: InvitationEmailPayload): string {
               <a href="${signUpUrl}"
                  style="display:inline-block;background:#18181b;color:#fff;font-size:14px;
                         font-weight:600;padding:12px 28px;border-radius:8px;text-decoration:none;">
-                Crear mi cuenta →
+                Acceder a la plataforma →
               </a>
             </td>
           </tr>
@@ -65,7 +65,6 @@ function buildInvitationHtml(payload: InvitationEmailPayload): string {
             <td style="padding:20px 40px 36px;">
               <p style="margin:0;font-size:12px;color:#a1a1aa;">
                 Si no esperabas esta invitación puedes ignorar este correo.
-                El enlace es válido por 7 días.
               </p>
             </td>
           </tr>

@@ -14,6 +14,7 @@ import {
 import { prisma } from "@/lib/db/prisma";
 import { createManagedUserSchema } from "@/lib/validations/users";
 import { sendInvitationEmail } from "@/lib/email/send-invitation";
+import { getPublicAppUrl, validateClerkEnvironment } from "@/lib/utils/app-url";
 
 function extractClerkErrorMessage(error: unknown): string {
   if (typeof error === "string" && error.trim().length > 0) {
@@ -246,10 +247,14 @@ export async function POST(request: Request) {
         }
       } else {
         try {
-          const appUrl = process.env.NEXT_PUBLIC_APP_URL ?? "https://dynami-quote.vercel.app";
+          // Usar siempre getPublicAppUrl() para el redirectUrl de la invitación Clerk
+          const inviteUrlResult = getPublicAppUrl();
+          const inviteBase = inviteUrlResult.ok
+            ? inviteUrlResult.url
+            : "https://dynami-quote.vercel.app";
           await client.invitations.createInvitation({
             emailAddress: normalizedEmail,
-            redirectUrl: `${appUrl}/sign-up`,
+            redirectUrl: `${inviteBase}/sign-up`,
             publicMetadata: {
               localUserId: responseUser.userId,
               role: assignedRole,
@@ -281,7 +286,17 @@ export async function POST(request: Request) {
   }
 
   // Enviar correo de invitación con Resend independientemente de Clerk
-  const appUrl = process.env["NEXT_PUBLIC_APP_URL"] ?? "https://dynami-quote.vercel.app";
+  const clerkEnvCheck = validateClerkEnvironment();
+  if (!clerkEnvCheck.ok) {
+    console.error("[users] Entorno Clerk inválido:", clerkEnvCheck.error);
+    return NextResponse.json({ error: clerkEnvCheck.error }, { status: 500 });
+  }
+
+  const appUrlResult = getPublicAppUrl();
+  const appUrl = appUrlResult.ok ? appUrlResult.url : "https://dynami-quote.vercel.app";
+  if (!appUrlResult.ok) {
+    console.warn("[users] No se pudo resolver URL pública:", appUrlResult.error);
+  }
 
   // Resolver email del superadmin para BCC silencioso
   let adminBcc: string | undefined;
