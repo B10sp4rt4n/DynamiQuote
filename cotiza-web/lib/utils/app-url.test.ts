@@ -196,8 +196,14 @@ describe("validateClerkEnvironment", () => {
       NEXT_PUBLIC_CLERK_PUBLISHABLE_KEY: process.env["NEXT_PUBLIC_CLERK_PUBLISHABLE_KEY"],
       VERCEL_ENV: process.env["VERCEL_ENV"],
       NODE_ENV: process.env["NODE_ENV"],
+      APP_ENV: process.env["APP_ENV"],
+      NEXT_PUBLIC_APP_ENV: process.env["NEXT_PUBLIC_APP_ENV"],
+      ALLOW_CLERK_TEST_KEYS: process.env["ALLOW_CLERK_TEST_KEYS"],
     };
     delete process.env["VERCEL_ENV"];
+    delete process.env["APP_ENV"];
+    delete process.env["NEXT_PUBLIC_APP_ENV"];
+    delete process.env["ALLOW_CLERK_TEST_KEYS"];
     (process.env as Record<string, string>)["NODE_ENV"] = "development";
   });
 
@@ -205,21 +211,9 @@ describe("validateClerkEnvironment", () => {
     setEnv(saved);
   });
 
-  it("acepta claves live en desarrollo", async () => {
-    process.env["CLERK_SECRET_KEY"] = "sk_live_xxxx";
-    process.env["NEXT_PUBLIC_CLERK_PUBLISHABLE_KEY"] = "pk_live_xxxx";
-    const { validateClerkEnvironment } = await getModule();
-    expect(validateClerkEnvironment()).toEqual({ ok: true });
-  });
+  // ── Mezclas — siempre bloqueadas ────────────────────────────────────────
 
-  it("acepta claves test en desarrollo", async () => {
-    process.env["CLERK_SECRET_KEY"] = "sk_test_xxxx";
-    process.env["NEXT_PUBLIC_CLERK_PUBLISHABLE_KEY"] = "pk_test_xxxx";
-    const { validateClerkEnvironment } = await getModule();
-    expect(validateClerkEnvironment()).toEqual({ ok: true });
-  });
-
-  it("bloquea mezcla sk_live + pk_test", async () => {
+  it("bloquea mezcla sk_live + pk_test siempre", async () => {
     process.env["CLERK_SECRET_KEY"] = "sk_live_xxxx";
     process.env["NEXT_PUBLIC_CLERK_PUBLISHABLE_KEY"] = "pk_test_xxxx";
     const { validateClerkEnvironment } = await getModule();
@@ -228,7 +222,7 @@ describe("validateClerkEnvironment", () => {
     expect((result as { ok: false; error: string }).error).toMatch(/mezcla/i);
   });
 
-  it("bloquea mezcla sk_test + pk_live", async () => {
+  it("bloquea mezcla sk_test + pk_live siempre", async () => {
     process.env["CLERK_SECRET_KEY"] = "sk_test_xxxx";
     process.env["NEXT_PUBLIC_CLERK_PUBLISHABLE_KEY"] = "pk_live_xxxx";
     const { validateClerkEnvironment } = await getModule();
@@ -237,27 +231,106 @@ describe("validateClerkEnvironment", () => {
     expect((result as { ok: false; error: string }).error).toMatch(/mezcla/i);
   });
 
-  it("bloquea claves test en VERCEL_ENV=production", async () => {
+  // ── Producción real: VERCEL_ENV=production + APP_ENV=production ─────────
+
+  it("bloquea claves test en producción real (VERCEL_ENV=production + APP_ENV=production)", async () => {
     process.env["VERCEL_ENV"] = "production";
+    process.env["APP_ENV"] = "production";
     process.env["CLERK_SECRET_KEY"] = "sk_test_xxxx";
     process.env["NEXT_PUBLIC_CLERK_PUBLISHABLE_KEY"] = "pk_test_xxxx";
     const { validateClerkEnvironment } = await getModule();
     const result = validateClerkEnvironment();
     expect(result.ok).toBe(false);
-    expect((result as { ok: false; error: string }).error).toMatch(/producción/i);
+    expect((result as { ok: false; error: string }).error).toMatch(/producción real/i);
   });
 
-  it("acepta claves live en VERCEL_ENV=production", async () => {
+  it("acepta claves live en producción real", async () => {
     process.env["VERCEL_ENV"] = "production";
+    process.env["APP_ENV"] = "production";
     process.env["CLERK_SECRET_KEY"] = "sk_live_xxxx";
     process.env["NEXT_PUBLIC_CLERK_PUBLISHABLE_KEY"] = "pk_live_xxxx";
     const { validateClerkEnvironment } = await getModule();
     expect(validateClerkEnvironment()).toEqual({ ok: true });
   });
 
-  it("acepta claves vacías en desarrollo (sin Clerk configurado)", async () => {
+  // ── VERCEL_ENV=production pero APP_ENV != production (demo / staging) ───
+
+  it("acepta claves test en Vercel prod con APP_ENV=demo y ALLOW_CLERK_TEST_KEYS=true", async () => {
+    process.env["VERCEL_ENV"] = "production";
+    process.env["APP_ENV"] = "demo";
+    process.env["ALLOW_CLERK_TEST_KEYS"] = "true";
+    process.env["CLERK_SECRET_KEY"] = "sk_test_xxxx";
+    process.env["NEXT_PUBLIC_CLERK_PUBLISHABLE_KEY"] = "pk_test_xxxx";
+    const { validateClerkEnvironment } = await getModule();
+    expect(validateClerkEnvironment()).toEqual({ ok: true });
+  });
+
+  it("acepta claves test en Vercel prod con APP_ENV=staging y ALLOW_CLERK_TEST_KEYS=true", async () => {
+    process.env["VERCEL_ENV"] = "production";
+    process.env["APP_ENV"] = "staging";
+    process.env["ALLOW_CLERK_TEST_KEYS"] = "true";
+    process.env["CLERK_SECRET_KEY"] = "sk_test_xxxx";
+    process.env["NEXT_PUBLIC_CLERK_PUBLISHABLE_KEY"] = "pk_test_xxxx";
+    const { validateClerkEnvironment } = await getModule();
+    expect(validateClerkEnvironment()).toEqual({ ok: true });
+  });
+
+  it("bloquea claves test en Vercel prod con APP_ENV=demo sin ALLOW_CLERK_TEST_KEYS", async () => {
+    (process.env as Record<string, string>)["NODE_ENV"] = "production"; // Vercel build = production
+    process.env["VERCEL_ENV"] = "production";
+    process.env["APP_ENV"] = "demo";
+    delete process.env["ALLOW_CLERK_TEST_KEYS"];
+    process.env["CLERK_SECRET_KEY"] = "sk_test_xxxx";
+    process.env["NEXT_PUBLIC_CLERK_PUBLISHABLE_KEY"] = "pk_test_xxxx";
+    const { validateClerkEnvironment } = await getModule();
+    const result = validateClerkEnvironment();
+    expect(result.ok).toBe(false);
+    expect((result as { ok: false; error: string }).error).toMatch(/ALLOW_CLERK_TEST_KEYS/);
+  });
+
+  // ── Desarrollo local (NODE_ENV=development) ─────────────────────────────
+
+  it("acepta claves test en desarrollo local sin variables adicionales", async () => {
+    (process.env as Record<string, string>)["NODE_ENV"] = "development";
+    delete process.env["VERCEL_ENV"];
+    process.env["CLERK_SECRET_KEY"] = "sk_test_xxxx";
+    process.env["NEXT_PUBLIC_CLERK_PUBLISHABLE_KEY"] = "pk_test_xxxx";
+    const { validateClerkEnvironment } = await getModule();
+    expect(validateClerkEnvironment()).toEqual({ ok: true });
+  });
+
+  it("acepta claves live en desarrollo local", async () => {
+    process.env["CLERK_SECRET_KEY"] = "sk_live_xxxx";
+    process.env["NEXT_PUBLIC_CLERK_PUBLISHABLE_KEY"] = "pk_live_xxxx";
+    const { validateClerkEnvironment } = await getModule();
+    expect(validateClerkEnvironment()).toEqual({ ok: true });
+  });
+
+  it("acepta claves vacías en desarrollo (Clerk no configurado)", async () => {
     process.env["CLERK_SECRET_KEY"] = "";
     process.env["NEXT_PUBLIC_CLERK_PUBLISHABLE_KEY"] = "";
+    const { validateClerkEnvironment } = await getModule();
+    expect(validateClerkEnvironment()).toEqual({ ok: true });
+  });
+
+  // ── Build production sin VERCEL_ENV (ej. local build) ───────────────────
+
+  it("bloquea claves test en NODE_ENV=production sin VERCEL_ENV ni ALLOW_CLERK_TEST_KEYS", async () => {
+    (process.env as Record<string, string>)["NODE_ENV"] = "production";
+    delete process.env["VERCEL_ENV"];
+    process.env["CLERK_SECRET_KEY"] = "sk_test_xxxx";
+    process.env["NEXT_PUBLIC_CLERK_PUBLISHABLE_KEY"] = "pk_test_xxxx";
+    const { validateClerkEnvironment } = await getModule();
+    const result = validateClerkEnvironment();
+    expect(result.ok).toBe(false);
+  });
+
+  it("acepta claves test en NODE_ENV=production con ALLOW_CLERK_TEST_KEYS=true", async () => {
+    (process.env as Record<string, string>)["NODE_ENV"] = "production";
+    delete process.env["VERCEL_ENV"];
+    process.env["ALLOW_CLERK_TEST_KEYS"] = "true";
+    process.env["CLERK_SECRET_KEY"] = "sk_test_xxxx";
+    process.env["NEXT_PUBLIC_CLERK_PUBLISHABLE_KEY"] = "pk_test_xxxx";
     const { validateClerkEnvironment } = await getModule();
     expect(validateClerkEnvironment()).toEqual({ ok: true });
   });

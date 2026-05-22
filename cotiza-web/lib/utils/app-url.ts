@@ -127,41 +127,124 @@ export function buildClerkTicketUrl(token: string): AppUrlResult {
 }
 
 // ---------------------------------------------------------------------------
+// Ambiente no sensitivo para logs — nunca imprime claves completas
+// ---------------------------------------------------------------------------
+
+type ClerkMode = "live" | "test" | "unknown";
+type AppUrlMode = "production" | "preview" | "localhost" | "unknown";
+
+function detectAppUrlMode(): AppUrlMode {
+  const raw =
+    process.env["APP_URL"]?.trim() ||
+    process.env["NEXT_PUBLIC_APP_URL"]?.trim() ||
+    process.env["NEXT_PUBLIC_SITE_URL"]?.trim() ||
+    null;
+  if (!raw) return "unknown";
+  try {
+    const { hostname } = new URL(raw);
+    if (hostname === "localhost" || hostname === "127.0.0.1") return "localhost";
+    if (hostname.endsWith(".vercel.app")) {
+      const prefix = hostname.slice(0, -(".vercel.app".length));
+      return /-[a-z0-9]{7,}$/.test(prefix) || prefix.includes("-git-")
+        ? "preview"
+        : "production";
+    }
+    return "production";
+  } catch {
+    return "unknown";
+  }
+}
+
+// ---------------------------------------------------------------------------
 // validateClerkEnvironment
-// Verifica que las claves de Clerk sean coherentes con el entorno.
-// En producción, bloquea claves de desarrollo (pk_test_ / sk_test_).
-// En cualquier entorno, bloquea mezclas de claves live+test.
+//
+// isRealProduction = VERCEL_ENV === "production" AND APP_ENV === "production"
+//
+// Si isRealProduction → solo acepta sk_live_ + pk_live_.
+// Si no es producción real → acepta sk_test_ + pk_test_ únicamente si:
+//   - NODE_ENV === "development"   (entorno local Next.js)
+//   - APP_ENV ∈ {demo, staging, preview, development}
+//   - ALLOW_CLERK_TEST_KEYS === "true"
+// La mezcla live/test siempre está bloqueada, sin excepción.
 // ---------------------------------------------------------------------------
 
 export function validateClerkEnvironment(): ClerkEnvResult {
-  const isProduction = isProductionEnv();
+  const vercelEnv = process.env["VERCEL_ENV"] ?? "";
+  const nodeEnv = process.env["NODE_ENV"] ?? "";
+  const appEnv = (process.env["APP_ENV"] ?? process.env["NEXT_PUBLIC_APP_ENV"] ?? "").toLowerCase();
+  const allowTestKeys = process.env["ALLOW_CLERK_TEST_KEYS"] === "true";
 
   const secretKey = process.env["CLERK_SECRET_KEY"] ?? "";
   const publishableKey = process.env["NEXT_PUBLIC_CLERK_PUBLISHABLE_KEY"] ?? "";
 
-  const secretIsLive = secretKey.startsWith("sk_live_");
-  const secretIsTest = secretKey.startsWith("sk_test_");
-  const publishableIsLive = publishableKey.startsWith("pk_live_");
-  const publishableIsTest = publishableKey.startsWith("pk_test_");
+  const secretMode: ClerkMode = secretKey.startsWith("sk_live_")
+    ? "live"
+    : secretKey.startsWith("sk_test_")
+      ? "test"
+      : "unknown";
 
-  // Mezcla de claves live y test — siempre inválido
+  const publicMode: ClerkMode = publishableKey.startsWith("pk_live_")
+    ? "live"
+    : publishableKey.startsWith("pk_test_")
+      ? "test"
+      : "unknown";
+
+  // Mezcla live/test — siempre inválida, sin excepción
   if (
-    (secretIsLive && publishableIsTest) ||
-    (secretIsTest && publishableIsLive)
+    (secretMode === "live" && publicMode === "test") ||
+    (secretMode === "test" && publicMode === "live")
   ) {
     return {
       ok: false,
       error:
-        "Configuración de Clerk inválida: mezcla de claves sk_live_/pk_test_ o sk_test_/pk_live_.",
+        "Configuración de Clerk inválida: claves públicas y privadas pertenecen a ambientes distintos (mezcla sk_live_/pk_test_ o sk_test_/pk_live_).",
     };
   }
 
-  // En producción, las claves de desarrollo no son aceptables
-  if (isProduction && (secretIsTest || publishableIsTest)) {
+  // Producción real: VERCEL_ENV=production Y APP_ENV=production
+  const isRealProduction = vercelEnv === "production" && appEnv === "production";
+
+  // Ambientes que permiten claves test explícitamente.
+  // Fuera de NODE_ENV=development, el único gate es ALLOW_CLERK_TEST_KEYS=true.
+  // APP_ENV se usa para isRealProduction y logging, no como permiso en sí mismo.
+  const isExplicitNonProd =
+    nodeEnv === "development" || // entorno local Next.js: siempre OK
+    allowTestKeys; // opt-in explícito requerido para todos los demás ambientes
+
+  // Logs seguros server-side
+  const appUrlMode = detectAppUrlMode();
+  console.info("[clerk-env] validateClerkEnvironment", {
+    NODE_ENV: nodeEnv,
+    VERCEL_ENV: vercelEnv || "(no definida)",
+    APP_ENV: appEnv || "(no definida)",
+    ALLOW_CLERK_TEST_KEYS: allowTestKeys,
+    detectedClerkMode: secretMode === publicMode ? secretMode : "mixed",
+    isRealProduction,
+    allowTestKeys: isExplicitNonProd,
+    appUrlMode,
+  });
+
+  if (isRealProduction && (secretMode === "test" || publicMode === "test")) {
     return {
       ok: false,
       error:
-        "Configuración de Clerk inválida: entorno de producción requiere claves sk_live_ y pk_live_.",
+        "Configuración de Clerk inválida: este ambiente está marcado como producción real " +
+        "(VERCEL_ENV=production y APP_ENV=production), pero usa claves de prueba. " +
+        "Configura claves live o marca el ambiente como staging/demo con APP_ENV=staging y ALLOW_CLERK_TEST_KEYS=true.",
+    };
+  }
+
+  // Claves test en un ambiente que no ha declarado explícitamente que las permite
+  if (
+    !isRealProduction &&
+    (secretMode === "test" || publicMode === "test") &&
+    !isExplicitNonProd
+  ) {
+    return {
+      ok: false,
+      error:
+        "Configuración de Clerk inválida: se detectaron claves de prueba en un ambiente no declarado. " +
+        "Agrega APP_ENV=staging (o demo/preview/development) y ALLOW_CLERK_TEST_KEYS=true para permitirlas.",
     };
   }
 
