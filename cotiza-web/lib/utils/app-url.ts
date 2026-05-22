@@ -34,9 +34,9 @@ function isVercelPreviewUrl(url: string): boolean {
 // Orden de permisividad: development < demo/staging < pilot < production
 // ---------------------------------------------------------------------------
 
-type AppEnv = "development" | "demo" | "staging" | "pilot" | "production" | "";
+export type AppEnv = "development" | "demo" | "staging" | "pilot" | "production" | "";
 
-function getAppEnv(): AppEnv {
+export function getAppEnv(): AppEnv {
   return (
     process.env["APP_ENV"] ??
     process.env["NEXT_PUBLIC_APP_ENV"] ??

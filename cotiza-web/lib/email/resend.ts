@@ -3,13 +3,18 @@ import "server-only";
 import { auth, clerkClient } from "@clerk/nextjs/server";
 import { Resend } from "resend";
 
+import { getAppEnv } from "@/lib/utils/app-url";
+
 export type ResendClientResult = {
   client: Resend | null;
   error: string | null;
 };
 
-type ResendConfigResult = ResendClientResult & {
+export type ResendConfigSource = "env" | "clerk_metadata" | "fallback_dev_only";
+
+export type ResendConfigResult = ResendClientResult & {
   from: string;
+  configSource: ResendConfigSource;
 };
 
 const RESEND_API_KEY_KEYS = [
@@ -33,6 +38,56 @@ const RESEND_FROM_KEYS = [
 
 function pickString(value: unknown): string {
   return typeof value === "string" ? value.trim() : "";
+}
+
+/**
+ * Extrae el dominio a partir de un campo `from` de correo.
+ * Soporta "Nombre <correo@dominio>" y "correo@dominio".
+ */
+export function extractFromDomain(from: string): string {
+  const angleMatch = from.match(/<([^>]+)>/);
+  const email = angleMatch?.[1]?.trim() ?? from.trim();
+  return email.split("@")[1]?.toLowerCase() ?? "(desconocido)";
+}
+
+/**
+ * Valida que el campo `from` sea un remitente aceptable para el entorno dado.
+ *
+ * Reglas:
+ * - Debe contener "@".
+ * - Fuera de `development`, no puede usar el dominio `resend.dev`.
+ */
+export function validateResendFrom(
+  from: string,
+  appEnv: string,
+): { valid: boolean; error?: string } {
+  const trimmed = from.trim();
+
+  if (!trimmed || !trimmed.includes("@")) {
+    if (appEnv === "development") {
+      return {
+        valid: false,
+        error: "RESEND_FROM vacío o sin '@'. Se usará fallback de desarrollo.",
+      };
+    }
+    return {
+      valid: false,
+      error:
+        "RESEND_FROM no está configurado con un dominio verificado. No se enviará correo con onboarding@resend.dev fuera de desarrollo.",
+    };
+  }
+
+  const domain = extractFromDomain(trimmed);
+
+  if (domain === "resend.dev" && appEnv !== "development") {
+    return {
+      valid: false,
+      error:
+        "RESEND_FROM no está configurado con un dominio verificado. No se enviará correo con onboarding@resend.dev fuera de desarrollo.",
+    };
+  }
+
+  return { valid: true };
 }
 
 function resolveEnvApiKey(): string {
@@ -116,25 +171,97 @@ export async function resolveResendApiKey(): Promise<string> {
 }
 
 export async function resolveResendConfig(): Promise<ResendConfigResult> {
+  const appEnv = getAppEnv();
+  const isDev = appEnv === "development" || process.env["NODE_ENV"] === "development";
+
   const envApiKey = resolveEnvApiKey();
   const envFrom = resolveEnvFromEmail();
-  const clerkSettings = !envApiKey || !envFrom ? await resolveClerkEmailSettings() : { apiKey: "", from: "" };
+
+  // Obtener metadata de Clerk solo si faltan variables de entorno.
+  let clerkSettings: { apiKey: string; from: string } = { apiKey: "", from: "" };
+  if (!envApiKey || !envFrom) {
+    clerkSettings = await resolveClerkEmailSettings();
+  }
 
   const apiKey = envApiKey || clerkSettings.apiKey;
-  const from = envFrom || clerkSettings.from;
+
+  // Variables de entorno tienen prioridad absoluta sobre metadata de Clerk.
+  let rawFrom = envFrom;
+  let configSource: ResendConfigSource = "env";
+
+  if (!rawFrom) {
+    const clerkFrom = clerkSettings.from;
+    if (clerkFrom) {
+      const clerkFromValidation = validateResendFrom(clerkFrom, appEnv);
+      if (clerkFromValidation.valid) {
+        rawFrom = clerkFrom;
+        configSource = "clerk_metadata";
+      } else {
+        console.warn("[email] Metadata de Clerk tiene RESEND_FROM inválido, ignorando.", {
+          error: clerkFromValidation.error,
+        });
+      }
+    }
+  }
+
+  // Si rawFrom sigue vacío, usar fallback solo en desarrollo; en otros entornos, error.
+  if (!rawFrom || !rawFrom.includes("@")) {
+    if (isDev) {
+      rawFrom = "Cotiza Dev <onboarding@resend.dev>";
+      configSource = "fallback_dev_only";
+      console.warn(
+        "[email] RESEND_FROM no configurado. Usando fallback de desarrollo: onboarding@resend.dev. Solo válido en local.",
+      );
+    } else {
+      console.error("[email] RESEND_FROM no configurado en entorno no local.", { appEnv });
+      return {
+        client: null,
+        configSource: "fallback_dev_only",
+        error:
+          "RESEND_FROM no está configurado con un dominio verificado. No se enviará correo con onboarding@resend.dev fuera de desarrollo.",
+        from: "",
+      };
+    }
+  }
+
+  // Validación final del from: atrapa onboarding@resend.dev fuera de development.
+  const fromValidation = validateResendFrom(rawFrom, appEnv);
+  if (!fromValidation.valid) {
+    console.error("[email] RESEND_FROM inválido.", { appEnv, error: fromValidation.error });
+    return {
+      client: null,
+      configSource,
+      error:
+        fromValidation.error ??
+        "RESEND_FROM no está configurado con un dominio verificado.",
+      from: rawFrom,
+    };
+  }
+
+  const fromDomain = extractFromDomain(rawFrom);
+
+  console.info("[email] Resend config resuelto.", {
+    APP_ENV: appEnv,
+    VERCEL_ENV: process.env["VERCEL_ENV"] ?? "(no definido)",
+    configSource,
+    fromDomain,
+    hasApiKey: Boolean(apiKey),
+  });
 
   if (!apiKey) {
     return {
       client: null,
+      configSource,
       error: "Falta configurar RESEND_API_KEY/API_RESEND_API_KEY para enviar correos.",
-      from: from.includes("@") ? from : "Cotiza <onboarding@resend.dev>",
+      from: rawFrom,
     };
   }
 
   return {
     client: new Resend(apiKey),
+    configSource,
     error: null,
-    from: from.includes("@") ? from : "Cotiza <onboarding@resend.dev>",
+    from: rawFrom,
   };
 }
 
@@ -144,11 +271,6 @@ export async function getResendClient(): Promise<ResendClientResult> {
 }
 
 export async function resolveResendFromEmail(): Promise<string> {
-  const configuredFrom = (await resolveResendConfig()).from;
-
-  if (configuredFrom.includes("@")) {
-    return configuredFrom;
-  }
-
-  return "Cotiza <onboarding@resend.dev>";
+  const { from } = await resolveResendConfig();
+  return from;
 }
