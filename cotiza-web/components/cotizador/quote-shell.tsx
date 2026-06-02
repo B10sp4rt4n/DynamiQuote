@@ -132,6 +132,23 @@ export function QuoteShell({
     });
   }, [quoteItems, quoteSearch, quoteSort]);
 
+  // Sincroniza la lista cuando el servidor devuelve datos frescos (ej. post-importación Excel)
+  useEffect(() => {
+    // eslint-disable-next-line react-hooks/set-state-in-effect
+    setQuoteItems(sortQuotes(items));
+  }, [items]);
+
+  // Limpia el mensaje de importación exitosa después de 4 segundos
+  useEffect(() => {
+    if (importStatus !== "success") return;
+    const timer = setTimeout(() => {
+      setImportStatus("idle");
+      setImportMessage(null);
+    }, 4000);
+    return () => clearTimeout(timer);
+  // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [importStatus]);
+
   useEffect(() => {
     const nextQuoteId = searchParams.get("quoteId");
 
@@ -423,10 +440,33 @@ export function QuoteShell({
       }
 
       setImportStatus("success");
-      setImportMessage(`Se importaron ${data.importedCount ?? 0} partidas. Recargando...`);
+      setImportMessage(`Se importaron ${data.importedCount ?? 0} partidas.`);
       setImportFile(null);
 
-      // Navegar al nuevo quoteId generado por la importación
+      // Actualización optimista: muestra la nueva versión en la lista sin esperar al servidor
+      const currentEntry = quoteItems.find((q) => q.quoteId === activeQuoteId);
+      if (data.quoteId && currentEntry) {
+        const optimisticEntry: QuoteGroupSummary = {
+          avgMargin: currentEntry.avgMargin,
+          clientName: currentEntry.clientName,
+          createdAt: new Date().toISOString(),
+          playbookName: currentEntry.playbookName,
+          proposalName: currentEntry.proposalName,
+          quoteGroupId: currentEntry.quoteGroupId,
+          quoteId: data.quoteId,
+          status: "draft",
+          totalRevenue: null,
+          version: currentEntry.version + 1,
+          versionCount: currentEntry.versionCount + 1,
+        };
+        setQuoteItems((prev) =>
+          sortQuotes([optimisticEntry, ...prev.filter((q) => q.quoteGroupId !== optimisticEntry.quoteGroupId)]),
+        );
+        setActiveQuoteId(data.quoteId);
+      }
+
+      // Actualizar URL con el nuevo quoteId (también dispara re-render del servidor
+      // para que los totales y márgenes se actualicen con los datos reales)
       if (data.quoteId) {
         const params = new URLSearchParams(searchParams.toString());
         params.set("quoteId", data.quoteId);
