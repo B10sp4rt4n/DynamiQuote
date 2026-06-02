@@ -96,6 +96,7 @@ export function QuoteShell({
   const [importFile, setImportFile] = useState<File | null>(null);
   const [importStatus, setImportStatus] = useState<"idle" | "uploading" | "success" | "error">("idle");
   const [importMessage, setImportMessage] = useState<string | null>(null);
+  const importFileRef = useRef<HTMLInputElement>(null);
 
   const filteredQuoteItems = useMemo(() => {
     const normalizedSearch = quoteSearch.trim().toLowerCase();
@@ -574,8 +575,9 @@ export function QuoteShell({
           </p>
           <div className="mt-3 flex flex-wrap items-center gap-2">
             <input
+              ref={importFileRef}
               accept=".xlsx"
-              className="block w-full max-w-xs text-sm text-zinc-700"
+              className="hidden"
               onChange={(event) => {
                 setImportFile(event.target.files?.[0] ?? null);
                 setImportStatus("idle");
@@ -584,13 +586,22 @@ export function QuoteShell({
               type="file"
             />
             <button
-              className="rounded-lg border border-zinc-300 bg-white px-3 py-2 text-sm font-medium text-zinc-700 transition hover:bg-zinc-100 disabled:cursor-not-allowed disabled:text-zinc-400"
-              disabled={!importFile || importStatus === "uploading"}
-              onClick={() => { void handleImportExcel(); }}
+              className="rounded-lg border border-zinc-300 bg-white px-3 py-2 text-sm font-medium text-zinc-700 transition hover:bg-zinc-100"
+              onClick={() => { importFileRef.current?.click(); }}
               type="button"
             >
-              {importStatus === "uploading" ? "Importando..." : "Importar Excel"}
+              {importFile ? importFile.name : "Elegir archivo .xlsx"}
             </button>
+            {importFile ? (
+              <button
+                className="rounded-lg border border-emerald-600 bg-emerald-600 px-3 py-2 text-sm font-medium text-white transition hover:bg-emerald-700 disabled:cursor-not-allowed disabled:opacity-50"
+                disabled={importStatus === "uploading"}
+                onClick={() => { void handleImportExcel(); }}
+                type="button"
+              >
+                {importStatus === "uploading" ? "Importando..." : "Importar Excel"}
+              </button>
+            ) : null}
           </div>
           {importMessage ? (
             <p className={`mt-2 text-sm ${importStatus === "error" ? "text-rose-700" : "text-emerald-700"}`}>
