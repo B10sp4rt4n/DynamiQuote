@@ -147,42 +147,9 @@ export async function POST(request: Request) {
         }
       }
 
-      if (!clerkUserId) {
-        try {
-          const createdInClerk = await client.users.createUser({
-            emailAddress: [normalizedEmail],
-            externalId: adminProvidedUserId ?? undefined,
-            firstName: parsed.data.firstName,
-            lastName: parsed.data.lastName,
-            publicMetadata: {
-              localUserId: responseUser.userId,
-              role: assignedRole,
-              tenantId: targetTenant.tenant_id,
-              tenantSlug: targetTenant.slug,
-            },
-          });
-
-          clerkUserId = createdInClerk.id;
-        } catch (error) {
-          const clerkDetail = extractClerkErrorMessage(error);
-          const clerkCode = extractClerkErrorCode(error);
-
-          if (clerkCode === "duplicate_record") {
-            const retry = await client.users.getUserList({
-              emailAddress: [normalizedEmail],
-              limit: 1,
-            });
-            const existing = retry.data[0];
-            if (existing?.id) {
-              clerkUserId = existing.id;
-            }
-          }
-
-          if (!clerkUserId) {
-            clerkWarning = `No se pudo crear usuario en Clerk: ${clerkDetail}`;
-          }
-        }
-      }
+      // Para usuarios nuevos no intentamos createUser (requiere contraseña en la mayoría
+      // de instancias Clerk y devuelve 422). Si no hay clerkUserId tras la búsqueda por
+      // email, caemos directamente a createInvitation más abajo.
 
       if (clerkUserId) {
         try {
