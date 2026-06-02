@@ -430,6 +430,7 @@ export async function createProposalFromQuoteByTenant(
 
   const quote = await prisma.quote.findFirst({
     select: {
+      client_id: true,
       client_name: true,
       proposal_name: true,
       quote_id: true,
@@ -471,6 +472,22 @@ export async function createProposalFromQuoteByTenant(
     where: { tenant_id: tenantId },
   });
 
+  // Precarga de datos de contacto desde el catálogo de clientes (Phase 2)
+  let catalogContact: { contactName: string | null; contactTitle: string | null; contactEmail: string | null } | null = null;
+  if (quote.client_id) {
+    const catalogClient = await prisma.client.findFirst({
+      select: { contact_name: true, contact_title: true, contact_email: true },
+      where: { client_id: quote.client_id, tenant_id: tenantId },
+    });
+    if (catalogClient) {
+      catalogContact = {
+        contactName: catalogClient.contact_name ?? null,
+        contactTitle: catalogClient.contact_title ?? null,
+        contactEmail: catalogClient.contact_email ?? null,
+      };
+    }
+  }
+
   const now = new Date();
   const proposalId = randomUUID();
   const proposalDocId = randomUUID();
@@ -505,6 +522,9 @@ export async function createProposalFromQuoteByTenant(
         proposal_number: proposalNumber,
         quote_id: quote.quote_id,
         recipient_company: recipientCompany,
+        recipient_contact_name: catalogContact?.contactName ?? null,
+        recipient_contact_title: catalogContact?.contactTitle ?? null,
+        recipient_email: catalogContact?.contactEmail ?? null,
         status: "draft",
         subject,
         tenant_id: tenantId,
@@ -557,9 +577,9 @@ export async function createProposalFromQuoteByTenant(
       proposal_number: proposalNumber,
       quote_id: quote.quote_id,
       recipient_company: recipientCompany,
-      recipient_contact_name: null,
-      recipient_contact_title: null,
-      recipient_email: null,
+      recipient_contact_name: catalogContact?.contactName ?? null,
+      recipient_contact_title: catalogContact?.contactTitle ?? null,
+      recipient_email: catalogContact?.contactEmail ?? null,
       status: "draft",
       subject,
       terms_and_conditions: "",

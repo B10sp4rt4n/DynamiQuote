@@ -1667,6 +1667,12 @@ export function SettingsShell({
         <button className={tabClass("issuer")} onClick={() => setTab("issuer")} type="button">
           Perfiles emisor ({issuerProfiles.length})
         </button>
+        <a
+          className="rounded-lg px-3 py-1.5 text-sm font-medium text-zinc-500 transition hover:bg-zinc-100 hover:text-zinc-900"
+          href="/configuracion/clientes"
+        >
+          Clientes
+        </a>
       </div>
 
       <div className="mt-5">

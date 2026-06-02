@@ -1,6 +1,7 @@
 import { z } from "zod";
 
 export const createQuoteSchema = z.object({
+  clientId: z.string().trim().max(100).optional().nullable(),
   clientName: z.string().trim().min(1).max(200),
   playbookName: z.string().trim().max(120).optional(),
   proposalName: z.string().trim().max(200).optional(),

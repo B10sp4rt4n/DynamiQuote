@@ -88,6 +88,10 @@ export function QuoteShell({
   const [selectedTenantSlug, setSelectedTenantSlug] = useState(currentTenantSlug);
   const [switchingTenant, setSwitchingTenant] = useState(false);
   const [clientName, setClientName] = useState("");
+  const [selectedClientId, setSelectedClientId] = useState<string | null>(null);
+  const [clientSearch, setClientSearch] = useState("");
+  const [clientOptions, setClientOptions] = useState<{ clientId: string; company: string; contactName: string | null }[]>([]);
+  const [showClientDropdown, setShowClientDropdown] = useState(false);
   const [proposalName, setProposalName] = useState("");
   const [playbookName, setPlaybookName] = useState("General");
   const [quotedBy, setQuotedBy] = useState("");
@@ -97,6 +101,8 @@ export function QuoteShell({
   const [importStatus, setImportStatus] = useState<"idle" | "uploading" | "success" | "error">("idle");
   const [importMessage, setImportMessage] = useState<string | null>(null);
   const importFileRef = useRef<HTMLInputElement>(null);
+  const clientSearchTimeout = useRef<ReturnType<typeof setTimeout> | null>(null);
+  const clientDropdownRef = useRef<HTMLDivElement>(null);
 
   const filteredQuoteItems = useMemo(() => {
     const normalizedSearch = quoteSearch.trim().toLowerCase();
@@ -252,6 +258,77 @@ export function QuoteShell({
     }
   }, [activeQuoteId, filteredQuoteItems]);
 
+  // Buscar clientes con debounce al escribir en el campo de cliente
+  useEffect(() => {
+    if (clientSearchTimeout.current) {
+      clearTimeout(clientSearchTimeout.current);
+    }
+
+    const trimmed = clientSearch.trim();
+
+    if (trimmed.length === 0) {
+      setClientOptions([]);
+      setShowClientDropdown(false);
+      return;
+    }
+
+    clientSearchTimeout.current = setTimeout(() => {
+      void (async () => {
+        try {
+          const res = await fetch(`/api/clients?search=${encodeURIComponent(trimmed)}`);
+          if (!res.ok) return;
+          const data = (await res.json()) as { clients: { clientId: string; company: string; contactName: string | null }[] };
+          setClientOptions(data.clients.slice(0, 8));
+          setShowClientDropdown(true);
+        } catch {
+          // silencioso
+        }
+      })();
+    }, 250);
+
+    return () => {
+      if (clientSearchTimeout.current) {
+        clearTimeout(clientSearchTimeout.current);
+      }
+    };
+  }, [clientSearch]);
+
+  // Cerrar dropdown de clientes al hacer clic fuera
+  useEffect(() => {
+    function handleClickOutside(event: MouseEvent) {
+      if (clientDropdownRef.current && !clientDropdownRef.current.contains(event.target as Node)) {
+        setShowClientDropdown(false);
+      }
+    }
+
+    document.addEventListener("mousedown", handleClickOutside);
+    return () => document.removeEventListener("mousedown", handleClickOutside);
+  }, []);
+
+  function handleSelectClient(option: { clientId: string; company: string; contactName: string | null }) {
+    setSelectedClientId(option.clientId);
+    setClientName(option.company);
+    setClientSearch(option.company);
+    setShowClientDropdown(false);
+  }
+
+  function handleClearClient() {
+    setSelectedClientId(null);
+    setClientSearch("");
+    setClientName("");
+    setClientOptions([]);
+    setShowClientDropdown(false);
+  }
+
+  function handleClientSearchChange(value: string) {
+    setClientSearch(value);
+    setClientName(value);
+    // Si el usuario edita manualmente, desvincula el cliente seleccionado
+    if (selectedClientId) {
+      setSelectedClientId(null);
+    }
+  }
+
   function handleQuoteVersionSaved(savedQuote: QuoteVersionSaved) {
     setQuoteItems((current) => {
       const updatedItem: QuoteGroupSummary = {
@@ -283,6 +360,7 @@ export function QuoteShell({
     try {
       const response = await fetch("/api/quotes", {
         body: JSON.stringify({
+          clientId: selectedClientId ?? null,
           clientName,
           playbookName,
           proposalName,
@@ -303,6 +381,9 @@ export function QuoteShell({
       setQuoteItems((current) => sortQuotes([data.quote!, ...current]));
       setActiveQuoteId(data.quote.quoteId);
       setClientName("");
+      setSelectedClientId(null);
+      setClientSearch("");
+      setClientOptions([]);
       setProposalName("");
       setPlaybookName("General");
       setQuotedBy("");
@@ -430,12 +511,59 @@ export function QuoteShell({
           </p>
         </div>
         <div className="mt-4 grid gap-3 md:grid-cols-2 xl:grid-cols-4">
-          <input
-            className="rounded-lg border border-zinc-300 bg-white px-3 py-2 text-sm text-zinc-900"
-            onChange={(event) => setClientName(event.target.value)}
-            placeholder="Cliente"
-            value={clientName}
-          />
+          {/* Selector de cliente con búsqueda */}
+          <div className="relative" ref={clientDropdownRef}>
+            <div className="flex items-center gap-1">
+              <input
+                autoComplete="off"
+                className="w-full rounded-lg border border-zinc-300 bg-white px-3 py-2 text-sm text-zinc-900"
+                onChange={(event) => handleClientSearchChange(event.target.value)}
+                onFocus={() => {
+                  if (clientSearch.trim().length > 0 && clientOptions.length > 0) {
+                    setShowClientDropdown(true);
+                  }
+                }}
+                placeholder="Cliente (buscar o escribir)"
+                value={clientSearch}
+              />
+              {selectedClientId ? (
+                <button
+                  className="shrink-0 rounded px-1 text-xs text-zinc-400 hover:text-zinc-700"
+                  onClick={handleClearClient}
+                  title="Quitar cliente seleccionado"
+                  type="button"
+                >
+                  ✕
+                </button>
+              ) : null}
+            </div>
+            {selectedClientId ? (
+              <p className="mt-0.5 text-xs text-emerald-600">Cliente vinculado al catálogo</p>
+            ) : null}
+            {showClientDropdown && clientOptions.length > 0 ? (
+              <ul className="absolute z-30 mt-1 max-h-52 w-full overflow-auto rounded-lg border border-zinc-200 bg-white shadow-lg">
+                {clientOptions.map((option) => (
+                  <li key={option.clientId}>
+                    <button
+                      className="w-full px-3 py-2 text-left text-sm text-zinc-900 hover:bg-zinc-50"
+                      onMouseDown={() => handleSelectClient(option)}
+                      type="button"
+                    >
+                      <span className="font-medium">{option.company}</span>
+                      {option.contactName ? (
+                        <span className="ml-2 text-xs text-zinc-500">{option.contactName}</span>
+                      ) : null}
+                    </button>
+                  </li>
+                ))}
+                <li className="border-t border-zinc-100 px-3 py-2">
+                  <a className="text-xs text-zinc-400 hover:text-zinc-700" href="/configuracion/clientes" rel="noreferrer" target="_blank">
+                    + Gestionar clientes
+                  </a>
+                </li>
+              </ul>
+            ) : null}
+          </div>
           <input
             className="rounded-lg border border-zinc-300 bg-white px-3 py-2 text-sm text-zinc-900"
             onChange={(event) => setProposalName(event.target.value)}

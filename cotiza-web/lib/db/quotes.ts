@@ -66,6 +66,7 @@ export type QuoteDashboardSnapshot = {
 };
 
 export type CreateQuoteInput = {
+  clientId?: string | null;
   clientName: string;
   playbookName?: string;
   proposalName?: string;
@@ -111,6 +112,7 @@ export async function createQuoteForTenant(
     await tx.quote.create({
       data: {
         avg_margin: 0,
+        client_id: input.clientId ?? null,
         client_name: input.clientName,
         createdAt: now,
         gross_profit: 0,

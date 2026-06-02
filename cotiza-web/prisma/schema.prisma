@@ -13,6 +13,7 @@ model Tenant {
   active           Boolean            @default(true)
   created_at       DateTime           @db.Timestamp(6)
   app_users        app_users[]
+  clients          Client[]
   company_logos    company_logos[]
   formal_proposals formal_proposals[]
   import_files     import_files[]
@@ -20,6 +21,30 @@ model Tenant {
   quotes           Quote[]
 
   @@map("tenants")
+}
+
+model Client {
+  client_id     String    @id @default(cuid())
+  tenant_id     String
+  company       String
+  rfc           String?
+  address       String?
+  industry      String?
+  notes         String?
+  active        Boolean   @default(true)
+  contact_name  String?
+  contact_title String?
+  contact_email String?
+  contact_phone String?
+  created_at    DateTime  @default(now()) @db.Timestamp(6)
+  updated_at    DateTime? @updatedAt @db.Timestamp(6)
+
+  tenant Tenant  @relation(fields: [tenant_id], references: [tenant_id], onDelete: NoAction, onUpdate: NoAction)
+  quotes Quote[]
+
+  @@index([tenant_id])
+  @@index([tenant_id, company])
+  @@map("clients")
 }
 
 model Package {
@@ -73,6 +98,7 @@ model Quote {
   parent_quote_id    String?
   playbook_name      String?              @default("General")
   client_name        String?
+  client_id          String?              @map("client_id")
   quoted_by          String?
   proposal_name      String?
   tenantId           String?              @map("tenant_id")
@@ -84,12 +110,14 @@ model Quote {
   rejected_at        DateTime?            @map("rejected_at") @db.Timestamp(6)
   rejected_by        String?              @map("rejected_by")
   closed_reason      String?              @map("closed_reason")
+  client             Client?              @relation(fields: [client_id], references: [client_id], onDelete: SetNull, onUpdate: NoAction)
   formal_proposals   formal_proposals[]
   import_files       import_files[]
   quote_lines        quote_lines[]
   quote_search_index quote_search_index[]
   tenant             Tenant?              @relation(fields: [tenantId], references: [tenant_id], onDelete: NoAction, onUpdate: NoAction)
 
+  @@index([client_id])
   @@map("quotes")
 }
 
