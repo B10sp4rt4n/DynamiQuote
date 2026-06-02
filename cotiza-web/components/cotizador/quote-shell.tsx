@@ -267,6 +267,7 @@ export function QuoteShell({
     const trimmed = clientSearch.trim();
 
     if (trimmed.length === 0) {
+      // eslint-disable-next-line react-hooks/set-state-in-effect
       setClientOptions([]);
       setShowClientDropdown(false);
       return;

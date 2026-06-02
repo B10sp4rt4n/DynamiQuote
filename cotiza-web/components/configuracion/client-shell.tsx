@@ -42,6 +42,18 @@ export function ClientShell({ initialClients }: ClientShellProps) {
   const [message, setMessage] = useState<{ text: string; type: "success" | "error" } | null>(null);
   const searchTimeout = useRef<ReturnType<typeof setTimeout> | null>(null);
 
+  const fetchClients = useCallback(async (q: string) => {
+    try {
+      const params = q.trim() ? `?search=${encodeURIComponent(q.trim())}` : "";
+      const res = await fetch(`/api/clients${params}`);
+      if (!res.ok) return;
+      const data = (await res.json()) as { clients: ClientSummary[] };
+      setClients(data.clients);
+    } catch {
+      // silencioso — no interrumpir UX
+    }
+  }, []);
+
   // Buscar con debounce
   useEffect(() => {
     if (searchTimeout.current) {
@@ -56,19 +68,7 @@ export function ClientShell({ initialClients }: ClientShellProps) {
         clearTimeout(searchTimeout.current);
       }
     };
-  }, [search]);
-
-  const fetchClients = useCallback(async (q: string) => {
-    try {
-      const params = q.trim() ? `?search=${encodeURIComponent(q.trim())}` : "";
-      const res = await fetch(`/api/clients${params}`);
-      if (!res.ok) return;
-      const data = (await res.json()) as { clients: ClientSummary[] };
-      setClients(data.clients);
-    } catch {
-      // silencioso — no interrumpir UX
-    }
-  }, []);
+  }, [search, fetchClients]);
 
   function openNew() {
     setEditingClient(null);
