@@ -334,7 +334,7 @@ export function QuoteShell({
         method: "POST",
       });
 
-      const data = (await response.json()) as { error?: string; importedCount?: number };
+      const data = (await response.json()) as { error?: string; importedCount?: number; quoteId?: string };
 
       if (!response.ok) {
         throw new Error(data.error ?? "No fue posible importar el archivo");
@@ -343,7 +343,15 @@ export function QuoteShell({
       setImportStatus("success");
       setImportMessage(`Se importaron ${data.importedCount ?? 0} partidas. Recargando...`);
       setImportFile(null);
-      router.refresh();
+
+      // Navegar al nuevo quoteId generado por la importación
+      if (data.quoteId) {
+        const params = new URLSearchParams(searchParams.toString());
+        params.set("quoteId", data.quoteId);
+        router.push(`${pathname}?${params.toString()}`);
+      } else {
+        router.refresh();
+      }
     } catch (error) {
       setImportStatus("error");
       setImportMessage(error instanceof Error ? error.message : "Error interno");
