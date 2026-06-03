@@ -862,6 +862,7 @@ function UsersTab({
             <tr>
               {canManageAllTenants ? <th className="px-4 py-3 font-medium">Empresa</th> : null}
               <th className="px-4 py-3 font-medium">Usuario</th>
+              <th className="px-4 py-3 font-medium">Correo</th>
               <th className="px-4 py-3 font-medium">Alias</th>
               <th className="px-4 py-3 font-medium">Rol</th>
               <th className="px-4 py-3 font-medium">Subtenant</th>
@@ -879,6 +880,18 @@ function UsersTab({
                 ) : null}
                 <td className="px-4 py-3 text-zinc-900">
                   {user.firstName} {user.lastName}
+                </td>
+                <td className="px-4 py-3 text-zinc-500">
+                  {user.email ? (
+                    <a
+                      className="hover:underline"
+                      href={`mailto:${user.email}`}
+                    >
+                      {user.email}
+                    </a>
+                  ) : (
+                    <span className="text-zinc-400">—</span>
+                  )}
                 </td>
                 <td className="px-4 py-3 font-mono text-xs text-zinc-600">{user.alias}</td>
                 <td className="px-4 py-3">

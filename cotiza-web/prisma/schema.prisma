@@ -126,6 +126,7 @@ model app_users {
   alias         String   @unique
   first_name    String
   last_name     String
+  email         String?
   password_hash String
   role          String   @default("user")
   active        Boolean  @default(true)
@@ -309,12 +310,28 @@ model proposals {
   closed_at                                                                DateTime?                    @db.Timestamp(6)
   formal_proposals                                                         formal_proposals[]
   project_expenses                                                         project_expenses[]
+  proposal_approvals                                                       proposal_approvals[]
   proposal_audit_events                                                    proposal_audit_events[]
   proposal_derivations_proposal_derivations_base_proposal_idToproposals    proposal_derivations[]       @relation("proposal_derivations_base_proposal_idToproposals") @ignore
   proposal_derivations_proposal_derivations_derived_proposal_idToproposals proposal_derivations[]       @relation("proposal_derivations_derived_proposal_idToproposals") @ignore
   proposal_integrated_node                                                 proposal_integrated_node?
   proposal_items                                                           proposal_items[]
   proposal_profitability_node                                              proposal_profitability_node?
+}
+
+model proposal_approvals {
+  approval_id      String    @id
+  tenant_id        String
+  proposal_id      String
+  approver_user_id String
+  approver_role    String
+  decision         String
+  reason           String?
+  created_at       DateTime  @default(now()) @db.Timestamp(6)
+  proposals        proposals @relation(fields: [proposal_id], references: [proposal_id], onDelete: Cascade, onUpdate: Cascade)
+
+  @@index([tenant_id, proposal_id, created_at(sort: Desc)], map: "idx_proposal_approvals_tenant_proposal")
+  @@index([tenant_id, proposal_id, approver_role, decision], map: "idx_proposal_approvals_role")
 }
 
 model quote_lines {
