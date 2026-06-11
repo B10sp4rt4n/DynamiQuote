@@ -150,6 +150,7 @@ model company_logos {
   is_default                                                      Boolean?           @default(false)
   tenant_id                                                       String?
   tenants                                                         Tenant?            @relation(fields: [tenant_id], references: [tenant_id], onDelete: NoAction, onUpdate: NoAction)
+  clients                                                        Client[]
   formal_proposals_formal_proposals_client_logo_idTocompany_logos formal_proposals[] @relation("formal_proposals_client_logo_idTocompany_logos")
   formal_proposals_formal_proposals_issuer_logo_idTocompany_logos formal_proposals[] @relation("formal_proposals_issuer_logo_idTocompany_logos")
 
