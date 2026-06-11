@@ -1,5 +1,7 @@
 import "server-only";
 
+import { randomUUID } from "crypto";
+
 import { prisma } from "@/lib/db/prisma";
 import type { CreateManagedUserInput, UpdateManagedUserInput } from "@/lib/validations/users";
 
@@ -588,7 +590,7 @@ export async function setDefaultIssuerProfileByTenant(
 ): Promise<IssuerProfileSummary | null> {
   const logo = await prisma.company_logos.findFirst({
     select: { logo_id: true },
-    where: { logo_id: logoId, tenant_id: tenantId },
+    where: { logo_id: logoId, logo_type: "issuer", tenant_id: tenantId },
   });
 
   if (!logo) return null;
@@ -596,7 +598,7 @@ export async function setDefaultIssuerProfileByTenant(
   await prisma.$transaction(async (tx) => {
     await tx.company_logos.updateMany({
       data: { is_default: false },
-      where: { tenant_id: tenantId },
+      where: { logo_type: "issuer", tenant_id: tenantId },
     });
     await tx.company_logos.update({
       data: { is_default: true },
@@ -627,5 +629,58 @@ export async function setDefaultIssuerProfileByTenant(
     logoName: updated.logo_name,
     logoType: updated.logo_type,
     uploadedAt: updated.uploaded_at.toISOString(),
+  };
+}
+
+export async function createLogoProfileByTenant(input: {
+  companyName?: string | null;
+  isDefault?: boolean;
+  logoBytes: Uint8Array<ArrayBuffer>;
+  logoFormat: string;
+  logoName: string;
+  logoType: "issuer" | "client";
+  tenantId: string;
+}): Promise<IssuerProfileSummary> {
+  const now = new Date();
+  const logoId = randomUUID();
+
+  if (input.logoType === "issuer" && input.isDefault) {
+    await prisma.company_logos.updateMany({
+      data: { is_default: false },
+      where: { logo_type: "issuer", tenant_id: input.tenantId },
+    });
+  }
+
+  const row = await prisma.company_logos.create({
+    data: {
+      company_name: input.companyName?.trim() || null,
+      is_default: input.logoType === "issuer" ? Boolean(input.isDefault) : false,
+      logo_data: input.logoBytes,
+      logo_format: input.logoFormat,
+      logo_id: logoId,
+      logo_name: input.logoName.trim(),
+      logo_type: input.logoType,
+      tenant_id: input.tenantId,
+      uploaded_at: now,
+    },
+    select: {
+      company_name: true,
+      is_default: true,
+      logo_format: true,
+      logo_id: true,
+      logo_name: true,
+      logo_type: true,
+      uploaded_at: true,
+    },
+  });
+
+  return {
+    companyName: row.company_name,
+    isDefault: row.is_default ?? false,
+    logoFormat: row.logo_format,
+    logoId: row.logo_id,
+    logoName: row.logo_name,
+    logoType: row.logo_type,
+    uploadedAt: row.uploaded_at.toISOString(),
   };
 }

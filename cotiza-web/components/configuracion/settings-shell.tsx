@@ -1536,7 +1536,13 @@ function IssuerProfilesTab({
   onProfilesUpdated?: (profiles: IssuerProfileSummary[]) => void;
 }) {
   const [profiles, setProfiles] = useState(initial);
+  const [companyName, setCompanyName] = useState("");
+  const [isDefault, setIsDefault] = useState(false);
+  const [logoFile, setLogoFile] = useState<File | null>(null);
+  const [logoName, setLogoName] = useState("");
+  const [logoType, setLogoType] = useState<"issuer" | "client">("issuer");
   const [pending, setPending] = useState<string | null>(null);
+  const [uploadPending, setUploadPending] = useState(false);
   const [error, setError] = useState<string | null>(null);
 
   useEffect(() => {
@@ -1567,8 +1573,126 @@ function IssuerProfilesTab({
     }
   }
 
+  async function handleUpload(event: FormEvent<HTMLFormElement>) {
+    event.preventDefault();
+
+    if (!logoFile) {
+      setError("Selecciona un archivo de logo.");
+      return;
+    }
+
+    setUploadPending(true);
+    setError(null);
+    try {
+      const payload = new FormData();
+      payload.append("logoType", logoType);
+      payload.append("logoFile", logoFile);
+      payload.append("logoName", logoName.trim() || logoFile.name);
+      payload.append("companyName", companyName.trim());
+      payload.append("isDefault", isDefault ? "true" : "false");
+
+      const res = await fetch("/api/settings/issuer-profiles", {
+        body: payload,
+        method: "POST",
+      });
+
+      const data = (await res.json()) as { error?: string; profile?: IssuerProfileSummary };
+      if (!res.ok || !data.profile) {
+        throw new Error(data.error ?? "No se pudo cargar el logo");
+      }
+
+      setProfiles((prev) => {
+        const next = [
+          data.profile!,
+          ...prev.map((profile) => {
+            if (logoType === "issuer" && data.profile?.isDefault && profile.logoType === "issuer") {
+              return { ...profile, isDefault: false };
+            }
+
+            return profile;
+          }),
+        ];
+        onProfilesUpdated?.(next);
+        return next;
+      });
+
+      setLogoFile(null);
+      setLogoName("");
+      setCompanyName("");
+      setIsDefault(false);
+    } catch (err) {
+      setError(err instanceof Error ? err.message : "Error desconocido");
+    } finally {
+      setUploadPending(false);
+    }
+  }
+
   return (
     <div className="space-y-3">
+      <form className="grid gap-3 rounded-xl border border-zinc-200 bg-zinc-50 p-4 md:grid-cols-2" onSubmit={(event) => { void handleUpload(event); }}>
+        <label className="text-sm text-zinc-700">
+          Tipo de logo
+          <select
+            className="mt-1 w-full rounded-lg border border-zinc-300 bg-white px-3 py-2 text-sm text-zinc-900"
+            onChange={(event) => setLogoType(event.target.value as "issuer" | "client")}
+            value={logoType}
+          >
+            <option value="issuer">Proveedor</option>
+            <option value="client">Cliente</option>
+          </select>
+        </label>
+
+        <label className="text-sm text-zinc-700">
+          Nombre del logo
+          <input
+            className="mt-1 w-full rounded-lg border border-zinc-300 bg-white px-3 py-2 text-sm text-zinc-900"
+            onChange={(event) => setLogoName(event.target.value)}
+            placeholder="Ej. Logotipo corporativo"
+            value={logoName}
+          />
+        </label>
+
+        <label className="text-sm text-zinc-700">
+          Empresa
+          <input
+            className="mt-1 w-full rounded-lg border border-zinc-300 bg-white px-3 py-2 text-sm text-zinc-900"
+            onChange={(event) => setCompanyName(event.target.value)}
+            placeholder="Nombre comercial"
+            value={companyName}
+          />
+        </label>
+
+        <label className="text-sm text-zinc-700">
+          Archivo
+          <input
+            accept="image/png,image/jpeg,image/jpg,image/webp,image/svg+xml"
+            className="mt-1 block w-full rounded-lg border border-zinc-300 bg-white px-3 py-2 text-sm text-zinc-900"
+            onChange={(event) => setLogoFile(event.target.files?.[0] ?? null)}
+            type="file"
+          />
+        </label>
+
+        <label className="inline-flex items-center gap-2 text-sm text-zinc-700 md:col-span-2">
+          <input
+            checked={isDefault}
+            disabled={logoType !== "issuer"}
+            onChange={(event) => setIsDefault(event.target.checked)}
+            type="checkbox"
+          />
+          Marcar como default del proveedor
+        </label>
+
+        <div className="md:col-span-2">
+          <button
+            className="rounded-lg bg-zinc-900 px-4 py-2 text-sm font-medium text-white transition hover:bg-zinc-700 disabled:opacity-60"
+            disabled={uploadPending}
+            type="submit"
+          >
+            {uploadPending ? "Subiendo..." : "Agregar logo"}
+          </button>
+        </div>
+      </form>
+
       {error ? <p className="text-sm text-rose-700">{error}</p> : null}
       <div className="overflow-hidden rounded-xl border border-zinc-200">
         <table className="min-w-full divide-y divide-zinc-200 text-sm">
@@ -1593,7 +1717,11 @@ function IssuerProfilesTab({
                 </td>
                 <td className="px-4 py-3 text-zinc-500">{formatDate(profile.uploadedAt)}</td>
                 <td className="px-4 py-3">
-                  {profile.isDefault ? (
+                  {profile.logoType !== "issuer" ? (
+                    <span className="rounded-full bg-zinc-100 px-2 py-0.5 text-xs font-medium text-zinc-700">
+                      N/A
+                    </span>
+                  ) : profile.isDefault ? (
                     <span className="rounded-full bg-emerald-100 px-2 py-0.5 text-xs font-medium text-emerald-800">
                       Default
                     </span>
