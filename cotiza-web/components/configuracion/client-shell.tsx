@@ -378,8 +378,8 @@ export function ClientShell({ clientLogos, initialClients }: ClientShellProps) {
 
       {/* Modal nuevo/editar cliente */}
       {showModal ? (
-        <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/40 p-4">
-          <div className="w-full max-w-lg rounded-xl bg-white shadow-xl">
+        <div className="fixed inset-0 z-50 flex items-start justify-center overflow-y-auto bg-black/40 p-4 sm:items-center">
+          <div className="flex w-full max-w-lg max-h-[calc(100vh-2rem)] flex-col overflow-hidden rounded-xl bg-white shadow-xl">
             <div className="flex items-center justify-between border-b border-zinc-200 px-6 py-4">
               <h2 className="text-base font-semibold text-zinc-900">
                 {editingClient ? "Editar cliente" : "Nuevo cliente"}
@@ -392,7 +392,7 @@ export function ClientShell({ clientLogos, initialClients }: ClientShellProps) {
                 ✕
               </button>
             </div>
-            <div className="grid gap-4 px-6 py-5 sm:grid-cols-2">
+            <div className="grid flex-1 gap-4 overflow-y-auto px-6 py-5 sm:grid-cols-2">
               <div className="sm:col-span-2">
                 <label className="mb-1 block text-xs font-medium text-zinc-700">Empresa *</label>
                 <input
@@ -471,6 +471,9 @@ export function ClientShell({ clientLogos, initialClients }: ClientShellProps) {
                   placeholder="Nombre opcional del logo"
                   value={logoName}
                 />
+                <p className="mt-2 text-xs text-zinc-500">
+                  {logoFile ? `Archivo seleccionado: ${logoFile.name}` : "Ningún archivo seleccionado todavía."}
+                </p>
               </div>
               <div>
                 <label className="mb-1 block text-xs font-medium text-zinc-700">Contacto principal</label>
@@ -527,7 +530,7 @@ export function ClientShell({ clientLogos, initialClients }: ClientShellProps) {
                 </p>
               </div>
             ) : null}
-            <div className="flex justify-end gap-3 border-t border-zinc-200 px-6 py-4">
+            <div className="flex shrink-0 justify-end gap-3 border-t border-zinc-200 bg-white px-6 py-4">
               <button
                 className="rounded-lg border border-zinc-300 px-4 py-2 text-sm font-medium text-zinc-700 hover:bg-zinc-50"
                 onClick={closeModal}
