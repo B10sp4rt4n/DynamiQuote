@@ -415,8 +415,8 @@ async function resolvePreferredIssuerProfileByTenant(tenantId: string): Promise<
 }
 
 async function resolvePreferredIssuerLogoAssetByTenant(tenantId: string): Promise<{
-  logoBytes: Uint8Array;
-  logoFormat: string;
+  logo_data: Uint8Array;
+  logo_format: string;
 } | null> {
   const tenantDefault = await prisma.company_logos.findFirst({
     orderBy: [{ uploaded_at: "desc" }],
@@ -433,8 +433,8 @@ async function resolvePreferredIssuerLogoAssetByTenant(tenantId: string): Promis
 
   if (tenantDefault?.logo_data?.length) {
     return {
-      logoBytes: tenantDefault.logo_data,
-      logoFormat: tenantDefault.logo_format,
+      logo_data: tenantDefault.logo_data,
+      logo_format: tenantDefault.logo_format,
     };
   }
 
@@ -453,8 +453,8 @@ async function resolvePreferredIssuerLogoAssetByTenant(tenantId: string): Promis
 
   if (globalDefault?.logo_data?.length) {
     return {
-      logoBytes: globalDefault.logo_data,
-      logoFormat: globalDefault.logo_format,
+      logo_data: globalDefault.logo_data,
+      logo_format: globalDefault.logo_format,
     };
   }
 
@@ -472,8 +472,8 @@ async function resolvePreferredIssuerLogoAssetByTenant(tenantId: string): Promis
 
   if (tenantAny?.logo_data?.length) {
     return {
-      logoBytes: tenantAny.logo_data,
-      logoFormat: tenantAny.logo_format,
+      logo_data: tenantAny.logo_data,
+      logo_format: tenantAny.logo_format,
     };
   }
 
@@ -494,8 +494,8 @@ async function resolvePreferredIssuerLogoAssetByTenant(tenantId: string): Promis
   }
 
   return {
-    logoBytes: globalAny.logo_data,
-    logoFormat: globalAny.logo_format,
+    logo_data: globalAny.logo_data,
+    logo_format: globalAny.logo_format,
   };
 }
 
@@ -688,7 +688,7 @@ export async function createProposalFromQuoteByTenant(
   const proposalDocId = randomUUID();
   const proposalNumber = await nextProposalNumber(now.getUTCFullYear());
   const issuerContactName = await resolveActorNameForTenant(tenantId, actorName, quote.quoted_by);
-  const issuerCompany = issuerProfile?.company_name?.trim() || tenant?.name || "Cotiza";
+  const issuerCompany = issuerProfile?.companyName?.trim() || tenant?.name || "Cotiza";
   const recipientCompany = input.recipientCompany?.trim() || quote.client_name || "Sin cliente";
   const subject = input.subject?.trim() || quote.proposal_name || "Propuesta Comercial";
 
@@ -711,7 +711,7 @@ export async function createProposalFromQuoteByTenant(
         created_by: issuerContactName,
         issuer_company: issuerCompany,
         issuer_contact_name: issuerContactName,
-        issuer_logo_id: issuerProfile?.logo_id ?? null,
+        issuer_logo_id: issuerProfile?.logoId ?? null,
         issued_date: now,
         proposal_doc_id: proposalDocId,
         proposal_id: proposalId,
@@ -769,7 +769,7 @@ export async function createProposalFromQuoteByTenant(
       issuer_company: issuerCompany,
       issuer_contact_name: issuerContactName,
       issuer_email: null,
-      issuer_logo_id: issuerProfile?.logo_id ?? null,
+      issuer_logo_id: issuerProfile?.logoId ?? null,
       issuer_phone: null,
       issued_date: now,
       proposal_doc_id: proposalDocId,
