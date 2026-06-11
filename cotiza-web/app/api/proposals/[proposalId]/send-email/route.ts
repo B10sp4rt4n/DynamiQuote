@@ -190,6 +190,15 @@ export async function POST(request: Request, context: RouteContext) {
   const ownerEmail = await resolveTenantOwnerEmail(tenant.id);
   const sellerEmail = sessionEmail ?? formIssuerEmail ?? appUserEmail ?? ownerEmail;
 
+  console.info("[proposal-email] Resolucion de destinatario vendedor", {
+    appUserEmail,
+    ownerEmail,
+    proposalId,
+    sellerEmail,
+    sessionEmail,
+    tenantId: tenant.id,
+  });
+
   if (!sellerEmail) {
     return NextResponse.json(
       { error: "No se pudo resolver el correo del vendedor. Verifica tu sesión o el campo Correo emisor." },
@@ -262,11 +271,30 @@ export async function POST(request: Request, context: RouteContext) {
     const message = typeof result.error.message === "string"
       ? result.error.message
       : "Error desconocido al enviar correo";
+
+    console.error("[proposal-email] Resend rechazo el envio", {
+      ccRecipients,
+      from,
+      message,
+      proposalId,
+      sellerEmail,
+      tenantId: tenant.id,
+    });
+
     return NextResponse.json(
       { error: `No fue posible enviar el correo: ${message}` },
       { status: 500 },
     );
   }
+
+  console.info("[proposal-email] Resend acepto el envio", {
+    ccRecipients,
+    from,
+    proposalId,
+    resendEmailId: result.data?.id ?? null,
+    sellerEmail,
+    tenantId: tenant.id,
+  });
 
   // Transicionar a "sent" para registrar que la propuesta fue despachada.
   await updateProposalWorkflowByTenant(tenant.id, proposalId, { status: "sent" }).catch(() => null);
