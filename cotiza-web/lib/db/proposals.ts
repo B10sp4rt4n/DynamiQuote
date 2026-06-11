@@ -746,7 +746,14 @@ export async function getProposalWorkflowByTenant(
                 tenant_id: tenantId,
               },
             })
-          : Promise.resolve(null),
+          : prisma.company_logos.findFirst({
+              orderBy: [{ is_default: "desc" }, { uploaded_at: "desc" }],
+              select: { logo_data: true, logo_format: true },
+              where: {
+                logo_type: "issuer",
+                tenant_id: tenantId,
+              },
+            }),
         latestFormal?.client_logo_id
           ? prisma.company_logos.findFirst({
               select: { logo_data: true, logo_format: true },

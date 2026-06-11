@@ -30,6 +30,12 @@ export type IssuerProfileSummary = {
   uploadedAt: string;
 };
 
+export type IssuerProfileLogoAsset = {
+  logoBytes: Uint8Array<ArrayBuffer>;
+  logoFormat: string;
+  logoName: string;
+};
+
 type CreateManagedUserArgs = {
   targetTenantId: string;
   payload: CreateManagedUserInput;
@@ -629,6 +635,33 @@ export async function setDefaultIssuerProfileByTenant(
     logoName: updated.logo_name,
     logoType: updated.logo_type,
     uploadedAt: updated.uploaded_at.toISOString(),
+  };
+}
+
+export async function getIssuerProfileLogoByTenant(
+  tenantId: string,
+  logoId: string,
+): Promise<IssuerProfileLogoAsset | null> {
+  const row = await prisma.company_logos.findFirst({
+    select: {
+      logo_data: true,
+      logo_format: true,
+      logo_name: true,
+    },
+    where: {
+      logo_id: logoId,
+      tenant_id: tenantId,
+    },
+  });
+
+  if (!row?.logo_data || row.logo_data.length === 0) {
+    return null;
+  }
+
+  return {
+    logoBytes: row.logo_data,
+    logoFormat: row.logo_format,
+    logoName: row.logo_name,
   };
 }
 

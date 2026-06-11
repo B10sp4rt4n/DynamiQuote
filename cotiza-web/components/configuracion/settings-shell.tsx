@@ -1698,6 +1698,7 @@ function IssuerProfilesTab({
         <table className="min-w-full divide-y divide-zinc-200 text-sm">
           <thead className="bg-zinc-50 text-left text-zinc-600">
             <tr>
+              <th className="px-4 py-3 font-medium">Vista previa</th>
               <th className="px-4 py-3 font-medium">Nombre</th>
               <th className="px-4 py-3 font-medium">Empresa</th>
               <th className="px-4 py-3 font-medium">Tipo</th>
@@ -1709,6 +1710,16 @@ function IssuerProfilesTab({
           <tbody className="divide-y divide-zinc-200 bg-white">
             {profiles.map((profile) => (
               <tr key={profile.logoId} className={profile.isDefault ? "bg-emerald-50/50" : ""}>
+                <td className="px-4 py-3">
+                  <div className="flex h-10 w-28 items-center justify-center overflow-hidden rounded-md border border-zinc-200 bg-white">
+                    <img
+                      alt={profile.logoName}
+                      className="h-full w-full object-contain"
+                      loading="lazy"
+                      src={`/api/settings/issuer-profiles/${profile.logoId}`}
+                    />
+                  </div>
+                </td>
                 <td className="px-4 py-3 text-zinc-900">{profile.logoName}</td>
                 <td className="px-4 py-3 text-zinc-600">{profile.companyName ?? "—"}</td>
                 <td className="px-4 py-3 text-zinc-500">{profile.logoType}</td>
