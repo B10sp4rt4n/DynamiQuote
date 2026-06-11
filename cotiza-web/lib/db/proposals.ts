@@ -322,6 +322,12 @@ function toLogoDataUrl(bytes: Uint8Array | null | undefined, format: string | nu
   }
 
   const safeFormat = (format?.trim() || "png").toLowerCase();
+  // React-PDF suele fallar al renderizar algunos SVG embebidos en data URL.
+  // Si es SVG, omitimos el logo para no romper la generación del PDF.
+  if (safeFormat === "svg" || safeFormat === "svg+xml") {
+    return null;
+  }
+
   const mime = safeFormat === "svg" || safeFormat === "svg+xml"
     ? "image/svg+xml"
     : `image/${safeFormat}`;
@@ -452,12 +458,17 @@ async function resolvePreferredIssuerLogoAssetByTenant(tenantId: string): Promis
       : null;
   };
 
-  return (
-    (await pickBest({ is_default: true, logo_type: "issuer", tenant_id: tenantId })) ??
-    (await pickBest({ is_default: true, logo_type: "issuer", tenant_id: null })) ??
-    (await pickBest({ logo_type: "issuer", tenant_id: tenantId })) ??
-    (await pickBest({ logo_type: "issuer", tenant_id: null }))
+  const tenantDefault = await pickBest({ is_default: true, logo_type: "issuer", tenant_id: tenantId });
+  const tenantAny = await pickBest({ logo_type: "issuer", tenant_id: tenantId });
+  const globalDefault = await pickBest({ is_default: true, logo_type: "issuer", tenant_id: null });
+  const globalAny = await pickBest({ logo_type: "issuer", tenant_id: null });
+
+  const candidates = [tenantDefault, tenantAny, globalDefault, globalAny].filter(
+    (value): value is { logo_data: Uint8Array; logo_format: string } => value !== null,
   );
+
+  const raster = candidates.find((item) => !isSvg(item.logo_format));
+  return raster ?? candidates[0] ?? null;
 }
 
 function resolveApproverRole(actor: {
