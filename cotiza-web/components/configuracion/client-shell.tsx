@@ -54,6 +54,7 @@ export function ClientShell({ clientLogos, initialClients }: ClientShellProps) {
   const [saving, setSaving] = useState(false);
   const [message, setMessage] = useState<{ text: string; type: "success" | "error" } | null>(null);
   const searchTimeout = useRef<ReturnType<typeof setTimeout> | null>(null);
+  const clientLogoFileInputRef = useRef<HTMLInputElement | null>(null);
 
   const fetchClients = useCallback(async (q: string) => {
     try {
@@ -127,7 +128,10 @@ export function ClientShell({ clientLogos, initialClients }: ClientShellProps) {
   }
 
   async function handleClientLogoUpload() {
-    if (!logoFile) {
+    const fileFromInput = clientLogoFileInputRef.current?.files?.[0] ?? null;
+    const selectedFile = fileFromInput ?? logoFile;
+
+    if (!selectedFile) {
       setMessage({ text: "Selecciona un archivo de logo para subir.", type: "error" });
       return;
     }
@@ -138,8 +142,8 @@ export function ClientShell({ clientLogos, initialClients }: ClientShellProps) {
     try {
       const payload = new FormData();
       payload.append("logoType", "client");
-      payload.append("logoFile", logoFile);
-      payload.append("logoName", logoName.trim() || logoFile.name);
+      payload.append("logoFile", selectedFile);
+      payload.append("logoName", logoName.trim() || selectedFile.name);
       payload.append("companyName", form.company.trim());
       payload.append("isDefault", "false");
 
@@ -175,6 +179,9 @@ export function ClientShell({ clientLogos, initialClients }: ClientShellProps) {
       });
 
       setField("clientLogoId", uploadedLogo.logoId);
+      if (clientLogoFileInputRef.current) {
+        clientLogoFileInputRef.current.value = "";
+      }
       setLogoFile(null);
       setLogoName("");
       setMessage({ text: "Logo cargado y seleccionado para este cliente.", type: "success" });
@@ -446,6 +453,7 @@ export function ClientShell({ clientLogos, initialClients }: ClientShellProps) {
                     accept="image/png,image/jpeg,image/jpg,image/webp,image/svg+xml"
                     className="w-full rounded-lg border border-zinc-300 bg-white px-3 py-2 text-sm text-zinc-900"
                     onChange={(e) => setLogoFile(e.target.files?.[0] ?? null)}
+                    ref={clientLogoFileInputRef}
                     type="file"
                   />
                   <button
