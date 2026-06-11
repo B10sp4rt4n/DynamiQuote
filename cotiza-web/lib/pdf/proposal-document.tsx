@@ -146,11 +146,11 @@ const styles = StyleSheet.create({
     width: "7%",
   },
   cellSku: {
-    width: "12%",
+    width: "17%",
   },
   cellDesc: {
     paddingRight: 4,
-    width: "41%",
+    width: "36%",
   },
   cellQty: {
     textAlign: "right",
