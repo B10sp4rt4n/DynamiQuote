@@ -726,6 +726,11 @@ export async function getProposalWorkflowByTenant(
           subtotal_cost: true,
           subtotal_price: true,
         },
+        where: {
+          status: {
+            not: "deleted",
+          },
+        },
       },
     },
     where: {
@@ -1285,6 +1290,11 @@ export async function getProposalMarginBlockedCountByTenant(tenantId: string): P
           cost_unit: true,
           price_unit: true,
           quantity: true,
+        },
+        where: {
+          status: {
+            not: "deleted",
+          },
         },
       },
     },
