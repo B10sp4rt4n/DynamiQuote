@@ -19,6 +19,7 @@ export const quoteLineEditorInputSchema = z
   });
 
 export const updateQuoteLinesSchema = z.object({
+  forceNewVersion: z.boolean().optional().default(false),
   lines: z.array(quoteLineEditorInputSchema).min(1),
 });
 

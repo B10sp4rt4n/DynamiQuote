@@ -530,6 +530,7 @@ export function QuoteLineEditor({
   const [compareState, setCompareState] = useState<VersionCompareState | null>(null);
   const [loading, setLoading] = useState(false);
   const [saving, setSaving] = useState(false);
+  const [versioningNow, setVersioningNow] = useState(false);
   const [creatingProposal, setCreatingProposal] = useState(false);
   const [message, setMessage] = useState<string | null>(null);
   const [showPackagePicker, setShowPackagePicker] = useState(false);
@@ -770,18 +771,23 @@ export function QuoteLineEditor({
     );
   }
 
-  async function saveLines(): Promise<string | null> {
+  async function saveLines(forceNewVersion = false): Promise<string | null> {
     if (!selectedQuoteId || lines.length === 0) {
       return null;
     }
 
-    setSaving(true);
+    if (forceNewVersion) {
+      setVersioningNow(true);
+    } else {
+      setSaving(true);
+    }
     setMessage(null);
 
     const previousLines = lines;
 
     try {
       const payload = {
+        forceNewVersion,
         lines: lines.map((line) => ({
           classification1: line.classification1,
           classification2: line.classification2,
@@ -825,22 +831,31 @@ export function QuoteLineEditor({
         removedCount: nextDiffResult.removedCount,
         unchangedCount: nextDiffResult.unchangedCount,
       });
-      setCompareState({
-        baselineQuoteId: selectedQuoteId,
-        baselineVersion: data.quote.version - 1,
-        targetQuoteId: data.quote.quoteId,
-        targetVersion: data.quote.version,
-      });
+      if (data.versionCreated) {
+        setCompareState({
+          baselineQuoteId: selectedQuoteId,
+          baselineVersion: data.quote.version - 1,
+          targetQuoteId: data.quote.quoteId,
+          targetVersion: data.quote.version,
+        });
+      } else {
+        setCompareState(null);
+      }
       onQuoteVersionSaved?.(data.quote);
       setSelectedQuoteId(data.quote.quoteId);
       void loadVersions(data.quote.quoteId);
-      setMessage(`Version v${data.quote.version} creada y guardada correctamente`);
+      setMessage(
+        data.versionCreated
+          ? `Version v${data.quote.version} creada y guardada correctamente`
+          : `Borrador v${data.quote.version} actualizado correctamente`,
+      );
       return data.quote.quoteId;
     } catch {
       setMessage("Error de red al guardar");
       return null;
     } finally {
       setSaving(false);
+      setVersioningNow(false);
     }
   }
 
@@ -1208,13 +1223,31 @@ export function QuoteLineEditor({
           </button>
           <button
             className="rounded-lg bg-zinc-900 px-3 py-2 text-sm font-semibold text-white hover:bg-zinc-700 disabled:opacity-60"
-            disabled={saving || loading || lines.length === 0}
+            disabled={saving || versioningNow || loading || lines.length === 0}
             onClick={() => {
               void saveLines();
             }}
             type="button"
           >
             {saving ? "Guardando..." : "Guardar"}
+          </button>
+          <button
+            className="rounded-lg border border-indigo-300 bg-indigo-50 px-3 py-2 text-sm font-semibold text-indigo-800 hover:bg-indigo-100 disabled:opacity-50"
+            disabled={saving || versioningNow || loading || lines.length === 0}
+            onClick={() => {
+              const confirmed = window.confirm(
+                "Se creara una nueva version en borrador con el estado actual. \n\n¿Deseas continuar?",
+              );
+
+              if (!confirmed) {
+                return;
+              }
+
+              void saveLines(true);
+            }}
+            type="button"
+          >
+            {versioningNow ? "Versionando..." : "Versionar ahora"}
           </button>
           <button
             className="rounded-lg border border-zinc-300 bg-white px-3 py-2 text-sm font-medium text-zinc-800 hover:bg-zinc-100"

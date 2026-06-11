@@ -54,7 +54,12 @@ export async function PUT(request: Request, context: RouteContext) {
   }
 
   try {
-    const updated = await updateQuoteLinesByTenant(tenant.id, quoteId, parsed.data.lines);
+    const updated = await updateQuoteLinesByTenant(
+      tenant.id,
+      quoteId,
+      parsed.data.lines,
+      parsed.data.forceNewVersion,
+    );
 
     if (!updated) {
       return NextResponse.json({ error: "Cotizacion no encontrada" }, { status: 404 });

@@ -177,8 +177,14 @@ export async function updateQuoteLinesByTenant(
   tenantId: string,
   quoteId: string,
   inputLines: QuoteLineEditorInput[],
+  forceNewVersion = false,
 ): Promise<
-  { lines: EditableQuoteLine[]; quote: UpdatedQuoteVersion; totals: UpdatedQuoteTotals } | null
+  {
+    lines: EditableQuoteLine[];
+    quote: UpdatedQuoteVersion;
+    totals: UpdatedQuoteTotals;
+    versionCreated: boolean;
+  } | null
 > {
   const quote = await prisma.quote.findFirst({
     select: {
@@ -277,27 +283,47 @@ export async function updateQuoteLinesByTenant(
   const avgMargin = totalRevenue > 0 ? round((grossProfit / totalRevenue) * 100) : 0;
   const createdAt = new Date();
 
+  // Si la versión activa es borrador, actualizar en lugar de crear una nueva versión.
+  // Solo se crea nueva versión cuando la activa ya fue enviada, cerrada o rechazada.
+  const isDraft = quote.status === "draft";
+  const shouldCreateNewVersion = forceNewVersion || !isDraft;
+  const resultQuoteId = shouldCreateNewVersion ? newQuoteId : quoteId;
+  const resultVersion = shouldCreateNewVersion ? nextVersion : (quote.version ?? 1);
+
   await prisma.$transaction(async (tx) => {
-    await tx.quote.create({
-      data: {
-        avg_margin: avgMargin,
-        client_name: quote.client_name,
-        created_by_user_id: quote.created_by_user_id,
-        createdAt,
-        gross_profit: grossProfit,
-        parent_quote_id: quote.quote_id,
-        playbook_name: quote.playbook_name,
-        proposal_name: quote.proposal_name,
-        quote_group_id: quoteGroupId,
-        quote_id: newQuoteId,
-        quoted_by: quote.quoted_by,
-        status: "draft",
-        tenantId,
-        total_cost: totalCost,
-        total_revenue: totalRevenue,
-        version: nextVersion,
-      },
-    });
+    if (!shouldCreateNewVersion) {
+      await tx.quote.update({
+        data: {
+          avg_margin: avgMargin,
+          gross_profit: grossProfit,
+          total_cost: totalCost,
+          total_revenue: totalRevenue,
+        },
+        where: { quote_id: quoteId, tenantId },
+      });
+      await tx.quote_lines.deleteMany({ where: { quote_id: quoteId } });
+    } else {
+      await tx.quote.create({
+        data: {
+          avg_margin: avgMargin,
+          client_name: quote.client_name,
+          created_by_user_id: quote.created_by_user_id,
+          createdAt,
+          gross_profit: grossProfit,
+          parent_quote_id: quote.quote_id,
+          playbook_name: quote.playbook_name,
+          proposal_name: quote.proposal_name,
+          quote_group_id: quoteGroupId,
+          quote_id: newQuoteId,
+          quoted_by: quote.quoted_by,
+          status: "draft",
+          tenantId,
+          total_cost: totalCost,
+          total_revenue: totalRevenue,
+          version: nextVersion,
+        },
+      });
+    }
 
     for (const line of resolvedLines) {
       const sourceLine: SourceQuoteLine | undefined = line.sourceLine;
@@ -316,7 +342,7 @@ export async function updateQuoteLinesByTenant(
           line_type: line.classification1 === "service" ? "service" : "product",
           margin_pct: line.marginPct,
           quantity: line.quantity,
-          quote_id: newQuoteId,
+          quote_id: resultQuoteId,
           service_origin: line.classification2 || null,
           sku: line.sku || null,
           strategy: sourceLine?.strategy ?? null,
@@ -326,7 +352,7 @@ export async function updateQuoteLinesByTenant(
     }
   });
 
-  const freshLines = await getEditableQuoteLinesByTenant(tenantId, newQuoteId);
+  const freshLines = await getEditableQuoteLinesByTenant(tenantId, resultQuoteId);
 
   if (!freshLines) {
     return null;
@@ -341,11 +367,11 @@ export async function updateQuoteLinesByTenant(
       playbookName: quote.playbook_name ?? null,
       proposalName: quote.proposal_name ?? "Sin propuesta",
       quoteGroupId,
-      quoteId: newQuoteId,
+      quoteId: resultQuoteId,
       status: "draft",
       totalRevenue,
-      version: nextVersion,
-      versionCount: quoteCountInGroup + 1,
+      version: resultVersion,
+        versionCount: shouldCreateNewVersion ? quoteCountInGroup + 1 : quoteCountInGroup,
     },
     totals: {
       avgMargin,
@@ -353,6 +379,7 @@ export async function updateQuoteLinesByTenant(
       totalCost,
       totalRevenue,
     },
+      versionCreated: shouldCreateNewVersion,
   };
 }
 

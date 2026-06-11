@@ -39,6 +39,7 @@ export const quoteLinesPutResponseSchema = z.object({
     totalCost: z.number(),
     totalRevenue: z.number(),
   }),
+  versionCreated: z.boolean(),
 });
 
 export const quoteVersionHistoryItemSchema = z.object({

@@ -280,12 +280,17 @@ export async function POST(request: Request) {
     }
   }
 
+  // Si el usuario ya existe en Clerk (clerkSynced), mandar a sign-in; si es nuevo, a sign-up.
+  const accessUrl = clerkSynced
+    ? `${appUrl}/sign-in?email=${encodeURIComponent(normalizedEmail)}`
+    : `${appUrl}/sign-up?email=${encodeURIComponent(normalizedEmail)}`;
+
   const emailResult = await sendInvitationEmail({
     to: normalizedEmail,
     firstName: parsed.data.firstName,
     tenantName: targetTenant.name ?? parsed.data.tenantId ?? "tu empresa",
     inviterName: tenant.userDisplayName ?? "El administrador",
-    signUpUrl: `${appUrl}/sign-up?email=${encodeURIComponent(normalizedEmail)}`,
+    signUpUrl: accessUrl,
     bcc: adminBcc,
   });
 
