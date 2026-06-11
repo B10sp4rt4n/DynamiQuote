@@ -6,6 +6,7 @@ export type ClientSummary = {
   active: boolean;
   address: string | null;
   clientId: string;
+  clientLogoId: string | null;
   company: string;
   contactEmail: string | null;
   contactName: string | null;
@@ -21,6 +22,7 @@ export type ClientSummary = {
 
 export type CreateClientInput = {
   address?: string | null;
+  clientLogoId?: string | null;
   company: string;
   contactEmail?: string | null;
   contactName?: string | null;
@@ -39,6 +41,7 @@ function mapToSummary(row: {
   active: boolean;
   address: string | null;
   client_id: string;
+  client_logo_id: string | null;
   company: string;
   contact_email: string | null;
   contact_name: string | null;
@@ -55,6 +58,7 @@ function mapToSummary(row: {
     active: row.active,
     address: row.address,
     clientId: row.client_id,
+    clientLogoId: row.client_logo_id,
     company: row.company,
     contactEmail: row.contact_email,
     contactName: row.contact_name,
@@ -67,6 +71,25 @@ function mapToSummary(row: {
     tenantId: row.tenant_id,
     updatedAt: row.updated_at ? row.updated_at.toISOString() : null,
   };
+}
+
+async function resolveClientLogoIdForTenant(tenantId: string, logoId?: string | null): Promise<string | null> {
+  const normalized = logoId?.trim() ?? "";
+
+  if (!normalized) {
+    return null;
+  }
+
+  const logo = await prisma.company_logos.findFirst({
+    select: { logo_id: true },
+    where: {
+      logo_id: normalized,
+      logo_type: "client",
+      tenant_id: tenantId,
+    },
+  });
+
+  return logo?.logo_id ?? null;
 }
 
 // Lista todos los clientes activos del tenant. Acepta búsqueda opcional por empresa, contacto o email.
@@ -113,9 +136,12 @@ export async function createClientForTenant(
   tenantId: string,
   input: CreateClientInput,
 ): Promise<ClientSummary> {
+  const clientLogoId = await resolveClientLogoIdForTenant(tenantId, input.clientLogoId);
+
   const row = await prisma.client.create({
     data: {
       address: input.address?.trim() || null,
+      client_logo_id: clientLogoId,
       company: input.company.trim(),
       contact_email: input.contactEmail?.trim() || null,
       contact_name: input.contactName?.trim() || null,
@@ -147,10 +173,16 @@ export async function updateClientForTenant(
     return null;
   }
 
+  const clientLogoId =
+    input.clientLogoId !== undefined
+      ? await resolveClientLogoIdForTenant(tenantId, input.clientLogoId)
+      : undefined;
+
   const row = await prisma.client.update({
     data: {
       ...(input.active !== undefined ? { active: input.active } : {}),
       ...(input.address !== undefined ? { address: input.address?.trim() || null } : {}),
+      ...(input.clientLogoId !== undefined ? { client_logo_id: clientLogoId ?? null } : {}),
       ...(input.company !== undefined ? { company: input.company.trim() } : {}),
       ...(input.contactEmail !== undefined ? { contact_email: input.contactEmail?.trim() || null } : {}),
       ...(input.contactName !== undefined ? { contact_name: input.contactName?.trim() || null } : {}),

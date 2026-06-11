@@ -552,6 +552,7 @@ export async function syncManagedUserFromClerkUserCreated({
 
 export async function getIssuerProfilesByTenant(
   tenantId: string,
+  logoType?: "issuer" | "client",
 ): Promise<IssuerProfileSummary[]> {
   const rows = await prisma.company_logos.findMany({
     orderBy: [{ is_default: "desc" }, { uploaded_at: "desc" }],
@@ -564,7 +565,10 @@ export async function getIssuerProfilesByTenant(
       logo_type: true,
       uploaded_at: true,
     },
-    where: { tenant_id: tenantId },
+    where: {
+      tenant_id: tenantId,
+      ...(logoType ? { logo_type: logoType } : {}),
+    },
   });
 
   return rows.map((row) => ({

@@ -4,12 +4,20 @@ import { useCallback, useEffect, useRef, useState } from "react";
 
 import type { ClientSummary } from "@/lib/db/clients";
 
+type ClientLogoOption = {
+  companyName: string | null;
+  logoId: string;
+  logoName: string;
+};
+
 type ClientShellProps = {
+  clientLogos: ClientLogoOption[];
   initialClients: ClientSummary[];
 };
 
 type FormState = {
   address: string;
+  clientLogoId: string;
   company: string;
   contactEmail: string;
   contactName: string;
@@ -22,6 +30,7 @@ type FormState = {
 
 const EMPTY_FORM: FormState = {
   address: "",
+  clientLogoId: "",
   company: "",
   contactEmail: "",
   contactName: "",
@@ -32,7 +41,7 @@ const EMPTY_FORM: FormState = {
   rfc: "",
 };
 
-export function ClientShell({ initialClients }: ClientShellProps) {
+export function ClientShell({ clientLogos, initialClients }: ClientShellProps) {
   const [clients, setClients] = useState<ClientSummary[]>(initialClients);
   const [search, setSearch] = useState("");
   const [showModal, setShowModal] = useState(false);
@@ -81,6 +90,7 @@ export function ClientShell({ initialClients }: ClientShellProps) {
     setEditingClient(client);
     setForm({
       address: client.address ?? "",
+      clientLogoId: client.clientLogoId ?? "",
       company: client.company,
       contactEmail: client.contactEmail ?? "",
       contactName: client.contactName ?? "",
@@ -115,6 +125,7 @@ export function ClientShell({ initialClients }: ClientShellProps) {
 
     const payload = {
       address: form.address.trim() || null,
+      clientLogoId: form.clientLogoId || null,
       company: form.company.trim(),
       contactEmail: form.contactEmail.trim() || null,
       contactName: form.contactName.trim() || null,
@@ -228,6 +239,7 @@ export function ClientShell({ initialClients }: ClientShellProps) {
               <tr>
                 <th className="px-4 py-3 font-medium">Empresa</th>
                 <th className="hidden px-4 py-3 font-medium md:table-cell">Contacto</th>
+                <th className="hidden px-4 py-3 font-medium md:table-cell">Logo</th>
                 <th className="hidden px-4 py-3 font-medium lg:table-cell">Email</th>
                 <th className="hidden px-4 py-3 font-medium lg:table-cell">Teléfono</th>
                 <th className="px-4 py-3 font-medium">Estado</th>
@@ -244,6 +256,11 @@ export function ClientShell({ initialClients }: ClientShellProps) {
                   <td className="hidden px-4 py-3 text-zinc-600 md:table-cell">
                     {client.contactName ?? "—"}
                     {client.contactTitle ? <span className="block text-xs text-zinc-400">{client.contactTitle}</span> : null}
+                  </td>
+                  <td className="hidden px-4 py-3 text-zinc-600 md:table-cell">
+                    {client.clientLogoId
+                      ? clientLogos.find((logo) => logo.logoId === client.clientLogoId)?.logoName ?? "Logo no disponible"
+                      : "—"}
                   </td>
                   <td className="hidden px-4 py-3 text-zinc-600 lg:table-cell">{client.contactEmail ?? "—"}</td>
                   <td className="hidden px-4 py-3 text-zinc-600 lg:table-cell">{client.contactPhone ?? "—"}</td>
@@ -333,6 +350,22 @@ export function ClientShell({ initialClients }: ClientShellProps) {
                   placeholder="Dirección"
                   value={form.address}
                 />
+              </div>
+              <div className="sm:col-span-2">
+                <label className="mb-1 block text-xs font-medium text-zinc-700">Logo del cliente</label>
+                <select
+                  className="w-full rounded-lg border border-zinc-300 bg-white px-3 py-2 text-sm text-zinc-900"
+                  onChange={(e) => setField("clientLogoId", e.target.value)}
+                  value={form.clientLogoId}
+                >
+                  <option value="">Sin logo</option>
+                  {clientLogos.map((logo) => (
+                    <option key={logo.logoId} value={logo.logoId}>
+                      {logo.logoName}
+                      {logo.companyName ? ` (${logo.companyName})` : ""}
+                    </option>
+                  ))}
+                </select>
               </div>
               <div>
                 <label className="mb-1 block text-xs font-medium text-zinc-700">Contacto principal</label>

@@ -191,9 +191,11 @@ async function resolveActorNameForTenant(
 }
 
 type FormalProposalSlice = {
+  clientLogoId: string;
   issuerCompany: string;
   issuerContactName: string;
   issuerEmail: string;
+  issuerLogoId: string;
   issuerPhone: string;
   issuedDate: string | null;
   proposalDocId: string;
@@ -269,9 +271,11 @@ function decimalToNumber(value: Prisma.Decimal | null | undefined): number {
 }
 
 function toFormalSlice(row: {
+  client_logo_id?: string | null;
   issuer_company: string;
   issuer_contact_name: string | null;
   issuer_email: string | null;
+  issuer_logo_id?: string | null;
   issuer_phone: string | null;
   issued_date: Date;
   proposal_doc_id: string;
@@ -286,9 +290,11 @@ function toFormalSlice(row: {
   terms_and_conditions: string | null;
 }): FormalProposalSlice {
   return {
+    clientLogoId: row.client_logo_id ?? "",
     issuerCompany: row.issuer_company,
     issuerContactName: row.issuer_contact_name ?? "",
     issuerEmail: row.issuer_email ?? "",
+    issuerLogoId: row.issuer_logo_id ?? "",
     issuerPhone: row.issuer_phone ?? "",
     issuedDate: dateToIso(row.issued_date),
     proposalDocId: row.proposal_doc_id,
@@ -468,19 +474,26 @@ export async function createProposalFromQuoteByTenant(
     orderBy: [{ is_default: "desc" }, { uploaded_at: "desc" }],
     select: {
       company_name: true,
+      logo_id: true,
     },
-    where: { tenant_id: tenantId },
+    where: { logo_type: "issuer", tenant_id: tenantId },
   });
 
   // Precarga de datos de contacto desde el catálogo de clientes (Phase 2)
-  let catalogContact: { contactName: string | null; contactTitle: string | null; contactEmail: string | null } | null = null;
+  let catalogContact: {
+    clientLogoId: string | null;
+    contactName: string | null;
+    contactTitle: string | null;
+    contactEmail: string | null;
+  } | null = null;
   if (quote.client_id) {
     const catalogClient = await prisma.client.findFirst({
-      select: { contact_name: true, contact_title: true, contact_email: true },
+      select: { client_logo_id: true, contact_name: true, contact_title: true, contact_email: true },
       where: { client_id: quote.client_id, tenant_id: tenantId },
     });
     if (catalogClient) {
       catalogContact = {
+        clientLogoId: catalogClient.client_logo_id ?? null,
         contactName: catalogClient.contact_name ?? null,
         contactTitle: catalogClient.contact_title ?? null,
         contactEmail: catalogClient.contact_email ?? null,
@@ -516,11 +529,13 @@ export async function createProposalFromQuoteByTenant(
         created_by: issuerContactName,
         issuer_company: issuerCompany,
         issuer_contact_name: issuerContactName,
+        issuer_logo_id: issuerProfile?.logo_id ?? null,
         issued_date: now,
         proposal_doc_id: proposalDocId,
         proposal_id: proposalId,
         proposal_number: proposalNumber,
         quote_id: quote.quote_id,
+        client_logo_id: catalogContact?.clientLogoId ?? null,
         recipient_company: recipientCompany,
         recipient_contact_name: catalogContact?.contactName ?? null,
         recipient_contact_title: catalogContact?.contactTitle ?? null,
@@ -568,9 +583,11 @@ export async function createProposalFromQuoteByTenant(
   return {
     createdAt: now.toISOString(),
     formal: toFormalSlice({
+      client_logo_id: catalogContact?.clientLogoId ?? null,
       issuer_company: issuerCompany,
       issuer_contact_name: issuerContactName,
       issuer_email: null,
+      issuer_logo_id: issuerProfile?.logo_id ?? null,
       issuer_phone: null,
       issued_date: now,
       proposal_doc_id: proposalDocId,
@@ -599,9 +616,11 @@ export async function getProposalSummariesByTenant(
       formal_proposals: {
         orderBy: [{ created_at: "desc" }, { proposal_doc_id: "desc" }],
         select: {
+          client_logo_id: true,
           issuer_company: true,
           issuer_contact_name: true,
           issuer_email: true,
+          issuer_logo_id: true,
           issuer_phone: true,
           issued_date: true,
           proposal_doc_id: true,
@@ -648,9 +667,11 @@ export async function getProposalWorkflowByTenant(
       formal_proposals: {
         orderBy: [{ created_at: "desc" }, { proposal_doc_id: "desc" }],
         select: {
+          client_logo_id: true,
           issuer_company: true,
           issuer_contact_name: true,
           issuer_email: true,
+          issuer_logo_id: true,
           issuer_phone: true,
           issued_date: true,
           proposal_doc_id: true,

@@ -3,6 +3,7 @@ import Link from "next/link";
 import { ClientShell } from "@/components/configuracion/client-shell";
 import { getCurrentTenantContext } from "@/lib/auth/tenant-context";
 import { listClientsByTenant } from "@/lib/db/clients";
+import { getIssuerProfilesByTenant } from "@/lib/db/settings";
 
 export const dynamic = "force-dynamic";
 
@@ -17,7 +18,10 @@ export default async function ClientsPage() {
     );
   }
 
-  const clients = await listClientsByTenant(tenant.id);
+  const [clients, clientLogos] = await Promise.all([
+    listClientsByTenant(tenant.id),
+    getIssuerProfilesByTenant(tenant.id, "client"),
+  ]);
 
   return (
     <div className="space-y-4">
@@ -26,7 +30,7 @@ export default async function ClientsPage() {
         {" / "}
         <span className="text-zinc-900">Clientes</span>
       </nav>
-      <ClientShell initialClients={clients} />
+      <ClientShell clientLogos={clientLogos} initialClients={clients} />
     </div>
   );
 }
