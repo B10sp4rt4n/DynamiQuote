@@ -418,85 +418,46 @@ async function resolvePreferredIssuerLogoAssetByTenant(tenantId: string): Promis
   logo_data: Uint8Array;
   logo_format: string;
 } | null> {
-  const tenantDefault = await prisma.company_logos.findFirst({
-    orderBy: [{ uploaded_at: "desc" }],
-    select: {
-      logo_data: true,
-      logo_format: true,
-    },
-    where: {
-      is_default: true,
-      logo_type: "issuer",
-      tenant_id: tenantId,
-    },
-  });
-
-  if (tenantDefault?.logo_data?.length) {
-    return {
-      logo_data: tenantDefault.logo_data,
-      logo_format: tenantDefault.logo_format,
-    };
-  }
-
-  const globalDefault = await prisma.company_logos.findFirst({
-    orderBy: [{ uploaded_at: "desc" }],
-    select: {
-      logo_data: true,
-      logo_format: true,
-    },
-    where: {
-      is_default: true,
-      logo_type: "issuer",
-      tenant_id: null,
-    },
-  });
-
-  if (globalDefault?.logo_data?.length) {
-    return {
-      logo_data: globalDefault.logo_data,
-      logo_format: globalDefault.logo_format,
-    };
-  }
-
-  const tenantAny = await prisma.company_logos.findFirst({
-    orderBy: [{ uploaded_at: "desc" }],
-    select: {
-      logo_data: true,
-      logo_format: true,
-    },
-    where: {
-      logo_type: "issuer",
-      tenant_id: tenantId,
-    },
-  });
-
-  if (tenantAny?.logo_data?.length) {
-    return {
-      logo_data: tenantAny.logo_data,
-      logo_format: tenantAny.logo_format,
-    };
-  }
-
-  const globalAny = await prisma.company_logos.findFirst({
-    orderBy: [{ uploaded_at: "desc" }],
-    select: {
-      logo_data: true,
-      logo_format: true,
-    },
-    where: {
-      logo_type: "issuer",
-      tenant_id: null,
-    },
-  });
-
-  if (!globalAny?.logo_data?.length) {
-    return null;
-  }
-
-  return {
-    logo_data: globalAny.logo_data,
-    logo_format: globalAny.logo_format,
+  const isSvg = (format: string | null | undefined): boolean => {
+    const normalized = (format ?? "").trim().toLowerCase();
+    return normalized === "svg" || normalized === "svg+xml";
   };
+
+  const pickBest = async (where: {
+    is_default?: boolean;
+    logo_type: "issuer";
+    tenant_id: string | null;
+  }): Promise<{ logo_data: Uint8Array; logo_format: string } | null> => {
+    const rows = await prisma.company_logos.findMany({
+      orderBy: [{ uploaded_at: "desc" }],
+      select: {
+        logo_data: true,
+        logo_format: true,
+      },
+      take: 20,
+      where,
+    });
+
+    const withBytes = rows.filter((row) => row.logo_data?.length > 0);
+    if (withBytes.length === 0) return null;
+
+    const raster = withBytes.find((row) => !isSvg(row.logo_format));
+    const selected = raster ?? withBytes[0];
+
+    return selected
+      ? {
+          logo_data: selected.logo_data,
+          logo_format: selected.logo_format,
+        }
+      : null;
+  };
+
+  return (
+    (await pickBest({ is_default: true, logo_type: "issuer", tenant_id: tenantId })) ??
+    (await pickBest({ is_default: true, logo_type: "issuer", tenant_id: null })) ??
+    (await pickBest({ logo_type: "issuer", tenant_id: tenantId })) ??
+    (await pickBest({ logo_type: "issuer", tenant_id: null }))
+  );
 }
 
 function resolveApproverRole(actor: {
