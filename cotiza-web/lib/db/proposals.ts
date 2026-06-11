@@ -889,10 +889,15 @@ export async function getProposalWorkflowByTenant(
           : resolvePreferredIssuerLogoAssetByTenant(tenantId),
         latestFormal?.client_logo_id
           ? (async () => {
+              const clientLogoId = latestFormal.client_logo_id;
+              if (!clientLogoId) {
+                return null;
+              }
+
               const tenantLogo = await prisma.company_logos.findFirst({
                 select: { logo_data: true, logo_format: true },
                 where: {
-                  logo_id: latestFormal.client_logo_id,
+                  logo_id: clientLogoId,
                   tenant_id: tenantId,
                 },
               });
@@ -904,7 +909,7 @@ export async function getProposalWorkflowByTenant(
               return prisma.company_logos.findFirst({
                 select: { logo_data: true, logo_format: true },
                 where: {
-                  logo_id: latestFormal.client_logo_id,
+                  logo_id: clientLogoId,
                   tenant_id: null,
                 },
               });
