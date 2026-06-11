@@ -192,10 +192,12 @@ async function resolveActorNameForTenant(
 
 type FormalProposalSlice = {
   clientLogoId: string;
+  clientLogoDataUrl: string;
   issuerCompany: string;
   issuerContactName: string;
   issuerEmail: string;
   issuerLogoId: string;
+  issuerLogoDataUrl: string;
   issuerPhone: string;
   issuedDate: string | null;
   proposalDocId: string;
@@ -272,10 +274,12 @@ function decimalToNumber(value: Prisma.Decimal | null | undefined): number {
 
 function toFormalSlice(row: {
   client_logo_id?: string | null;
+  client_logo_data_url?: string | null;
   issuer_company: string;
   issuer_contact_name: string | null;
   issuer_email: string | null;
   issuer_logo_id?: string | null;
+  issuer_logo_data_url?: string | null;
   issuer_phone: string | null;
   issued_date: Date;
   proposal_doc_id: string;
@@ -291,10 +295,12 @@ function toFormalSlice(row: {
 }): FormalProposalSlice {
   return {
     clientLogoId: row.client_logo_id ?? "",
+    clientLogoDataUrl: row.client_logo_data_url ?? "",
     issuerCompany: row.issuer_company,
     issuerContactName: row.issuer_contact_name ?? "",
     issuerEmail: row.issuer_email ?? "",
     issuerLogoId: row.issuer_logo_id ?? "",
+    issuerLogoDataUrl: row.issuer_logo_data_url ?? "",
     issuerPhone: row.issuer_phone ?? "",
     issuedDate: dateToIso(row.issued_date),
     proposalDocId: row.proposal_doc_id,
@@ -308,6 +314,19 @@ function toFormalSlice(row: {
     subject: row.subject ?? "Sin asunto",
     termsAndConditions: row.terms_and_conditions ?? "",
   };
+}
+
+function toLogoDataUrl(bytes: Uint8Array | null | undefined, format: string | null | undefined): string | null {
+  if (!bytes || bytes.length === 0) {
+    return null;
+  }
+
+  const safeFormat = (format?.trim() || "png").toLowerCase();
+  const mime = safeFormat === "svg" || safeFormat === "svg+xml"
+    ? "image/svg+xml"
+    : `image/${safeFormat}`;
+
+  return `data:${mime};base64,${Buffer.from(bytes).toString("base64")}`;
 }
 
 function resolveApproverRole(actor: {
@@ -661,6 +680,7 @@ export async function getProposalSummariesByTenant(
 export async function getProposalWorkflowByTenant(
   tenantId: string,
   proposalId: string,
+  options?: { includeLogoData?: boolean },
 ): Promise<ProposalWorkflowDetail | null> {
   const row = await prisma.proposals.findFirst({
     include: {
@@ -715,8 +735,37 @@ export async function getProposalWorkflowByTenant(
   }
 
   const latestFormal = row.formal_proposals[0];
+  const includeLogoData = options?.includeLogoData === true;
+  const [issuerLogo, clientLogo] = includeLogoData
+    ? await Promise.all([
+        latestFormal?.issuer_logo_id
+          ? prisma.company_logos.findFirst({
+              select: { logo_data: true, logo_format: true },
+              where: {
+                logo_id: latestFormal.issuer_logo_id,
+                tenant_id: tenantId,
+              },
+            })
+          : Promise.resolve(null),
+        latestFormal?.client_logo_id
+          ? prisma.company_logos.findFirst({
+              select: { logo_data: true, logo_format: true },
+              where: {
+                logo_id: latestFormal.client_logo_id,
+                tenant_id: tenantId,
+              },
+            })
+          : Promise.resolve(null),
+      ])
+    : [null, null];
   const resolvedSalesOwner = await resolveUserDisplayNameByTenant(tenantId, row.created_by);
-  const normalizedFormal = latestFormal ? toFormalSlice(latestFormal) : null;
+  const normalizedFormal = latestFormal
+    ? toFormalSlice({
+        ...latestFormal,
+        client_logo_data_url: toLogoDataUrl(clientLogo?.logo_data, clientLogo?.logo_format),
+        issuer_logo_data_url: toLogoDataUrl(issuerLogo?.logo_data, issuerLogo?.logo_format),
+      })
+    : null;
   const marginPolicy = await getMarginPolicyByTenant(tenantId);
   const proposalItems = row.proposal_items.map((item) => ({
     componentType: item.component_type ?? "",

@@ -176,7 +176,7 @@ export async function POST(request: Request, context: RouteContext) {
   // Ignorar cualquier email del body — el destino se resuelve server-side
   await request.json().catch(() => null);
 
-  const proposal = await getProposalWorkflowByTenant(tenant.id, proposalId);
+  const proposal = await getProposalWorkflowByTenant(tenant.id, proposalId, { includeLogoData: true });
 
   if (!proposal) {
     return NextResponse.json({ error: "Propuesta no encontrada" }, { status: 404 });

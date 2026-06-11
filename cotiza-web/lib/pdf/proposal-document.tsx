@@ -1,5 +1,6 @@
 import {
   Document,
+  Image,
   Page,
   StyleSheet,
   Text,
@@ -20,6 +21,34 @@ const styles = StyleSheet.create({
   },
   header: {
     marginBottom: 10,
+    textAlign: "center",
+  },
+  brandRow: {
+    alignItems: "center",
+    flexDirection: "row",
+    justifyContent: "space-between",
+    marginBottom: 8,
+  },
+  brandBox: {
+    alignItems: "center",
+    borderColor: "#e5e7eb",
+    borderStyle: "solid",
+    borderWidth: 1,
+    borderRadius: 4,
+    justifyContent: "center",
+    minHeight: 52,
+    paddingHorizontal: 6,
+    paddingVertical: 4,
+    width: "48%",
+  },
+  brandImage: {
+    maxHeight: 40,
+    maxWidth: 150,
+    objectFit: "contain",
+  },
+  brandFallback: {
+    color: "#6b7280",
+    fontSize: 8,
     textAlign: "center",
   },
   logo: {
@@ -312,6 +341,22 @@ export function ProposalPdfDocument({ proposal, tenantName }: ProposalPdfInput) 
     <Document>
       <Page size="A4" style={styles.page}>
         <View style={styles.header}>
+          <View style={styles.brandRow}>
+            <View style={styles.brandBox}>
+              {formal?.issuerLogoDataUrl ? (
+                <Image src={formal.issuerLogoDataUrl} style={styles.brandImage} />
+              ) : (
+                <Text style={styles.brandFallback}>{formal?.issuerCompany || tenantName}</Text>
+              )}
+            </View>
+            <View style={styles.brandBox}>
+              {formal?.clientLogoDataUrl ? (
+                <Image src={formal.clientLogoDataUrl} style={styles.brandImage} />
+              ) : (
+                <Text style={styles.brandFallback}>{formal?.recipientCompany || "Cliente sin logo"}</Text>
+              )}
+            </View>
+          </View>
           <Text style={styles.logo}>{formal?.issuerCompany || tenantName}</Text>
           <Text style={styles.title}>Propuesta Comercial</Text>
           <Text style={styles.folio}>{formal?.proposalNumber ?? proposal.proposalId}</Text>

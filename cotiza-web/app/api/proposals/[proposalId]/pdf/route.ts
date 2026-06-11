@@ -46,7 +46,7 @@ export async function GET(_: Request, context: RouteContext) {
     );
   }
 
-  const proposal = await getProposalWorkflowByTenant(tenant.id, proposalId);
+  const proposal = await getProposalWorkflowByTenant(tenant.id, proposalId, { includeLogoData: true });
 
   if (!proposal) {
     return NextResponse.json({ error: "Propuesta no encontrada" }, { status: 404 });
