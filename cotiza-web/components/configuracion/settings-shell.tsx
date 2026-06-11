@@ -1576,7 +1576,11 @@ function IssuerProfilesTab({
   async function handleUpload(event: FormEvent<HTMLFormElement>) {
     event.preventDefault();
 
-    if (!logoFile) {
+    const formData = new FormData(event.currentTarget);
+    const fileFromForm = formData.get("logoFile");
+    const selectedFile = fileFromForm instanceof File && fileFromForm.size > 0 ? fileFromForm : logoFile;
+
+    if (!selectedFile) {
       setError("Selecciona un archivo de logo.");
       return;
     }
@@ -1586,8 +1590,8 @@ function IssuerProfilesTab({
     try {
       const payload = new FormData();
       payload.append("logoType", logoType);
-      payload.append("logoFile", logoFile);
-      payload.append("logoName", logoName.trim() || logoFile.name);
+      payload.append("logoFile", selectedFile);
+      payload.append("logoName", logoName.trim() || selectedFile.name);
       payload.append("companyName", companyName.trim());
       payload.append("isDefault", isDefault ? "true" : "false");
 
@@ -1616,6 +1620,7 @@ function IssuerProfilesTab({
         return next;
       });
 
+      event.currentTarget.reset();
       setLogoFile(null);
       setLogoName("");
       setCompanyName("");
@@ -1667,6 +1672,7 @@ function IssuerProfilesTab({
           <input
             accept="image/png,image/jpeg,image/jpg,image/webp,image/svg+xml"
             className="mt-1 block w-full rounded-lg border border-zinc-300 bg-white px-3 py-2 text-sm text-zinc-900"
+            name="logoFile"
             onChange={(event) => setLogoFile(event.target.files?.[0] ?? null)}
             type="file"
           />
