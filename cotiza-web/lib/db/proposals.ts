@@ -329,6 +329,176 @@ function toLogoDataUrl(bytes: Uint8Array | null | undefined, format: string | nu
   return `data:${mime};base64,${Buffer.from(bytes).toString("base64")}`;
 }
 
+async function resolvePreferredIssuerProfileByTenant(tenantId: string): Promise<{
+  companyName: string | null;
+  logoId: string;
+} | null> {
+  const tenantDefault = await prisma.company_logos.findFirst({
+    orderBy: [{ uploaded_at: "desc" }],
+    select: {
+      company_name: true,
+      logo_id: true,
+    },
+    where: {
+      is_default: true,
+      logo_type: "issuer",
+      tenant_id: tenantId,
+    },
+  });
+
+  if (tenantDefault) {
+    return {
+      companyName: tenantDefault.company_name,
+      logoId: tenantDefault.logo_id,
+    };
+  }
+
+  const globalDefault = await prisma.company_logos.findFirst({
+    orderBy: [{ uploaded_at: "desc" }],
+    select: {
+      company_name: true,
+      logo_id: true,
+    },
+    where: {
+      is_default: true,
+      logo_type: "issuer",
+      tenant_id: null,
+    },
+  });
+
+  if (globalDefault) {
+    return {
+      companyName: globalDefault.company_name,
+      logoId: globalDefault.logo_id,
+    };
+  }
+
+  const tenantAny = await prisma.company_logos.findFirst({
+    orderBy: [{ uploaded_at: "desc" }],
+    select: {
+      company_name: true,
+      logo_id: true,
+    },
+    where: {
+      logo_type: "issuer",
+      tenant_id: tenantId,
+    },
+  });
+
+  if (tenantAny) {
+    return {
+      companyName: tenantAny.company_name,
+      logoId: tenantAny.logo_id,
+    };
+  }
+
+  const globalAny = await prisma.company_logos.findFirst({
+    orderBy: [{ uploaded_at: "desc" }],
+    select: {
+      company_name: true,
+      logo_id: true,
+    },
+    where: {
+      logo_type: "issuer",
+      tenant_id: null,
+    },
+  });
+
+  if (!globalAny) {
+    return null;
+  }
+
+  return {
+    companyName: globalAny.company_name,
+    logoId: globalAny.logo_id,
+  };
+}
+
+async function resolvePreferredIssuerLogoAssetByTenant(tenantId: string): Promise<{
+  logoBytes: Uint8Array;
+  logoFormat: string;
+} | null> {
+  const tenantDefault = await prisma.company_logos.findFirst({
+    orderBy: [{ uploaded_at: "desc" }],
+    select: {
+      logo_data: true,
+      logo_format: true,
+    },
+    where: {
+      is_default: true,
+      logo_type: "issuer",
+      tenant_id: tenantId,
+    },
+  });
+
+  if (tenantDefault?.logo_data?.length) {
+    return {
+      logoBytes: tenantDefault.logo_data,
+      logoFormat: tenantDefault.logo_format,
+    };
+  }
+
+  const globalDefault = await prisma.company_logos.findFirst({
+    orderBy: [{ uploaded_at: "desc" }],
+    select: {
+      logo_data: true,
+      logo_format: true,
+    },
+    where: {
+      is_default: true,
+      logo_type: "issuer",
+      tenant_id: null,
+    },
+  });
+
+  if (globalDefault?.logo_data?.length) {
+    return {
+      logoBytes: globalDefault.logo_data,
+      logoFormat: globalDefault.logo_format,
+    };
+  }
+
+  const tenantAny = await prisma.company_logos.findFirst({
+    orderBy: [{ uploaded_at: "desc" }],
+    select: {
+      logo_data: true,
+      logo_format: true,
+    },
+    where: {
+      logo_type: "issuer",
+      tenant_id: tenantId,
+    },
+  });
+
+  if (tenantAny?.logo_data?.length) {
+    return {
+      logoBytes: tenantAny.logo_data,
+      logoFormat: tenantAny.logo_format,
+    };
+  }
+
+  const globalAny = await prisma.company_logos.findFirst({
+    orderBy: [{ uploaded_at: "desc" }],
+    select: {
+      logo_data: true,
+      logo_format: true,
+    },
+    where: {
+      logo_type: "issuer",
+      tenant_id: null,
+    },
+  });
+
+  if (!globalAny?.logo_data?.length) {
+    return null;
+  }
+
+  return {
+    logoBytes: globalAny.logo_data,
+    logoFormat: globalAny.logo_format,
+  };
+}
+
 function resolveApproverRole(actor: {
   isSuperAdmin: boolean;
   userRole: "superadmin" | "owner" | "admin" | "user";
@@ -489,18 +659,7 @@ export async function createProposalFromQuoteByTenant(
     where: { tenant_id: tenantId },
   });
 
-  const issuerProfile = await prisma.company_logos.findFirst({
-    orderBy: [{ uploaded_at: "desc" }],
-    select: {
-      company_name: true,
-      logo_id: true,
-    },
-    where: {
-      is_default: true,
-      logo_type: "issuer",
-      tenant_id: tenantId,
-    },
-  });
+  const issuerProfile = await resolvePreferredIssuerProfileByTenant(tenantId);
 
   // Precarga de datos de contacto desde el catálogo de clientes (Phase 2)
   let catalogContact: {
@@ -755,15 +914,7 @@ export async function getProposalWorkflowByTenant(
                 tenant_id: tenantId,
               },
             })
-          : prisma.company_logos.findFirst({
-              orderBy: [{ uploaded_at: "desc" }],
-              select: { logo_data: true, logo_format: true },
-              where: {
-                is_default: true,
-                logo_type: "issuer",
-                tenant_id: tenantId,
-              },
-            }),
+          : resolvePreferredIssuerLogoAssetByTenant(tenantId),
         latestFormal?.client_logo_id
           ? prisma.company_logos.findFirst({
               select: { logo_data: true, logo_format: true },
