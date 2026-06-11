@@ -42,7 +42,11 @@ const EMPTY_FORM: FormState = {
 };
 
 export function ClientShell({ clientLogos, initialClients }: ClientShellProps) {
+  const [availableClientLogos, setAvailableClientLogos] = useState<ClientLogoOption[]>(clientLogos);
   const [clients, setClients] = useState<ClientSummary[]>(initialClients);
+  const [logoFile, setLogoFile] = useState<File | null>(null);
+  const [logoName, setLogoName] = useState("");
+  const [logoUploadPending, setLogoUploadPending] = useState(false);
   const [search, setSearch] = useState("");
   const [showModal, setShowModal] = useState(false);
   const [editingClient, setEditingClient] = useState<ClientSummary | null>(null);
@@ -79,9 +83,15 @@ export function ClientShell({ clientLogos, initialClients }: ClientShellProps) {
     };
   }, [search, fetchClients]);
 
+  useEffect(() => {
+    setAvailableClientLogos(clientLogos);
+  }, [clientLogos]);
+
   function openNew() {
     setEditingClient(null);
     setForm(EMPTY_FORM);
+    setLogoFile(null);
+    setLogoName("");
     setMessage(null);
     setShowModal(true);
   }
@@ -100,6 +110,8 @@ export function ClientShell({ clientLogos, initialClients }: ClientShellProps) {
       notes: client.notes ?? "",
       rfc: client.rfc ?? "",
     });
+    setLogoFile(null);
+    setLogoName("");
     setMessage(null);
     setShowModal(true);
   }
@@ -112,6 +124,65 @@ export function ClientShell({ clientLogos, initialClients }: ClientShellProps) {
 
   function setField(field: keyof FormState, value: string) {
     setForm((prev) => ({ ...prev, [field]: value }));
+  }
+
+  async function handleClientLogoUpload() {
+    if (!logoFile) {
+      setMessage({ text: "Selecciona un archivo de logo para subir.", type: "error" });
+      return;
+    }
+
+    setLogoUploadPending(true);
+    setMessage(null);
+
+    try {
+      const payload = new FormData();
+      payload.append("logoType", "client");
+      payload.append("logoFile", logoFile);
+      payload.append("logoName", logoName.trim() || logoFile.name);
+      payload.append("companyName", form.company.trim());
+      payload.append("isDefault", "false");
+
+      const res = await fetch("/api/settings/issuer-profiles", {
+        body: payload,
+        method: "POST",
+      });
+
+      const data = (await res.json()) as {
+        error?: string;
+        profile?: {
+          companyName: string | null;
+          logoId: string;
+          logoName: string;
+          logoType: string;
+        };
+      };
+
+      if (!res.ok || !data.profile || data.profile.logoType !== "client") {
+        setMessage({ text: data.error ?? "No se pudo cargar el logo.", type: "error" });
+        return;
+      }
+
+      const uploadedLogo: ClientLogoOption = {
+        companyName: data.profile.companyName,
+        logoId: data.profile.logoId,
+        logoName: data.profile.logoName,
+      };
+
+      setAvailableClientLogos((prev) => {
+        const next = [uploadedLogo, ...prev.filter((logo) => logo.logoId !== uploadedLogo.logoId)];
+        return next;
+      });
+
+      setField("clientLogoId", uploadedLogo.logoId);
+      setLogoFile(null);
+      setLogoName("");
+      setMessage({ text: "Logo cargado y seleccionado para este cliente.", type: "success" });
+    } catch {
+      setMessage({ text: "Error de conexión al cargar el logo.", type: "error" });
+    } finally {
+      setLogoUploadPending(false);
+    }
   }
 
   async function handleSave() {
@@ -259,7 +330,7 @@ export function ClientShell({ clientLogos, initialClients }: ClientShellProps) {
                   </td>
                   <td className="hidden px-4 py-3 text-zinc-600 md:table-cell">
                     {client.clientLogoId
-                      ? clientLogos.find((logo) => logo.logoId === client.clientLogoId)?.logoName ?? "Logo no disponible"
+                      ? availableClientLogos.find((logo) => logo.logoId === client.clientLogoId)?.logoName ?? "Logo no disponible"
                       : "—"}
                   </td>
                   <td className="hidden px-4 py-3 text-zinc-600 lg:table-cell">{client.contactEmail ?? "—"}</td>
@@ -359,13 +430,39 @@ export function ClientShell({ clientLogos, initialClients }: ClientShellProps) {
                   value={form.clientLogoId}
                 >
                   <option value="">Sin logo</option>
-                  {clientLogos.map((logo) => (
+                  {availableClientLogos.map((logo) => (
                     <option key={logo.logoId} value={logo.logoId}>
                       {logo.logoName}
                       {logo.companyName ? ` (${logo.companyName})` : ""}
                     </option>
                   ))}
                 </select>
+                <p className="mt-1 text-xs text-zinc-500">Puedes elegir uno existente o subir uno nuevo aquí mismo.</p>
+              </div>
+              <div className="sm:col-span-2 rounded-lg border border-dashed border-zinc-300 bg-zinc-50 p-3">
+                <p className="text-xs font-medium text-zinc-700">Subir nuevo logo de cliente</p>
+                <div className="mt-2 grid gap-2 sm:grid-cols-[1fr_auto]">
+                  <input
+                    accept="image/png,image/jpeg,image/jpg,image/webp,image/svg+xml"
+                    className="w-full rounded-lg border border-zinc-300 bg-white px-3 py-2 text-sm text-zinc-900"
+                    onChange={(e) => setLogoFile(e.target.files?.[0] ?? null)}
+                    type="file"
+                  />
+                  <button
+                    className="rounded-lg bg-zinc-900 px-3 py-2 text-xs font-medium text-white disabled:opacity-60"
+                    disabled={logoUploadPending}
+                    onClick={() => { void handleClientLogoUpload(); }}
+                    type="button"
+                  >
+                    {logoUploadPending ? "Subiendo..." : "Subir logo"}
+                  </button>
+                </div>
+                <input
+                  className="mt-2 w-full rounded-lg border border-zinc-300 bg-white px-3 py-2 text-sm text-zinc-900"
+                  onChange={(e) => setLogoName(e.target.value)}
+                  placeholder="Nombre opcional del logo"
+                  value={logoName}
+                />
               </div>
               <div>
                 <label className="mb-1 block text-xs font-medium text-zinc-700">Contacto principal</label>
