@@ -325,13 +325,14 @@ export async function updateQuoteLinesByTenant(
       });
     }
 
-    for (const line of resolvedLines) {
+    for (const [index, line] of resolvedLines.entries()) {
       const sourceLine: SourceQuoteLine | undefined = line.sourceLine;
+      const lineCreatedAt = new Date(createdAt.getTime() + index);
 
       await tx.quote_lines.create({
         data: {
           cost_unit: line.costUnit,
-          created_at: createdAt,
+          created_at: lineCreatedAt,
           description_corrections: sourceLine?.description_corrections ?? null,
           description_final: line.description || null,
           description_original: line.description || null,
