@@ -1360,7 +1360,7 @@ export function ProposalShell({ proposals, tenantName }: ProposalShellProps) {
               </div>
 
               {/* Evaluación de margen: informativa, no editable */}
-              {selectedProposal?.marginEvaluation ? (
+              {selectedProposal?.marginEvaluation && (selectedStatus === "draft" || selectedStatus === "in_review") ? (
                 <div
                   className={`rounded-lg border px-3 py-3 text-sm ${getMarginToneClass(selectedProposal.marginEvaluation.releaseMode)}`}
                 >

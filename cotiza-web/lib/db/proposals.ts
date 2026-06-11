@@ -490,12 +490,16 @@ export async function createProposalFromQuoteByTenant(
   });
 
   const issuerProfile = await prisma.company_logos.findFirst({
-    orderBy: [{ is_default: "desc" }, { uploaded_at: "desc" }],
+    orderBy: [{ uploaded_at: "desc" }],
     select: {
       company_name: true,
       logo_id: true,
     },
-    where: { logo_type: "issuer", tenant_id: tenantId },
+    where: {
+      is_default: true,
+      logo_type: "issuer",
+      tenant_id: tenantId,
+    },
   });
 
   // Precarga de datos de contacto desde el catálogo de clientes (Phase 2)
@@ -747,9 +751,10 @@ export async function getProposalWorkflowByTenant(
               },
             })
           : prisma.company_logos.findFirst({
-              orderBy: [{ is_default: "desc" }, { uploaded_at: "desc" }],
+              orderBy: [{ uploaded_at: "desc" }],
               select: { logo_data: true, logo_format: true },
               where: {
+                is_default: true,
                 logo_type: "issuer",
                 tenant_id: tenantId,
               },
