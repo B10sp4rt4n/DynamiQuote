@@ -34,10 +34,44 @@ function sanitizeFilename(value: string): string {
 
 async function resolveCurrentUserEmail(): Promise<string | null> {
   try {
-    const { sessionClaims } = await auth();
+    const { sessionClaims, userId } = await auth();
     const claimRecord = (sessionClaims ?? {}) as { email?: unknown };
     const email = typeof claimRecord.email === "string" ? claimRecord.email : null;
-    return sanitizeEmail(email);
+    const sessionEmail = sanitizeEmail(email);
+
+    if (sessionEmail) {
+      return sessionEmail;
+    }
+
+    // Fallback: cuando el claim email no viene en sesión, intentar resolverlo en Clerk.
+    if (userId) {
+      const client = await clerkClient();
+      const user = await client.users.getUser(userId);
+      const primary = user.emailAddresses.find((ea) => ea.id === user.primaryEmailAddressId);
+      return sanitizeEmail(primary?.emailAddress ?? user.emailAddresses[0]?.emailAddress);
+    }
+
+    return null;
+  } catch {
+    return null;
+  }
+}
+
+async function resolveAppUserEmailByTenant(tenantId: string, userId: string | null | undefined): Promise<string | null> {
+  if (!userId) {
+    return null;
+  }
+
+  try {
+    const row = await prisma.app_users.findFirst({
+      select: { email: true },
+      where: {
+        tenant_id: tenantId,
+        user_id: userId,
+      },
+    });
+
+    return sanitizeEmail(row?.email ?? null);
   } catch {
     return null;
   }
@@ -148,10 +182,13 @@ export async function POST(request: Request, context: RouteContext) {
     return NextResponse.json({ error: "Propuesta no encontrada" }, { status: 404 });
   }
 
-  // Resolver el correo del vendedor: sesión Clerk activa → issuerEmail del formulario
+  // Resolver el correo del vendedor con fallbacks robustos:
+  // sesión Clerk -> issuerEmail formal -> app_users.email del usuario actual.
   const sessionEmail = await resolveCurrentUserEmail();
   const formIssuerEmail = sanitizeEmail(proposal.formal?.issuerEmail);
-  const sellerEmail = sessionEmail ?? formIssuerEmail;
+  const appUserEmail = await resolveAppUserEmailByTenant(tenant.id, tenant.userId);
+  const ownerEmail = await resolveTenantOwnerEmail(tenant.id);
+  const sellerEmail = sessionEmail ?? formIssuerEmail ?? appUserEmail ?? ownerEmail;
 
   if (!sellerEmail) {
     return NextResponse.json(
@@ -201,7 +238,6 @@ export async function POST(request: Request, context: RouteContext) {
   };
 
   // Resolver email del owner para copia — siempre va en CC aunque coincida con el vendedor
-  const ownerEmail = await resolveTenantOwnerEmail(tenant.id);
   const ccRecipients = Array.from(
     new Set([ownerEmail].filter((e): e is string => Boolean(e))),
   );

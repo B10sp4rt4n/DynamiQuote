@@ -764,7 +764,8 @@ export async function updateProposalWorkflowByTenant(
   const hasSubjectUpdate = input.subject !== undefined;
   const hasRecipientUpdate = input.recipientCompany !== undefined;
   const hasIssuerCompanyUpdate = input.issuerCompany !== undefined;
-  const hasIssuerEmailUpdate = input.issuerEmail !== undefined;
+  const issuerEmailInput = input.issuerEmail?.trim();
+  const hasIssuerEmailUpdate = issuerEmailInput !== undefined && issuerEmailInput.length > 0;
   const hasIssuerPhoneUpdate = input.issuerPhone !== undefined;
   const hasRecipientContactNameUpdate = input.recipientContactName !== undefined;
   const hasRecipientEmailUpdate = input.recipientEmail !== undefined;
@@ -861,7 +862,7 @@ export async function updateProposalWorkflowByTenant(
 
     const termsToPersist = input.termsAndConditions;
     const issuerCompanyToPersist = input.issuerCompany;
-    const issuerEmailToPersist = input.issuerEmail;
+    const issuerEmailToPersist = issuerEmailInput;
     const issuerPhoneToPersist = input.issuerPhone;
     const subjectToPersist = input.subject;
     const recipientToPersist = input.recipientCompany;
