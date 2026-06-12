@@ -1052,19 +1052,63 @@ export async function updateProposalWorkflowByTenant(
   }
 
   const currentStatus = current.status;
+  const currentFormal = current.formal;
   const nextStatus = input.status ?? currentStatus;
   const hasStatusUpdate = nextStatus !== currentStatus;
-  const hasTermsUpdate = input.termsAndConditions !== undefined;
-  const hasSubjectUpdate = input.subject !== undefined;
-  const hasRecipientUpdate = input.recipientCompany !== undefined;
-  const hasIssuerCompanyUpdate = input.issuerCompany !== undefined;
+  const hasTermsUpdate =
+    input.termsAndConditions !== undefined &&
+    input.termsAndConditions !== (currentFormal?.termsAndConditions ?? "");
+  const hasSubjectUpdate =
+    input.subject !== undefined &&
+    input.subject !== (currentFormal?.subject ?? "");
+  const hasRecipientUpdate =
+    input.recipientCompany !== undefined &&
+    input.recipientCompany !== (currentFormal?.recipientCompany ?? "");
+  const hasIssuerCompanyUpdate =
+    input.issuerCompany !== undefined &&
+    input.issuerCompany !== (currentFormal?.issuerCompany ?? "");
   const issuerEmailInput = input.issuerEmail?.trim();
-  const hasIssuerEmailUpdate = issuerEmailInput !== undefined && issuerEmailInput.length > 0;
-  const hasIssuerPhoneUpdate = input.issuerPhone !== undefined;
-  const hasRecipientContactNameUpdate = input.recipientContactName !== undefined;
-  const hasRecipientEmailUpdate = input.recipientEmail !== undefined;
-  const hasRecipientContactTitleUpdate = input.recipientContactTitle !== undefined;
-  const hasItemsUpdate = input.items !== undefined;
+  const hasIssuerEmailUpdate =
+    issuerEmailInput !== undefined &&
+    issuerEmailInput.length > 0 &&
+    issuerEmailInput !== (currentFormal?.issuerEmail ?? "");
+  const hasIssuerPhoneUpdate =
+    input.issuerPhone !== undefined &&
+    input.issuerPhone !== (currentFormal?.issuerPhone ?? "");
+  const hasRecipientContactNameUpdate =
+    input.recipientContactName !== undefined &&
+    input.recipientContactName !== (currentFormal?.recipientContactName ?? "");
+  const hasRecipientEmailUpdate =
+    input.recipientEmail !== undefined &&
+    input.recipientEmail !== (currentFormal?.recipientEmail ?? "");
+  const hasRecipientContactTitleUpdate =
+    input.recipientContactTitle !== undefined &&
+    input.recipientContactTitle !== (currentFormal?.recipientContactTitle ?? "");
+  const normalizedCurrentItems = current.items.map((item) => ({
+    componentType: item.componentType,
+    costUnit: item.costUnit,
+    description: item.description,
+    itemNumber: item.itemNumber,
+    origin: item.origin,
+    priceUnit: item.priceUnit,
+    quantity: item.quantity,
+    sku: item.sku,
+    status: item.status,
+  }));
+  const normalizedInputItems = input.items?.map((item) => ({
+    componentType: item.componentType,
+    costUnit: item.costUnit,
+    description: item.description,
+    itemNumber: item.itemNumber,
+    origin: item.origin,
+    priceUnit: item.priceUnit,
+    quantity: item.quantity,
+    sku: item.sku,
+    status: item.status,
+  }));
+  const hasItemsUpdate =
+    input.items !== undefined &&
+    JSON.stringify(normalizedInputItems) !== JSON.stringify(normalizedCurrentItems);
   const hasContentUpdate =
     hasTermsUpdate ||
     hasSubjectUpdate ||
@@ -1089,7 +1133,7 @@ export async function updateProposalWorkflowByTenant(
   const allowApprovedTermsUpdate = hasTermsUpdate && !hasNonTermsContentUpdate;
 
   const policy = await getMarginPolicyByTenant(tenantId);
-  const candidateItems = input.items ?? current.items;
+  const candidateItems = hasItemsUpdate && input.items ? input.items : current.items;
   const marginEvaluation = evaluateProposalLiberation(policy, candidateItems);
 
   assertProposalWorkflowGuard({
