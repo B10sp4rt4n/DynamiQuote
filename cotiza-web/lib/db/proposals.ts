@@ -471,6 +471,51 @@ async function resolvePreferredIssuerLogoAssetByTenant(tenantId: string): Promis
   return raster ?? candidates[0] ?? null;
 }
 
+async function resolvePreferredClientLogoAssetByTenant(tenantId: string): Promise<{
+  logo_data: Uint8Array;
+  logo_format: string;
+} | null> {
+  const isSvg = (format: string | null | undefined): boolean => {
+    const normalized = (format ?? "").trim().toLowerCase();
+    return normalized === "svg" || normalized === "svg+xml";
+  };
+
+  const pickBest = async (tenantScope: string | null): Promise<{ logo_data: Uint8Array; logo_format: string } | null> => {
+    const rows = await prisma.company_logos.findMany({
+      orderBy: [{ uploaded_at: "desc" }],
+      select: {
+        logo_data: true,
+        logo_format: true,
+      },
+      take: 20,
+      where: {
+        logo_type: "client",
+        tenant_id: tenantScope,
+      },
+    });
+
+    const withBytes = rows.filter((row) => row.logo_data?.length > 0);
+    if (withBytes.length === 0) return null;
+
+    const raster = withBytes.find((row) => !isSvg(row.logo_format));
+    const selected = raster ?? withBytes[0];
+
+    return selected
+      ? {
+          logo_data: selected.logo_data,
+          logo_format: selected.logo_format,
+        }
+      : null;
+  };
+
+  const tenantDefault = await pickBest(tenantId);
+  if (tenantDefault) {
+    return tenantDefault;
+  }
+
+  return pickBest(null);
+}
+
 function resolveApproverRole(actor: {
   isSuperAdmin: boolean;
   userRole: "superadmin" | "owner" | "admin" | "user";
@@ -879,13 +924,32 @@ export async function getProposalWorkflowByTenant(
   const [issuerLogo, clientLogo] = includeLogoData
     ? await Promise.all([
         latestFormal?.issuer_logo_id
-          ? prisma.company_logos.findFirst({
-              select: { logo_data: true, logo_format: true },
-              where: {
-                logo_id: latestFormal.issuer_logo_id,
-                tenant_id: tenantId,
-              },
-            })
+          ? (async () => {
+              const issuerLogoId = latestFormal.issuer_logo_id;
+              if (!issuerLogoId) {
+                return null;
+              }
+
+              const tenantLogo = await prisma.company_logos.findFirst({
+                select: { logo_data: true, logo_format: true },
+                where: {
+                  logo_id: issuerLogoId,
+                  tenant_id: tenantId,
+                },
+              });
+
+              if (tenantLogo?.logo_data?.length) {
+                return tenantLogo;
+              }
+
+              return prisma.company_logos.findFirst({
+                select: { logo_data: true, logo_format: true },
+                where: {
+                  logo_id: issuerLogoId,
+                  tenant_id: null,
+                },
+              });
+            })()
           : resolvePreferredIssuerLogoAssetByTenant(tenantId),
         latestFormal?.client_logo_id
           ? (async () => {
@@ -914,7 +978,7 @@ export async function getProposalWorkflowByTenant(
                 },
               });
             })()
-          : Promise.resolve(null),
+          : resolvePreferredClientLogoAssetByTenant(tenantId),
       ])
     : [null, null];
   const resolvedSalesOwner = await resolveUserDisplayNameByTenant(tenantId, row.created_by);
