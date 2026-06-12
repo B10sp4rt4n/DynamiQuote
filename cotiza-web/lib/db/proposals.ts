@@ -1075,12 +1075,24 @@ export async function updateProposalWorkflowByTenant(
     hasRecipientEmailUpdate ||
     hasRecipientContactTitleUpdate ||
     hasItemsUpdate;
+  const hasNonTermsContentUpdate =
+    hasSubjectUpdate ||
+    hasRecipientUpdate ||
+    hasIssuerCompanyUpdate ||
+    hasIssuerEmailUpdate ||
+    hasIssuerPhoneUpdate ||
+    hasRecipientContactNameUpdate ||
+    hasRecipientEmailUpdate ||
+    hasRecipientContactTitleUpdate ||
+    hasItemsUpdate;
+  const allowApprovedTermsUpdate = hasTermsUpdate && !hasNonTermsContentUpdate;
 
   const policy = await getMarginPolicyByTenant(tenantId);
   const candidateItems = input.items ?? current.items;
   const marginEvaluation = evaluateProposalLiberation(policy, candidateItems);
 
   assertProposalWorkflowGuard({
+    allowApprovedTermsUpdate,
     currentStatus,
     hasContentUpdate,
     marginCanAuthorizeFinal: marginEvaluation.canAuthorizeFinal,

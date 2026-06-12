@@ -16,6 +16,7 @@ const allowedTransitions: Record<ProposalStatus, ProposalStatus[]> = {
 };
 
 export type ProposalWorkflowGuardInput = {
+  allowApprovedTermsUpdate: boolean;
   currentStatus: ProposalStatus;
   hasContentUpdate: boolean;
   marginCanAuthorizeFinal: boolean;
@@ -28,7 +29,12 @@ export function canTransitionProposalStatus(current: ProposalStatus, next: Propo
 
 export function assertProposalWorkflowGuard(input: ProposalWorkflowGuardInput): void {
   // Bloquear edición de contenido en propuesta aprobada sin cambiar estado
-  if (input.currentStatus === "approved" && input.nextStatus === "approved" && input.hasContentUpdate) {
+  if (
+    input.currentStatus === "approved" &&
+    input.nextStatus === "approved" &&
+    input.hasContentUpdate &&
+    !input.allowApprovedTermsUpdate
+  ) {
     throw new Error("La propuesta ya esta autorizada");
   }
 

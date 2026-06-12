@@ -12,6 +12,7 @@ describe("proposal-workflow-guard", () => {
   it("bloquea editar propuesta aprobada sin reabrir estado", () => {
     expect(() =>
       assertProposalWorkflowGuard({
+        allowApprovedTermsUpdate: false,
         currentStatus: "approved",
         hasContentUpdate: true,
         marginCanAuthorizeFinal: true,
@@ -26,6 +27,7 @@ describe("proposal-workflow-guard", () => {
 
     expect(() =>
       assertProposalWorkflowGuard({
+        allowApprovedTermsUpdate: false,
         currentStatus: "draft",
         hasContentUpdate: false,
         marginCanAuthorizeFinal: true,
@@ -39,6 +41,7 @@ describe("proposal-workflow-guard", () => {
 
     expect(() =>
       assertProposalWorkflowGuard({
+        allowApprovedTermsUpdate: false,
         currentStatus: "draft",
         hasContentUpdate: false,
         marginCanAuthorizeFinal: false,
@@ -59,6 +62,7 @@ describe("proposal-workflow-guard", () => {
     // El guard de margen protege: si margen NO permite, sigue bloqueando
     expect(() =>
       assertProposalWorkflowGuard({
+        allowApprovedTermsUpdate: false,
         currentStatus: "draft",
         hasContentUpdate: false,
         marginCanAuthorizeFinal: false,
@@ -69,6 +73,7 @@ describe("proposal-workflow-guard", () => {
     // Si margen SI permite, la transicion es valida
     expect(() =>
       assertProposalWorkflowGuard({
+        allowApprovedTermsUpdate: false,
         currentStatus: "draft",
         hasContentUpdate: false,
         marginCanAuthorizeFinal: true,
@@ -80,6 +85,7 @@ describe("proposal-workflow-guard", () => {
   it("bloquea autorizacion final cuando margen no autoriza", () => {
     expect(() =>
       assertProposalWorkflowGuard({
+        allowApprovedTermsUpdate: false,
         currentStatus: "in_review",
         hasContentUpdate: false,
         marginCanAuthorizeFinal: false,
@@ -92,6 +98,18 @@ describe("proposal-workflow-guard", () => {
     expect(shouldClearProposalApprovals(true, 2)).toBe(true);
     expect(shouldClearProposalApprovals(true, 0)).toBe(false);
     expect(shouldClearProposalApprovals(false, 3)).toBe(false);
+  });
+
+  it("permite editar terminos en propuesta aprobada sin reabrir estado", () => {
+    expect(() =>
+      assertProposalWorkflowGuard({
+        allowApprovedTermsUpdate: true,
+        currentStatus: "approved",
+        hasContentUpdate: true,
+        marginCanAuthorizeFinal: true,
+        nextStatus: "approved",
+      }),
+    ).not.toThrow();
   });
 
   it("valida elegibilidad del actor aprobador", () => {
