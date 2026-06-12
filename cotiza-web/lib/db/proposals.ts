@@ -1053,6 +1053,7 @@ export async function updateProposalWorkflowByTenant(
 
   const currentStatus = current.status;
   const nextStatus = input.status ?? currentStatus;
+  const hasStatusUpdate = nextStatus !== currentStatus;
   const hasTermsUpdate = input.termsAndConditions !== undefined;
   const hasSubjectUpdate = input.subject !== undefined;
   const hasRecipientUpdate = input.recipientCompany !== undefined;
@@ -1103,7 +1104,7 @@ export async function updateProposalWorkflowByTenant(
     await clearProposalApprovalsByTenant(tenantId, proposalId);
   }
 
-  if (nextStatus === "approved") {
+  if (hasStatusUpdate && nextStatus === "approved") {
     const actorUserId = actor?.userId ?? null;
     const approverRole = resolveApproverRole(
       actor ?? {
@@ -1175,8 +1176,6 @@ export async function updateProposalWorkflowByTenant(
     const recipientEmailToPersist = input.recipientEmail;
     const recipientContactTitleToPersist = input.recipientContactTitle;
     const itemsToPersist = input.items;
-    const hasStatusUpdate = nextStatus !== currentStatus;
-
     if (
       !hasTermsUpdate &&
       !hasStatusUpdate &&

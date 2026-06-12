@@ -45,7 +45,12 @@ export function assertProposalWorkflowGuard(input: ProposalWorkflowGuardInput): 
   // El guard de margen NO aplica cuando la propuesta ya fue enviada al cliente (estado "sent").
   // En ese escenario, "aprobada" registra la aceptación del cliente; la propuesta ya pasó
   // validación de margen cuando fue aprobada internamente antes de enviarse.
-  if (input.nextStatus === "approved" && !input.marginCanAuthorizeFinal && input.currentStatus !== "sent") {
+  if (
+    input.nextStatus === "approved" &&
+    input.currentStatus !== "approved" &&
+    !input.marginCanAuthorizeFinal &&
+    input.currentStatus !== "sent"
+  ) {
     throw new Error("La politica de margen bloquea la autorizacion final de esta propuesta.");
   }
 }

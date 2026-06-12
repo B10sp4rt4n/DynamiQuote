@@ -112,6 +112,18 @@ describe("proposal-workflow-guard", () => {
     ).not.toThrow();
   });
 
+  it("permite editar terminos en aprobada aunque el margen actual no autorice", () => {
+    expect(() =>
+      assertProposalWorkflowGuard({
+        allowApprovedTermsUpdate: true,
+        currentStatus: "approved",
+        hasContentUpdate: true,
+        marginCanAuthorizeFinal: false,
+        nextStatus: "approved",
+      }),
+    ).not.toThrow();
+  });
+
   it("valida elegibilidad del actor aprobador", () => {
     expect(() =>
       assertApprovalActorEligibility({
