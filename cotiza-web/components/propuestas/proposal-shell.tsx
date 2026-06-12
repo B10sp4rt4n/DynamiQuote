@@ -634,6 +634,7 @@ export function ProposalShell({ proposals, tenantName }: ProposalShellProps) {
     setSaveStatus("saving");
     setErrorMessage(null);
 
+    const currentFormal = selectedProposal.formal;
     const normalizedItems = proposalItems.map((item, index) => ({
       ...item,
       itemNumber: index + 1,
@@ -652,9 +653,9 @@ export function ProposalShell({ proposals, tenantName }: ProposalShellProps) {
     const hasItemsChanges = JSON.stringify(normalizedItems) !== JSON.stringify(baselineItems);
 
     const payload: {
-      issuerCompany: string;
-      issuerEmail: string;
-      issuerPhone: string;
+      issuerCompany?: string;
+      issuerEmail?: string;
+      issuerPhone?: string;
       items?: Array<{
         componentType: string;
         costUnit: number;
@@ -666,28 +667,54 @@ export function ProposalShell({ proposals, tenantName }: ProposalShellProps) {
         sku: string;
         status: string;
       }>;
-      recipientCompany: string;
-      recipientContactName: string;
-      recipientContactTitle: string;
-      recipientEmail: string;
-      status: ProposalStatus;
-      subject: string;
-      termsAndConditions: string;
-    } = {
-      issuerCompany,
-      issuerEmail,
-      issuerPhone,
-      recipientCompany,
-      recipientContactName,
-      recipientContactTitle,
-      recipientEmail,
-      status: statusToSend,
-      subject,
-      termsAndConditions,
-    };
+      recipientCompany?: string;
+      recipientContactName?: string;
+      recipientContactTitle?: string;
+      recipientEmail?: string;
+      status?: ProposalStatus;
+      subject?: string;
+      termsAndConditions?: string;
+    } = {};
+
+    if (issuerCompany !== (currentFormal?.issuerCompany ?? "")) {
+      payload.issuerCompany = issuerCompany;
+    }
+    if (issuerEmail !== (currentFormal?.issuerEmail ?? "")) {
+      payload.issuerEmail = issuerEmail;
+    }
+    if (issuerPhone !== (currentFormal?.issuerPhone ?? "")) {
+      payload.issuerPhone = issuerPhone;
+    }
+    if (recipientCompany !== (currentFormal?.recipientCompany ?? "")) {
+      payload.recipientCompany = recipientCompany;
+    }
+    if (recipientContactName !== (currentFormal?.recipientContactName ?? "")) {
+      payload.recipientContactName = recipientContactName;
+    }
+    if (recipientContactTitle !== (currentFormal?.recipientContactTitle ?? "")) {
+      payload.recipientContactTitle = recipientContactTitle;
+    }
+    if (recipientEmail !== (currentFormal?.recipientEmail ?? "")) {
+      payload.recipientEmail = recipientEmail;
+    }
+    if (subject !== (currentFormal?.subject ?? "")) {
+      payload.subject = subject;
+    }
+    if (termsAndConditions !== (currentFormal?.termsAndConditions ?? "")) {
+      payload.termsAndConditions = termsAndConditions;
+    }
+
+    if (statusToSend !== selectedProposal.status) {
+      payload.status = statusToSend;
+    }
 
     if (hasItemsChanges) {
       payload.items = normalizedItems;
+    }
+
+    if (Object.keys(payload).length === 0) {
+      setSaveStatus("success");
+      return true;
     }
 
     try {
