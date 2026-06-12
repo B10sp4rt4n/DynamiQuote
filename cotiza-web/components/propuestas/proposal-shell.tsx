@@ -198,6 +198,19 @@ export function ProposalShell({ proposals, tenantName }: ProposalShellProps) {
       status: string;
     }>
   >([]);
+  const [baselineProposalItems, setBaselineProposalItems] = useState<
+    Array<{
+      componentType: string;
+      costUnit: number;
+      description: string;
+      itemNumber: number;
+      origin: string;
+      priceUnit: number;
+      quantity: number;
+      sku: string;
+      status: string;
+    }>
+  >([]);
   const [loadingDetail, setLoadingDetail] = useState(false);
   const [saveStatus, setSaveStatus] = useState<"idle" | "saving" | "success" | "error">("idle");
   const [errorMessage, setErrorMessage] = useState<string | null>(null);
@@ -486,6 +499,12 @@ export function ProposalShell({ proposals, tenantName }: ProposalShellProps) {
           itemNumber: index + 1,
         })),
       );
+      setBaselineProposalItems(
+        data.proposal.items.map((row, index) => ({
+          ...row,
+          itemNumber: index + 1,
+        })),
+      );
 
       setItems((current) =>
         current.map((item) =>
@@ -498,6 +517,19 @@ export function ProposalShell({ proposals, tenantName }: ProposalShellProps) {
                       issuerCompany: data.proposal?.formal?.issuerCompany ?? item.formal.issuerCompany,
                       issuerContactName:
                         data.proposal?.formal?.issuerContactName ?? item.formal.issuerContactName,
+                      issuerEmail: data.proposal?.formal?.issuerEmail ?? item.formal.issuerEmail,
+                      issuerPhone: data.proposal?.formal?.issuerPhone ?? item.formal.issuerPhone,
+                      recipientCompany:
+                        data.proposal?.formal?.recipientCompany ?? item.formal.recipientCompany,
+                      recipientContactName:
+                        data.proposal?.formal?.recipientContactName ?? item.formal.recipientContactName,
+                      recipientContactTitle:
+                        data.proposal?.formal?.recipientContactTitle ?? item.formal.recipientContactTitle,
+                      recipientEmail:
+                        data.proposal?.formal?.recipientEmail ?? item.formal.recipientEmail,
+                      subject: data.proposal?.formal?.subject ?? item.formal.subject,
+                      termsAndConditions:
+                        data.proposal?.formal?.termsAndConditions ?? item.formal.termsAndConditions,
                     }
                   : item.formal,
                 status: data.proposal?.status ?? item.status,
@@ -602,24 +634,65 @@ export function ProposalShell({ proposals, tenantName }: ProposalShellProps) {
     setSaveStatus("saving");
     setErrorMessage(null);
 
+    const normalizedItems = proposalItems.map((item, index) => ({
+      ...item,
+      itemNumber: index + 1,
+    }));
+    const baselineItems = baselineProposalItems.map((item, index) => ({
+      componentType: item.componentType,
+      costUnit: item.costUnit,
+      description: item.description,
+      itemNumber: index + 1,
+      origin: item.origin,
+      priceUnit: item.priceUnit,
+      quantity: item.quantity,
+      sku: item.sku,
+      status: item.status,
+    }));
+    const hasItemsChanges = JSON.stringify(normalizedItems) !== JSON.stringify(baselineItems);
+
+    const payload: {
+      issuerCompany: string;
+      issuerEmail: string;
+      issuerPhone: string;
+      items?: Array<{
+        componentType: string;
+        costUnit: number;
+        description: string;
+        itemNumber: number;
+        origin: string;
+        priceUnit: number;
+        quantity: number;
+        sku: string;
+        status: string;
+      }>;
+      recipientCompany: string;
+      recipientContactName: string;
+      recipientContactTitle: string;
+      recipientEmail: string;
+      status: ProposalStatus;
+      subject: string;
+      termsAndConditions: string;
+    } = {
+      issuerCompany,
+      issuerEmail,
+      issuerPhone,
+      recipientCompany,
+      recipientContactName,
+      recipientContactTitle,
+      recipientEmail,
+      status: statusToSend,
+      subject,
+      termsAndConditions,
+    };
+
+    if (hasItemsChanges) {
+      payload.items = normalizedItems;
+    }
+
     try {
       const response = await fetch(`/api/proposals/${selectedProposal.proposalId}`, {
-        body: JSON.stringify({
-          issuerCompany,
-          issuerEmail,
-          issuerPhone,
-          items: proposalItems.map((item, index) => ({
-            ...item,
-            itemNumber: index + 1,
-          })),
-          recipientCompany,
-          recipientContactName,
-          recipientContactTitle,
-          recipientEmail,
-          status: statusToSend,
-          subject,
-          termsAndConditions,
-        }),
+        body: JSON.stringify(payload),
         headers: {
           "Content-Type": "application/json",
         },
@@ -672,8 +745,8 @@ export function ProposalShell({ proposals, tenantName }: ProposalShellProps) {
                 formal: item.formal
                   ? {
                       ...item.formal,
-                    recipientCompany:
-                      data.proposal?.formal?.recipientCompany ?? item.formal.recipientCompany,
+                      recipientCompany:
+                        data.proposal?.formal?.recipientCompany ?? item.formal.recipientCompany,
                     recipientContactName:
                       data.proposal?.formal?.recipientContactName ??
                       item.formal.recipientContactName,
@@ -691,7 +764,7 @@ export function ProposalShell({ proposals, tenantName }: ProposalShellProps) {
                     issuerPhone:
                       data.proposal?.formal?.issuerPhone ?? item.formal.issuerPhone,
                     subject: data.proposal?.formal?.subject ?? item.formal.subject,
-                      termsAndConditions:
+                    termsAndConditions:
                       data.proposal?.formal?.termsAndConditions ?? item.formal.termsAndConditions,
                   }
                   : item.formal,
@@ -708,12 +781,19 @@ export function ProposalShell({ proposals, tenantName }: ProposalShellProps) {
           itemNumber: index + 1,
         })),
       );
+      setBaselineProposalItems(
+        (data.proposal.items ?? []).map((row, index) => ({
+          ...row,
+          itemNumber: index + 1,
+        })),
+      );
       setApprovals(data.proposal.approvals ?? []);
       setApprovalGate(data.proposal.approvalGate ?? null);
 
       // Sincronizar el dropdown con el estado real confirmado por la API
       // (la API puede ajustar el estado si el workflow lo requiere).
       setSelectedStatus(data.proposal.status);
+      setTermsAndConditions(data.proposal.formal?.termsAndConditions ?? termsAndConditions);
       if (data.proposal.status === "approved") {
         setEmailStatus("idle");
         setEmailMessage(null);
