@@ -210,6 +210,34 @@ const styles = StyleSheet.create({
   rowText: {
     fontSize: 7.6,
   },
+  traceWrap: {
+    marginTop: 10,
+    width: "100%",
+  },
+  traceLine: {
+    borderBottomColor: "#e5e7eb",
+    borderBottomStyle: "solid",
+    borderBottomWidth: 1,
+    flexDirection: "row",
+    paddingVertical: 3,
+  },
+  traceLineStrong: {
+    borderBottomColor: "#1f2937",
+    borderBottomStyle: "solid",
+    borderBottomWidth: 1,
+    flexDirection: "row",
+    paddingVertical: 4,
+  },
+  traceLabel: {
+    fontSize: 7.6,
+    minWidth: 110,
+    width: 110,
+  },
+  traceValue: {
+    flex: 1,
+    fontSize: 7.6,
+    textAlign: "right",
+  },
   totalsWrap: {
     alignSelf: "flex-end",
     marginTop: 8,
@@ -467,46 +495,48 @@ export function ProposalPdfDocument({ proposal, tenantName }: ProposalPdfInput) 
         <Text style={styles.narrativeText}>
           Esta propuesta fue preparada por {formal?.issuerCompany || tenantName} para {formal?.recipientCompany || "cliente sin definir"}. El contenido, precios y condiciones tienen vigencia segun lo indicado en la seccion de condiciones comerciales. Cualquier modificacion posterior a la fecha de emision debera formalizarse por escrito entre las partes.
         </Text>
-        <View style={styles.totalsWrap}>
-          <View style={styles.totalLine}>
-            <Text style={styles.rowText}>Propuesta:</Text>
-            <Text style={styles.rowText}>{formal?.proposalNumber ?? proposal.proposalId}</Text>
+        <View style={styles.traceWrap}>
+          <View style={styles.traceLine}>
+            <Text style={styles.traceLabel}>Propuesta:</Text>
+            <Text style={styles.traceValue}>{formal?.proposalNumber ?? proposal.proposalId}</Text>
           </View>
-          <View style={styles.totalLine}>
-            <Text style={styles.rowText}>Cotizacion origen:</Text>
-            <Text style={styles.rowText}>{proposal.origin ?? "N/D"}</Text>
+          <View style={styles.traceLine}>
+            <Text style={styles.traceLabel}>Cotizacion origen:</Text>
+            <Text style={styles.traceValue}>{proposal.origin ?? "N/D"}</Text>
           </View>
-          <View style={styles.totalLine}>
-            <Text style={styles.rowText}>Fecha de emision:</Text>
-            <Text style={styles.rowText}>{formatDate(formal?.issuedDate)}</Text>
+          <View style={styles.traceLine}>
+            <Text style={styles.traceLabel}>Fecha de emision:</Text>
+            <Text style={styles.traceValue}>{formatDate(formal?.issuedDate)}</Text>
           </View>
-          <View style={styles.totalLine}>
-            <Text style={styles.rowText}>Vendedor responsable:</Text>
-            <Text style={styles.rowText}>{formal?.issuerContactName || proposal.salesOwner || "Sin asignar"}</Text>
+          <View style={styles.traceLine}>
+            <Text style={styles.traceLabel}>Vendedor responsable:</Text>
+            <Text style={styles.traceValue}>{formal?.issuerContactName || proposal.salesOwner || "Sin asignar"}</Text>
           </View>
-          <View style={styles.totalLine}>
-            <Text style={styles.rowText}>Emisor:</Text>
-            <Text style={styles.rowText}>{formal?.issuerCompany || tenantName}</Text>
+          <View style={styles.traceLine}>
+            <Text style={styles.traceLabel}>Emisor:</Text>
+            <Text style={styles.traceValue}>{formal?.issuerCompany || tenantName}</Text>
           </View>
-          <View style={styles.totalLine}>
-            <Text style={styles.rowText}>Cliente:</Text>
-            <Text style={styles.rowText}>{formal?.recipientCompany || "Sin definir"}</Text>
+          <View style={styles.traceLine}>
+            <Text style={styles.traceLabel}>Cliente:</Text>
+            <Text style={styles.traceValue}>{formal?.recipientCompany || "Sin definir"}</Text>
           </View>
-          <View style={styles.totalLine}>
-            <Text style={styles.rowText}>Contacto receptor:</Text>
-            <Text style={styles.rowText}>{formal?.recipientContactName || "N/D"} {formal?.recipientContactTitle ? `· ${formal.recipientContactTitle}` : ""}</Text>
+          <View style={styles.traceLine}>
+            <Text style={styles.traceLabel}>Contacto receptor:</Text>
+            <Text style={styles.traceValue}>
+              {formal?.recipientContactName || "N/D"}{formal?.recipientContactTitle ? `\n${formal.recipientContactTitle}` : ""}
+            </Text>
           </View>
-          <View style={styles.totalLine}>
-            <Text style={styles.rowText}>Partidas incluidas:</Text>
-            <Text style={styles.rowText}>{lines.length}</Text>
+          <View style={styles.traceLine}>
+            <Text style={styles.traceLabel}>Partidas incluidas:</Text>
+            <Text style={styles.traceValue}>{lines.length}</Text>
           </View>
-          <View style={styles.totalLine}>
-            <Text style={styles.rowText}>Subtotal sin IVA:</Text>
-            <Text style={styles.rowText}>{formatCurrency(totalRevenue)}</Text>
+          <View style={styles.traceLine}>
+            <Text style={styles.traceLabel}>Subtotal sin IVA:</Text>
+            <Text style={styles.traceValue}>{formatCurrency(totalRevenue)}</Text>
           </View>
-          <View style={styles.totalLineStrong}>
-            <Text style={styles.rowText}>Total con IVA (16%):</Text>
-            <Text style={styles.rowText}>{formatCurrency(grandTotal)}</Text>
+          <View style={styles.traceLineStrong}>
+            <Text style={styles.traceLabel}>Total con IVA (16%):</Text>
+            <Text style={styles.traceValue}>{formatCurrency(grandTotal)}</Text>
           </View>
         </View>
         <Text style={styles.narrativeText}>
