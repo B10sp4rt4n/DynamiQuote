@@ -82,6 +82,31 @@ function buildHumanName(firstName: string | null | undefined, lastName: string |
   return fullName.length > 0 ? fullName : null;
 }
 
+function normalizeComparableText(value: string | null | undefined): string {
+  return (value ?? "")
+    .normalize("NFD")
+    .replace(/[\u0300-\u036f]/g, "")
+    .toLowerCase()
+    .replace(/\s+/g, " ")
+    .trim();
+}
+
+function shouldRecomposeRecipientContactName(
+  formalName: string,
+  formalTitle: string,
+  catalogName: string,
+): boolean {
+  if (!formalName || !formalTitle || !catalogName) {
+    return false;
+  }
+
+  const normalizedCombined = normalizeComparableText(`${formalName} ${formalTitle}`);
+  const normalizedCatalogName = normalizeComparableText(catalogName);
+  const isFormalNameSingleToken = formalName.trim().split(/\s+/).length === 1;
+
+  return isFormalNameSingleToken && normalizedCombined === normalizedCatalogName;
+}
+
 async function resolveUserDisplayNameByTenant(
   tenantId: string,
   raw: string | null | undefined,
@@ -171,6 +196,57 @@ async function resolveUserDisplayNameByTenant(
 async function getTenantDefaultIssuerName(tenantId: string): Promise<string> {
   const preferred = await resolveUserDisplayNameByTenant(tenantId, null);
   return preferred ?? "Usuario del tenant";
+}
+
+async function resolveIssuerEmailByTenant(
+  tenantId: string,
+  raw: string | null | undefined,
+): Promise<string | null> {
+  const candidate = raw?.trim() ?? null;
+
+  if (candidate) {
+    const byUserId = await prisma.app_users.findFirst({
+      select: { email: true },
+      where: {
+        tenant_id: tenantId,
+        user_id: candidate,
+      },
+    });
+
+    if (byUserId?.email?.trim()) {
+      return byUserId.email.trim();
+    }
+
+    const byAlias = await prisma.app_users.findFirst({
+      select: { email: true },
+      where: {
+        tenant_id: tenantId,
+        alias: candidate,
+      },
+    });
+
+    if (byAlias?.email?.trim()) {
+      return byAlias.email.trim();
+    }
+  }
+
+  const ownerOrAdmin = await prisma.app_users.findFirst({
+    orderBy: [{ created_at: "asc" }],
+    select: { email: true },
+    where: {
+      active: true,
+      role: {
+        in: ["owner", "admin"],
+      },
+      tenant_id: tenantId,
+    },
+  });
+
+  if (ownerOrAdmin?.email?.trim()) {
+    return ownerOrAdmin.email.trim();
+  }
+
+  return null;
 }
 
 async function resolveActorNameForTenant(
@@ -920,6 +996,30 @@ export async function getProposalWorkflowByTenant(
   }
 
   const latestFormal = row.formal_proposals[0];
+  const linkedQuoteId = latestFormal?.quote_id ?? row.origin;
+
+  const catalogClientContact = linkedQuoteId
+    ? await prisma.quote.findFirst({
+        select: {
+          client: {
+            select: {
+              contact_email: true,
+              contact_name: true,
+              contact_title: true,
+            },
+          },
+        },
+        where: {
+          quote_id: linkedQuoteId,
+          tenantId,
+        },
+      })
+    : null;
+
+  const catalogContactName = catalogClientContact?.client?.contact_name?.trim() ?? "";
+  const catalogContactTitle = catalogClientContact?.client?.contact_title?.trim() ?? "";
+  const catalogContactEmail = catalogClientContact?.client?.contact_email?.trim() ?? "";
+
   const includeLogoData = options?.includeLogoData === true;
   const [issuerLogo, clientLogo] = includeLogoData
     ? await Promise.all([
@@ -989,6 +1089,37 @@ export async function getProposalWorkflowByTenant(
         issuer_logo_data_url: toLogoDataUrl(issuerLogo?.logo_data, issuerLogo?.logo_format),
       })
     : null;
+  const formalContactName = normalizedFormal?.recipientContactName?.trim() ?? "";
+  const formalContactTitle = normalizedFormal?.recipientContactTitle?.trim() ?? "";
+  const formalContactEmail = normalizedFormal?.recipientEmail?.trim() ?? "";
+
+  const useCatalogContactName = formalContactName.length === 0 && catalogContactName.length > 0;
+  const useCatalogContactTitle = formalContactTitle.length === 0 && catalogContactTitle.length > 0;
+  const useCatalogContactEmail = formalContactEmail.length === 0 && catalogContactEmail.length > 0;
+  const recomposeFromCatalog = shouldRecomposeRecipientContactName(
+    formalContactName,
+    formalContactTitle,
+    catalogContactName,
+  );
+
+  const enrichedFormal = normalizedFormal
+    ? {
+        ...normalizedFormal,
+        recipientContactName:
+          recomposeFromCatalog
+            ? catalogContactName
+            : (useCatalogContactName ? catalogContactName : normalizedFormal.recipientContactName),
+        recipientContactTitle:
+          recomposeFromCatalog
+            ? (catalogContactTitle || normalizedFormal.recipientContactTitle)
+            : (useCatalogContactTitle ? catalogContactTitle : normalizedFormal.recipientContactTitle),
+        recipientEmail: useCatalogContactEmail ? catalogContactEmail : normalizedFormal.recipientEmail,
+      }
+    : null;
+  const resolvedIssuerEmail =
+    (enrichedFormal?.issuerEmail?.trim() ?? "").length > 0
+      ? enrichedFormal?.issuerEmail ?? ""
+      : (await resolveIssuerEmailByTenant(tenantId, latestFormal?.issuer_contact_name ?? row.created_by)) ?? "";
   const marginPolicy = await getMarginPolicyByTenant(tenantId);
   const proposalItems = row.proposal_items.map((item) => ({
     componentType: item.component_type ?? "",
@@ -1020,9 +1151,10 @@ export async function getProposalWorkflowByTenant(
   return {
     approvalGate,
     approvals,
-    formal: normalizedFormal
+    formal: enrichedFormal
       ? {
-          ...normalizedFormal,
+          ...enrichedFormal,
+        issuerEmail: resolvedIssuerEmail,
           issuerContactName: resolvedIssuerContact,
         }
       : null,

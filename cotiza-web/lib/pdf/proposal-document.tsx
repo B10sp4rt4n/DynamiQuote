@@ -350,6 +350,39 @@ function buildTermsList(terms: string): string[] {
       ];
 }
 
+function normalizeTextValue(value: string | null | undefined): string {
+  return value?.trim() ?? "";
+}
+
+function formatRecipientIdentity(formal: ProposalWorkflowDetail["formal"]): {
+  displayName: string;
+  displayTitle: string;
+} {
+  const rawName = normalizeTextValue(formal?.recipientContactName);
+  const rawTitle = normalizeTextValue(formal?.recipientContactTitle);
+
+  if (!rawName && !rawTitle) {
+    return {
+      displayName: "Contacto por definir",
+      displayTitle: "Cargo no definido",
+    };
+  }
+
+  const titleLooksLikeRole = /(director|gerente|jefe|subdirector|coordinador|lider|lead|manager|ingenier|administrador|owner|responsable)/i.test(rawTitle);
+
+  if (rawName && rawTitle && !titleLooksLikeRole && rawName.split(/\s+/).length === 1) {
+    return {
+      displayName: `${rawName} ${rawTitle}`.trim(),
+      displayTitle: "Cargo no definido",
+    };
+  }
+
+  return {
+    displayName: rawName || "Contacto por definir",
+    displayTitle: rawTitle || "Cargo no definido",
+  };
+}
+
 type ProposalPdfInput = {
   proposal: ProposalWorkflowDetail;
   tenantName: string;
@@ -357,6 +390,10 @@ type ProposalPdfInput = {
 
 export function ProposalPdfDocument({ proposal, tenantName }: ProposalPdfInput) {
   const formal = proposal.formal;
+  const recipientIdentity = formatRecipientIdentity(formal);
+  const issuerPhoneDisplay = normalizeTextValue(formal?.issuerPhone) || "Telefono no disponible";
+  const issuerEmailDisplay = normalizeTextValue(formal?.issuerEmail) || "correo no disponible";
+  const recipientEmailDisplay = normalizeTextValue(formal?.recipientEmail) || "correo no disponible";
   const lines = proposal.items ?? [];
   const totalCost = lines.reduce((sum, item) => sum + item.subtotalCost, 0);
   const totalRevenue = lines.reduce((sum, item) => sum + item.subtotalPrice, 0);
@@ -398,14 +435,14 @@ export function ProposalPdfDocument({ proposal, tenantName }: ProposalPdfInput) 
           <View style={styles.metadataCol}>
             <Text style={styles.companyName}>{formal?.issuerCompany || tenantName}</Text>
             <Text style={styles.micro}>{formal?.issuerContactName || proposal.salesOwner || "Sin vendedor"}</Text>
-            <Text style={styles.micro}>{formal?.issuerPhone || "Telefono no disponible"}</Text>
-            <Text style={styles.micro}>{formal?.issuerEmail || "correo no disponible"}</Text>
+            <Text style={styles.micro}>{issuerPhoneDisplay}</Text>
+            <Text style={styles.micro}>{issuerEmailDisplay}</Text>
           </View>
           <View style={styles.metadataColLast}>
             <Text style={styles.companyName}>{formal?.recipientCompany || "Cliente sin definir"}</Text>
-            <Text style={styles.micro}>{formal?.recipientContactName || "Contacto por definir"}</Text>
-            <Text style={styles.micro}>{formal?.recipientContactTitle || "Cargo no definido"}</Text>
-            <Text style={styles.micro}>{formal?.recipientEmail || "correo no disponible"}</Text>
+            <Text style={styles.micro}>{recipientIdentity.displayName}</Text>
+            <Text style={styles.micro}>{recipientIdentity.displayTitle}</Text>
+            <Text style={styles.micro}>{recipientEmailDisplay}</Text>
           </View>
         </View>
 
@@ -419,7 +456,7 @@ export function ProposalPdfDocument({ proposal, tenantName }: ProposalPdfInput) 
         </View>
 
         <Text style={styles.narrativeText}>
-          {formal?.recipientContactName || "Cliente"}: Adjuntamos la propuesta comercial para {formal?.recipientCompany || "su negocio"}. A continuación encontrará el detalle de partidas, precios y condiciones de negociación.
+          {recipientIdentity.displayName || "Cliente"}: Adjuntamos la propuesta comercial para {formal?.recipientCompany || "su negocio"}. A continuación encontrará el detalle de partidas, precios y condiciones de negociación.
         </Text>
 
         <Text style={styles.sectionHeader}>Detalle de la propuesta</Text>
@@ -523,7 +560,7 @@ export function ProposalPdfDocument({ proposal, tenantName }: ProposalPdfInput) 
           <View style={styles.traceLine}>
             <Text style={styles.traceLabel}>Contacto receptor:</Text>
             <Text style={styles.traceValue}>
-              {formal?.recipientContactName || "N/D"}{formal?.recipientContactTitle ? `\n${formal.recipientContactTitle}` : ""}
+              {recipientIdentity.displayName}{recipientIdentity.displayTitle && recipientIdentity.displayTitle !== "Cargo no definido" ? `\n${recipientIdentity.displayTitle}` : ""}
             </Text>
           </View>
           <View style={styles.traceLine}>
@@ -540,7 +577,7 @@ export function ProposalPdfDocument({ proposal, tenantName }: ProposalPdfInput) 
           </View>
         </View>
         <Text style={styles.narrativeText}>
-          Para cualquier aclaracion relacionada con esta propuesta, favor de contactar a {formal?.issuerContactName || proposal.salesOwner || "el representante comercial"} al correo {formal?.issuerEmail || "no disponible"}{formal?.issuerPhone ? ` o al telefono ${formal.issuerPhone}` : ""}.
+          Para cualquier aclaracion relacionada con esta propuesta, favor de contactar a {formal?.issuerContactName || proposal.salesOwner || "el representante comercial"} al correo {issuerEmailDisplay}{issuerPhoneDisplay !== "Telefono no disponible" ? ` o al telefono ${issuerPhoneDisplay}` : ""}.
         </Text>
         <Text
           fixed
