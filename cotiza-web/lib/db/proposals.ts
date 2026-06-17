@@ -1262,7 +1262,20 @@ export async function updateProposalWorkflowByTenant(
     hasRecipientEmailUpdate ||
     hasRecipientContactTitleUpdate ||
     hasItemsUpdate;
-  const allowApprovedTermsUpdate = hasTermsUpdate && !hasNonTermsContentUpdate;
+  const hasApprovedSafeContactUpdate =
+    hasIssuerEmailUpdate ||
+    hasIssuerPhoneUpdate ||
+    hasRecipientContactNameUpdate ||
+    hasRecipientEmailUpdate ||
+    hasRecipientContactTitleUpdate;
+  const hasApprovedMaterialUpdate =
+    hasSubjectUpdate ||
+    hasRecipientUpdate ||
+    hasIssuerCompanyUpdate ||
+    hasItemsUpdate;
+  const allowApprovedTermsUpdate =
+    (hasTermsUpdate || hasApprovedSafeContactUpdate) &&
+    !hasApprovedMaterialUpdate;
 
   const policy = await getMarginPolicyByTenant(tenantId);
   const candidateItems = hasItemsUpdate && input.items ? input.items : current.items;

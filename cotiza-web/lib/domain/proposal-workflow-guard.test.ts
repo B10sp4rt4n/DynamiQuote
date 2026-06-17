@@ -124,6 +124,18 @@ describe("proposal-workflow-guard", () => {
     ).not.toThrow();
   });
 
+  it("permite editar datos de contacto en aprobada sin reabrir estado", () => {
+    expect(() =>
+      assertProposalWorkflowGuard({
+        allowApprovedTermsUpdate: true,
+        currentStatus: "approved",
+        hasContentUpdate: true,
+        marginCanAuthorizeFinal: true,
+        nextStatus: "approved",
+      }),
+    ).not.toThrow();
+  });
+
   it("valida elegibilidad del actor aprobador", () => {
     expect(() =>
       assertApprovalActorEligibility({
