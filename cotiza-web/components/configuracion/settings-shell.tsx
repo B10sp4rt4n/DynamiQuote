@@ -1786,6 +1786,45 @@ export function SettingsShell({
   const [usersState, setUsersState] = useState(users);
   const [issuerProfilesState, setIssuerProfilesState] = useState(issuerProfiles);
   const [marginPolicyState, setMarginPolicyState] = useState(marginPolicy);
+  const [selectedTenantSlug, setSelectedTenantSlug] = useState(tenantSlug);
+  const [switchingTenant, setSwitchingTenant] = useState(false);
+  const [tenantSwitchMessage, setTenantSwitchMessage] = useState<string | null>(null);
+
+  useEffect(() => {
+    setSelectedTenantSlug(tenantSlug);
+  }, [tenantSlug]);
+
+  async function handleTenantAssociation(slug: string) {
+    if (!slug || slug === selectedTenantSlug) {
+      return;
+    }
+
+    setSwitchingTenant(true);
+    setTenantSwitchMessage(null);
+
+    try {
+      const response = await fetch("/api/context/tenant", {
+        body: JSON.stringify({ slug }),
+        headers: {
+          "Content-Type": "application/json",
+        },
+        method: "POST",
+      });
+
+      const data = (await response.json().catch(() => null)) as { error?: string; ok?: boolean } | null;
+
+      if (!response.ok || !data?.ok) {
+        throw new Error(data?.error ?? "No fue posible asociar la empresa");
+      }
+
+      setSelectedTenantSlug(slug);
+      setTenantSwitchMessage("Empresa asociada correctamente. Recargando...");
+      window.location.reload();
+    } catch (error) {
+      setTenantSwitchMessage(error instanceof Error ? error.message : "Error interno al cambiar de tenant");
+      setSwitchingTenant(false);
+    }
+  }
 
   function pushUser(user: AppUserSummary) {
     setUsersState((prev) => [user, ...prev]);
@@ -1803,6 +1842,30 @@ export function SettingsShell({
       <div className="flex flex-col gap-2 border-b border-zinc-200 pb-4">
         <p className="text-sm uppercase tracking-[0.18em] text-zinc-500">Tenant activo</p>
         <h1 className="text-2xl font-semibold text-zinc-900">Configuración de {tenantName}</h1>
+        {tenantOptions.length > 1 ? (
+          <div className="mt-2 flex flex-wrap items-center gap-2">
+            <label className="text-xs font-medium uppercase tracking-[0.12em] text-zinc-500" htmlFor="settings-tenant-selector">
+              Asociar a empresa
+            </label>
+            <select
+              className="min-w-[260px] rounded-lg border border-zinc-300 bg-white px-3 py-2 text-sm text-zinc-900"
+              disabled={switchingTenant}
+              id="settings-tenant-selector"
+              onChange={(event) => {
+                void handleTenantAssociation(event.target.value);
+              }}
+              value={selectedTenantSlug}
+            >
+              {tenantOptions.map((tenantOption) => (
+                <option key={tenantOption.id} value={tenantOption.slug}>
+                  {tenantOption.name} ({tenantOption.slug})
+                </option>
+              ))}
+            </select>
+            {switchingTenant ? <p className="text-xs text-zinc-500">Actualizando contexto...</p> : null}
+            {tenantSwitchMessage ? <p className="text-xs text-zinc-600">{tenantSwitchMessage}</p> : null}
+          </div>
+        ) : null}
       </div>
 
       <div className="mt-4 flex gap-0 border-b border-zinc-200">

@@ -65,11 +65,13 @@ async function resolveBootstrapTenantContext(
         ...tenant,
         authMode: "bootstrap",
         isSuperAdmin: false,
-        isTenantPrimaryAdmin: false,
+        isTenantPrimaryAdmin: true,
         subtenantKey: null,
-        userRole: "user",
-        userDisplayName: null,
-        userId: null,
+        // En modo bootstrap no hay identidad Clerk, pero sí debe existir un actor técnico
+        // para operar políticas/aprobaciones durante desarrollo y demos.
+        userRole: "owner",
+        userDisplayName: "Bootstrap Admin",
+        userId: `bootstrap:${tenant.id}`,
       }
     : null;
 }
