@@ -66,7 +66,7 @@ function MetricCard({
 }: {
   helper: string;
   title: string;
-  value: number;
+  value: number | string;
 }) {
   return (
     <article className="rounded-xl border border-zinc-200 bg-zinc-50 p-4">
@@ -508,7 +508,11 @@ function ControlCenterTab({
       </div>
 
       <div className="grid gap-3 md:grid-cols-2 xl:grid-cols-4">
-        <MetricCard helper="Monto agregado en cotizaciones" title="Ingreso cotizado" value={Math.round(quoteDashboardSnapshot.totalRevenue)} />
+        <MetricCard
+          helper="Monto agregado en cotizaciones"
+          title="Ingreso cotizado"
+          value={formatCurrency(quoteDashboardSnapshot.totalRevenue)}
+        />
         <MetricCard helper="Propuestas ya aprobadas" title="Aprobadas" value={proposalStatusCounts.approved} />
         <MetricCard helper="Propuestas ya enviadas" title="Enviadas" value={proposalStatusCounts.sent} />
         <MetricCard helper="Fuera de política de margen" title="Bloqueadas" value={proposalMarginBlockedCount} />
