@@ -44,6 +44,33 @@ let marginPolicyTableReady = false;
 
 function toNumber(value: unknown): number {
   if (typeof value === "number") return value;
+
+  if (typeof value === "object" && value !== null) {
+    // Prisma devuelve NUMERIC como Decimal (con toNumber/toString).
+    const decimalLike = value as {
+      toNumber?: () => number;
+      toString?: () => string;
+      valueOf?: () => unknown;
+    };
+
+    if (typeof decimalLike.toNumber === "function") {
+      const parsed = decimalLike.toNumber();
+      return Number.isFinite(parsed) ? parsed : 0;
+    }
+
+    if (typeof decimalLike.valueOf === "function") {
+      const raw = decimalLike.valueOf();
+      if (typeof raw === "number" && Number.isFinite(raw)) {
+        return raw;
+      }
+    }
+
+    if (typeof decimalLike.toString === "function") {
+      const parsed = Number(decimalLike.toString());
+      return Number.isFinite(parsed) ? parsed : 0;
+    }
+  }
+
   if (typeof value === "string" && value.trim().length > 0) {
     const parsed = Number(value);
     return Number.isFinite(parsed) ? parsed : 0;
