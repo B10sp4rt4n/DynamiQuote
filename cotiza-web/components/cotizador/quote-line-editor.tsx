@@ -2,6 +2,7 @@
 
 import { useEffect, useMemo, useState } from "react";
 import { useRouter } from "next/navigation";
+import { Cell, Pie, PieChart, ResponsiveContainer, Tooltip } from "recharts";
 
 import type { QuoteGroupSummary } from "@/lib/db/quotes";
 import { resolveBidirectionalPricing } from "@/lib/domain/pricing-engine";
@@ -1466,24 +1467,88 @@ export function QuoteLineEditor({
         </div>
       ) : null}
 
-      <div className="mt-5 grid gap-3 md:grid-cols-4">
-        <article className="rounded-lg border border-zinc-200 p-3 text-sm">
-          <p className="text-zinc-500">Costo total</p>
-          <p className="mt-1 font-semibold text-zinc-900">{formatCurrency(totals.totalCost)}</p>
-        </article>
-        <article className="rounded-lg border border-zinc-200 p-3 text-sm">
-          <p className="text-zinc-500">Revenue total</p>
-          <p className="mt-1 font-semibold text-zinc-900">{formatCurrency(totals.totalRevenue)}</p>
-        </article>
-        <article className="rounded-lg border border-zinc-200 p-3 text-sm">
-          <p className="text-zinc-500">Utilidad</p>
-          <p className="mt-1 font-semibold text-zinc-900">{formatCurrency(totals.grossProfit)}</p>
-        </article>
-        <article className="rounded-lg border border-zinc-200 p-3 text-sm">
-          <p className="text-zinc-500">Margen promedio</p>
-          <p className="mt-1 font-semibold text-zinc-900">{totals.avgMargin.toFixed(2)}%</p>
-        </article>
-      </div>
+      {lines.length > 0 && totals.totalRevenue > 0 ? (
+        <div className="mt-5 grid gap-4 md:grid-cols-[auto_1fr]">
+          {/* Gráfica donut: costo vs utilidad */}
+          <div className="flex flex-col items-center justify-center rounded-xl border border-zinc-200 bg-zinc-50 p-4">
+            <p className="mb-2 text-xs uppercase tracking-[0.14em] text-zinc-500">Costo vs Utilidad</p>
+            <ResponsiveContainer height={160} width={160}>
+              <PieChart>
+                <Pie
+                  cx="50%"
+                  cy="50%"
+                  data={[
+                    { name: "Costo", value: Math.max(0, totals.totalCost) },
+                    { name: "Utilidad", value: Math.max(0, totals.grossProfit) },
+                  ]}
+                  dataKey="value"
+                  innerRadius={46}
+                  outerRadius={70}
+                  paddingAngle={2}
+                  strokeWidth={0}
+                >
+                  <Cell fill="#e4e4e7" />
+                  <Cell fill="#22c55e" />
+                </Pie>
+                <Tooltip
+                  formatter={(value: number) =>
+                    new Intl.NumberFormat("es-MX", { currency: "MXN", maximumFractionDigits: 0, style: "currency" }).format(value)
+                  }
+                />
+              </PieChart>
+            </ResponsiveContainer>
+            <div className="mt-2 flex gap-4 text-xs text-zinc-600">
+              <span className="flex items-center gap-1">
+                <span className="inline-block h-2.5 w-2.5 rounded-full bg-zinc-300" /> Costo
+              </span>
+              <span className="flex items-center gap-1">
+                <span className="inline-block h-2.5 w-2.5 rounded-full bg-green-500" /> Utilidad
+              </span>
+            </div>
+            <p className="mt-3 text-lg font-semibold text-zinc-900">{totals.avgMargin.toFixed(1)}%</p>
+            <p className="text-xs text-zinc-500">margen promedio</p>
+          </div>
+
+          {/* Tarjetas de totales */}
+          <div className="grid gap-3 md:grid-cols-2 xl:grid-cols-4">
+            <article className="rounded-lg border border-zinc-200 bg-white p-3 text-sm">
+              <p className="text-zinc-500">Costo total</p>
+              <p className="mt-1 font-semibold text-zinc-900">{formatCurrency(totals.totalCost)}</p>
+            </article>
+            <article className="rounded-lg border border-zinc-200 bg-white p-3 text-sm">
+              <p className="text-zinc-500">Revenue total</p>
+              <p className="mt-1 font-semibold text-zinc-900">{formatCurrency(totals.totalRevenue)}</p>
+            </article>
+            <article className="rounded-lg border border-zinc-200 bg-white p-3 text-sm">
+              <p className="text-zinc-500">Utilidad</p>
+              <p className="mt-1 font-semibold text-zinc-900">{formatCurrency(totals.grossProfit)}</p>
+            </article>
+            <article className="rounded-lg border border-zinc-200 bg-white p-3 text-sm">
+              <p className="text-zinc-500">Margen promedio</p>
+              <p className="mt-1 font-semibold text-zinc-900">{totals.avgMargin.toFixed(2)}%</p>
+            </article>
+          </div>
+        </div>
+      ) : (
+        <div className="mt-5 grid gap-3 md:grid-cols-4">
+          <article className="rounded-lg border border-zinc-200 p-3 text-sm">
+            <p className="text-zinc-500">Costo total</p>
+            <p className="mt-1 font-semibold text-zinc-900">{formatCurrency(totals.totalCost)}</p>
+          </article>
+          <article className="rounded-lg border border-zinc-200 p-3 text-sm">
+            <p className="text-zinc-500">Revenue total</p>
+            <p className="mt-1 font-semibold text-zinc-900">{formatCurrency(totals.totalRevenue)}</p>
+          </article>
+          <article className="rounded-lg border border-zinc-200 p-3 text-sm">
+            <p className="text-zinc-500">Utilidad</p>
+            <p className="mt-1 font-semibold text-zinc-900">{formatCurrency(totals.grossProfit)}</p>
+          </article>
+          <article className="rounded-lg border border-zinc-200 p-3 text-sm">
+            <p className="text-zinc-500">Margen promedio</p>
+            <p className="mt-1 font-semibold text-zinc-900">{totals.avgMargin.toFixed(2)}%</p>
+          </article>
+        </div>
+      )}
 
       <div className="mt-6 overflow-x-auto rounded-xl border border-zinc-200">
         <table className="min-w-full divide-y divide-zinc-200 text-sm">
