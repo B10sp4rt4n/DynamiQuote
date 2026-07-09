@@ -1,4 +1,5 @@
 import Link from "next/link";
+import { CotizaBrand } from "@/components/ui/cotiza-brand";
 
 export default function Home() {
   return (
@@ -11,7 +12,9 @@ export default function Home() {
               Anuncio de plataforma
             </div>
 
-            <p className="mt-6 text-sm font-semibold uppercase tracking-[0.24em] text-zinc-500">Cotiza</p>
+            <div className="mt-6">
+              <CotizaBrand href="/" subtitle={null} />
+            </div>
             <h1 className="mt-3 max-w-3xl text-4xl font-semibold leading-tight text-zinc-950 md:text-5xl">
               Cotización, control de margen y propuesta formal en una sola operación.
             </h1>

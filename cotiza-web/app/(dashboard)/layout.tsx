@@ -6,6 +6,7 @@ import { redirect } from "next/navigation";
 
 import { hasClerkCredentials } from "@/lib/auth/clerk";
 import { getCurrentTenantContext } from "@/lib/auth/tenant-context";
+import { CotizaBrand } from "@/components/ui/cotiza-brand";
 
 type DashboardLayoutProps = {
   children: React.ReactNode;
@@ -47,17 +48,24 @@ export default async function DashboardLayout({ children }: DashboardLayoutProps
     <div className="min-h-screen bg-zinc-100">
       <header className="border-b border-zinc-200 bg-white">
         <div className="mx-auto flex max-w-7xl items-center justify-between px-6 py-4">
-          <div>
-            <p className="text-lg font-semibold text-zinc-900">Cotiza</p>
-            <p className="text-sm text-zinc-500">Tenant activo: {tenant.name}</p>
-          </div>
+          <CotizaBrand href="/cotizaciones" subtitle={`Tenant activo: ${tenant.name}`} />
           <nav className="flex items-center gap-4 text-sm text-zinc-600">
             <Link href="/cotizaciones">Cotizaciones</Link>
             <Link href="/propuestas">Propuestas</Link>
             <Link href="/paquetes">Paquetes</Link>
             <Link href="/configuracion/clientes">Clientes</Link>
             <Link href="/configuracion">Configuracion</Link>
-            {clerkEnabled ? <UserButton afterSignOutUrl="/sign-in" /> : <Link href="/sign-in">Activar autenticacion</Link>}
+            {clerkEnabled ? (
+              <UserButton
+                afterSignOutUrl="/sign-in"
+                appearance={{
+                  elements: {
+                    avatarBox: "ring-2 ring-zinc-200 shadow-sm",
+                    userButtonTrigger: "rounded-full",
+                  },
+                }}
+              />
+            ) : <Link href="/sign-in">Activar autenticacion</Link>}
           </nav>
         </div>
       </header>

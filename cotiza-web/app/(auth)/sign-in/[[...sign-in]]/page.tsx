@@ -3,6 +3,7 @@ import { auth } from "@clerk/nextjs/server";
 import { redirect } from "next/navigation";
 
 import { ClientAuthRedirect } from "@/components/auth/client-auth-redirect";
+import { CotizaBrand } from "@/components/ui/cotiza-brand";
 import { hasClerkCredentials } from "@/lib/auth/clerk";
 
 type SignInPageProps = {
@@ -44,7 +45,9 @@ export default async function SignInPage({ searchParams }: SignInPageProps) {
               Acceso a plataforma
             </div>
 
-            <p className="mt-6 text-sm font-semibold uppercase tracking-[0.24em] text-zinc-500">Cotiza</p>
+            <div className="mt-6">
+              <CotizaBrand href="/" subtitle={null} />
+            </div>
             <h1 className="mt-3 max-w-3xl text-4xl font-semibold leading-tight text-zinc-950 md:text-5xl">
               Entra al motor de cotización con control de margen y propuesta formal.
             </h1>
