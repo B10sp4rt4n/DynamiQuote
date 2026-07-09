@@ -35,10 +35,79 @@ export default async function SignInPage({ searchParams }: SignInPageProps) {
   }
 
   return (
-    <main className="flex min-h-screen items-center justify-center bg-zinc-50 px-6">
-      <div className="w-full max-w-md">
-        <ClientAuthRedirect target={requestedRedirect && requestedRedirect.startsWith("/") ? requestedRedirect : "/cotizaciones"} />
-        <SignIn fallbackRedirectUrl="/cotizaciones" path="/sign-in" routing="path" signUpUrl="/sign-up" />
+    <main className="min-h-screen bg-[radial-gradient(circle_at_top_left,_rgba(249,115,22,0.16),_transparent_26%),linear-gradient(180deg,_#fffdf7_0%,_#f8fafc_50%,_#ffffff_100%)] px-6 py-10 text-zinc-900">
+      <div className="mx-auto flex min-h-[calc(100vh-5rem)] w-full max-w-6xl items-center">
+        <section className="grid w-full gap-8 lg:grid-cols-[1.05fr_0.95fr]">
+          <div className="rounded-[2rem] border border-zinc-200/80 bg-white/90 p-8 shadow-[0_24px_80px_-32px_rgba(15,23,42,0.35)] backdrop-blur xl:p-12">
+            <div className="inline-flex items-center gap-2 rounded-full border border-amber-200 bg-amber-50 px-3 py-1 text-xs font-semibold uppercase tracking-[0.18em] text-amber-800">
+              <span className="h-2 w-2 rounded-full bg-emerald-500" />
+              Acceso a plataforma
+            </div>
+
+            <p className="mt-6 text-sm font-semibold uppercase tracking-[0.24em] text-zinc-500">Cotiza</p>
+            <h1 className="mt-3 max-w-3xl text-4xl font-semibold leading-tight text-zinc-950 md:text-5xl">
+              Entra al motor de cotización con control de margen y propuesta formal.
+            </h1>
+            <p className="mt-5 max-w-2xl text-base leading-7 text-zinc-600 md:text-lg">
+              Cotiza concentra cotización, autorización interna y salida documental en un mismo flujo.
+              La meta no es solo emitir propuestas: es proteger rentabilidad, estandarizar operación y acelerar cierre comercial.
+            </p>
+
+            <div className="mt-8 flex flex-wrap gap-3">
+              <span className="rounded-full bg-zinc-100 px-4 py-2 text-sm font-medium text-zinc-700">
+                Multi-tenant SaaS
+              </span>
+              <span className="rounded-full bg-zinc-100 px-4 py-2 text-sm font-medium text-zinc-700">
+                Margen bidireccional
+              </span>
+              <span className="rounded-full bg-zinc-100 px-4 py-2 text-sm font-medium text-zinc-700">
+                PDF + Excel + email
+              </span>
+            </div>
+
+            <div className="mt-10 grid gap-4 border-t border-zinc-200 pt-8 md:grid-cols-3">
+              <div>
+                <p className="text-xs uppercase tracking-[0.16em] text-zinc-500">Valor</p>
+                <p className="mt-2 text-sm leading-6 text-zinc-700">
+                  Decidir mejor qué propuesta sí puede salir al cliente.
+                </p>
+              </div>
+              <div>
+                <p className="text-xs uppercase tracking-[0.16em] text-zinc-500">Control</p>
+                <p className="mt-2 text-sm leading-6 text-zinc-700">
+                  Reglas de margen y autorizaciones integradas al flujo.
+                </p>
+              </div>
+              <div>
+                <p className="text-xs uppercase tracking-[0.16em] text-zinc-500">Salida</p>
+                <p className="mt-2 text-sm leading-6 text-zinc-700">
+                  Documento formal listo para operar y enviar.
+                </p>
+              </div>
+            </div>
+          </div>
+
+          <div className="flex items-center justify-center">
+            <div className="w-full max-w-md rounded-[2rem] border border-zinc-200/80 bg-white/90 p-3 shadow-[0_24px_80px_-32px_rgba(15,23,42,0.35)] backdrop-blur">
+              <ClientAuthRedirect target={requestedRedirect && requestedRedirect.startsWith("/") ? requestedRedirect : "/cotizaciones"} />
+              <SignIn
+                appearance={{
+                  elements: {
+                    card: "shadow-none border-0 bg-transparent",
+                    footer: "hidden",
+                    headerSubtitle: "text-zinc-500",
+                    headerTitle: "text-zinc-950",
+                    rootBox: "w-full",
+                  },
+                }}
+                fallbackRedirectUrl="/cotizaciones"
+                path="/sign-in"
+                routing="path"
+                signUpUrl="/sign-up"
+              />
+            </div>
+          </div>
+        </section>
       </div>
     </main>
   );
