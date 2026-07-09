@@ -57,7 +57,6 @@ export default async function DashboardLayout({ children }: DashboardLayoutProps
             <Link href="/configuracion">Configuracion</Link>
             {clerkEnabled ? (
               <UserButton
-                afterSignOutUrl="/sign-in"
                 appearance={{
                   elements: {
                     avatarBox: "ring-2 ring-zinc-200 shadow-sm",

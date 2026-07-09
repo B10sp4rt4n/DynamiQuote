@@ -1491,9 +1491,16 @@ export function QuoteLineEditor({
                   <Cell fill="#22c55e" />
                 </Pie>
                 <Tooltip
-                  formatter={(value: number) =>
-                    new Intl.NumberFormat("es-MX", { currency: "MXN", maximumFractionDigits: 0, style: "currency" }).format(value)
-                  }
+                  formatter={(value: number | string | ReadonlyArray<number | string> | undefined) => {
+                    const resolved = Array.isArray(value) ? value[0] : value;
+                    const numericValue = typeof resolved === "number" ? resolved : Number(resolved ?? 0);
+
+                    return new Intl.NumberFormat("es-MX", {
+                      currency: "MXN",
+                      maximumFractionDigits: 0,
+                      style: "currency",
+                    }).format(Number.isFinite(numericValue) ? numericValue : 0);
+                  }}
                 />
               </PieChart>
             </ResponsiveContainer>
