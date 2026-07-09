@@ -17,7 +17,7 @@ export default async function QuotesPage() {
   }
 
   const items = await getQuoteGroupsSummaryByTenant(tenant.id);
-  const canSwitchTenant = tenant.isSuperAdmin || tenant.isTenantPrimaryAdmin;
+  const canSwitchTenant = tenant.isSuperAdmin;
   const tenantOptions = canSwitchTenant
     ? await getActiveTenants()
     : [{ id: tenant.id, name: tenant.name, slug: tenant.slug }];

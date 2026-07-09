@@ -23,7 +23,7 @@ export default async function SettingsPage() {
     );
   }
 
-  const canSwitchTenant = tenant.isSuperAdmin || tenant.isTenantPrimaryAdmin;
+  const canSwitchTenant = tenant.isSuperAdmin;
 
   const [
     users,
