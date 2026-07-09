@@ -17,10 +17,14 @@ export default async function QuotesPage() {
   }
 
   const items = await getQuoteGroupsSummaryByTenant(tenant.id);
-  const tenantOptions = await getActiveTenants();
+  const canSwitchTenant = tenant.isSuperAdmin || tenant.userRole === "owner" || tenant.userRole === "admin";
+  const tenantOptions = canSwitchTenant
+    ? await getActiveTenants()
+    : [{ id: tenant.id, name: tenant.name, slug: tenant.slug }];
 
   return (
     <QuoteShell
+      canSwitchTenant={canSwitchTenant}
       currentTenantSlug={tenant.slug}
       items={items}
       tenantName={tenant.name}

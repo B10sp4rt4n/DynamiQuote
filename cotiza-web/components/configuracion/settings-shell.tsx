@@ -9,6 +9,7 @@ import type { AppUserSummary, IssuerProfileSummary } from "@/lib/db/settings";
 import type { ActiveTenantOption } from "@/lib/db/tenants";
 
 type SettingsShellProps = {
+  canSwitchTenant?: boolean;
   canViewControl?: boolean;
   canViewTenantConfig?: boolean;
   canManageAllTenants?: boolean;
@@ -1770,6 +1771,7 @@ function IssuerProfilesTab({
 }
 
 export function SettingsShell({
+  canSwitchTenant = false,
   users,
   issuerProfiles,
   marginPolicy,
@@ -1846,7 +1848,7 @@ export function SettingsShell({
       <div className="flex flex-col gap-2 border-b border-zinc-200 pb-4">
         <p className="text-sm uppercase tracking-[0.18em] text-zinc-500">Tenant activo</p>
         <h1 className="text-2xl font-semibold text-zinc-900">Configuración de {tenantName}</h1>
-        {tenantOptions.length > 1 ? (
+        {canSwitchTenant && tenantOptions.length > 1 ? (
           <div className="mt-2 flex flex-wrap items-center gap-2">
             <label className="text-xs font-medium uppercase tracking-[0.12em] text-zinc-500" htmlFor="settings-tenant-selector">
               Asociar a empresa

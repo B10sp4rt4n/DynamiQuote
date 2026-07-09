@@ -2,6 +2,7 @@ import { NextResponse } from "next/server";
 
 import { auth } from "@clerk/nextjs/server";
 
+import { getCurrentTenantContext } from "@/lib/auth/tenant-context";
 import { prisma } from "@/lib/db/prisma";
 
 const TENANT_OVERRIDE_COOKIE = "tenant_override_slug";
@@ -19,6 +20,15 @@ export async function POST(request: Request) {
 
   if (!userId && !hasDevClientSession) {
     return NextResponse.json({ error: "No autorizado" }, { status: 401 });
+  }
+
+  const tenantContext = await getCurrentTenantContext();
+  const canSwitchTenant =
+    Boolean(tenantContext) &&
+    (tenantContext.isSuperAdmin || tenantContext.userRole === "owner" || tenantContext.userRole === "admin");
+
+  if (!canSwitchTenant) {
+    return NextResponse.json({ error: "Sin permisos para cambiar de empresa" }, { status: 403 });
   }
 
   const payload = (await request.json().catch(() => null)) as { slug?: string } | null;

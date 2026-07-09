@@ -23,6 +23,8 @@ export default async function SettingsPage() {
     );
   }
 
+  const canSwitchTenant = tenant.isSuperAdmin || tenant.userRole === "owner" || tenant.userRole === "admin";
+
   const [
     users,
     issuerProfiles,
@@ -36,7 +38,7 @@ export default async function SettingsPage() {
     tenant.isSuperAdmin ? getAppUsersForSuperAdmin() : getAppUsersByTenant(tenant.id),
     getIssuerProfilesByTenant(tenant.id),
     getMarginPolicyByTenant(tenant.id),
-    getActiveTenants(),
+    canSwitchTenant ? getActiveTenants() : Promise.resolve([{ id: tenant.id, name: tenant.name, slug: tenant.slug }]),
     getProposalStatusCountsByTenant(tenant.id),
     getProposalMarginBlockedCountByTenant(tenant.id),
     getQuoteDashboardSnapshotByTenant(tenant.id),
@@ -45,6 +47,7 @@ export default async function SettingsPage() {
 
   return (
     <SettingsShell
+      canSwitchTenant={canSwitchTenant}
       canManageAllTenants={tenant.isSuperAdmin}
       canViewControl={tenant.isSuperAdmin || tenant.userRole === "owner"}
       canViewTenantConfig={tenant.isSuperAdmin || tenant.userRole === "owner"}
