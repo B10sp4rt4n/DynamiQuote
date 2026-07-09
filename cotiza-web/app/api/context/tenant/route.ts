@@ -25,7 +25,7 @@ export async function POST(request: Request) {
   const tenantContext = await getCurrentTenantContext();
   const canSwitchTenant =
     Boolean(tenantContext) &&
-    (tenantContext.isSuperAdmin || tenantContext.userRole === "owner" || tenantContext.userRole === "admin");
+    (tenantContext.isSuperAdmin || tenantContext.isTenantPrimaryAdmin);
 
   if (!canSwitchTenant) {
     return NextResponse.json({ error: "Sin permisos para cambiar de empresa" }, { status: 403 });
