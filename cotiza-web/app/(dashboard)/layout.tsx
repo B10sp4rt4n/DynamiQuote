@@ -57,7 +57,7 @@ export default async function DashboardLayout({ children }: DashboardLayoutProps
             <Link href="/paquetes">Paquetes</Link>
             <Link href="/configuracion/clientes">Clientes</Link>
             <Link href="/configuracion">Configuracion</Link>
-            {clerkEnabled ? <UserButton /> : <Link href="/sign-in">Activar autenticacion</Link>}
+            {clerkEnabled ? <UserButton afterSignOutUrl="/sign-in" /> : <Link href="/sign-in">Activar autenticacion</Link>}
           </nav>
         </div>
       </header>
