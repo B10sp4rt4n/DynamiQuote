@@ -140,7 +140,6 @@ export default async function DashboardPage() {
                   <p className="font-medium text-zinc-900">{quote.clientName}</p>
                   <p className="text-sm text-zinc-600">{quote.proposalName}</p>
                 </div>
-                <div className="text-sm text-zinc-500">{quote.quotedBy}</div>
                 <div className="text-sm text-zinc-500">v{quote.version}</div>
                 <div className="font-medium text-zinc-900">{formatCurrency(quote.totalRevenue ?? 0)}</div>
               </article>

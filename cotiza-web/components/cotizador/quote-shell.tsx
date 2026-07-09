@@ -90,7 +90,6 @@ export function QuoteShell({
   const [clientName, setClientName] = useState("");
   const [proposalName, setProposalName] = useState("");
   const [playbookName, setPlaybookName] = useState("General");
-  const [quotedBy, setQuotedBy] = useState("");
   const [createState, setCreateState] = useState<"idle" | "saving" | "error">("idle");
   const [createMessage, setCreateMessage] = useState<string | null>(null);
   const [importFile, setImportFile] = useState<File | null>(null);
@@ -286,7 +285,6 @@ export function QuoteShell({
           clientName,
           playbookName,
           proposalName,
-          quotedBy,
         }),
         headers: {
           "Content-Type": "application/json",
@@ -305,7 +303,6 @@ export function QuoteShell({
       setClientName("");
       setProposalName("");
       setPlaybookName("General");
-      setQuotedBy("");
       setCreateState("idle");
       setCreateMessage(`Cotizacion ${data.quote.quoteGroupId} creada.`);
     } catch (error) {
@@ -429,7 +426,7 @@ export function QuoteShell({
             Crea la cotizacion base y despues edita lineas o genera su propuesta formal.
           </p>
         </div>
-        <div className="mt-4 grid gap-3 md:grid-cols-2 xl:grid-cols-4">
+        <div className="mt-4 grid gap-3 md:grid-cols-2 xl:grid-cols-3">
           <input
             className="rounded-lg border border-zinc-300 bg-white px-3 py-2 text-sm text-zinc-900"
             onChange={(event) => setClientName(event.target.value)}
@@ -447,12 +444,6 @@ export function QuoteShell({
             onChange={(event) => setPlaybookName(event.target.value)}
             placeholder="Playbook"
             value={playbookName}
-          />
-          <input
-            className="rounded-lg border border-zinc-300 bg-white px-3 py-2 text-sm text-zinc-900"
-            onChange={(event) => setQuotedBy(event.target.value)}
-            placeholder="Cotizado por"
-            value={quotedBy}
           />
         </div>
         <div className="mt-4 flex items-center gap-3">
