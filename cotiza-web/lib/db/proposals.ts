@@ -414,12 +414,14 @@ function toLogoDataUrl(bytes: Uint8Array | null | undefined, format: string | nu
 async function resolvePreferredIssuerProfileByTenant(tenantId: string): Promise<{
   companyName: string | null;
   logoId: string;
+  sourceTenantId: string | null;
 } | null> {
   const tenantDefault = await prisma.company_logos.findFirst({
     orderBy: [{ uploaded_at: "desc" }],
     select: {
       company_name: true,
       logo_id: true,
+      tenant_id: true,
     },
     where: {
       is_default: true,
@@ -432,6 +434,7 @@ async function resolvePreferredIssuerProfileByTenant(tenantId: string): Promise<
     return {
       companyName: tenantDefault.company_name,
       logoId: tenantDefault.logo_id,
+      sourceTenantId: tenantDefault.tenant_id,
     };
   }
 
@@ -440,6 +443,7 @@ async function resolvePreferredIssuerProfileByTenant(tenantId: string): Promise<
     select: {
       company_name: true,
       logo_id: true,
+      tenant_id: true,
     },
     where: {
       is_default: true,
@@ -452,6 +456,7 @@ async function resolvePreferredIssuerProfileByTenant(tenantId: string): Promise<
     return {
       companyName: globalDefault.company_name,
       logoId: globalDefault.logo_id,
+      sourceTenantId: globalDefault.tenant_id,
     };
   }
 
@@ -460,6 +465,7 @@ async function resolvePreferredIssuerProfileByTenant(tenantId: string): Promise<
     select: {
       company_name: true,
       logo_id: true,
+      tenant_id: true,
     },
     where: {
       logo_type: "issuer",
@@ -471,6 +477,7 @@ async function resolvePreferredIssuerProfileByTenant(tenantId: string): Promise<
     return {
       companyName: tenantAny.company_name,
       logoId: tenantAny.logo_id,
+      sourceTenantId: tenantAny.tenant_id,
     };
   }
 
@@ -479,6 +486,7 @@ async function resolvePreferredIssuerProfileByTenant(tenantId: string): Promise<
     select: {
       company_name: true,
       logo_id: true,
+      tenant_id: true,
     },
     where: {
       logo_type: "issuer",
@@ -493,6 +501,7 @@ async function resolvePreferredIssuerProfileByTenant(tenantId: string): Promise<
   return {
     companyName: globalAny.company_name,
     logoId: globalAny.logo_id,
+    sourceTenantId: globalAny.tenant_id,
   };
 }
 
@@ -781,7 +790,13 @@ export async function createProposalFromQuoteByTenant(
   const proposalDocId = randomUUID();
   const proposalNumber = await nextProposalNumber(now.getUTCFullYear());
   const issuerContactName = await resolveActorNameForTenant(tenantId, actorName, quote.quoted_by);
-  const issuerCompany = issuerProfile?.companyName?.trim() || tenant?.name || "Cotiza";
+  const isTenantScopedIssuer = issuerProfile?.sourceTenantId === tenantId;
+  const issuerCompanyFromProfile = issuerProfile?.companyName?.trim();
+  const issuerCompany =
+    (isTenantScopedIssuer && issuerCompanyFromProfile) ||
+    tenant?.name ||
+    issuerCompanyFromProfile ||
+    "Cotiza";
   const recipientCompany = input.recipientCompany?.trim() || quote.client_name || "Sin cliente";
   const subject = input.subject?.trim() || quote.proposal_name || "Propuesta Comercial";
 

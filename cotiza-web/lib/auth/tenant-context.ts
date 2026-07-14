@@ -545,8 +545,6 @@ export async function getCurrentTenantContext(): Promise<TenantContext | null> {
 
     if (rescued) {
       appUser = rescued;
-    } else if (superAdminCandidates.length === 1) {
-      appUser = superAdminCandidates[0];
     }
   }
 
