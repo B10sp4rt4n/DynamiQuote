@@ -1874,28 +1874,28 @@ export function SettingsShell({
         ) : null}
       </div>
 
-      <div className="mt-4 flex gap-0 border-b border-zinc-200">
+      <div className="mt-4 flex gap-0 overflow-x-auto border-b border-zinc-200 whitespace-nowrap">
         {canViewControl ? (
-          <button className={tabClass("control")} onClick={() => setTab("control")} type="button">
+          <button className={`${tabClass("control")} shrink-0`} onClick={() => setTab("control")} type="button">
             Control
           </button>
         ) : null}
         {canViewTenantConfig ? (
-          <button className={tabClass("tenant")} onClick={() => setTab("tenant")} type="button">
+          <button className={`${tabClass("tenant")} shrink-0`} onClick={() => setTab("tenant")} type="button">
             Tenant
           </button>
         ) : null}
-        <button className={tabClass("users")} onClick={() => setTab("users")} type="button">
+        <button className={`${tabClass("users")} shrink-0`} onClick={() => setTab("users")} type="button">
           Usuarios ({usersState.length})
         </button>
-        <button className={tabClass("policy")} onClick={() => setTab("policy")} type="button">
+        <button className={`${tabClass("policy")} shrink-0`} onClick={() => setTab("policy")} type="button">
           Política margen
         </button>
-        <button className={tabClass("issuer")} onClick={() => setTab("issuer")} type="button">
-          Perfiles emisor ({issuerProfiles.length})
+        <button className={`${tabClass("issuer")} shrink-0`} onClick={() => setTab("issuer")} type="button">
+          Perfiles emisor (logos) ({issuerProfiles.length})
         </button>
         <a
-          className="rounded-lg px-3 py-1.5 text-sm font-medium text-zinc-500 transition hover:bg-zinc-100 hover:text-zinc-900"
+          className="shrink-0 rounded-lg px-3 py-1.5 text-sm font-medium text-zinc-500 transition hover:bg-zinc-100 hover:text-zinc-900"
           href="/configuracion/clientes"
         >
           Clientes
