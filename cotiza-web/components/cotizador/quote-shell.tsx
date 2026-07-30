@@ -439,14 +439,31 @@ export function QuoteShell({
         method: "POST",
       });
 
-      const data = (await response.json()) as { error?: string; importedCount?: number; quoteId?: string };
+      const data = (await response.json()) as {
+        error?: string;
+        importedCount?: number;
+        quoteId?: string | null;
+        skipped?: { reason: string; row: number }[];
+        skippedCount?: number;
+      };
 
       if (!response.ok) {
         throw new Error(data.error ?? "No fue posible importar el archivo");
       }
 
       setImportStatus("success");
-      setImportMessage(`Se importaron ${data.importedCount ?? 0} partidas.`);
+      let skippedNote = "";
+      if (data.skippedCount && data.skippedCount > 0) {
+        const reasonCounts = new Map<string, number>();
+        for (const item of data.skipped ?? []) {
+          reasonCounts.set(item.reason, (reasonCounts.get(item.reason) ?? 0) + 1);
+        }
+        const reasonSummary = Array.from(reasonCounts.entries())
+          .map(([reason, count]) => `${count} por ${reason.toLowerCase()}`)
+          .join("; ");
+        skippedNote = ` ${data.skippedCount} fila${data.skippedCount > 1 ? "s" : ""} se omitieron (${reasonSummary}).`;
+      }
+      setImportMessage(`Se importaron ${data.importedCount ?? 0} partidas.${skippedNote}`);
       setImportFile(null);
 
       // Actualización optimista: muestra la nueva versión en la lista sin esperar al servidor
