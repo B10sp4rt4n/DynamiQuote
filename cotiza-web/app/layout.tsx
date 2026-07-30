@@ -40,21 +40,7 @@ export default function RootLayout({
     >
       <body className="min-h-full flex flex-col">
         {clerkEnabled ? (
-          <ClerkProvider
-            appearance={{
-              layout: {
-                logoImageUrl: "/cotiza-mark.svg",
-              },
-              variables: {
-                colorPrimary: "#0f172a",
-                colorText: "#111827",
-                colorBackground: "#ffffff",
-                colorInputBackground: "#ffffff",
-                colorInputText: "#111827",
-                borderRadius: "1rem",
-              },
-            }}
-          >
+          <ClerkProvider>
             {children}
           </ClerkProvider>
         ) : children}
