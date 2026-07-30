@@ -1,5 +1,6 @@
 "use client";
 
+import Link from "next/link";
 import { useEffect, useMemo, useRef, useState } from "react";
 import { usePathname, useRouter, useSearchParams } from "next/navigation";
 
@@ -750,7 +751,11 @@ export function QuoteShell({
         <div className="mt-4 rounded-lg border border-dashed border-zinc-300 bg-white p-4">
           <p className="text-xs uppercase tracking-[0.18em] text-zinc-500">Importar partidas desde Excel</p>
           <p className="mt-1 text-xs text-zinc-500">
-            Reemplaza las partidas de la cotización activa con las filas del archivo. Columnas esperadas: <code>sku</code>, <code>description</code>, <code>quantity</code>, <code>costUnit</code>, <code>priceUnit</code>.
+            Reemplaza las partidas de la cotización activa con las filas del archivo. Usa la{" "}
+            <Link className="text-zinc-700 underline hover:text-zinc-900" href="/api/quotes/import-template">
+              plantilla descargable
+            </Link>{" "}
+            para asegurar el formato correcto.
           </p>
           <div className="mt-3 flex flex-wrap items-center gap-2">
             <input
@@ -764,6 +769,12 @@ export function QuoteShell({
               }}
               type="file"
             />
+            <Link
+              className="rounded-lg border border-zinc-300 bg-white px-3 py-2 text-sm font-medium text-zinc-700 transition hover:bg-zinc-100"
+              href="/api/quotes/import-template"
+            >
+              Descargar plantilla
+            </Link>
             <button
               className="rounded-lg border border-zinc-300 bg-white px-3 py-2 text-sm font-medium text-zinc-700 transition hover:bg-zinc-100"
               onClick={() => { importFileRef.current?.click(); }}
