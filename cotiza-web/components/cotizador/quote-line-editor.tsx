@@ -1,6 +1,6 @@
 "use client";
 
-import { useEffect, useMemo, useState } from "react";
+import { useEffect, useMemo, useRef, useState } from "react";
 import { useRouter } from "next/navigation";
 import { Cell, Pie, PieChart, ResponsiveContainer, Tooltip } from "recharts";
 
@@ -524,9 +524,12 @@ export function QuoteLineEditor({
   quotes,
 }: QuoteLineEditorProps) {
   const router = useRouter();
+  const descriptionInputRefs = useRef<Record<string, HTMLInputElement | null>>({});
   const [selectedQuoteId, setSelectedQuoteId] = useState<string>(quotes[0]?.quoteId ?? "");
   const [lines, setLines] = useState<EditableQuoteLine[]>([]);
   const [quantityDrafts, setQuantityDrafts] = useState<Record<string, string>>({});
+  const [costDrafts, setCostDrafts] = useState<Record<string, string>>({});
+  const [priceDrafts, setPriceDrafts] = useState<Record<string, string>>({});
   const [lineDiffMap, setLineDiffMap] = useState<LineDiffMap>({});
   const [lineDeltaMap, setLineDeltaMap] = useState<LineDeltaMap>({});
   const [versions, setVersions] = useState<QuoteVersionHistoryItem[]>([]);
@@ -591,6 +594,8 @@ export function QuoteLineEditor({
     if (!quoteId) {
       setLines([]);
       setQuantityDrafts({});
+      setCostDrafts({});
+      setPriceDrafts({});
       return;
     }
 
@@ -608,15 +613,21 @@ export function QuoteLineEditor({
         setMessage(getErrorMessage(data) ?? "No se pudieron cargar las lineas");
         setLines([]);
         setQuantityDrafts({});
+        setCostDrafts({});
+        setPriceDrafts({});
         return;
       }
 
       setLines(data.lines.map(normalizeLineQuantity));
       setQuantityDrafts({});
+      setCostDrafts({});
+      setPriceDrafts({});
     } catch {
       setMessage("Error de red al cargar lineas");
       setLines([]);
       setQuantityDrafts({});
+      setCostDrafts({});
+      setPriceDrafts({});
     } finally {
       setLoading(false);
     }
@@ -625,12 +636,93 @@ export function QuoteLineEditor({
   async function handleQuoteChange(nextQuoteId: string) {
     setCompareState(null);
     setLineDeltaMap({});
+    setCostDrafts({});
+    setPriceDrafts({});
     setSelectedQuoteId(nextQuoteId);
     onSelectedQuoteChange?.(nextQuoteId);
   }
 
   function updateLine(lineId: string, patch: Partial<EditableQuoteLine>) {
     setLines((current) => current.map((line) => (line.lineId === lineId ? { ...line, ...patch } : line)));
+  }
+
+  function parseDecimalInput(value: string): number | null {
+    const normalized = value.trim().replace(",", ".");
+
+    if (normalized.length === 0) {
+      return null;
+    }
+
+    const parsed = Number(normalized);
+
+    return Number.isFinite(parsed) ? parsed : null;
+  }
+
+  function applyCostChange(lineId: string, nextCostUnit: number) {
+    setLines((current) =>
+      current.map((line) => {
+        if (line.lineId !== lineId) {
+          return line;
+        }
+
+        const costUnit = Math.max(0, nextCostUnit);
+        if (line.priceUnit <= 0) {
+          const pricing = resolveBidirectionalPricing({
+            costUnit,
+            marginPct: line.marginPct,
+          });
+
+          return {
+            ...line,
+            costUnit: pricing.costUnit,
+            marginPct: pricing.marginPct,
+            priceUnit: pricing.priceUnit,
+          };
+        }
+
+        const pricing = resolveBidirectionalPricing({
+          costUnit,
+          priceUnit: line.priceUnit,
+        });
+
+        return {
+          ...line,
+          costUnit: pricing.costUnit,
+          marginPct: pricing.marginPct,
+          priceUnit: pricing.priceUnit,
+        };
+      }),
+    );
+  }
+
+  function applyPriceChange(lineId: string, nextPriceUnit: number) {
+    setLines((current) =>
+      current.map((line) => {
+        if (line.lineId !== lineId) {
+          return line;
+        }
+
+        const priceUnit = Math.max(0, nextPriceUnit);
+        if (priceUnit <= 0) {
+          return {
+            ...line,
+            marginPct: 0,
+            priceUnit,
+          };
+        }
+
+        const pricing = resolveBidirectionalPricing({
+          costUnit: line.costUnit,
+          priceUnit,
+        });
+
+        return {
+          ...line,
+          marginPct: pricing.marginPct,
+          priceUnit: pricing.priceUnit,
+        };
+      }),
+    );
   }
 
   function onQuantityChange(lineId: string, value: string) {
@@ -661,21 +753,124 @@ export function QuoteLineEditor({
     });
   }
 
-  function addPartida() {
-    setLines((current) => [
+  function onCostDraftChange(lineId: string, value: string) {
+    setCostDrafts((current) => ({
       ...current,
-      {
-        classification1: "product",
-        classification2: "",
-        costUnit: 0,
-        description: "",
-        lineId: createLocalLineId(),
-        marginPct: 0,
-        priceUnit: 0,
-        quantity: 1,
-        sku: null,
-      },
-    ]);
+      [lineId]: value,
+    }));
+
+    const parsed = parseDecimalInput(value);
+
+    if (parsed === null) {
+      return;
+    }
+
+    applyCostChange(lineId, parsed);
+  }
+
+  function commitCostDraft(lineId: string) {
+    const draft = costDrafts[lineId];
+
+    if (draft === undefined) {
+      return;
+    }
+
+    const parsed = parseDecimalInput(draft);
+    applyCostChange(lineId, parsed ?? 0);
+
+    setCostDrafts((current) => {
+      const next = { ...current };
+      delete next[lineId];
+      return next;
+    });
+  }
+
+  function onPriceDraftChange(lineId: string, value: string) {
+    setPriceDrafts((current) => ({
+      ...current,
+      [lineId]: value,
+    }));
+
+    const parsed = parseDecimalInput(value);
+
+    if (parsed === null) {
+      return;
+    }
+
+    applyPriceChange(lineId, parsed);
+  }
+
+  function commitPriceDraft(lineId: string) {
+    const draft = priceDrafts[lineId];
+
+    if (draft === undefined) {
+      return;
+    }
+
+    const parsed = parseDecimalInput(draft);
+    applyPriceChange(lineId, parsed ?? 0);
+
+    setPriceDrafts((current) => {
+      const next = { ...current };
+      delete next[lineId];
+      return next;
+    });
+  }
+
+  function createEmptyPartida(): EditableQuoteLine {
+    return {
+      classification1: "product",
+      classification2: "",
+      costUnit: 0,
+      description: "",
+      lineId: createLocalLineId(),
+      marginPct: 0,
+      priceUnit: 0,
+      quantity: 1,
+      sku: null,
+    };
+  }
+
+  function focusDescriptionInput(lineId: string) {
+    requestAnimationFrame(() => {
+      const input = descriptionInputRefs.current[lineId];
+
+      if (!input) {
+        return;
+      }
+
+      input.scrollIntoView({
+        behavior: "smooth",
+        block: "nearest",
+        inline: "nearest",
+      });
+      input.focus();
+      input.select();
+    });
+  }
+
+  function addPartida() {
+    const newLine = createEmptyPartida();
+    setLines((current) => [...current, newLine]);
+    focusDescriptionInput(newLine.lineId);
+  }
+
+  function addPartidaAfter(lineId: string) {
+    const newLine = createEmptyPartida();
+
+    setLines((current) => {
+      const lineIndex = current.findIndex((line) => line.lineId === lineId);
+
+      if (lineIndex < 0) {
+        return [...current, newLine];
+      }
+
+      const next = [...current];
+      next.splice(lineIndex + 1, 0, newLine);
+      return next;
+    });
+
+    focusDescriptionInput(newLine.lineId);
   }
 
   function removePartida(lineId: string) {
@@ -686,43 +881,22 @@ export function QuoteLineEditor({
 
       return current.filter((line) => line.lineId !== lineId);
     });
+
+    setCostDrafts((current) => {
+      const next = { ...current };
+      delete next[lineId];
+      return next;
+    });
+
+    setPriceDrafts((current) => {
+      const next = { ...current };
+      delete next[lineId];
+      return next;
+    });
   }
 
   function onCostChange(lineId: string, value: string) {
-    setLines((current) =>
-      current.map((line) => {
-        if (line.lineId !== lineId) {
-          return line;
-        }
-
-        const costUnit = Math.max(0, toNumber(value));
-        if (line.priceUnit <= 0) {
-          const pricing = resolveBidirectionalPricing({
-            costUnit,
-            marginPct: line.marginPct,
-          });
-
-          return {
-            ...line,
-            costUnit,
-            marginPct: pricing.marginPct,
-            priceUnit: pricing.priceUnit,
-          };
-        }
-
-        const pricing = resolveBidirectionalPricing({
-          costUnit,
-          priceUnit: line.priceUnit,
-        });
-
-        return {
-          ...line,
-          costUnit,
-          marginPct: pricing.marginPct,
-          priceUnit: pricing.priceUnit,
-        };
-      }),
-    );
+    onCostDraftChange(lineId, value);
   }
 
   function onMarginChange(lineId: string, value: string) {
@@ -748,33 +922,7 @@ export function QuoteLineEditor({
   }
 
   function onPriceChange(lineId: string, value: string) {
-    setLines((current) =>
-      current.map((line) => {
-        if (line.lineId !== lineId) {
-          return line;
-        }
-
-        const priceUnit = Math.max(0, toNumber(value));
-        if (priceUnit <= 0) {
-          return {
-            ...line,
-            marginPct: 0,
-            priceUnit,
-          };
-        }
-
-        const pricing = resolveBidirectionalPricing({
-          costUnit: line.costUnit,
-          priceUnit,
-        });
-
-        return {
-          ...line,
-          marginPct: pricing.marginPct,
-          priceUnit: pricing.priceUnit,
-        };
-      }),
-    );
+    onPriceDraftChange(lineId, value);
   }
 
   async function saveLines(forceNewVersion = false): Promise<string | null> {
@@ -829,6 +977,8 @@ export function QuoteLineEditor({
 
       setLines(data.lines.map(normalizeLineQuantity));
       setQuantityDrafts({});
+      setCostDrafts({});
+      setPriceDrafts({});
       setLineDiffMap(nextDiffResult.diffMap);
       setLineDeltaMap(nextDiffResult.deltaMap);
       setCompareLineCounts({
@@ -894,6 +1044,8 @@ export function QuoteLineEditor({
 
       setLines(targetData.lines.map(normalizeLineQuantity));
       setQuantityDrafts({});
+      setCostDrafts({});
+      setPriceDrafts({});
       setSelectedQuoteId(targetQuoteId);
       onSelectedQuoteChange?.(targetQuoteId);
       setLineDiffMap(diffResult.diffMap);
@@ -1595,7 +1747,20 @@ export function QuoteLineEditor({
 
               return (
               <tr key={line.lineId}>
-                <td className="px-4 py-3 font-mono text-xs text-zinc-600">{String(index + 1).padStart(3, "0")}</td>
+                <td className="px-4 py-3">
+                  <div className="flex items-center gap-2">
+                    <span className="font-mono text-xs text-zinc-600">{String(index + 1).padStart(3, "0")}</span>
+                    <button
+                      className="rounded border border-zinc-300 px-2 py-1 text-xs font-medium text-zinc-700 hover:bg-zinc-50"
+                      onClick={() => {
+                        addPartidaAfter(line.lineId);
+                      }}
+                      type="button"
+                    >
+                      + Partida
+                    </button>
+                  </div>
+                </td>
                 <td className="px-4 py-3">
                   <input
                     className="w-28 rounded border border-zinc-300 px-2 py-1"
@@ -1608,15 +1773,29 @@ export function QuoteLineEditor({
                   />
                 </td>
                 <td className="px-4 py-3">
-                  <input
-                    className="w-72 rounded border border-zinc-300 px-2 py-1 text-zinc-900"
-                    onChange={(event) => {
-                      updateLine(line.lineId, { description: event.target.value });
-                    }}
-                    placeholder="Descripcion de la partida"
-                    type="text"
-                    value={line.description}
-                  />
+                  <div className="flex flex-col gap-1.5">
+                    <input
+                      className="w-72 rounded border border-zinc-300 px-2 py-1 text-zinc-900"
+                      ref={(node) => {
+                        descriptionInputRefs.current[line.lineId] = node;
+                      }}
+                      onChange={(event) => {
+                        updateLine(line.lineId, { description: event.target.value });
+                      }}
+                      placeholder="Descripcion de la partida"
+                      type="text"
+                      value={line.description}
+                    />
+                    <button
+                      className="w-fit rounded border border-zinc-300 px-2 py-1 text-[11px] font-medium text-zinc-700 hover:bg-zinc-50"
+                      onClick={() => {
+                        addPartidaAfter(line.lineId);
+                      }}
+                      type="button"
+                    >
+                      + Agregar abajo
+                    </button>
+                  </div>
                 </td>
                 <td className={`px-4 py-3 ${diffCellClass(Boolean(lineDiffMap[line.lineId]?.has("quantity")))}`}>
                   <input
@@ -1643,26 +1822,42 @@ export function QuoteLineEditor({
                   <input
                     className="w-28 rounded border border-zinc-300 px-2 py-1"
                     title={lineDeltaMap[line.lineId]?.costUnit}
-                    min={0}
+                    inputMode="decimal"
+                    pattern="[0-9]*[.,]?[0-9]*"
+                    onBlur={() => {
+                      commitCostDraft(line.lineId);
+                    }}
                     onChange={(event) => {
                       onCostChange(line.lineId, event.target.value);
                     }}
-                    step={0.01}
-                    type="number"
-                    value={line.costUnit}
+                    onKeyDown={(event) => {
+                      if (event.key === "Enter") {
+                        commitCostDraft(line.lineId);
+                      }
+                    }}
+                    type="text"
+                    value={costDrafts[line.lineId] ?? String(line.costUnit)}
                   />
                 </td>
                 <td className={`px-4 py-3 ${diffCellClass(Boolean(lineDiffMap[line.lineId]?.has("priceUnit")))}`}>
                   <input
                     className="w-28 rounded border border-zinc-300 px-2 py-1"
                     title={lineDeltaMap[line.lineId]?.priceUnit}
-                    min={0}
+                    inputMode="decimal"
+                    pattern="[0-9]*[.,]?[0-9]*"
+                    onBlur={() => {
+                      commitPriceDraft(line.lineId);
+                    }}
                     onChange={(event) => {
                       onPriceChange(line.lineId, event.target.value);
                     }}
-                    step={0.01}
-                    type="number"
-                    value={line.priceUnit}
+                    onKeyDown={(event) => {
+                      if (event.key === "Enter") {
+                        commitPriceDraft(line.lineId);
+                      }
+                    }}
+                    type="text"
+                    value={priceDrafts[line.lineId] ?? String(line.priceUnit)}
                   />
                 </td>
                 <td className="px-4 py-3 text-zinc-700">
