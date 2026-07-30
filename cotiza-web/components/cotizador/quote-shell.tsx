@@ -264,17 +264,23 @@ export function QuoteShell({
   }, [pathname, quoteSort, router, searchParams]);
 
   useEffect(() => {
-    if (filteredQuoteItems.length === 0) {
+    if (quoteItems.length === 0) {
+      if (activeQuoteId !== null) {
+        // eslint-disable-next-line react-hooks/set-state-in-effect
+        setActiveQuoteId(null);
+      }
       return;
     }
 
-    const selectedIsVisible = filteredQuoteItems.some((item) => item.quoteId === activeQuoteId);
+    const selectedExists = activeQuoteId ? quoteItems.some((item) => item.quoteId === activeQuoteId) : false;
 
-    if (!selectedIsVisible) {
+    if (!selectedExists) {
+      // Solo corrige cuando la cotización ya no existe en el dataset completo.
+      // No debe depender del filtro de búsqueda, para no "rebotar" la selección.
       // eslint-disable-next-line react-hooks/set-state-in-effect
-      setActiveQuoteId(filteredQuoteItems[0].quoteId);
+      setActiveQuoteId(quoteItems[0].quoteId);
     }
-  }, [activeQuoteId, filteredQuoteItems]);
+  }, [activeQuoteId, quoteItems]);
 
   // Buscar clientes con debounce al escribir en el campo de cliente
   useEffect(() => {
@@ -735,6 +741,7 @@ export function QuoteShell({
       {quoteItems.length > 0 ? (
         <QuoteLineEditor
           forcedSelectedQuoteId={activeQuoteId}
+          onSelectedQuoteChange={setActiveQuoteId}
           onQuoteVersionSaved={handleQuoteVersionSaved}
           quotes={quoteItems}
         />

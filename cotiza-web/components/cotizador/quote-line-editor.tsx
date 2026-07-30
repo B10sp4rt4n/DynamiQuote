@@ -26,6 +26,7 @@ export type QuoteVersionSaved = QuoteVersionResponse;
 
 type QuoteLineEditorProps = {
   forcedSelectedQuoteId?: string | null;
+  onSelectedQuoteChange?: (quoteId: string) => void;
   onQuoteVersionSaved?: (quote: QuoteVersionSaved) => void;
   quotes: QuoteGroupSummary[];
 };
@@ -518,6 +519,7 @@ function StatusBadge({ status }: { status: string }) {
 
 export function QuoteLineEditor({
   forcedSelectedQuoteId,
+  onSelectedQuoteChange,
   onQuoteVersionSaved,
   quotes,
 }: QuoteLineEditorProps) {
@@ -557,15 +559,17 @@ export function QuoteLineEditor({
   }, [selectedQuoteId]);
 
   useEffect(() => {
-    if (!forcedSelectedQuoteId || forcedSelectedQuoteId === selectedQuoteId) {
+    if (!forcedSelectedQuoteId) {
       return;
     }
 
+    // Cuando la selección cambia desde el contenedor, reflejarla en el editor.
+    // Evitamos depender de selectedQuoteId para no pisar cambios hechos localmente.
     // eslint-disable-next-line react-hooks/set-state-in-effect
     setCompareState(null);
     setLineDeltaMap({});
-    setSelectedQuoteId(forcedSelectedQuoteId);
-  }, [forcedSelectedQuoteId, selectedQuoteId]);
+    setSelectedQuoteId((current) => (current === forcedSelectedQuoteId ? current : forcedSelectedQuoteId));
+  }, [forcedSelectedQuoteId]);
 
   async function loadVersions(quoteId: string) {
     try {
@@ -622,6 +626,7 @@ export function QuoteLineEditor({
     setCompareState(null);
     setLineDeltaMap({});
     setSelectedQuoteId(nextQuoteId);
+    onSelectedQuoteChange?.(nextQuoteId);
   }
 
   function updateLine(lineId: string, patch: Partial<EditableQuoteLine>) {
@@ -844,6 +849,7 @@ export function QuoteLineEditor({
       }
       onQuoteVersionSaved?.(data.quote);
       setSelectedQuoteId(data.quote.quoteId);
+      onSelectedQuoteChange?.(data.quote.quoteId);
       void loadVersions(data.quote.quoteId);
       setMessage(
         data.versionCreated
@@ -889,6 +895,7 @@ export function QuoteLineEditor({
       setLines(targetData.lines.map(normalizeLineQuantity));
       setQuantityDrafts({});
       setSelectedQuoteId(targetQuoteId);
+      onSelectedQuoteChange?.(targetQuoteId);
       setLineDiffMap(diffResult.diffMap);
       setLineDeltaMap(diffResult.deltaMap);
       setCompareLineCounts({
