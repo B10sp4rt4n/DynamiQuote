@@ -223,6 +223,12 @@ export async function POST(request: Request) {
             emailAddress: normalizedEmail,
             redirectUrl: `${inviteBase}/sign-up`,
             publicMetadata: {
+              // Clerk no acepta firstName/lastName en createInvitation, y su
+              // flujo de sign-up no siempre los captura. Los mandamos aqui
+              // para que el webhook user.created los use si Clerk llega sin
+              // nombre real (ver app/api/webhooks/clerk/route.ts).
+              firstName: parsed.data.firstName,
+              lastName: parsed.data.lastName,
               localUserId: responseUser.userId,
               role: assignedRole,
               tenantId: targetTenant.tenant_id,

@@ -71,8 +71,14 @@ export async function POST(request: NextRequest) {
       );
     }
 
-    const firstName = pickString(payload.first_name) ?? "Usuario";
-    const lastName = pickString(payload.last_name) ?? "Invitado";
+    // El sign-up de Clerk no siempre captura nombre real (invitaciones via
+    // email suelen llegar sin first_name/last_name). Usamos el nombre que
+    // el admin capturo al invitar (ver app/api/settings/users/route.ts,
+    // que lo manda en publicMetadata) antes de caer al placeholder.
+    const firstName =
+      pickString(payload.first_name) ?? pickString(publicMetadata.firstName) ?? "Usuario";
+    const lastName =
+      pickString(payload.last_name) ?? pickString(publicMetadata.lastName) ?? "Invitado";
     const role = normalizeRole(pickString(publicMetadata.role));
     const localUserId = pickString(publicMetadata.localUserId) ?? pickString(publicMetadata.local_user_id);
     const externalId = pickString(payload.external_id);
