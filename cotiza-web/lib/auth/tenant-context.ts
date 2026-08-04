@@ -14,7 +14,6 @@ export type TenantContext = BootstrapTenant & {
   accessScope: AccessScope;
   authMode: "bootstrap" | "clerk";
   isSuperAdmin: boolean;
-  isTenantPrimaryAdmin: boolean;
   subtenantKey: string | null;
   userRole: AppUserRole;
   userDisplayName: string | null;
@@ -49,7 +48,6 @@ const DEV_CLERK_EMAIL_ALIAS_COOKIE = "dev_clerk_email_alias";
 const DEV_CLERK_FIRST_NAME_COOKIE = "dev_clerk_first_name";
 const DEV_CLERK_LAST_NAME_COOKIE = "dev_clerk_last_name";
 const SUPER_ADMIN_ROLES = new Set<string>(["superadmin", "super_admin", "platform_admin", "root"]);
-const TENANT_ADMIN_ROLES = new Set<string>(["owner", "admin"]);
 
 async function resolveBootstrapTenantContext(
   tenantOverrideSlug: string | null,
@@ -65,7 +63,6 @@ async function resolveBootstrapTenantContext(
         ...tenant,
         authMode: "bootstrap",
         isSuperAdmin: false,
-        isTenantPrimaryAdmin: true,
         subtenantKey: null,
         // En modo bootstrap no hay identidad Clerk, pero sí debe existir un actor técnico
         // para operar políticas/aprobaciones durante desarrollo y demos.
@@ -187,7 +184,6 @@ async function resolveDevelopmentTenantContextFromCookies(
     authMode: "clerk",
     id: tenant.id,
     isSuperAdmin,
-    isTenantPrimaryAdmin: false,
     name: tenant.name,
     slug: tenant.slug,
     subtenantKey: userId ? `${tenant.id}:${userId}` : tenant.id,
@@ -622,26 +618,6 @@ export async function getCurrentTenantContext(): Promise<TenantContext | null> {
     userDisplayName = null;
   }
 
-  const isTenantAdmin = TENANT_ADMIN_ROLES.has(userRole);
-
-  const primaryAdmin = isTenantAdmin
-    ? await prisma.app_users.findFirst({
-        orderBy: [{ created_at: "asc" }],
-        select: {
-          user_id: true,
-        },
-        where: {
-          active: true,
-          role: {
-            in: ["owner", "admin"],
-          },
-          tenant_id: tenant.id,
-        },
-      })
-    : null;
-
-  const isTenantPrimaryAdmin = Boolean(isTenantAdmin && primaryAdmin?.user_id === appUser?.user_id);
-
   const accessScope: AccessScope = isSuperAdmin ? "global" : "subtenant";
   const subtenantKey = isSuperAdmin ? `superadmin:${userId}` : `${tenant.id}:${userId}`;
 
@@ -650,7 +626,6 @@ export async function getCurrentTenantContext(): Promise<TenantContext | null> {
     authMode: "clerk",
     id: tenant.id,
     isSuperAdmin,
-    isTenantPrimaryAdmin,
     name: tenant.name,
     slug: tenant.slug,
     subtenantKey,
