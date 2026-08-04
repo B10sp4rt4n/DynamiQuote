@@ -1200,7 +1200,7 @@ export async function updateProposalWorkflowByTenant(
 
   const currentStatus = current.status;
   const currentFormal = current.formal;
-  const nextStatus = input.status ?? currentStatus;
+  let nextStatus = input.status ?? currentStatus;
   const hasStatusUpdate = nextStatus !== currentStatus;
   const hasTermsUpdate =
     input.termsAndConditions !== undefined &&
@@ -1308,7 +1308,18 @@ export async function updateProposalWorkflowByTenant(
     await clearProposalApprovalsByTenant(tenantId, proposalId);
   }
 
-  if (hasStatusUpdate && nextStatus === "approved") {
+  // Auto-aprobacion al someter un borrador cuyo margen ya esta dentro de
+  // politica: la decide la politica de margen, no una persona, asi que
+  // cualquier rol puede completarla — no se exige elegibilidad de aprobador.
+  // Si el tenant exige un observador (requireObserverApproval) y quien
+  // somete no lo satisface por si solo, la propuesta cae a "in_review" en
+  // vez de fallar con un error. Cualquier otra transicion a "approved"
+  // (ej. "Cliente acepto" desde estado "sent", o una decision manual)
+  // mantiene el chequeo estricto de elegibilidad + gate, sin cambios.
+  const isDraftMarginAutoApproval = hasStatusUpdate && nextStatus === "approved" && currentStatus === "draft";
+  const skipApprovalGate = isDraftMarginAutoApproval && !policy.requireObserverApproval;
+
+  if (hasStatusUpdate && nextStatus === "approved" && !skipApprovalGate) {
     const actorUserId = actor?.userId ?? null;
     const approverRole = resolveApproverRole(
       actor ?? {
@@ -1317,7 +1328,9 @@ export async function updateProposalWorkflowByTenant(
       },
     );
 
-    assertApprovalActorEligibility({ approverRole, userId: actorUserId });
+    if (!isDraftMarginAutoApproval) {
+      assertApprovalActorEligibility({ approverRole, userId: actorUserId });
+    }
 
     if (!actorUserId) {
       throw new Error("No se pudo identificar al aprobador.");
@@ -1349,9 +1362,15 @@ export async function updateProposalWorkflowByTenant(
     });
 
     if (!gate.canAuthorizeFinal) {
-      const gateError = resolveApprovalGateError(gate.missingRoles);
-      if (gateError) {
-        throw new Error(gateError);
+      if (isDraftMarginAutoApproval) {
+        // No se pudo auto-aprobar sin el observador requerido: pasa a
+        // revision manual en vez de fallar para quien la sometio.
+        nextStatus = "in_review";
+      } else {
+        const gateError = resolveApprovalGateError(gate.missingRoles);
+        if (gateError) {
+          throw new Error(gateError);
+        }
       }
     }
   }
