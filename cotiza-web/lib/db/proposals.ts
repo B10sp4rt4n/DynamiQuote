@@ -556,51 +556,6 @@ async function resolvePreferredIssuerLogoAssetByTenant(tenantId: string): Promis
   return raster ?? candidates[0] ?? null;
 }
 
-async function resolvePreferredClientLogoAssetByTenant(tenantId: string): Promise<{
-  logo_data: Uint8Array;
-  logo_format: string;
-} | null> {
-  const isSvg = (format: string | null | undefined): boolean => {
-    const normalized = (format ?? "").trim().toLowerCase();
-    return normalized === "svg" || normalized === "svg+xml";
-  };
-
-  const pickBest = async (tenantScope: string | null): Promise<{ logo_data: Uint8Array; logo_format: string } | null> => {
-    const rows = await prisma.company_logos.findMany({
-      orderBy: [{ uploaded_at: "desc" }],
-      select: {
-        logo_data: true,
-        logo_format: true,
-      },
-      take: 20,
-      where: {
-        logo_type: "client",
-        tenant_id: tenantScope,
-      },
-    });
-
-    const withBytes = rows.filter((row) => row.logo_data?.length > 0);
-    if (withBytes.length === 0) return null;
-
-    const raster = withBytes.find((row) => !isSvg(row.logo_format));
-    const selected = raster ?? withBytes[0];
-
-    return selected
-      ? {
-          logo_data: selected.logo_data,
-          logo_format: selected.logo_format,
-        }
-      : null;
-  };
-
-  const tenantDefault = await pickBest(tenantId);
-  if (tenantDefault) {
-    return tenantDefault;
-  }
-
-  return pickBest(null);
-}
-
 function resolveApproverRole(actor: {
   isSuperAdmin: boolean;
   userRole: "superadmin" | "owner" | "admin" | "user";
@@ -1093,7 +1048,12 @@ export async function getProposalWorkflowByTenant(
                 },
               });
             })()
-          : resolvePreferredClientLogoAssetByTenant(tenantId),
+          // A diferencia del emisor (siempre la misma empresa, tiene sentido
+          // un logo "preferido" del tenant como default), el cliente cambia
+          // por propuesta. Sin client_logo_id no hay logo que mostrar — nada
+          // de caer al logo de cliente subido mas recientemente en el tenant,
+          // que podria ser el de cualquier otro cliente sin relacion alguna.
+          : Promise.resolve(null),
       ])
     : [null, null];
   const resolvedSalesOwner = await resolveUserDisplayNameByTenant(tenantId, row.created_by);
