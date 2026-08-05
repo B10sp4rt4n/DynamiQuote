@@ -11,8 +11,8 @@ export const marginPolicyInputSchema = z
     message: "El margen minimo no puede ser mayor al maximo",
     path: ["minMarginPct"],
   })
-  .refine((value) => value.maxMarginPct <= value.highPreapprovalMarginPct, {
-    message: "El umbral alto debe ser igual o mayor al margen maximo",
+  .refine((value) => value.maxMarginPct < value.highPreapprovalMarginPct, {
+    message: "El umbral alto debe ser mayor al margen maximo",
     path: ["highPreapprovalMarginPct"],
   });
 
