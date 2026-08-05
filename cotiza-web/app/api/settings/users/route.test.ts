@@ -104,6 +104,7 @@ const TENANT = {
   isSuperAdmin: false,
   userId: "user_admin123",
   userDisplayName: "Admin Test",
+  userRole: "admin",
 };
 
 const TARGET_TENANT = {
@@ -314,5 +315,95 @@ describe("POST /api/settings/users — guards", () => {
 
     const res = await POST(makeRequest(VALID_BODY));
     expect(res.status).toBe(409);
+  });
+});
+
+// ---------------------------------------------------------------------------
+// Tests: escalacion de privilegios (fix de seguridad).
+// ---------------------------------------------------------------------------
+
+describe("POST /api/settings/users — escalacion de privilegios", () => {
+  it("L: rol 'user' no puede crear usuarios en absoluto → 403", async () => {
+    getCurrentTenantContextMock.mockResolvedValue({ ...TENANT, userRole: "user" });
+
+    const res = await POST(makeRequest(VALID_BODY));
+    const json = await res.json();
+
+    expect(res.status).toBe(403);
+    expect(createManagedUserByTenantMock).not.toHaveBeenCalled();
+    expect(json.error).toMatch(/permisos/i);
+  });
+
+  it("M: 'admin' no puede asignar rol 'admin' (techo: solo 'user') → 403", async () => {
+    getCurrentTenantContextMock.mockResolvedValue({ ...TENANT, userRole: "admin" });
+
+    const res = await POST(makeRequest({ ...VALID_BODY, role: "admin" }));
+    const json = await res.json();
+
+    expect(res.status).toBe(403);
+    expect(createManagedUserByTenantMock).not.toHaveBeenCalled();
+    expect(json.error).toMatch(/no puede asignar/i);
+  });
+
+  it("N: 'admin' no puede asignar rol 'owner' → 403", async () => {
+    getCurrentTenantContextMock.mockResolvedValue({ ...TENANT, userRole: "admin" });
+
+    const res = await POST(makeRequest({ ...VALID_BODY, role: "owner" }));
+    expect(res.status).toBe(403);
+    expect(createManagedUserByTenantMock).not.toHaveBeenCalled();
+  });
+
+  it("O: 'owner' SI puede asignar rol 'admin' → 201", async () => {
+    getCurrentTenantContextMock.mockResolvedValue({ ...TENANT, userRole: "owner" });
+
+    const res = await POST(makeRequest({ ...VALID_BODY, role: "admin" }));
+    expect(res.status).toBe(201);
+    expect(createManagedUserByTenantMock).toHaveBeenCalled();
+  });
+
+  it("P: 'owner' NO puede asignar rol 'owner' (no puede crear co-owners) → 403", async () => {
+    getCurrentTenantContextMock.mockResolvedValue({ ...TENANT, userRole: "owner" });
+
+    const res = await POST(makeRequest({ ...VALID_BODY, role: "owner" }));
+    const json = await res.json();
+
+    expect(res.status).toBe(403);
+    expect(createManagedUserByTenantMock).not.toHaveBeenCalled();
+    expect(json.error).toMatch(/no puede asignar/i);
+  });
+
+  it("Q: superadmin SI puede asignar rol 'owner' → 201", async () => {
+    getCurrentTenantContextMock.mockResolvedValue({ ...TENANT, isSuperAdmin: true, userRole: "superadmin" });
+
+    const res = await POST(makeRequest({ ...VALID_BODY, role: "owner" }));
+    expect(res.status).toBe(201);
+    expect(createManagedUserByTenantMock).toHaveBeenCalled();
+  });
+
+  it("R: no-superadmin que manda tenantId distinto en el payload → se ignora, se fuerza el propio tenant", async () => {
+    getCurrentTenantContextMock.mockResolvedValue({ ...TENANT, userRole: "admin", id: "tenant-abc" });
+
+    await POST(makeRequest({ ...VALID_BODY, tenantId: "tenant-ajeno-xyz" }));
+
+    expect(prismaFindFirstMock).toHaveBeenCalledWith(
+      expect.objectContaining({ where: expect.objectContaining({ tenant_id: "tenant-abc" }) }),
+    );
+    expect(createManagedUserByTenantMock).toHaveBeenCalledWith(
+      expect.objectContaining({ targetTenantId: "tenant-abc" }),
+    );
+  });
+
+  it("S: superadmin SI puede especificar un tenantId distinto en el payload", async () => {
+    getCurrentTenantContextMock.mockResolvedValue({ ...TENANT, isSuperAdmin: true, userRole: "superadmin", id: "tenant-abc" });
+    prismaFindFirstMock.mockResolvedValue({ ...TARGET_TENANT, tenant_id: "tenant-otro" });
+
+    await POST(makeRequest({ ...VALID_BODY, tenantId: "tenant-otro" }));
+
+    expect(prismaFindFirstMock).toHaveBeenCalledWith(
+      expect.objectContaining({ where: expect.objectContaining({ tenant_id: "tenant-otro" }) }),
+    );
+    expect(createManagedUserByTenantMock).toHaveBeenCalledWith(
+      expect.objectContaining({ targetTenantId: "tenant-otro" }),
+    );
   });
 });

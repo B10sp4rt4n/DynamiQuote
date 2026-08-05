@@ -78,6 +78,10 @@ export async function POST(request: Request) {
   const tenant = await getCurrentTenantContext();
   if (!tenant) return NextResponse.json({ error: "No autorizado" }, { status: 401 });
 
+  if (!(tenant.isSuperAdmin || tenant.userRole === "owner" || tenant.userRole === "admin")) {
+    return NextResponse.json({ error: "No tienes permisos para crear usuarios" }, { status: 403 });
+  }
+
   const body = (await request.json().catch(() => null)) as unknown;
   const parsed = createManagedUserSchema.safeParse(body);
 
@@ -85,7 +89,27 @@ export async function POST(request: Request) {
     return NextResponse.json({ error: parsed.error.issues[0]?.message ?? "Payload invalido" }, { status: 422 });
   }
 
-  const targetTenantId = parsed.data.tenantId ?? tenant.id;
+  const requestedRole = parsed.data.role ?? "user";
+  // Techo de asignacion: nadie puede otorgar un rol igual o superior al propio,
+  // salvo superadmin. admin solo puede crear "user"; owner puede crear
+  // "user"/"admin" pero no otro "owner".
+  const assignableRoles: Record<"owner" | "admin", Array<"user" | "admin">> = {
+    admin: ["user"],
+    owner: ["user", "admin"],
+  };
+
+  if (!tenant.isSuperAdmin) {
+    const allowed: readonly string[] = assignableRoles[tenant.userRole as "owner" | "admin"] ?? [];
+    if (!allowed.includes(requestedRole)) {
+      return NextResponse.json(
+        { error: `Tu rol (${tenant.userRole}) no puede asignar el rol "${requestedRole}"` },
+        { status: 403 },
+      );
+    }
+  }
+
+  // Solo superadmin puede crear usuarios fuera de su propio tenant.
+  const targetTenantId = tenant.isSuperAdmin ? (parsed.data.tenantId ?? tenant.id) : tenant.id;
 
   const targetTenant = await prisma.tenant.findFirst({
     select: {
@@ -103,7 +127,7 @@ export async function POST(request: Request) {
     return NextResponse.json({ error: "Tenant destino invalido" }, { status: 422 });
   }
 
-  const assignedRole = parsed.data.role ?? "user";
+  const assignedRole = requestedRole;
   const normalizedEmail = parsed.data.email.trim().toLowerCase();
   const adminProvidedUserId = parsed.data.userId?.trim() || null;
   const provisionalUserId = adminProvidedUserId || `pending_${crypto.randomUUID()}`;
