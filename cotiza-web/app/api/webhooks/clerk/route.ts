@@ -1,4 +1,5 @@
 import { NextRequest, NextResponse } from "next/server";
+import { clerkClient } from "@clerk/nextjs/server";
 import { verifyWebhook } from "@clerk/nextjs/webhooks";
 
 import { syncManagedUserFromClerkUserCreated } from "@/lib/db/settings";
@@ -99,6 +100,31 @@ export async function POST(request: NextRequest) {
       return NextResponse.json(
         { clerkUserId, ignored: true, reason: "could_not_match_or_create_local_user", tenantId },
         { status: 200 },
+      );
+    }
+
+    // Clerk incluye el publicMetadata de la invitación en el payload de este
+    // evento, pero NO lo copia automáticamente al publicMetadata propio del
+    // usuario recién creado — hay que escribirlo explícitamente. Sin esto,
+    // sessionClaims queda sin tenantId en un login real y getCurrentTenantContext()
+    // cae al tenant bootstrap. Este fallo es invisible hasta que alguien inicia
+    // sesión, así que si falla se loguea fuerte en vez de tragarse el error;
+    // no debe tumbar el resto del webhook porque la escritura en Neon ya es
+    // la fuente de verdad y ya se completó arriba.
+    try {
+      const tenantSlug = pickString(publicMetadata.tenantSlug);
+      await (await clerkClient()).users.updateUserMetadata(clerkUserId, {
+        publicMetadata: {
+          localUserId,
+          role,
+          tenantId,
+          tenantSlug,
+        },
+      });
+    } catch (error) {
+      console.error(
+        "[webhook][clerk] FALLO al sincronizar publicMetadata hacia Clerk — el usuario quedara sin tenantId en su sesion real hasta corregirse manualmente:",
+        { clerkUserId, tenantId, error },
       );
     }
 

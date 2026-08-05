@@ -1,13 +1,20 @@
 import { NextRequest } from "next/server";
 import { beforeEach, describe, expect, it, vi } from "vitest";
 
-const { verifyWebhookMock, syncManagedUserFromClerkUserCreatedMock } = vi.hoisted(() => ({
+const { verifyWebhookMock, syncManagedUserFromClerkUserCreatedMock, updateUserMetadataMock } = vi.hoisted(() => ({
   verifyWebhookMock: vi.fn(),
   syncManagedUserFromClerkUserCreatedMock: vi.fn(),
+  updateUserMetadataMock: vi.fn(),
 }));
 
 vi.mock("@clerk/nextjs/webhooks", () => ({
   verifyWebhook: verifyWebhookMock,
+}));
+
+vi.mock("@clerk/nextjs/server", () => ({
+  clerkClient: vi.fn().mockResolvedValue({
+    users: { updateUserMetadata: updateUserMetadataMock },
+  }),
 }));
 
 vi.mock("@/lib/db/settings", () => ({
@@ -42,6 +49,7 @@ describe("POST /api/webhooks/clerk", () => {
   beforeEach(() => {
     vi.clearAllMocks();
     syncManagedUserFromClerkUserCreatedMock.mockResolvedValue({ userId: "local-1" });
+    updateUserMetadataMock.mockResolvedValue({});
   });
 
   it("A: Clerk manda first_name/last_name reales -> se usan tal cual", async () => {
@@ -94,5 +102,49 @@ describe("POST /api/webhooks/clerk", () => {
 
     expect(json.ignored).toBe(true);
     expect(syncManagedUserFromClerkUserCreatedMock).not.toHaveBeenCalled();
+  });
+
+  it("E: sincroniza publicMetadata hacia Clerk tras crear el usuario local", async () => {
+    verifyWebhookMock.mockResolvedValue({
+      type: "user.created",
+      data: baseUserCreatedPayload({ tenantSlug: "salsa", localUserId: "pending_abc123" }),
+    });
+
+    await POST(makeRequest());
+
+    expect(updateUserMetadataMock).toHaveBeenCalledWith(
+      "user_test123",
+      {
+        publicMetadata: {
+          localUserId: "pending_abc123",
+          role: "user",
+          tenantId: "tenant-salsa",
+          tenantSlug: "salsa",
+        },
+      },
+    );
+  });
+
+  it("F: si falla la sincronizacion hacia Clerk, no tumba el webhook y queda logueado (no silencioso)", async () => {
+    const consoleErrorSpy = vi.spyOn(console, "error").mockImplementation(() => {});
+    updateUserMetadataMock.mockRejectedValue(new Error("Clerk API caida"));
+
+    verifyWebhookMock.mockResolvedValue({
+      type: "user.created",
+      data: baseUserCreatedPayload(),
+    });
+
+    const res = await POST(makeRequest());
+    const json = await res.json();
+
+    expect(res.status).toBe(200);
+    expect(json.ok).toBe(true);
+    expect(syncManagedUserFromClerkUserCreatedMock).toHaveBeenCalled();
+    expect(consoleErrorSpy).toHaveBeenCalledWith(
+      expect.stringContaining("FALLO al sincronizar publicMetadata"),
+      expect.objectContaining({ clerkUserId: "user_test123" }),
+    );
+
+    consoleErrorSpy.mockRestore();
   });
 });
