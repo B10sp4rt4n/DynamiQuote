@@ -14,6 +14,7 @@ type SettingsShellProps = {
   canViewTenantConfig?: boolean;
   canManageAllTenants?: boolean;
   canManagePolicy?: boolean;
+  canManageUsers?: boolean;
   issuerProfiles: IssuerProfileSummary[];
   marginPolicy: MarginPolicySummary;
   proposalMarginBlockedCount: number;
@@ -1792,11 +1793,12 @@ export function SettingsShell({
   canViewTenantConfig = false,
   canManageAllTenants = false,
   canManagePolicy = false,
+  canManageUsers = false,
   tenantId,
   tenantSlug,
   tenantOptions = [],
 }: SettingsShellProps) {
-  const [tab, setTab] = useState<Tab>(canViewControl ? "control" : "users");
+  const [tab, setTab] = useState<Tab>(canViewControl ? "control" : canManageUsers ? "users" : "policy");
   const [usersState, setUsersState] = useState(users);
   const [issuerProfilesState, setIssuerProfilesState] = useState(issuerProfiles);
   const [marginPolicyState, setMarginPolicyState] = useState(marginPolicy);
@@ -1893,9 +1895,11 @@ export function SettingsShell({
             Tenant
           </button>
         ) : null}
-        <button className={`${tabClass("users")} shrink-0`} onClick={() => setTab("users")} type="button">
-          Usuarios ({usersState.length})
-        </button>
+        {canManageUsers ? (
+          <button className={`${tabClass("users")} shrink-0`} onClick={() => setTab("users")} type="button">
+            Usuarios ({usersState.length})
+          </button>
+        ) : null}
         <button className={`${tabClass("policy")} shrink-0`} onClick={() => setTab("policy")} type="button">
           Política margen
         </button>
@@ -1937,7 +1941,7 @@ export function SettingsShell({
             users={usersState}
           />
         )}
-        {tab === "users" && (
+        {tab === "users" && canManageUsers && (
           <div className="space-y-4">
             <CreateUserForm
               onCreated={pushUser}

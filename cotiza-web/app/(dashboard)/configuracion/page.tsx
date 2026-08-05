@@ -24,6 +24,7 @@ export default async function SettingsPage() {
   }
 
   const canSwitchTenant = tenant.isSuperAdmin;
+  const canManageUsers = tenant.isSuperAdmin || tenant.userRole === "owner" || tenant.userRole === "admin";
 
   const [
     users,
@@ -35,7 +36,11 @@ export default async function SettingsPage() {
     quoteDashboardSnapshot,
     recentProposals,
   ] = await Promise.all([
-    tenant.isSuperAdmin ? getAppUsersForSuperAdmin() : getAppUsersByTenant(tenant.id),
+    canManageUsers
+      ? tenant.isSuperAdmin
+        ? getAppUsersForSuperAdmin()
+        : getAppUsersByTenant(tenant.id)
+      : Promise.resolve([]),
     getIssuerProfilesByTenant(tenant.id),
     getMarginPolicyByTenant(tenant.id),
     canSwitchTenant ? getActiveTenants() : Promise.resolve([{ id: tenant.id, name: tenant.name, slug: tenant.slug }]),
@@ -52,6 +57,7 @@ export default async function SettingsPage() {
       canViewControl={tenant.isSuperAdmin || tenant.userRole === "owner"}
       canViewTenantConfig={tenant.isSuperAdmin || tenant.userRole === "owner"}
       canManagePolicy={tenant.isSuperAdmin || tenant.userRole === "owner" || tenant.userRole === "admin"}
+      canManageUsers={canManageUsers}
       marginPolicy={marginPolicy}
       proposalMarginBlockedCount={proposalMarginBlockedCount}
       proposalStatusCounts={proposalStatusCounts}
