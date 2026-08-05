@@ -987,7 +987,7 @@ function CreateUserForm({
   const [lastName, setLastName] = useState("");
   const [sellerCode, setSellerCode] = useState("");
   const [role, setRole] = useState<"user" | "admin" | "owner">("user");
-  const [tenantId, setTenantId] = useState(tenantOptions[0]?.id ?? "");
+  const [tenantId, setTenantId] = useState("");
   const [userId, setUserId] = useState("");
   const [pending, setPending] = useState(false);
   const [error, setError] = useState<string | null>(null);
@@ -998,6 +998,12 @@ function CreateUserForm({
     event.preventDefault();
     setError(null);
     setSuccess(null);
+
+    if (canSelectTenant && tenantId === "") {
+      setError("Selecciona un tenant antes de crear el usuario.");
+      return;
+    }
+
     setPending(true);
 
     try {
@@ -1114,9 +1120,11 @@ function CreateUserForm({
           <select
             className="rounded-lg border border-zinc-400 bg-white px-3 py-2 text-sm text-zinc-900 md:col-span-2"
             onChange={(event) => setTenantId(event.target.value)}
-            required
             value={tenantId}
           >
+            <option disabled value="">
+              — Selecciona tenant —
+            </option>
             {tenantOptions.map((tenant) => (
               <option key={tenant.id} value={tenant.id}>
                 {tenant.name}
