@@ -225,9 +225,9 @@ export function ProposalShell({ proposals, tenantName }: ProposalShellProps) {
   const [approvalReason, setApprovalReason] = useState("");
   const [emailStatus, setEmailStatus] = useState<"idle" | "sending" | "success" | "error">("idle");
   const [emailMessage, setEmailMessage] = useState<string | null>(null);
-  const [listFilter, setListFilter] = useState<ProposalListFilter>("all");
   const [searchQuery, setSearchQuery] = useState("");
   const [sortBy, setSortBy] = useState<ProposalSort>("date_desc");
+  const listFilter = normalizeProposalListFilter(searchParams.get("filter"));
 
   const filteredItems = useMemo(() => {
     const byFilter = (() => {
@@ -346,34 +346,6 @@ export function ProposalShell({ proposals, tenantName }: ProposalShellProps) {
   }, [pathname, router, searchParams, sortBy]);
 
   useEffect(() => {
-    const filterFromQuery = searchParams.get("filter") ?? "all";
-    const nextFilter = normalizeProposalListFilter(filterFromQuery);
-
-    // eslint-disable-next-line react-hooks/set-state-in-effect
-    setListFilter((current) => (current === nextFilter ? current : nextFilter));
-  }, [searchParams]);
-
-  useEffect(() => {
-    const currentFilterParam = searchParams.get("filter");
-    const expectedFilterParam = listFilter === "all" ? null : listFilter;
-
-    if (currentFilterParam === expectedFilterParam) {
-      return;
-    }
-
-    const nextParams = new URLSearchParams(searchParams.toString());
-
-    if (expectedFilterParam) {
-      nextParams.set("filter", expectedFilterParam);
-    } else {
-      nextParams.delete("filter");
-    }
-
-    const nextQuery = nextParams.toString();
-    router.replace(nextQuery.length > 0 ? `${pathname}?${nextQuery}` : pathname, { scroll: false });
-  }, [listFilter, pathname, router, searchParams]);
-
-  useEffect(() => {
     const currentProposalParam = searchParams.get("proposalId");
 
     if (currentProposalParam === selectedProposalId) {
@@ -433,6 +405,19 @@ export function ProposalShell({ proposals, tenantName }: ProposalShellProps) {
     setApprovalReason("");
     setEmailStatus("idle");
     setEmailMessage(null);
+  }
+
+  function handleListFilterChange(nextFilter: ProposalListFilter) {
+    const nextParams = new URLSearchParams(searchParams.toString());
+
+    if (nextFilter === "all") {
+      nextParams.delete("filter");
+    } else {
+      nextParams.set("filter", nextFilter);
+    }
+
+    const nextQuery = nextParams.toString();
+    router.replace(nextQuery.length > 0 ? `${pathname}?${nextQuery}` : pathname, { scroll: false });
   }
 
   async function loadProposalDetail(proposalId: string) {
@@ -1034,7 +1019,7 @@ export function ProposalShell({ proposals, tenantName }: ProposalShellProps) {
                       : sf.className
                   }`}
                   key={sf.value}
-                  onClick={() => setListFilter(sf.value)}
+                  onClick={() => handleListFilterChange(sf.value)}
                   type="button"
                 >
                   {sf.label} ({count})
