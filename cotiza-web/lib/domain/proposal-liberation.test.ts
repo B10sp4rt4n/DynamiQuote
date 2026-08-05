@@ -44,4 +44,50 @@ describe("evaluateProposalLiberation", () => {
     expect(evaluation.canShareInformative).toBe(false);
     expect(evaluation.marginBand).toBe("elevated");
   });
+
+  it("margen exactamente igual al minimo cuenta como dentro de politica (limite inclusivo)", () => {
+    const evaluation = evaluateProposalLiberation(policy, [
+      { costUnit: 90, priceUnit: 100, quantity: 1 },
+    ]);
+
+    expect(evaluation.averageMarginPct).toBe(10);
+    expect(evaluation.releaseMode).toBe("standard");
+    expect(evaluation.canAuthorizeFinal).toBe(true);
+    expect(evaluation.marginBand).toBe("standard");
+  });
+
+  it("margen exactamente igual al maximo cae en banda elevated, no en high_preapproval", () => {
+    const evaluation = evaluateProposalLiberation(policy, [
+      { costUnit: 65, priceUnit: 100, quantity: 1 },
+    ]);
+
+    expect(evaluation.averageMarginPct).toBe(35);
+    expect(evaluation.marginBand).toBe("elevated");
+    expect(evaluation.releaseMode).toBe("standard");
+    expect(evaluation.canAuthorizeFinal).toBe(true);
+    expect(evaluation.canShareInformative).toBe(false);
+  });
+
+  it("margen exactamente igual al umbral alto ya activa preaprobacion informativa", () => {
+    const evaluation = evaluateProposalLiberation(policy, [
+      { costUnit: 45, priceUnit: 100, quantity: 1 },
+    ]);
+
+    expect(evaluation.averageMarginPct).toBe(55);
+    expect(evaluation.marginBand).toBe("high_preapproval");
+    expect(evaluation.releaseMode).toBe("informative");
+    expect(evaluation.canShareInformative).toBe(true);
+  });
+
+  it("con min=10/max=35/umbral=55 la banda elevated SI es alcanzable con un margen intermedio (45%)", () => {
+    const evaluation = evaluateProposalLiberation(policy, [
+      { costUnit: 55, priceUnit: 100, quantity: 1 },
+    ]);
+
+    expect(evaluation.averageMarginPct).toBe(45);
+    expect(evaluation.marginBand).toBe("elevated");
+    expect(evaluation.releaseMode).toBe("standard");
+    expect(evaluation.canAuthorizeFinal).toBe(true);
+    expect(evaluation.canShareInformative).toBe(false);
+  });
 });

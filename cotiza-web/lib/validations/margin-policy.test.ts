@@ -35,4 +35,18 @@ describe("marginPolicyInputSchema", () => {
 
     expect(result.success).toBe(false);
   });
+
+  it("rechaza cuando el umbral alto es igual al maximo (colapsa la banda elevated)", () => {
+    const result = marginPolicyInputSchema.safeParse({
+      highPreapprovalMarginPct: 35,
+      maxMarginPct: 35,
+      minMarginPct: 10,
+      requireObserverApproval: false,
+    });
+
+    expect(result.success).toBe(false);
+    if (!result.success) {
+      expect(result.error.issues[0]?.message).toBe("El umbral alto debe ser mayor al margen maximo");
+    }
+  });
 });
