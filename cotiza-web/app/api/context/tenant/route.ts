@@ -9,10 +9,6 @@ const TENANT_OVERRIDE_COOKIE = "tenant_override_slug";
 const DEV_CLERK_SESSION_COOKIE = "dev_clerk_client_session";
 
 export async function POST(request: Request) {
-  if (process.env.NODE_ENV === "production") {
-    return NextResponse.json({ error: "No permitido en produccion" }, { status: 403 });
-  }
-
   const { userId } = await auth();
   const hasDevClientSession =
     process.env.NODE_ENV === "development" &&
@@ -56,7 +52,7 @@ export async function POST(request: Request) {
     name: TENANT_OVERRIDE_COOKIE,
     path: "/",
     sameSite: "lax",
-    secure: false,
+    secure: process.env.NODE_ENV === "production",
     value: tenant.slug,
   });
 
@@ -72,7 +68,7 @@ export async function DELETE() {
     name: TENANT_OVERRIDE_COOKIE,
     path: "/",
     sameSite: "lax",
-    secure: false,
+    secure: process.env.NODE_ENV === "production",
     value: "",
   });
 
