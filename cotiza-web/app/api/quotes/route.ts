@@ -33,7 +33,7 @@ export async function POST(request: Request) {
     return NextResponse.json({ error: parsed.error.flatten() }, { status: 422 });
   }
 
-  const quote = await createQuoteForTenant(tenant.id, parsed.data);
+  const quote = await createQuoteForTenant(tenant.id, parsed.data, tenant.userId ?? null);
 
   return NextResponse.json({ quote }, { status: 201 });
 }

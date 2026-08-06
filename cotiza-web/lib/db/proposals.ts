@@ -597,6 +597,7 @@ export async function createProposalFromQuoteByTenant(
   tenantId: string,
   input: CreateProposalFromQuoteInput,
   actorName: string | null,
+  actorUserId: string | null = null,
 ): Promise<ProposalSummary | null> {
   const existingProposal = await prisma.proposals.findFirst({
     include: {
@@ -761,6 +762,7 @@ export async function createProposalFromQuoteByTenant(
         closed_at: null,
         created_at: now,
         created_by: issuerContactName,
+        created_by_user_id: actorUserId,
         origin: quote.quote_id,
         proposal_id: proposalId,
         status: "draft",

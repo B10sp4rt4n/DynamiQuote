@@ -103,6 +103,7 @@ async function nextQuoteGroupId(tenantId: string): Promise<string> {
 export async function createQuoteForTenant(
   tenantId: string,
   input: CreateQuoteInput,
+  createdByUserId: string | null = null,
 ): Promise<QuoteGroupSummary> {
   const quoteGroupId = await nextQuoteGroupId(tenantId);
   const quoteId = randomUUID();
@@ -115,6 +116,7 @@ export async function createQuoteForTenant(
         client_id: input.clientId ?? null,
         client_name: input.clientName,
         createdAt: now,
+        created_by_user_id: createdByUserId,
         gross_profit: 0,
         playbook_name: input.playbookName?.trim() || "General",
         proposal_name: input.proposalName?.trim() || "Sin propuesta",

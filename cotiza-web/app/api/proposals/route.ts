@@ -99,7 +99,7 @@ export async function POST(request: Request) {
     }
 
     const actorName = await resolveActorName(tenant.id, tenant.userId, tenant.userDisplayName);
-    const proposal = await createProposalFromQuoteByTenant(tenant.id, parsed.data, actorName);
+    const proposal = await createProposalFromQuoteByTenant(tenant.id, parsed.data, actorName, tenant.userId ?? null);
 
     if (!proposal) {
       return NextResponse.json({ error: "Cotizacion no encontrada" }, { status: 404 });
