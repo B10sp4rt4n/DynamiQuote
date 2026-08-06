@@ -3,12 +3,14 @@ import { beforeEach, describe, expect, it, vi } from "vitest";
 const {
   getCurrentTenantContextMock,
   getProposalWorkflowByTenantMock,
+  isProposalVisibleToViewerMock,
   updateProposalWorkflowByTenantMock,
   enforceRateLimitMock,
   getRequestIdentityMock,
 } = vi.hoisted(() => ({
   getCurrentTenantContextMock: vi.fn(),
   getProposalWorkflowByTenantMock: vi.fn(),
+  isProposalVisibleToViewerMock: vi.fn(),
   updateProposalWorkflowByTenantMock: vi.fn(),
   enforceRateLimitMock: vi.fn(),
   getRequestIdentityMock: vi.fn(),
@@ -20,6 +22,7 @@ vi.mock("@/lib/auth/tenant-context", () => ({
 
 vi.mock("@/lib/db/proposals", () => ({
   getProposalWorkflowByTenant: getProposalWorkflowByTenantMock,
+  isProposalVisibleToViewer: isProposalVisibleToViewerMock,
   updateProposalWorkflowByTenant: updateProposalWorkflowByTenantMock,
 }));
 
@@ -37,6 +40,7 @@ describe("PUT /api/proposals/[proposalId]", () => {
     vi.clearAllMocks();
     enforceRateLimitMock.mockReturnValue({ allowed: true, remaining: 10, resetAt: Date.now() + 10_000 });
     getRequestIdentityMock.mockReturnValue("ip-1");
+    isProposalVisibleToViewerMock.mockResolvedValue(true);
   });
 
   it("devuelve 401 sin tenant", async () => {
@@ -128,6 +132,29 @@ describe("PUT /api/proposals/[proposalId]", () => {
     expect(res.status).toBe(400);
     const body = (await res.json()) as { error: string };
     expect(body.error).toContain("Transicion invalida");
+  });
+
+  it("devuelve 404 cuando isProposalVisibleToViewer indica que no es del viewer (scoping por dueno)", async () => {
+    getCurrentTenantContextMock.mockResolvedValue({
+      id: "t1",
+      isSuperAdmin: false,
+      userId: "u2",
+      userRole: "user",
+    });
+    isProposalVisibleToViewerMock.mockResolvedValue(false);
+
+    const res = await PUT(
+      new Request("http://localhost/api/proposals/p1", {
+        method: "PUT",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ status: "sent" }),
+      }),
+      ctx("p1"),
+    );
+
+    expect(res.status).toBe(404);
+    expect(isProposalVisibleToViewerMock).toHaveBeenCalledWith("t1", "p1", "u2", false);
+    expect(updateProposalWorkflowByTenantMock).not.toHaveBeenCalled();
   });
 
   it("devuelve 200 y pasa actor tenant-scoped", async () => {

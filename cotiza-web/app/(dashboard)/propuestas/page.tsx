@@ -15,7 +15,8 @@ export default async function ProposalsPage() {
     );
   }
 
-  const proposals = await getProposalSummariesByTenant(tenant.id);
+  const canSeeAll = tenant.isSuperAdmin || tenant.userRole === "owner" || tenant.userRole === "admin";
+  const proposals = await getProposalSummariesByTenant(tenant.id, 20, tenant.userId, canSeeAll);
 
   return <ProposalShell proposals={proposals} tenantName={tenant.name} />;
 }

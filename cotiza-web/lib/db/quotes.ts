@@ -100,6 +100,34 @@ async function nextQuoteGroupId(tenantId: string): Promise<string> {
   return `COT-${String(lastNumber + 1).padStart(4, "0")}`;
 }
 
+// Gate de acceso por dueno para rutas de detalle/mutacion por ID. Sin
+// canSeeAll, solo el creador o una cotizacion huerfana (created_by_user_id
+// IS NULL) son visibles -- mismo criterio que getQuoteGroupsSummaryByTenant.
+// Retorna true si no existe (deja que el caller resuelva su propio 404 de
+// "no encontrada" en vez de duplicar esa logica aqui), o si es del viewer,
+// huerfana, o canSeeAll. Retorna false solo cuando existe y es de otro dueno.
+export async function isQuoteVisibleToViewer(
+  tenantId: string,
+  quoteId: string,
+  viewerUserId: string | null,
+  canSeeAll: boolean,
+): Promise<boolean> {
+  if (canSeeAll) {
+    return true;
+  }
+
+  const quote = await prisma.quote.findFirst({
+    select: { created_by_user_id: true },
+    where: { quote_id: quoteId, tenantId },
+  });
+
+  if (!quote) {
+    return true;
+  }
+
+  return quote.created_by_user_id === null || quote.created_by_user_id === viewerUserId;
+}
+
 export async function createQuoteForTenant(
   tenantId: string,
   input: CreateQuoteInput,
@@ -168,7 +196,15 @@ export async function createQuoteForTenant(
 export async function getQuoteGroupsSummaryByTenant(
   tenantId: string,
   limit = 12,
+  viewerUserId: string | null = null,
+  canSeeAll = true,
 ): Promise<QuoteGroupSummary[]> {
+  // Sin canSeeAll, solo se ven las propias (created_by_user_id = viewerUserId)
+  // mas las huerfanas (created_by_user_id IS NULL, sin dueno confiable).
+  const scopeFilter = canSeeAll
+    ? Prisma.empty
+    : Prisma.sql`AND (created_by_user_id = ${viewerUserId} OR created_by_user_id IS NULL)`;
+
   const rows = await prisma.$queryRaw<QuoteSummaryRow[]>(Prisma.sql`
     WITH latest_versions AS (
       SELECT DISTINCT ON (quote_group_id)
@@ -183,7 +219,7 @@ export async function getQuoteGroupsSummaryByTenant(
         proposal_name,
         playbook_name
       FROM quotes
-      WHERE tenant_id = ${tenantId}
+      WHERE tenant_id = ${tenantId} ${scopeFilter}
       ORDER BY quote_group_id, version DESC
     ),
     version_counts AS (
@@ -229,7 +265,13 @@ export async function getQuoteGroupsSummaryByTenant(
 
 export async function getQuoteDashboardSnapshotByTenant(
   tenantId: string,
+  viewerUserId: string | null = null,
+  canSeeAll = true,
 ): Promise<QuoteDashboardSnapshot> {
+  const scopeFilter = canSeeAll
+    ? Prisma.empty
+    : Prisma.sql`AND (created_by_user_id = ${viewerUserId} OR created_by_user_id IS NULL)`;
+
   const [aggregate, recentRows] = await Promise.all([
     prisma.quote.aggregate({
       _count: {
@@ -240,6 +282,9 @@ export async function getQuoteDashboardSnapshotByTenant(
       },
       where: {
         tenantId,
+        ...(canSeeAll
+          ? {}
+          : { OR: [{ created_by_user_id: viewerUserId }, { created_by_user_id: null }] }),
       },
     }),
     prisma.$queryRaw<RecentQuoteRow[]>(Prisma.sql`
@@ -249,7 +294,7 @@ export async function getQuoteDashboardSnapshotByTenant(
       INNER JOIN (
         SELECT quote_group_id, MAX(version) AS max_version
         FROM quotes
-        WHERE tenant_id = ${tenantId}
+        WHERE tenant_id = ${tenantId} ${scopeFilter}
         GROUP BY quote_group_id
       ) latest ON q.quote_group_id = latest.quote_group_id AND q.version = latest.max_version
       WHERE q.tenant_id = ${tenantId}

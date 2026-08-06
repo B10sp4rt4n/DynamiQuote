@@ -857,6 +857,8 @@ export async function createProposalFromQuoteByTenant(
 export async function getProposalSummariesByTenant(
   tenantId: string,
   limit = 20,
+  viewerUserId: string | null = null,
+  canSeeAll = true,
 ): Promise<ProposalSummary[]> {
   const rows = await prisma.proposals.findMany({
     include: {
@@ -888,6 +890,9 @@ export async function getProposalSummariesByTenant(
     take: limit,
     where: {
       tenant_id: tenantId,
+      ...(canSeeAll
+        ? {}
+        : { OR: [{ created_by_user_id: viewerUserId }, { created_by_user_id: null }] }),
     },
   });
 
@@ -903,6 +908,34 @@ export async function getProposalSummariesByTenant(
       status,
     };
   });
+}
+
+// Gate de acceso por dueno para rutas de detalle/mutacion por ID. Sin
+// canSeeAll, solo el creador o una propuesta huerfana (created_by_user_id
+// IS NULL) son visibles -- mismo criterio que getProposalSummariesByTenant.
+// Retorna true si no existe (deja que el caller resuelva su propio 404 de
+// "no encontrada" en vez de duplicar esa logica aqui), o si es del viewer,
+// huerfana, o canSeeAll. Retorna false solo cuando existe y es de otro dueno.
+export async function isProposalVisibleToViewer(
+  tenantId: string,
+  proposalId: string,
+  viewerUserId: string | null,
+  canSeeAll: boolean,
+): Promise<boolean> {
+  if (canSeeAll) {
+    return true;
+  }
+
+  const proposal = await prisma.proposals.findFirst({
+    select: { created_by_user_id: true },
+    where: { proposal_id: proposalId, tenant_id: tenantId },
+  });
+
+  if (!proposal) {
+    return true;
+  }
+
+  return proposal.created_by_user_id === null || proposal.created_by_user_id === viewerUserId;
 }
 
 export async function getProposalWorkflowByTenant(
@@ -1655,11 +1688,18 @@ export type ProposalStatusCounts = {
 
 export async function getProposalStatusCountsByTenant(
   tenantId: string,
+  viewerUserId: string | null = null,
+  canSeeAll = true,
 ): Promise<ProposalStatusCounts> {
   const rows = await prisma.proposals.groupBy({
     by: ["status"],
     _count: { proposal_id: true },
-    where: { tenant_id: tenantId },
+    where: {
+      tenant_id: tenantId,
+      ...(canSeeAll
+        ? {}
+        : { OR: [{ created_by_user_id: viewerUserId }, { created_by_user_id: null }] }),
+    },
   });
 
   const counts: Record<string, number> = {};
@@ -1681,7 +1721,11 @@ export async function getProposalStatusCountsByTenant(
   };
 }
 
-export async function getProposalMarginBlockedCountByTenant(tenantId: string): Promise<number> {
+export async function getProposalMarginBlockedCountByTenant(
+  tenantId: string,
+  viewerUserId: string | null = null,
+  canSeeAll = true,
+): Promise<number> {
   const activeStatuses = ["draft", "sent", "in_review"];
 
   const rows = await prisma.proposals.findMany({
@@ -1703,6 +1747,9 @@ export async function getProposalMarginBlockedCountByTenant(tenantId: string): P
     where: {
       tenant_id: tenantId,
       status: { in: activeStatuses },
+      ...(canSeeAll
+        ? {}
+        : { OR: [{ created_by_user_id: viewerUserId }, { created_by_user_id: null }] }),
     },
   });
 

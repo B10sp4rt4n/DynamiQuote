@@ -5,6 +5,7 @@ import {
   getEditableQuoteLinesByTenant,
   updateQuoteLinesByTenant,
 } from "@/lib/db/quote-editor";
+import { isQuoteVisibleToViewer } from "@/lib/db/quotes";
 import { updateQuoteLinesSchema } from "@/lib/validations/quote-editor";
 import {
   quoteLinesGetResponseSchema,
@@ -23,6 +24,13 @@ export async function GET(_: Request, context: RouteContext) {
   }
 
   const { quoteId } = await context.params;
+
+  const canSeeAll = tenant.isSuperAdmin || tenant.userRole === "owner" || tenant.userRole === "admin";
+  const visible = await isQuoteVisibleToViewer(tenant.id, quoteId, tenant.userId, canSeeAll);
+
+  if (!visible) {
+    return NextResponse.json({ error: "Cotizacion no encontrada" }, { status: 404 });
+  }
 
   const lines = await getEditableQuoteLinesByTenant(tenant.id, quoteId);
 
@@ -43,6 +51,13 @@ export async function PUT(request: Request, context: RouteContext) {
   }
 
   const { quoteId } = await context.params;
+
+  const canSeeAll = tenant.isSuperAdmin || tenant.userRole === "owner" || tenant.userRole === "admin";
+  const visible = await isQuoteVisibleToViewer(tenant.id, quoteId, tenant.userId, canSeeAll);
+
+  if (!visible) {
+    return NextResponse.json({ error: "Cotizacion no encontrada" }, { status: 404 });
+  }
 
   const parsed = updateQuoteLinesSchema.safeParse(await request.json());
 

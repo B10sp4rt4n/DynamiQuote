@@ -44,10 +44,10 @@ export default async function SettingsPage() {
     getIssuerProfilesByTenant(tenant.id),
     getMarginPolicyByTenant(tenant.id),
     canSwitchTenant ? getActiveTenants() : Promise.resolve([{ id: tenant.id, name: tenant.name, slug: tenant.slug }]),
-    getProposalStatusCountsByTenant(tenant.id),
-    getProposalMarginBlockedCountByTenant(tenant.id),
-    getQuoteDashboardSnapshotByTenant(tenant.id),
-    getProposalSummariesByTenant(tenant.id, 6),
+    getProposalStatusCountsByTenant(tenant.id, tenant.userId, canManageUsers),
+    getProposalMarginBlockedCountByTenant(tenant.id, tenant.userId, canManageUsers),
+    getQuoteDashboardSnapshotByTenant(tenant.id, tenant.userId, canManageUsers),
+    getProposalSummariesByTenant(tenant.id, 6, tenant.userId, canManageUsers),
   ]);
 
   return (

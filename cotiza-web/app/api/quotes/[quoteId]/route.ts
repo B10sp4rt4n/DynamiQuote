@@ -6,6 +6,7 @@ import {
   markQuoteAsSentByTenant,
   rejectQuoteVersionByTenant,
 } from "@/lib/db/quote-editor";
+import { isQuoteVisibleToViewer } from "@/lib/db/quotes";
 import { enforceRateLimit, getRequestIdentity } from "@/lib/utils/rate-limit";
 import { quoteActionSchema } from "@/lib/validations/quotes";
 
@@ -39,6 +40,14 @@ export async function PATCH(request: Request, context: RouteContext) {
   }
 
   const { quoteId } = await context.params;
+
+  const canSeeAll = tenant.isSuperAdmin || tenant.userRole === "owner" || tenant.userRole === "admin";
+  const visible = await isQuoteVisibleToViewer(tenant.id, quoteId, tenant.userId, canSeeAll);
+
+  if (!visible) {
+    return NextResponse.json({ error: "Cotizacion no encontrada" }, { status: 404 });
+  }
+
   const parsed = quoteActionSchema.safeParse(await request.json());
 
   if (!parsed.success) {

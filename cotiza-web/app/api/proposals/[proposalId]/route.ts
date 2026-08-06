@@ -1,7 +1,11 @@
 import { NextResponse } from "next/server";
 
 import { getCurrentTenantContext } from "@/lib/auth/tenant-context";
-import { getProposalWorkflowByTenant, updateProposalWorkflowByTenant } from "@/lib/db/proposals";
+import {
+  getProposalWorkflowByTenant,
+  isProposalVisibleToViewer,
+  updateProposalWorkflowByTenant,
+} from "@/lib/db/proposals";
 import { enforceRateLimit, getRequestIdentity } from "@/lib/utils/rate-limit";
 import { updateProposalWorkflowSchema } from "@/lib/validations/proposals";
 
@@ -36,6 +40,13 @@ export async function GET(request: Request, context: RouteContext) {
         status: 429,
       },
     );
+  }
+
+  const canSeeAll = tenant.isSuperAdmin || tenant.userRole === "owner" || tenant.userRole === "admin";
+  const visible = await isProposalVisibleToViewer(tenant.id, proposalId, tenant.userId, canSeeAll);
+
+  if (!visible) {
+    return NextResponse.json({ error: "Propuesta no encontrada" }, { status: 404 });
   }
 
   const proposal = await getProposalWorkflowByTenant(tenant.id, proposalId);
@@ -84,6 +95,13 @@ export async function PUT(request: Request, context: RouteContext) {
         status: 429,
       },
     );
+  }
+
+  const canSeeAll = tenant.isSuperAdmin || tenant.userRole === "owner" || tenant.userRole === "admin";
+  const visible = await isProposalVisibleToViewer(tenant.id, proposalId, tenant.userId, canSeeAll);
+
+  if (!visible) {
+    return NextResponse.json({ error: "Propuesta no encontrada" }, { status: 404 });
   }
 
   const parsed = updateProposalWorkflowSchema.safeParse(await request.json());

@@ -57,11 +57,13 @@ export default async function DashboardPage() {
     );
   }
 
+  const canSeeAll = tenant.isSuperAdmin || tenant.userRole === "owner" || tenant.userRole === "admin";
+
   const [snapshot, proposalCounts, packages, marginBlockedCount] = await Promise.all([
-    getQuoteDashboardSnapshotByTenant(tenant.id),
-    getProposalStatusCountsByTenant(tenant.id),
+    getQuoteDashboardSnapshotByTenant(tenant.id, tenant.userId, canSeeAll),
+    getProposalStatusCountsByTenant(tenant.id, tenant.userId, canSeeAll),
     getPackagesSummaryByTenant(tenant.id),
-    getProposalMarginBlockedCountByTenant(tenant.id),
+    getProposalMarginBlockedCountByTenant(tenant.id, tenant.userId, canSeeAll),
   ]);
 
   const activePackages = packages.filter((p) => p.active).length;

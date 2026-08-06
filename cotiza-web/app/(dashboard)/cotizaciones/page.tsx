@@ -16,7 +16,8 @@ export default async function QuotesPage() {
     );
   }
 
-  const items = await getQuoteGroupsSummaryByTenant(tenant.id);
+  const canSeeAll = tenant.isSuperAdmin || tenant.userRole === "owner" || tenant.userRole === "admin";
+  const items = await getQuoteGroupsSummaryByTenant(tenant.id, 12, tenant.userId, canSeeAll);
   const canSwitchTenant = tenant.isSuperAdmin;
   const tenantOptions = canSwitchTenant
     ? await getActiveTenants()
