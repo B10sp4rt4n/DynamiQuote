@@ -1143,14 +1143,13 @@ export function ProposalShell({ proposals, tenantName }: ProposalShellProps) {
                 })}
               </div>
 
-              <label className="block text-sm font-medium text-zinc-700" htmlFor="recipient-company">
-                Empresa emisora
+              <label className="block text-sm font-medium text-zinc-700" htmlFor="issuer-company">
+                Empresa emisora (fijo por tenant)
               </label>
               <input
-                className="w-full rounded-lg border border-zinc-300 bg-white px-3 py-2 text-sm text-zinc-800"
+                className="w-full rounded-lg border border-zinc-200 bg-zinc-100 px-3 py-2 text-sm text-zinc-700"
+                disabled
                 id="issuer-company"
-                onChange={(event) => setIssuerCompany(event.target.value)}
-                placeholder="Empresa emisora"
                 value={issuerCompany}
               />
 
@@ -1181,13 +1180,12 @@ export function ProposalShell({ proposals, tenantName }: ProposalShellProps) {
               </div>
 
               <label className="block text-sm font-medium text-zinc-700" htmlFor="issuer-email">
-                Email emisor
+                Email emisor (fijo por usuario)
               </label>
               <input
-                className="w-full rounded-lg border border-zinc-300 bg-white px-3 py-2 text-sm text-zinc-800"
+                className="w-full rounded-lg border border-zinc-200 bg-zinc-100 px-3 py-2 text-sm text-zinc-700"
+                disabled
                 id="issuer-email"
-                onChange={(event) => setIssuerEmail(event.target.value)}
-                placeholder="correo@empresa.com"
                 value={issuerEmail}
               />
 

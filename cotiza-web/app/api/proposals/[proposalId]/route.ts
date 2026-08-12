@@ -113,8 +113,14 @@ export async function PUT(request: Request, context: RouteContext) {
     );
   }
 
+  // issuerCompany/issuerEmail ya no son editables por propuesta -- se ignora
+  // cualquier valor que mande el cliente, igual que issuerContactName (que
+  // ni siquiera esta en el schema). El emisor lo define el perfil del
+  // tenant y el usuario autenticado, no el formulario de la propuesta.
+  const sanitizedInput = { ...parsed.data, issuerCompany: undefined, issuerEmail: undefined };
+
   try {
-    const updated = await updateProposalWorkflowByTenant(tenant.id, proposalId, parsed.data, {
+    const updated = await updateProposalWorkflowByTenant(tenant.id, proposalId, sanitizedInput, {
       isSuperAdmin: tenant.isSuperAdmin,
       userId: tenant.userId,
       userRole: tenant.userRole,
