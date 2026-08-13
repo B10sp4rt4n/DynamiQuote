@@ -2,7 +2,8 @@ import { renderToBuffer } from "@react-pdf/renderer";
 import { NextResponse } from "next/server";
 
 import { getCurrentTenantContext } from "@/lib/auth/tenant-context";
-import { getProposalWorkflowByTenant } from "@/lib/db/proposals";
+import { consumeProposalIssuanceForce, getProposalWorkflowByTenant } from "@/lib/db/proposals";
+import { resolveProposalIssuanceGate } from "@/lib/domain/proposal-issuance-gate";
 import { ProposalPdfDocument } from "@/lib/pdf/proposal-document";
 import { enforceRateLimit } from "@/lib/utils/rate-limit";
 
@@ -50,6 +51,24 @@ export async function GET(_: Request, context: RouteContext) {
 
   if (!proposal) {
     return NextResponse.json({ error: "Propuesta no encontrada" }, { status: 404 });
+  }
+
+  const issuanceGate = resolveProposalIssuanceGate({
+    issuanceStatus: proposal.issuanceStatus,
+    status: proposal.status,
+  });
+
+  if (issuanceGate.kind === "blocked") {
+    return NextResponse.json({ error: issuanceGate.reason }, { status: 403 });
+  }
+
+  if (issuanceGate.forced) {
+    await consumeProposalIssuanceForce({
+      consumedBy: tenant.userId ?? null,
+      consumedVia: "pdf",
+      proposalId,
+      tenantId: tenant.id,
+    });
   }
 
   const issuerContact = proposal.formal?.issuerContactName?.trim().toLowerCase() ?? "";

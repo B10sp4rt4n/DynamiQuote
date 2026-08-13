@@ -4,7 +4,12 @@ import { auth, clerkClient } from "@clerk/nextjs/server";
 
 import { getCurrentTenantContext } from "@/lib/auth/tenant-context";
 import { prisma } from "@/lib/db/prisma";
-import { getProposalWorkflowByTenant, updateProposalWorkflowByTenant } from "@/lib/db/proposals";
+import {
+  consumeProposalIssuanceForce,
+  getProposalWorkflowByTenant,
+  updateProposalWorkflowByTenant,
+} from "@/lib/db/proposals";
+import { resolveProposalIssuanceGate } from "@/lib/domain/proposal-issuance-gate";
 import { resolveResendConfig } from "@/lib/email/resend";
 import { ProposalPdfDocument } from "@/lib/pdf/proposal-document";
 import { enforceRateLimit, getRequestIdentity } from "@/lib/utils/rate-limit";
@@ -180,6 +185,24 @@ export async function POST(request: Request, context: RouteContext) {
 
   if (!proposal) {
     return NextResponse.json({ error: "Propuesta no encontrada" }, { status: 404 });
+  }
+
+  const issuanceGate = resolveProposalIssuanceGate({
+    issuanceStatus: proposal.issuanceStatus,
+    status: proposal.status,
+  });
+
+  if (issuanceGate.kind === "blocked") {
+    return NextResponse.json({ error: issuanceGate.reason }, { status: 403 });
+  }
+
+  if (issuanceGate.forced) {
+    await consumeProposalIssuanceForce({
+      consumedBy: tenant.userId ?? null,
+      consumedVia: "email",
+      proposalId,
+      tenantId: tenant.id,
+    });
   }
 
   // Resolver el correo del vendedor con fallbacks robustos:

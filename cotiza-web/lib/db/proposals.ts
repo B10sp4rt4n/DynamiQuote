@@ -18,6 +18,7 @@ import {
   evaluateProposalLiberation,
   type ProposalLiberationEvaluation,
 } from "@/lib/domain/proposal-liberation";
+import type { ProposalIssuanceStatus } from "@/lib/domain/proposal-issuance-gate";
 import {
   assertApprovalActorEligibility,
   assertProposalWorkflowGuard,
@@ -301,6 +302,7 @@ export type ProposalWorkflowDetail = {
   approvalGate: ProposalApprovalGate;
   approvals: ProposalApprovalRecord[];
   formal: FormalProposalSlice | null;
+  issuanceStatus: ProposalIssuanceStatus;
   items: ProposalExcelItem[];
   marginEvaluation: ProposalLiberationEvaluation;
   origin: string | null;
@@ -325,6 +327,7 @@ export type ProposalExcelItem = {
 
 export type ProposalExcelPayload = {
   formal: FormalProposalSlice | null;
+  issuanceStatus: ProposalIssuanceStatus;
   items: ProposalExcelItem[];
   origin: string | null;
   proposalId: string;
@@ -338,6 +341,10 @@ function normalizeStatus(value: string | null | undefined): ProposalStatus {
 
   const normalized = legacyStatusMap[value.trim().toLowerCase()];
   return normalized ?? "draft";
+}
+
+function normalizeIssuanceStatus(value: string | null | undefined): ProposalIssuanceStatus {
+  return value === "force_pending" ? "force_pending" : "normal";
 }
 
 function dateToIso(value: Date | null | undefined): string | null {
@@ -1168,6 +1175,7 @@ export async function getProposalWorkflowByTenant(
           issuerContactName: resolvedIssuerContact,
         }
       : null,
+    issuanceStatus: normalizeIssuanceStatus(row.issuance_status),
     items: proposalItems,
     marginEvaluation,
     origin: row.origin,
@@ -1175,6 +1183,52 @@ export async function getProposalWorkflowByTenant(
     salesOwner: resolvedSalesOwner ?? resolvedIssuerContact,
     status: normalizeStatus(latestFormal?.status ?? row.status),
   };
+}
+
+// Consume un forzamiento de emision activo (issuance_status === "force_pending")
+// al momento en que una de las 3 rutas de entrega (pdf, send-email, xlsx) lo
+// usa. Es de un solo uso: el UPDATE condicionado por WHERE issuance_status =
+// 'force_pending' actua como guardia contra doble consumo si dos rutas se
+// disparan casi al mismo tiempo -- solo la primera transaccion que llega
+// encuentra la fila en ese estado.
+export async function consumeProposalIssuanceForce(input: {
+  consumedBy: string | null;
+  consumedVia: "pdf" | "email" | "xlsx";
+  proposalId: string;
+  tenantId: string;
+}): Promise<void> {
+  const now = new Date();
+
+  await prisma.$transaction(async (tx) => {
+    const updated = await tx.proposals.updateMany({
+      data: { issuance_status: "normal" },
+      where: {
+        issuance_status: "force_pending",
+        proposal_id: input.proposalId,
+        tenant_id: input.tenantId,
+      },
+    });
+
+    if (updated.count === 0) {
+      return;
+    }
+
+    await tx.proposal_audit_events.create({
+      data: {
+        created_at: now,
+        event_hash: randomUUID(),
+        event_id: randomUUID(),
+        event_type: "proposal_force_issue_consumed",
+        payload: JSON.stringify({
+          consumedAt: now.toISOString(),
+          consumedBy: input.consumedBy,
+          consumedVia: input.consumedVia,
+        }),
+        proposal_id: input.proposalId,
+        tenant_id: input.tenantId,
+      },
+    });
+  });
 }
 
 export async function updateProposalWorkflowByTenant(
@@ -1595,6 +1649,7 @@ export async function getProposalExcelPayloadByTenant(
 
   return {
     formal: latestFormal ? toFormalSlice(latestFormal) : null,
+    issuanceStatus: normalizeIssuanceStatus(row.issuance_status),
     items: row.proposal_items.map((item) => ({
       componentType: item.component_type ?? "",
       costUnit: decimalToNumber(item.cost_unit),

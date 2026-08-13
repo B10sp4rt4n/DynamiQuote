@@ -3,9 +3,11 @@ import * as XLSX from "xlsx";
 
 import { getCurrentTenantContext } from "@/lib/auth/tenant-context";
 import {
+  consumeProposalIssuanceForce,
   getProposalExcelPayloadByTenant,
   importProposalItemsByTenant,
 } from "@/lib/db/proposals";
+import { resolveProposalIssuanceGate } from "@/lib/domain/proposal-issuance-gate";
 import { enforceRateLimit, getRequestIdentity } from "@/lib/utils/rate-limit";
 import { proposalImportPayloadSchema } from "@/lib/validations/proposals";
 
@@ -105,6 +107,24 @@ export async function GET(_: Request, context: RouteContext) {
 
   if (!payload) {
     return NextResponse.json({ error: "Propuesta no encontrada" }, { status: 404 });
+  }
+
+  const issuanceGate = resolveProposalIssuanceGate({
+    issuanceStatus: payload.issuanceStatus,
+    status: payload.status,
+  });
+
+  if (issuanceGate.kind === "blocked") {
+    return NextResponse.json({ error: issuanceGate.reason }, { status: 403 });
+  }
+
+  if (issuanceGate.forced) {
+    await consumeProposalIssuanceForce({
+      consumedBy: tenant.userId ?? null,
+      consumedVia: "xlsx",
+      proposalId,
+      tenantId: tenant.id,
+    });
   }
 
   const workbook = buildWorkbook(payload);
