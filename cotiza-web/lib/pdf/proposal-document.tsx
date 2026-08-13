@@ -139,6 +139,20 @@ const styles = StyleSheet.create({
     marginBottom: 8,
     textAlign: "right",
   },
+  draftBanner: {
+    backgroundColor: "#fff1f2",
+    borderColor: "#fda4af",
+    borderStyle: "solid",
+    borderWidth: 1,
+    marginBottom: 8,
+    padding: 6,
+  },
+  draftBannerText: {
+    color: "#9f1239",
+    fontSize: 8,
+    fontWeight: 700,
+    textAlign: "center",
+  },
   subjectBox: {
     borderLeftColor: "#60a5fa",
     borderLeftStyle: "solid",
@@ -426,6 +440,14 @@ export function ProposalPdfDocument({ proposal, tenantName }: ProposalPdfInput) 
           <Text style={styles.title}>Propuesta Comercial</Text>
           <Text style={styles.folio}>{formal?.proposalNumber ?? proposal.proposalId}</Text>
         </View>
+
+        {proposal.status === "draft" ? (
+          <View style={styles.draftBanner}>
+            <Text style={styles.draftBannerText}>
+              BORRADOR — INFORMACIÓN NO VALIDADA, SUJETA A CAMBIOS
+            </Text>
+          </View>
+        ) : null}
 
         <View style={styles.metadataHeader}>
           <Text style={styles.metadataHeaderCell}>Datos del emisor</Text>

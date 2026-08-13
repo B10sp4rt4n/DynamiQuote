@@ -38,6 +38,9 @@ function buildWorkbook(payload: Awaited<ReturnType<typeof getProposalExcelPayloa
     ["subject", payload?.formal?.subject ?? ""],
     ["origin", payload?.origin ?? ""],
     ["termsAndConditions", payload?.formal?.termsAndConditions ?? ""],
+    ...(payload?.status === "draft"
+      ? [["Aviso", "BORRADOR - INFORMACION NO VALIDADA, SUJETA A CAMBIOS"]]
+      : []),
   ];
 
   const itemsRows = (payload?.items ?? []).map((item) => ({
