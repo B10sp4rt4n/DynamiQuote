@@ -12,6 +12,10 @@ import {
   type ProposalSort,
 } from "@/lib/domain/proposal-list-state";
 import type { ProposalLiberationEvaluation } from "@/lib/domain/proposal-liberation";
+import {
+  resolveProposalIssuanceGate,
+  type ProposalIssuanceStatus,
+} from "@/lib/domain/proposal-issuance-gate";
 import type { ProposalStatus } from "@/lib/validations/proposals";
 
 type ProposalApprovalRecordView = {
@@ -33,6 +37,7 @@ type ProposalApprovalGateView = {
 };
 
 type ProposalShellProps = {
+  canForceIssuance: boolean;
   proposals: ProposalSummary[];
   tenantName: string;
 };
@@ -153,7 +158,7 @@ function getFinalAuthorizationBadge(item: ProposalSummary): {
   return null;
 }
 
-export function ProposalShell({ proposals, tenantName }: ProposalShellProps) {
+export function ProposalShell({ canForceIssuance, proposals, tenantName }: ProposalShellProps) {
   const router = useRouter();
   const pathname = usePathname();
   const searchParams = useSearchParams();
@@ -182,6 +187,13 @@ export function ProposalShell({ proposals, tenantName }: ProposalShellProps) {
   const [selectedStatus, setSelectedStatus] = useState<ProposalStatus>(
     proposals[0]?.status ?? "draft",
   );
+  const [selectedIssuanceStatus, setSelectedIssuanceStatus] = useState<ProposalIssuanceStatus>(
+    "normal",
+  );
+  const [forceIssueStatus, setForceIssueStatus] = useState<"idle" | "pending" | "success" | "error">(
+    "idle",
+  );
+  const [forceIssueMessage, setForceIssueMessage] = useState<string | null>(null);
   const [termsAndConditions, setTermsAndConditions] = useState<string>(
     proposals[0]?.formal?.termsAndConditions ?? "",
   );
@@ -276,6 +288,14 @@ export function ProposalShell({ proposals, tenantName }: ProposalShellProps) {
   const selectedProposal = useMemo(
     () => items.find((item) => item.proposalId === selectedProposalId) ?? null,
     [items, selectedProposalId],
+  );
+  const issuanceGate = useMemo(
+    () =>
+      resolveProposalIssuanceGate({
+        issuanceStatus: selectedIssuanceStatus,
+        status: selectedStatus,
+      }),
+    [selectedIssuanceStatus, selectedStatus],
   );
   const marginAllowsFinalAuthorization = selectedProposal?.marginEvaluation?.canAuthorizeFinal ?? true;
   const marginAllowsInformativeShare = selectedProposal?.marginEvaluation?.canShareInformative ?? false;
@@ -455,6 +475,7 @@ export function ProposalShell({ proposals, tenantName }: ProposalShellProps) {
           marginEvaluation?: ProposalLiberationEvaluation | null;
           approvalGate: ProposalApprovalGateView;
           approvals: ProposalApprovalRecordView[];
+          issuanceStatus: ProposalIssuanceStatus;
           salesOwner: string;
           proposalId: string;
           status: ProposalStatus;
@@ -475,6 +496,7 @@ export function ProposalShell({ proposals, tenantName }: ProposalShellProps) {
       setSubject(data.proposal.formal?.subject ?? "");
       setTermsAndConditions(data.proposal.formal?.termsAndConditions ?? "");
       setSelectedStatus(data.proposal.status);
+      setSelectedIssuanceStatus(data.proposal.issuanceStatus ?? "normal");
       setSalesOwner(data.proposal.salesOwner ?? data.proposal.formal?.issuerContactName ?? "");
       setApprovals(data.proposal.approvals ?? []);
       setApprovalGate(data.proposal.approvalGate ?? null);
@@ -740,6 +762,7 @@ export function ProposalShell({ proposals, tenantName }: ProposalShellProps) {
           marginEvaluation?: ProposalLiberationEvaluation | null;
           approvalGate: ProposalApprovalGateView;
           approvals: ProposalApprovalRecordView[];
+          issuanceStatus: ProposalIssuanceStatus;
           proposalId: string;
           status: ProposalStatus;
         };
@@ -805,6 +828,7 @@ export function ProposalShell({ proposals, tenantName }: ProposalShellProps) {
       // Sincronizar el dropdown con el estado real confirmado por la API
       // (la API puede ajustar el estado si el workflow lo requiere).
       setSelectedStatus(data.proposal.status);
+      setSelectedIssuanceStatus(data.proposal.issuanceStatus ?? "normal");
       setTermsAndConditions(data.proposal.formal?.termsAndConditions ?? termsAndConditions);
       if (data.proposal.status === "approved") {
         setEmailStatus("idle");
@@ -858,6 +882,7 @@ export function ProposalShell({ proposals, tenantName }: ProposalShellProps) {
           approvalGate: ProposalApprovalGateView;
           approvals: ProposalApprovalRecordView[];
           formal: ProposalSummary["formal"];
+          issuanceStatus: ProposalIssuanceStatus;
           marginEvaluation: ProposalLiberationEvaluation;
           proposalId: string;
           status: ProposalStatus;
@@ -871,6 +896,7 @@ export function ProposalShell({ proposals, tenantName }: ProposalShellProps) {
       setApprovals(data.proposal.approvals ?? []);
       setApprovalGate(data.proposal.approvalGate ?? null);
       setSelectedStatus(data.proposal.status);
+      setSelectedIssuanceStatus(data.proposal.issuanceStatus ?? "normal");
       if (data.proposal.status === "approved") {
         setEmailStatus("idle");
         setEmailMessage(null);
@@ -974,6 +1000,49 @@ export function ProposalShell({ proposals, tenantName }: ProposalShellProps) {
     } catch (error) {
       setEmailStatus("error");
       setEmailMessage(error instanceof Error ? error.message : "Error interno al enviar correo");
+    }
+  }
+
+  // Forzar emision: unicamente Owner/Superadmin, y solo cuando el gate esta
+  // bloqueado. Requiere un motivo explicito (fricción deliberada para que no
+  // se dispare por accidente) y queda auditado en proposal_audit_events.
+  async function handleForceIssue() {
+    if (!selectedProposal) {
+      return;
+    }
+
+    const reason = window.prompt(
+      "Esta propuesta no esta aprobada. Escribe el motivo para forzar su emision:",
+    );
+
+    if (!reason || reason.trim().length === 0) {
+      return;
+    }
+
+    setForceIssueStatus("pending");
+    setForceIssueMessage(null);
+
+    try {
+      const response = await fetch(`/api/proposals/${selectedProposal.proposalId}/force-issue`, {
+        body: JSON.stringify({ reason: reason.trim() }),
+        headers: {
+          "Content-Type": "application/json",
+        },
+        method: "POST",
+      });
+
+      const data = (await response.json().catch(() => null)) as { error?: string } | null;
+
+      if (!response.ok) {
+        throw new Error(data?.error ?? "No fue posible forzar la emision");
+      }
+
+      setSelectedIssuanceStatus("force_pending");
+      setForceIssueStatus("success");
+      setForceIssueMessage("Emision forzada. El siguiente PDF, correo o Excel descargado la consumira.");
+    } catch (error) {
+      setForceIssueStatus("error");
+      setForceIssueMessage(error instanceof Error ? error.message : "Error interno al forzar la emision");
     }
   }
 
@@ -1373,22 +1442,32 @@ export function ProposalShell({ proposals, tenantName }: ProposalShellProps) {
                   </button>
                   <button
                     className="rounded-lg border border-zinc-300 bg-white px-4 py-2 text-sm font-medium text-zinc-700 transition hover:bg-zinc-100 disabled:cursor-not-allowed disabled:opacity-60"
-                    disabled={loadingDetail}
+                    disabled={loadingDetail || issuanceGate.kind === "blocked"}
                     onClick={() => {
                       window.open(`/api/proposals/${selectedProposal.proposalId}/pdf`, "_blank");
                     }}
+                    title={issuanceGate.kind === "blocked" ? issuanceGate.reason : undefined}
                     type="button"
                   >
                     Descargar PDF
                   </button>
-                  <a
-                    className="rounded-lg border border-zinc-300 bg-white px-4 py-2 text-sm font-medium text-zinc-700 transition hover:bg-zinc-100"
-                    href={`/api/proposals/${selectedProposal.proposalId}/xlsx`}
-                    rel="noreferrer"
-                    target="_blank"
-                  >
-                    Descargar Excel
-                  </a>
+                  {issuanceGate.kind === "blocked" ? (
+                    <span
+                      className="cursor-not-allowed rounded-lg border border-zinc-200 bg-zinc-100 px-4 py-2 text-sm font-medium text-zinc-400"
+                      title={issuanceGate.reason}
+                    >
+                      Descargar Excel
+                    </span>
+                  ) : (
+                    <a
+                      className="rounded-lg border border-zinc-300 bg-white px-4 py-2 text-sm font-medium text-zinc-700 transition hover:bg-zinc-100"
+                      href={`/api/proposals/${selectedProposal.proposalId}/xlsx`}
+                      rel="noreferrer"
+                      target="_blank"
+                    >
+                      Descargar Excel
+                    </a>
+                  )}
                 </div>
                 {saveStatus === "success" ? (
                   <p className="text-sm text-emerald-700">Cambios guardados correctamente.</p>
@@ -1397,6 +1476,32 @@ export function ProposalShell({ proposals, tenantName }: ProposalShellProps) {
                   <p className="text-sm text-rose-700">{errorMessage ?? "Error desconocido"}</p>
                 ) : null}
               </div>
+
+              {issuanceGate.kind === "blocked" ? (
+                <div className="rounded-lg border border-amber-200 bg-amber-50 px-3 py-3 text-sm text-amber-900">
+                  <p className="font-semibold">Emision de documentos bloqueada.</p>
+                  <p className="mt-1 text-xs leading-5 text-amber-800">{issuanceGate.reason}</p>
+                  {canForceIssuance ? (
+                    <button
+                      className="mt-2 rounded-lg border border-amber-400 bg-white px-3 py-1.5 text-xs font-semibold text-amber-800 transition hover:bg-amber-100 disabled:cursor-not-allowed disabled:opacity-60"
+                      disabled={forceIssueStatus === "pending"}
+                      onClick={() => { void handleForceIssue(); }}
+                      type="button"
+                    >
+                      {forceIssueStatus === "pending" ? "Forzando..." : "Forzar emision"}
+                    </button>
+                  ) : null}
+                  {forceIssueMessage ? (
+                    <p
+                      className={`mt-2 text-xs font-medium ${
+                        forceIssueStatus === "error" ? "text-rose-700" : "text-emerald-700"
+                      }`}
+                    >
+                      {forceIssueMessage}
+                    </p>
+                  ) : null}
+                </div>
+              ) : null}
 
               {/* Sección de envío a aprobación: visible solo cuando la propuesta está en borrador.
                   El mensaje y la acción del botón cambian según si el margen pre-aprueba o no:
@@ -1473,8 +1578,9 @@ export function ProposalShell({ proposals, tenantName }: ProposalShellProps) {
                 <div className="flex flex-col gap-1">
                   <button
                     className="w-fit rounded-lg border border-blue-300 bg-blue-50 px-4 py-2 text-sm font-medium text-blue-700 transition hover:bg-blue-100 disabled:cursor-not-allowed disabled:opacity-60"
-                    disabled={emailStatus === "sending"}
+                    disabled={emailStatus === "sending" || issuanceGate.kind === "blocked"}
                     onClick={handleSendEmailProposal}
+                    title={issuanceGate.kind === "blocked" ? issuanceGate.reason : undefined}
                     type="button"
                   >
                     {emailStatus === "sending"

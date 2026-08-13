@@ -1,6 +1,7 @@
 import { ProposalShell } from "@/components/propuestas/proposal-shell";
 import { getCurrentTenantContext } from "@/lib/auth/tenant-context";
 import { getProposalSummariesByTenant } from "@/lib/db/proposals";
+import { isForceIssuanceEligibleRole } from "@/lib/domain/proposal-issuance-gate";
 
 export const dynamic = "force-dynamic";
 
@@ -17,6 +18,7 @@ export default async function ProposalsPage() {
 
   const canSeeAll = tenant.isSuperAdmin || tenant.userRole === "owner" || tenant.userRole === "admin";
   const proposals = await getProposalSummariesByTenant(tenant.id, 20, tenant.userId, canSeeAll);
+  const canForceIssuance = isForceIssuanceEligibleRole(tenant.userRole);
 
-  return <ProposalShell proposals={proposals} tenantName={tenant.name} />;
+  return <ProposalShell canForceIssuance={canForceIssuance} proposals={proposals} tenantName={tenant.name} />;
 }
