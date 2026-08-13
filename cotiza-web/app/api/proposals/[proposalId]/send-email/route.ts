@@ -258,6 +258,7 @@ export async function POST(request: Request, context: RouteContext) {
     : proposal;
 
   const pdfDocument = ProposalPdfDocument({
+    forcedIssuance: issuanceGate.forced,
     proposal: normalizedProposal,
     tenantName: tenant.name,
   });

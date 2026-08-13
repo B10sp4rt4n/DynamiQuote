@@ -153,6 +153,20 @@ const styles = StyleSheet.create({
     fontWeight: 700,
     textAlign: "center",
   },
+  forcedBanner: {
+    backgroundColor: "#fffbeb",
+    borderColor: "#f59e0b",
+    borderStyle: "solid",
+    borderWidth: 1,
+    marginBottom: 8,
+    padding: 6,
+  },
+  forcedBannerText: {
+    color: "#92400e",
+    fontSize: 8,
+    fontWeight: 700,
+    textAlign: "center",
+  },
   subjectBox: {
     borderLeftColor: "#60a5fa",
     borderLeftStyle: "solid",
@@ -398,11 +412,12 @@ function formatRecipientIdentity(formal: ProposalWorkflowDetail["formal"]): {
 }
 
 type ProposalPdfInput = {
+  forcedIssuance?: boolean;
   proposal: ProposalWorkflowDetail;
   tenantName: string;
 };
 
-export function ProposalPdfDocument({ proposal, tenantName }: ProposalPdfInput) {
+export function ProposalPdfDocument({ forcedIssuance, proposal, tenantName }: ProposalPdfInput) {
   const formal = proposal.formal;
   const recipientIdentity = formatRecipientIdentity(formal);
   const issuerPhoneDisplay = normalizeTextValue(formal?.issuerPhone) || "Telefono no disponible";
@@ -445,6 +460,14 @@ export function ProposalPdfDocument({ proposal, tenantName }: ProposalPdfInput) 
           <View style={styles.draftBanner}>
             <Text style={styles.draftBannerText}>
               BORRADOR — INFORMACIÓN NO VALIDADA, SUJETA A CAMBIOS
+            </Text>
+          </View>
+        ) : null}
+
+        {forcedIssuance ? (
+          <View style={styles.forcedBanner}>
+            <Text style={styles.forcedBannerText}>
+              EMITIDO SIN APROBACIÓN FORMAL — EMISIÓN FORZADA POR OWNER/SUPERADMIN
             </Text>
           </View>
         ) : null}

@@ -28,7 +28,10 @@ function sanitizeFilename(value: string): string {
   return value.replace(/[^a-zA-Z0-9-_]/g, "_");
 }
 
-function buildWorkbook(payload: Awaited<ReturnType<typeof getProposalExcelPayloadByTenant>>) {
+function buildWorkbook(
+  payload: Awaited<ReturnType<typeof getProposalExcelPayloadByTenant>>,
+  options?: { forcedIssuance?: boolean },
+) {
   const workbook = XLSX.utils.book_new();
 
   const summaryRows = [
@@ -42,6 +45,9 @@ function buildWorkbook(payload: Awaited<ReturnType<typeof getProposalExcelPayloa
     ["termsAndConditions", payload?.formal?.termsAndConditions ?? ""],
     ...(payload?.status === "draft"
       ? [["Aviso", "BORRADOR - INFORMACION NO VALIDADA, SUJETA A CAMBIOS"]]
+      : []),
+    ...(options?.forcedIssuance
+      ? [["Aviso", "EMITIDO SIN APROBACION FORMAL - EMISION FORZADA POR OWNER/SUPERADMIN"]]
       : []),
   ];
 
@@ -127,7 +133,7 @@ export async function GET(_: Request, context: RouteContext) {
     });
   }
 
-  const workbook = buildWorkbook(payload);
+  const workbook = buildWorkbook(payload, { forcedIssuance: issuanceGate.forced });
   const arrayBuffer = XLSX.write(workbook, {
     bookType: "xlsx",
     type: "array",

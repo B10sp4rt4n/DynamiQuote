@@ -90,6 +90,7 @@ export async function GET(_: Request, context: RouteContext) {
     : proposal;
 
   const document = ProposalPdfDocument({
+    forcedIssuance: issuanceGate.forced,
     proposal: normalizedProposal,
     tenantName: tenant.name,
   });
