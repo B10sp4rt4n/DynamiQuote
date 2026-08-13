@@ -346,6 +346,7 @@ export async function importQuoteLinesByTenant(
 ): Promise<{ importedCount: number; quoteId: string } | null> {
   const quote = await prisma.quote.findFirst({
     select: {
+      client_id: true,
       client_name: true,
       created_by_user_id: true,
       playbook_name: true,
@@ -383,6 +384,7 @@ export async function importQuoteLinesByTenant(
     await tx.quote.create({
       data: {
         avg_margin: avgMargin,
+        client_id: quote.client_id,
         client_name: quote.client_name,
         created_by_user_id: quote.created_by_user_id,
         createdAt: now,
