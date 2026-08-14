@@ -30,6 +30,16 @@ type SettingsShellProps = {
 
 type Tab = "control" | "tenant" | "users" | "issuer" | "policy";
 
+// Un pending item navega a una pestaña interna de Configuracion (tab) o a una
+// ruta externa con su propio filtro aplicado (href) -- nunca ambas a la vez.
+type PendingItem = {
+  action: string;
+  cta: string;
+  href?: string;
+  tab?: Exclude<Tab, "control">;
+  tone: "amber" | "rose";
+};
+
 type TestEmailTemplate = "alta" | "mantenimiento" | "promocion";
 
 type TestEmailHistoryItem = {
@@ -443,13 +453,13 @@ function ControlCenterTab({
     marginPolicy.highPreapprovalMarginPct === 55 &&
     marginPolicy.requireObserverApproval === false;
 
-  const pendingItems = [
+  const pendingItems: PendingItem[] = [
     ownerUsers === 0
       ? {
           action: "Definir un usuario Owner activo para el tenant.",
           cta: "Ir a usuarios",
           tab: "users" as const,
-          tone: "rose",
+          tone: "rose" as const,
         }
       : null,
     defaultIssuerProfiles === 0
@@ -457,7 +467,7 @@ function ControlCenterTab({
           action: "Seleccionar un perfil emisor por default para propuestas y PDFs.",
           cta: "Ir a perfiles",
           tab: "issuer" as const,
-          tone: "amber",
+          tone: "amber" as const,
         }
       : null,
     usesDefaultPolicy
@@ -465,15 +475,19 @@ function ControlCenterTab({
           action: "La política de margen sigue en valores por defecto; conviene personalizarla para este tenant.",
           cta: "Ir a política",
           tab: "policy" as const,
-          tone: "amber",
+          tone: "amber" as const,
         }
       : null,
     proposalMarginBlockedCount > 0
       ? {
+          // La política no cambia por esto -- lo que hay que revisar es cuáles
+          // propuestas están bloqueadas, para decidir caso por caso si se
+          // desbloquean (forzar emisión) o se dejan así. Por eso navega a la
+          // lista filtrada de propuestas, no a la pestaña de política.
           action: `Hay ${proposalMarginBlockedCount} propuesta(s) activas bloqueadas por márgenes fuera de política.`,
-          cta: "Revisar política",
-          tab: "policy" as const,
-          tone: "rose",
+          cta: "Ver propuestas bloqueadas",
+          href: "/propuestas?filter=blocked_margin",
+          tone: "rose" as const,
         }
       : null,
     missingSellerCodes > 0
@@ -481,7 +495,7 @@ function ControlCenterTab({
           action: `Hay ${missingSellerCodes} usuario(s) activos sin código de vendedor, lo que puede afectar trazabilidad comercial.`,
           cta: "Completar usuarios",
           tab: "users" as const,
-          tone: "amber",
+          tone: "amber" as const,
         }
       : null,
   ].filter((item): item is NonNullable<typeof item> => item !== null);
@@ -537,13 +551,22 @@ function ControlCenterTab({
               pendingItems.map((item) => (
                 <div key={item.action} className={`rounded-xl border p-4 ${toneClasses[item.tone]}`}>
                   <p className="text-sm font-medium">{item.action}</p>
-                  <button
-                    className="mt-3 rounded-lg bg-white/80 px-3 py-2 text-xs font-semibold text-zinc-900 transition hover:bg-white"
-                    onClick={() => onOpenTab(item.tab)}
-                    type="button"
-                  >
-                    {item.cta}
-                  </button>
+                  {item.href ? (
+                    <a
+                      className="mt-3 inline-block rounded-lg bg-white/80 px-3 py-2 text-xs font-semibold text-zinc-900 transition hover:bg-white"
+                      href={item.href}
+                    >
+                      {item.cta}
+                    </a>
+                  ) : (
+                    <button
+                      className="mt-3 rounded-lg bg-white/80 px-3 py-2 text-xs font-semibold text-zinc-900 transition hover:bg-white"
+                      onClick={() => item.tab && onOpenTab(item.tab)}
+                      type="button"
+                    >
+                      {item.cta}
+                    </button>
+                  )}
                 </div>
               ))
             ) : (
