@@ -1243,16 +1243,60 @@ export async function consumeProposalIssuanceForce(input: {
   });
 }
 
+// Tipo del evento que documenta una ventana de override otorgada -- se
+// guarda en proposal_audit_events (sin DDL nuevo) porque es informacion
+// efimera: solo importa mientras la ventana sigue abierta. Cuando el
+// vendedor ejecuta, executeMarginOverride consume este motivo/autorizador
+// y los traslada a la UNICA fila final en proposal_approvals.
+export type MarginOverrideGrant = {
+  approverRole: ProposalApproverRole;
+  approverUserId: string;
+  reason: string;
+  targetUserId: string;
+};
+
+// Recupera el motivo y quien autorizo la ventana de override actualmente
+// abierta para esta propuesta (si hay una). Como solo puede haber una
+// ventana abierta a la vez (ver guardia en grantMarginOverrideWindow), el
+// evento mas reciente de tipo margin_override_window_granted es siempre el
+// vigente mientras proposals.margin_override_target_user_id no sea null.
+export async function getLatestMarginOverrideGrant(
+  tenantId: string,
+  proposalId: string,
+): Promise<MarginOverrideGrant | null> {
+  const event = await prisma.proposal_audit_events.findFirst({
+    orderBy: { created_at: "desc" },
+    select: { payload: true },
+    where: {
+      event_type: "margin_override_window_granted",
+      proposal_id: proposalId,
+      tenant_id: tenantId,
+    },
+  });
+
+  if (!event?.payload) {
+    return null;
+  }
+
+  const parsed = JSON.parse(event.payload) as MarginOverrideGrant;
+  return parsed;
+}
+
 // Habilita una ventana de override de margen de un solo uso, para que el
 // vendedor dueño de la propuesta (proposals.created_by_user_id) pueda
 // ejecutarla el mismo via POST .../override/execute. El motivo y quien
-// habilita se documentan hasta que se ejecute o se cierre -- ver
-// executeMarginOverride y el hook de cierre en updateProposalWorkflowByTenant.
+// habilita (documentados aqui, en proposal_audit_events) se recuperan en
+// la ejecucion via getLatestMarginOverrideGrant y se trasladan a la UNICA
+// fila final en proposal_approvals -- ver executeMarginOverride y el hook
+// de cierre en updateProposalWorkflowByTenant.
 // Falla explicitamente si la propuesta no esta bloqueada por margen, si la
 // transicion a "approved" no es valida desde el status actual, si ya hay
 // una ventana abierta, o si no hay un vendedor identificado (huerfana).
 export async function grantMarginOverrideWindow(input: {
+  approverRole: ProposalApproverRole;
+  approverUserId: string;
   proposalId: string;
+  reason: string;
   tenantId: string;
 }): Promise<ProposalWorkflowDetail | null> {
   const current = await getProposalWorkflowByTenant(input.tenantId, input.proposalId);
@@ -1280,18 +1324,41 @@ export async function grantMarginOverrideWindow(input: {
     );
   }
 
-  const updated = await prisma.proposals.updateMany({
-    data: { margin_override_target_user_id: row.created_by_user_id },
-    where: {
-      margin_override_target_user_id: null,
-      proposal_id: input.proposalId,
-      tenant_id: input.tenantId,
-    },
-  });
+  const targetUserId = row.created_by_user_id;
 
-  if (updated.count === 0) {
-    throw new Error("Ya hay una ventana de override pendiente de consumir para esta propuesta.");
-  }
+  await prisma.$transaction(async (tx) => {
+    const updated = await tx.proposals.updateMany({
+      data: { margin_override_target_user_id: targetUserId },
+      where: {
+        margin_override_target_user_id: null,
+        proposal_id: input.proposalId,
+        tenant_id: input.tenantId,
+      },
+    });
+
+    if (updated.count === 0) {
+      throw new Error("Ya hay una ventana de override pendiente de consumir para esta propuesta.");
+    }
+
+    const grant: MarginOverrideGrant = {
+      approverRole: input.approverRole,
+      approverUserId: input.approverUserId,
+      reason: input.reason,
+      targetUserId,
+    };
+
+    await tx.proposal_audit_events.create({
+      data: {
+        created_at: new Date(),
+        event_hash: randomUUID(),
+        event_id: randomUUID(),
+        event_type: "margin_override_window_granted",
+        payload: JSON.stringify(grant),
+        proposal_id: input.proposalId,
+        tenant_id: input.tenantId,
+      },
+    });
+  });
 
   return getProposalWorkflowByTenant(input.tenantId, input.proposalId);
 }
