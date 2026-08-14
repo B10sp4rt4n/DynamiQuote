@@ -8,7 +8,7 @@ export type ProposalApprovalGate = {
 export type ProposalApprovalGateInput = {
   approvals: Array<{
     approverRole: "superadmin" | "owner" | "admin" | "user";
-    decision: "approved" | "rejected";
+    decision: "approved" | "rejected" | "overridden";
   }>;
   requireObserverApproval: boolean;
 };

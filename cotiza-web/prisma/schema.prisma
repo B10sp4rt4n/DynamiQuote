@@ -314,6 +314,7 @@ model proposals {
   created_at                                                               DateTime                     @db.Timestamp(6)
   closed_at                                                                DateTime?                    @db.Timestamp(6)
   issuance_status                                                          String                       @default("normal")
+  margin_override_target_user_id                                          String?
   formal_proposals                                                         formal_proposals[]
   project_expenses                                                         project_expenses[]
   proposal_approvals                                                       proposal_approvals[]

@@ -11,6 +11,7 @@ function approval(overrides: Partial<ProposalApprovalRecord>): ProposalApprovalR
     approverUserId: "user-owner-1",
     createdAt: "2026-05-10T00:00:00.000Z",
     decision: "approved",
+    executedByUserId: null,
     proposalId: "prop-1",
     reason: null,
     tenantId: "tenant-1",

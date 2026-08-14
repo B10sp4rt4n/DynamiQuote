@@ -22,6 +22,7 @@ import type { ProposalIssuanceStatus } from "@/lib/domain/proposal-issuance-gate
 import {
   assertApprovalActorEligibility,
   assertProposalWorkflowGuard,
+  canTransitionProposalStatus,
   resolveApprovalGateError,
   shouldClearProposalApprovals,
 } from "@/lib/domain/proposal-workflow-guard";
@@ -302,6 +303,13 @@ export type ProposalWorkflowDetail = {
   approvalGate: ProposalApprovalGate;
   approvals: ProposalApprovalRecord[];
   formal: FormalProposalSlice | null;
+  // Hay una ventana de override de margen abierta para ALGUIEN (no
+  // necesariamente el viewer actual) -- gatea si Owner/Superadmin puede
+  // habilitar una nueva ventana (solo una a la vez por propuesta).
+  hasOpenMarginOverrideWindow: boolean;
+  // La ventana abierta es especificamente para el viewer actual -- gatea el
+  // indicador/boton de "Ejecutar override" en la vista del vendedor.
+  isPendingOverrideTarget: boolean;
   issuanceStatus: ProposalIssuanceStatus;
   items: ProposalExcelItem[];
   marginEvaluation: ProposalLiberationEvaluation;
@@ -948,7 +956,7 @@ export async function isProposalVisibleToViewer(
 export async function getProposalWorkflowByTenant(
   tenantId: string,
   proposalId: string,
-  options?: { includeLogoData?: boolean },
+  options?: { includeLogoData?: boolean; viewerUserId?: string | null },
 ): Promise<ProposalWorkflowDetail | null> {
   const row = await prisma.proposals.findFirst({
     include: {
@@ -1175,6 +1183,10 @@ export async function getProposalWorkflowByTenant(
           issuerContactName: resolvedIssuerContact,
         }
       : null,
+    hasOpenMarginOverrideWindow: row.margin_override_target_user_id !== null,
+    isPendingOverrideTarget:
+      row.margin_override_target_user_id !== null &&
+      row.margin_override_target_user_id === (options?.viewerUserId ?? null),
     issuanceStatus: normalizeIssuanceStatus(row.issuance_status),
     items: proposalItems,
     marginEvaluation,
@@ -1229,6 +1241,129 @@ export async function consumeProposalIssuanceForce(input: {
       },
     });
   });
+}
+
+// Habilita una ventana de override de margen de un solo uso, para que el
+// vendedor dueño de la propuesta (proposals.created_by_user_id) pueda
+// ejecutarla el mismo via POST .../override/execute. El motivo y quien
+// habilita se documentan hasta que se ejecute o se cierre -- ver
+// executeMarginOverride y el hook de cierre en updateProposalWorkflowByTenant.
+// Falla explicitamente si la propuesta no esta bloqueada por margen, si la
+// transicion a "approved" no es valida desde el status actual, si ya hay
+// una ventana abierta, o si no hay un vendedor identificado (huerfana).
+export async function grantMarginOverrideWindow(input: {
+  proposalId: string;
+  tenantId: string;
+}): Promise<ProposalWorkflowDetail | null> {
+  const current = await getProposalWorkflowByTenant(input.tenantId, input.proposalId);
+
+  if (!current) {
+    return null;
+  }
+
+  if (current.marginEvaluation.canAuthorizeFinal) {
+    throw new Error("Esta propuesta no esta bloqueada por margen, no aplica override.");
+  }
+
+  if (!canTransitionProposalStatus(current.status, "approved")) {
+    throw new Error(`Transicion invalida: ${current.status} -> approved`);
+  }
+
+  const row = await prisma.proposals.findFirst({
+    select: { created_by_user_id: true },
+    where: { proposal_id: input.proposalId, tenant_id: input.tenantId },
+  });
+
+  if (!row?.created_by_user_id) {
+    throw new Error(
+      "Esta propuesta no tiene un vendedor identificado (created_by_user_id vacio); no se puede habilitar la ventana de override.",
+    );
+  }
+
+  const updated = await prisma.proposals.updateMany({
+    data: { margin_override_target_user_id: row.created_by_user_id },
+    where: {
+      margin_override_target_user_id: null,
+      proposal_id: input.proposalId,
+      tenant_id: input.tenantId,
+    },
+  });
+
+  if (updated.count === 0) {
+    throw new Error("Ya hay una ventana de override pendiente de consumir para esta propuesta.");
+  }
+
+  return getProposalWorkflowByTenant(input.tenantId, input.proposalId);
+}
+
+// Ejecuta el override de margen: mueve la propuesta directo a "approved"
+// saltandose unicamente el check de margen del guard (bypassMarginGuard),
+// sin pasar por assertApprovalActorEligibility ni evaluateApprovalGate -- la
+// autoridad ya se valido en el endpoint (Owner/Superadmin elegible, o el
+// vendedor destinatario de una ventana abierta), no depende del rol de
+// quien ejecuta materialmente. Inserta UNA sola fila en proposal_approvals
+// (decision:'overridden'), distinguible de una aprobacion normal, con
+// approverUserId (quien documento el motivo) y executedByUserId (quien
+// ejecuto materialmente) -- pueden ser la misma persona (B1) o no (B2).
+export async function executeMarginOverride(input: {
+  approverRole: ProposalApproverRole;
+  approverUserId: string;
+  executedByUserId: string;
+  proposalId: string;
+  reason: string;
+  tenantId: string;
+}): Promise<ProposalWorkflowDetail | null> {
+  const current = await getProposalWorkflowByTenant(input.tenantId, input.proposalId);
+
+  if (!current) {
+    return null;
+  }
+
+  if (current.marginEvaluation.canAuthorizeFinal) {
+    throw new Error("Esta propuesta no esta bloqueada por margen, no aplica override.");
+  }
+
+  assertProposalWorkflowGuard({
+    allowApprovedTermsUpdate: false,
+    bypassMarginGuard: true,
+    currentStatus: current.status,
+    hasContentUpdate: false,
+    marginCanAuthorizeFinal: current.marginEvaluation.canAuthorizeFinal,
+    nextStatus: "approved",
+  });
+
+  const now = new Date();
+
+  await prisma.$transaction(async (tx) => {
+    await tx.proposals.update({
+      data: {
+        closed_at: now,
+        margin_override_target_user_id: null,
+        status: "approved",
+      },
+      where: { proposal_id: input.proposalId },
+    });
+
+    await tx.formal_proposals.updateMany({
+      data: { status: "approved", updated_at: now },
+      where: { proposal_id: input.proposalId },
+    });
+
+    await registerProposalApprovalDecisionByTenant(
+      {
+        approverRole: input.approverRole,
+        approverUserId: input.approverUserId,
+        decision: "overridden",
+        executedByUserId: input.executedByUserId,
+        proposalId: input.proposalId,
+        reason: input.reason,
+        tenantId: input.tenantId,
+      },
+      tx,
+    );
+  });
+
+  return getProposalWorkflowByTenant(input.tenantId, input.proposalId);
 }
 
 export async function updateProposalWorkflowByTenant(
@@ -1431,6 +1566,13 @@ export async function updateProposalWorkflowByTenant(
     await tx.proposals.update({
       data: {
         closed_at: shouldClose ? now : null,
+        // Si el status cambia por esta via (la normal: Aprobar/Rechazar/
+        // "Cliente acepto"/etc.), cierra cualquier ventana de override de
+        // margen pendiente sin consumirla -- no se inserta fila en
+        // proposal_approvals, simplemente deja de estar disponible para el
+        // vendedor. Distinto de executeMarginOverride, que la consume con
+        // registro cuando SI se ejecuta.
+        ...(hasStatusUpdate ? { margin_override_target_user_id: null } : {}),
         status: nextStatus,
       },
       where: {

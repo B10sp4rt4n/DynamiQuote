@@ -17,6 +17,10 @@ const allowedTransitions: Record<ProposalStatus, ProposalStatus[]> = {
 
 export type ProposalWorkflowGuardInput = {
   allowApprovedTermsUpdate: boolean;
+  // Omite unicamente el check de margen mas abajo -- el resto del guard
+  // (transiciones permitidas, edicion de contenido en aprobada) sigue
+  // aplicando igual. Lo usa executeMarginOverride, nunca el flujo normal.
+  bypassMarginGuard?: boolean;
   currentStatus: ProposalStatus;
   hasContentUpdate: boolean;
   marginCanAuthorizeFinal: boolean;
@@ -49,7 +53,8 @@ export function assertProposalWorkflowGuard(input: ProposalWorkflowGuardInput): 
     input.nextStatus === "approved" &&
     input.currentStatus !== "approved" &&
     !input.marginCanAuthorizeFinal &&
-    input.currentStatus !== "sent"
+    input.currentStatus !== "sent" &&
+    !input.bypassMarginGuard
   ) {
     throw new Error("La politica de margen bloquea la autorizacion final de esta propuesta.");
   }

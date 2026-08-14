@@ -1,9 +1,11 @@
 import { randomUUID } from "crypto";
 
+import type { Prisma } from "@prisma/client";
+
 import { evaluateApprovalGate, type ProposalApprovalGate } from "@/lib/domain/proposal-approval-gate";
 import { prisma } from "@/lib/db/prisma";
 
-export type ProposalApprovalDecision = "approved" | "rejected";
+export type ProposalApprovalDecision = "approved" | "rejected" | "overridden";
 export type ProposalApproverRole = "superadmin" | "owner" | "admin" | "user";
 
 export type ProposalApprovalRecord = {
@@ -12,6 +14,10 @@ export type ProposalApprovalRecord = {
   approverUserId: string;
   createdAt: string;
   decision: ProposalApprovalDecision;
+  // Solo poblado en decision:'overridden' -- quien ejecuto materialmente el
+  // override (puede ser distinto de approverUserId cuando un Owner/Superadmin
+  // habilita una ventana y el vendedor dueño de la propuesta la ejecuta).
+  executedByUserId: string | null;
   proposalId: string;
   reason: string | null;
   tenantId: string;
@@ -59,6 +65,7 @@ type ProposalApprovalRow = {
   approver_user_id: string;
   created_at: Date | string;
   decision: string;
+  executed_by_user_id: string | null;
   proposal_id: string;
   reason: string | null;
   tenant_id: string;
@@ -74,7 +81,17 @@ function normalizeApproverRole(value: string): ProposalApproverRole {
 }
 
 function normalizeDecision(value: string): ProposalApprovalDecision {
-  return value.trim().toLowerCase() === "rejected" ? "rejected" : "approved";
+  const normalized = value.trim().toLowerCase();
+
+  if (normalized === "rejected") {
+    return "rejected";
+  }
+
+  if (normalized === "overridden") {
+    return "overridden";
+  }
+
+  return "approved";
 }
 
 function toIso(value: Date | string): string {
@@ -89,23 +106,32 @@ function mapApprovalRow(row: ProposalApprovalRow): ProposalApprovalRecord {
     approverUserId: row.approver_user_id,
     createdAt: toIso(row.created_at),
     decision: normalizeDecision(row.decision),
+    executedByUserId: row.executed_by_user_id,
     proposalId: row.proposal_id,
     reason: row.reason,
     tenantId: row.tenant_id,
   };
 }
 
-export async function registerProposalApprovalDecisionByTenant(input: {
-  approverRole: ProposalApproverRole;
-  approverUserId: string;
-  decision: ProposalApprovalDecision;
-  proposalId: string;
-  reason?: string | null;
-  tenantId: string;
-}): Promise<void> {
+export async function registerProposalApprovalDecisionByTenant(
+  input: {
+    approverRole: ProposalApproverRole;
+    approverUserId: string;
+    decision: ProposalApprovalDecision;
+    // Solo aplica a decision:'overridden' -- ver comentario en ProposalApprovalRecord.
+    executedByUserId?: string | null;
+    proposalId: string;
+    reason?: string | null;
+    tenantId: string;
+  },
+  // Cliente de transaccion opcional -- para que el caller pueda insertar esta
+  // fila atomicamente junto con otros writes (ej. executeMarginOverride,
+  // que ademas mueve proposals.status en la misma transaccion).
+  client: Prisma.TransactionClient | typeof prisma = prisma,
+): Promise<void> {
   await ensureProposalApprovalsTable();
 
-  await prisma.$executeRaw`
+  await client.$executeRaw`
     INSERT INTO proposal_approvals (
       approval_id,
       tenant_id,
@@ -114,6 +140,7 @@ export async function registerProposalApprovalDecisionByTenant(input: {
       approver_role,
       decision,
       reason,
+      executed_by_user_id,
       created_at
     )
     VALUES (
@@ -124,6 +151,7 @@ export async function registerProposalApprovalDecisionByTenant(input: {
       ${input.approverRole},
       ${input.decision},
       ${input.reason ?? null},
+      ${input.executedByUserId ?? null},
       NOW()
     )
   `;
@@ -144,6 +172,7 @@ export async function getProposalApprovalsByTenant(
       approver_role,
       decision,
       reason,
+      executed_by_user_id,
       created_at
     FROM proposal_approvals
     WHERE tenant_id = ${tenantId}
