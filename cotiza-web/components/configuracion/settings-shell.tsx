@@ -672,6 +672,9 @@ function UsersTab({
   const [editRole, setEditRole] = useState<"user" | "admin" | "owner">("user");
   const [editSellerCode, setEditSellerCode] = useState("");
   const [editTenantId, setEditTenantId] = useState(tenantOptions[0]?.id ?? "");
+  const [editingSuperAdminSellerCodeUserId, setEditingSuperAdminSellerCodeUserId] = useState<string | null>(null);
+  const [editSuperAdminSellerCode, setEditSuperAdminSellerCode] = useState("");
+  const [editSuperAdminEmail, setEditSuperAdminEmail] = useState("");
 
   async function toggleActive(userId: string) {
     setPending(userId);
@@ -732,6 +735,50 @@ function UsersTab({
 
       onUserUpdated(data.user);
       setEditingUserId(null);
+    } catch (err) {
+      setError(err instanceof Error ? err.message : "Error desconocido");
+    } finally {
+      setPending(null);
+    }
+  }
+
+  // Las cuentas superadmin estan protegidas contra edicion de rol/tenant/estado/nombre/alias
+  // desde este panel (ver updateManagedUserByTenant) -- este flujo aparte es la unica
+  // excepcion permitida, restringida a codigo de vendedor y correo.
+  function beginEditSuperAdminSellerCode(user: AppUserSummary) {
+    setError(null);
+    setEditingSuperAdminSellerCodeUserId(user.userId);
+    setEditSuperAdminSellerCode(user.sellerCode ?? "");
+    setEditSuperAdminEmail(user.email ?? "");
+  }
+
+  function cancelEditSuperAdminSellerCode() {
+    setEditingSuperAdminSellerCodeUserId(null);
+  }
+
+  async function submitEditSuperAdminSellerCode(event: FormEvent<HTMLFormElement>) {
+    event.preventDefault();
+
+    if (!editingSuperAdminSellerCodeUserId) return;
+
+    setPending(`edit:${editingSuperAdminSellerCodeUserId}`);
+    setError(null);
+
+    try {
+      const res = await fetch(`/api/settings/users/${editingSuperAdminSellerCodeUserId}`, {
+        body: JSON.stringify({
+          email: editSuperAdminEmail || null,
+          sellerCode: editSuperAdminSellerCode || null,
+        }),
+        headers: { "Content-Type": "application/json" },
+        method: "PATCH",
+      });
+
+      const data = (await res.json()) as { error?: string; user?: AppUserSummary };
+      if (!res.ok || !data.user) throw new Error(data.error ?? "No se pudo editar el codigo de vendedor o correo");
+
+      onUserUpdated(data.user);
+      setEditingSuperAdminSellerCodeUserId(null);
     } catch (err) {
       setError(err instanceof Error ? err.message : "Error desconocido");
     } finally {
@@ -862,6 +909,50 @@ function UsersTab({
         </form>
       ) : null}
 
+      {canManageAllTenants && editingSuperAdminSellerCodeUserId ? (
+        <form
+          className="grid gap-3 rounded-xl border border-zinc-200 bg-zinc-50 p-4"
+          onSubmit={submitEditSuperAdminSellerCode}
+        >
+          <p className="text-sm font-semibold text-zinc-900">Editar código vendedor / correo (cuenta superadmin)</p>
+          <p className="text-xs text-zinc-500">
+            Las cuentas superadmin están protegidas contra cambios de rol, tenant, estado, alias
+            o nombre desde este panel. Solo se pueden editar código vendedor y correo.
+          </p>
+          <div className="grid gap-3 md:grid-cols-2">
+            <input
+              className="rounded-lg border border-zinc-400 bg-white px-3 py-2 text-sm text-zinc-900 placeholder:text-zinc-500"
+              onChange={(event) => setEditSuperAdminSellerCode(event.target.value)}
+              placeholder="Código vendedor"
+              value={editSuperAdminSellerCode}
+            />
+            <input
+              className="rounded-lg border border-zinc-400 bg-white px-3 py-2 text-sm text-zinc-900 placeholder:text-zinc-500"
+              onChange={(event) => setEditSuperAdminEmail(event.target.value)}
+              placeholder="Correo"
+              type="email"
+              value={editSuperAdminEmail}
+            />
+          </div>
+          <div className="flex gap-2">
+            <button
+              className="rounded-lg bg-zinc-900 px-3 py-2 text-sm font-medium text-white transition hover:bg-zinc-700 disabled:opacity-60"
+              disabled={pending === `edit:${editingSuperAdminSellerCodeUserId}`}
+              type="submit"
+            >
+              {pending === `edit:${editingSuperAdminSellerCodeUserId}` ? "Guardando..." : "Guardar cambios"}
+            </button>
+            <button
+              className="rounded-lg bg-zinc-100 px-3 py-2 text-sm font-medium text-zinc-700 transition hover:bg-zinc-200"
+              onClick={cancelEditSuperAdminSellerCode}
+              type="button"
+            >
+              Cancelar
+            </button>
+          </div>
+        </form>
+      ) : null}
+
       <div className="overflow-x-auto overflow-y-hidden rounded-xl border border-zinc-200">
         <table className="min-w-[1200px] divide-y divide-zinc-200 text-sm">
           <thead className="bg-zinc-50 text-left text-zinc-600">
@@ -925,6 +1016,13 @@ function UsersTab({
                     {user.role.toLowerCase().includes("superadmin") ? (
                       <div className="flex gap-2 whitespace-nowrap pr-2">
                         <span className="text-xs font-medium text-zinc-600">Protegido</span>
+                        <button
+                          className="rounded-lg bg-zinc-100 px-3 py-1 text-xs font-medium text-zinc-700 transition hover:bg-zinc-200"
+                          onClick={() => beginEditSuperAdminSellerCode(user)}
+                          type="button"
+                        >
+                          Editar código vendedor
+                        </button>
                         <button
                           className="rounded-lg bg-sky-100 px-3 py-1 text-xs font-medium text-sky-700 transition hover:bg-sky-200 disabled:opacity-60"
                           disabled={pending === `resend:${user.userId}`}

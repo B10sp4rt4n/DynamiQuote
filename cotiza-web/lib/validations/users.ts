@@ -28,6 +28,7 @@ export const updateManagedUserSchema = z
       .max(60)
       .regex(/^[a-zA-Z0-9._-]+$/, "Alias invalido")
       .optional(),
+    email: z.string().trim().email("Correo invalido").max(191).nullable().optional(),
     firstName: z.string().trim().min(1).max(120).optional(),
     lastName: z.string().trim().min(1).max(120).optional(),
     role: z.enum(VALID_ROLES).optional(),
@@ -38,6 +39,7 @@ export const updateManagedUserSchema = z
     (payload) =>
       payload.active !== undefined ||
       payload.alias !== undefined ||
+      payload.email !== undefined ||
       payload.firstName !== undefined ||
       payload.lastName !== undefined ||
       payload.role !== undefined ||

@@ -215,8 +215,25 @@ export async function updateManagedUserByTenant({
   if (!current) return null;
 
   const normalizedRole = current.role.trim().toLowerCase();
-  if (normalizedRole === "superadmin" || normalizedRole === "super_admin" || normalizedRole === "platform_admin") {
-    return null;
+  const isProtectedSuperAdmin =
+    normalizedRole === "superadmin" || normalizedRole === "super_admin" || normalizedRole === "platform_admin";
+
+  if (isProtectedSuperAdmin) {
+    // Cuentas superadmin estan protegidas contra cambios de rol/tenant/estado/nombre/alias
+    // desde este panel -- las unicas excepciones son codigo de vendedor y correo, que no
+    // tienen implicaciones de privilegios ni de scoping multi-tenant.
+    const onlyProtectedExceptionFields =
+      payload.active === undefined &&
+      payload.alias === undefined &&
+      payload.firstName === undefined &&
+      payload.lastName === undefined &&
+      payload.role === undefined &&
+      payload.tenantId === undefined &&
+      (payload.sellerCode !== undefined || payload.email !== undefined);
+
+    if (!onlyProtectedExceptionFields) {
+      return null;
+    }
   }
 
   if (payload.tenantId !== undefined) {
@@ -237,6 +254,9 @@ export async function updateManagedUserByTenant({
     data: {
       ...(payload.active !== undefined ? { active: payload.active } : {}),
       ...(payload.alias !== undefined ? { alias: payload.alias.trim() } : {}),
+      ...(payload.email !== undefined
+        ? { email: payload.email ? payload.email.trim().toLowerCase() : null }
+        : {}),
       ...(payload.firstName !== undefined ? { first_name: payload.firstName.trim() } : {}),
       ...(payload.lastName !== undefined ? { last_name: payload.lastName.trim() } : {}),
       ...(payload.role !== undefined ? { role: payload.role } : {}),
