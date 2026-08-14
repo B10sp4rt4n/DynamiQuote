@@ -23,10 +23,21 @@ type ProposalApprovalRecordView = {
   approverRole: "superadmin" | "owner" | "admin" | "user";
   approverUserId: string;
   createdAt: string;
-  decision: "approved" | "rejected";
+  decision: "approved" | "rejected" | "overridden";
+  executedByUserId: string | null;
   proposalId: string;
   reason: string | null;
   tenantId: string;
+};
+
+// Forma minima del proposal que devuelven los endpoints de override -- solo
+// los campos que estos handlers necesitan sincronizar localmente.
+type MarginOverrideResponseProposal = {
+  approvals: ProposalApprovalRecordView[];
+  hasOpenMarginOverrideWindow: boolean;
+  isPendingOverrideTarget: boolean;
+  marginEvaluation: ProposalLiberationEvaluation;
+  status: ProposalStatus;
 };
 
 type ProposalApprovalGateView = {
@@ -126,7 +137,9 @@ function formatApprovalRole(value: ProposalApprovalRecordView["approverRole"]): 
 }
 
 function formatApprovalDecision(value: ProposalApprovalRecordView["decision"]): string {
-  return value === "approved" ? "Aprobada" : "Rechazada";
+  if (value === "approved") return "Aprobada";
+  if (value === "overridden") return "Override";
+  return "Rechazada";
 }
 
 function formatMissingApprovalRoles(roles: Array<"owner" | "superadmin">): string {
@@ -190,10 +203,15 @@ export function ProposalShell({ canForceIssuance, proposals, tenantName }: Propo
   const [selectedIssuanceStatus, setSelectedIssuanceStatus] = useState<ProposalIssuanceStatus>(
     "normal",
   );
-  const [forceIssueStatus, setForceIssueStatus] = useState<"idle" | "pending" | "success" | "error">(
+  const [selectedHasOpenMarginOverrideWindow, setSelectedHasOpenMarginOverrideWindow] = useState(false);
+  const [selectedIsPendingOverrideTarget, setSelectedIsPendingOverrideTarget] = useState(false);
+  const [overrideReason, setOverrideReason] = useState("");
+  const [overrideStatus, setOverrideStatus] = useState<"idle" | "pending" | "success" | "error">("idle");
+  const [overrideMessage, setOverrideMessage] = useState<string | null>(null);
+  const [executeOverrideStatus, setExecuteOverrideStatus] = useState<"idle" | "pending" | "success" | "error">(
     "idle",
   );
-  const [forceIssueMessage, setForceIssueMessage] = useState<string | null>(null);
+  const [executeOverrideMessage, setExecuteOverrideMessage] = useState<string | null>(null);
   const [termsAndConditions, setTermsAndConditions] = useState<string>(
     proposals[0]?.formal?.termsAndConditions ?? "",
   );
@@ -475,6 +493,8 @@ export function ProposalShell({ canForceIssuance, proposals, tenantName }: Propo
           marginEvaluation?: ProposalLiberationEvaluation | null;
           approvalGate: ProposalApprovalGateView;
           approvals: ProposalApprovalRecordView[];
+          hasOpenMarginOverrideWindow: boolean;
+          isPendingOverrideTarget: boolean;
           issuanceStatus: ProposalIssuanceStatus;
           salesOwner: string;
           proposalId: string;
@@ -497,6 +517,8 @@ export function ProposalShell({ canForceIssuance, proposals, tenantName }: Propo
       setTermsAndConditions(data.proposal.formal?.termsAndConditions ?? "");
       setSelectedStatus(data.proposal.status);
       setSelectedIssuanceStatus(data.proposal.issuanceStatus ?? "normal");
+      setSelectedHasOpenMarginOverrideWindow(data.proposal.hasOpenMarginOverrideWindow ?? false);
+      setSelectedIsPendingOverrideTarget(data.proposal.isPendingOverrideTarget ?? false);
       setSalesOwner(data.proposal.salesOwner ?? data.proposal.formal?.issuerContactName ?? "");
       setApprovals(data.proposal.approvals ?? []);
       setApprovalGate(data.proposal.approvalGate ?? null);
@@ -762,6 +784,7 @@ export function ProposalShell({ canForceIssuance, proposals, tenantName }: Propo
           marginEvaluation?: ProposalLiberationEvaluation | null;
           approvalGate: ProposalApprovalGateView;
           approvals: ProposalApprovalRecordView[];
+          hasOpenMarginOverrideWindow: boolean;
           issuanceStatus: ProposalIssuanceStatus;
           proposalId: string;
           status: ProposalStatus;
@@ -829,6 +852,7 @@ export function ProposalShell({ canForceIssuance, proposals, tenantName }: Propo
       // (la API puede ajustar el estado si el workflow lo requiere).
       setSelectedStatus(data.proposal.status);
       setSelectedIssuanceStatus(data.proposal.issuanceStatus ?? "normal");
+      setSelectedHasOpenMarginOverrideWindow(data.proposal.hasOpenMarginOverrideWindow ?? false);
       setTermsAndConditions(data.proposal.formal?.termsAndConditions ?? termsAndConditions);
       if (data.proposal.status === "approved") {
         setEmailStatus("idle");
@@ -882,6 +906,7 @@ export function ProposalShell({ canForceIssuance, proposals, tenantName }: Propo
           approvalGate: ProposalApprovalGateView;
           approvals: ProposalApprovalRecordView[];
           formal: ProposalSummary["formal"];
+          hasOpenMarginOverrideWindow: boolean;
           issuanceStatus: ProposalIssuanceStatus;
           marginEvaluation: ProposalLiberationEvaluation;
           proposalId: string;
@@ -897,6 +922,7 @@ export function ProposalShell({ canForceIssuance, proposals, tenantName }: Propo
       setApprovalGate(data.proposal.approvalGate ?? null);
       setSelectedStatus(data.proposal.status);
       setSelectedIssuanceStatus(data.proposal.issuanceStatus ?? "normal");
+      setSelectedHasOpenMarginOverrideWindow(data.proposal.hasOpenMarginOverrideWindow ?? false);
       if (data.proposal.status === "approved") {
         setEmailStatus("idle");
         setEmailMessage(null);
@@ -1006,43 +1032,114 @@ export function ProposalShell({ canForceIssuance, proposals, tenantName }: Propo
   // Forzar emision: unicamente Owner/Superadmin, y solo cuando el gate esta
   // bloqueado. Requiere un motivo explicito (fricción deliberada para que no
   // se dispare por accidente) y queda auditado en proposal_audit_events.
-  async function handleForceIssue() {
+  // Aplica al estado local lo que devuelven /override y /override/execute --
+  // ambos responden con la propuesta actualizada completa.
+  function syncMarginOverrideProposal(proposal: MarginOverrideResponseProposal, proposalId: string) {
+    setApprovals(proposal.approvals ?? []);
+    setSelectedStatus(proposal.status);
+    setSelectedHasOpenMarginOverrideWindow(proposal.hasOpenMarginOverrideWindow);
+    setSelectedIsPendingOverrideTarget(proposal.isPendingOverrideTarget);
+    setItems((current) =>
+      current.map((item) =>
+        item.proposalId === proposalId
+          ? { ...item, marginEvaluation: proposal.marginEvaluation, status: proposal.status }
+          : item,
+      ),
+    );
+  }
+
+  // Override de margen: unicamente Owner/Superadmin, y solo cuando la
+  // propuesta esta bloqueada por politica de margen. Motivo obligatorio.
+  // mode "direct": ejecuta de inmediato (B1). mode "grant": habilita una
+  // ventana de un solo uso para que el vendedor dueño de la propuesta la
+  // ejecute el mismo (B2) -- el targetUserId real lo deriva el servidor,
+  // aqui solo se manda un valor no vacio para senializar el modo.
+  async function handleMarginOverride(mode: "direct" | "grant") {
     if (!selectedProposal) {
       return;
     }
 
-    const reason = window.prompt(
-      "Esta propuesta no esta aprobada. Escribe el motivo para forzar su emision:",
-    );
+    const reason = overrideReason.trim();
 
-    if (!reason || reason.trim().length === 0) {
+    if (!reason) {
+      setOverrideStatus("error");
+      setOverrideMessage("El motivo es obligatorio.");
       return;
     }
 
-    setForceIssueStatus("pending");
-    setForceIssueMessage(null);
+    setOverrideStatus("pending");
+    setOverrideMessage(null);
 
     try {
-      const response = await fetch(`/api/proposals/${selectedProposal.proposalId}/force-issue`, {
-        body: JSON.stringify({ reason: reason.trim() }),
+      const response = await fetch(`/api/proposals/${selectedProposal.proposalId}/override`, {
+        body: JSON.stringify({
+          reason,
+          ...(mode === "grant" ? { targetUserId: "auto" } : {}),
+        }),
         headers: {
           "Content-Type": "application/json",
         },
         method: "POST",
       });
 
-      const data = (await response.json().catch(() => null)) as { error?: string } | null;
+      const data = (await response.json().catch(() => null)) as
+        | { error?: string; proposal?: MarginOverrideResponseProposal }
+        | null;
 
       if (!response.ok) {
-        throw new Error(data?.error ?? "No fue posible forzar la emision");
+        throw new Error(data?.error ?? "No fue posible ejecutar el override");
       }
 
-      setSelectedIssuanceStatus("force_pending");
-      setForceIssueStatus("success");
-      setForceIssueMessage("Emision forzada. El siguiente PDF, correo o Excel descargado la consumira.");
+      if (data?.proposal) {
+        syncMarginOverrideProposal(data.proposal, selectedProposal.proposalId);
+      }
+
+      setOverrideStatus("success");
+      setOverrideReason("");
+      setOverrideMessage(
+        mode === "grant"
+          ? "Ventana habilitada para el vendedor de esta propuesta."
+          : "Override ejecutado. La propuesta quedo aprobada.",
+      );
     } catch (error) {
-      setForceIssueStatus("error");
-      setForceIssueMessage(error instanceof Error ? error.message : "Error interno al forzar la emision");
+      setOverrideStatus("error");
+      setOverrideMessage(error instanceof Error ? error.message : "Error interno al ejecutar el override");
+    }
+  }
+
+  // Lo dispara el vendedor cuando tiene una ventana de override habilitada
+  // para el mismo (isPendingOverrideTarget). Sin motivo: el motivo ya lo
+  // documento quien habilito la ventana, se recupera server-side.
+  async function handleExecuteOverride() {
+    if (!selectedProposal) {
+      return;
+    }
+
+    setExecuteOverrideStatus("pending");
+    setExecuteOverrideMessage(null);
+
+    try {
+      const response = await fetch(`/api/proposals/${selectedProposal.proposalId}/override/execute`, {
+        method: "POST",
+      });
+
+      const data = (await response.json().catch(() => null)) as
+        | { error?: string; proposal?: MarginOverrideResponseProposal }
+        | null;
+
+      if (!response.ok) {
+        throw new Error(data?.error ?? "No fue posible ejecutar el override");
+      }
+
+      if (data?.proposal) {
+        syncMarginOverrideProposal(data.proposal, selectedProposal.proposalId);
+      }
+
+      setExecuteOverrideStatus("success");
+      setExecuteOverrideMessage("Override ejecutado. La propuesta quedo aprobada.");
+    } catch (error) {
+      setExecuteOverrideStatus("error");
+      setExecuteOverrideMessage(error instanceof Error ? error.message : "Error interno al ejecutar el override");
     }
   }
 
@@ -1477,27 +1574,99 @@ export function ProposalShell({ canForceIssuance, proposals, tenantName }: Propo
                 ) : null}
               </div>
 
-              {issuanceGate.kind === "blocked" ? (
+              {/* Punto unico de autoridad para propuestas bloqueadas por politica de
+                  margen -- visible solo a Owner/Superadmin. Bloqueo total reutiliza
+                  el mismo mecanismo que "Rechazar" en Aprobaciones formales (mismo
+                  motivo compartido); Override tiene las dos sub-opciones B1/B2. */}
+              {!marginAllowsFinalAuthorization && canForceIssuance ? (
                 <div className="rounded-lg border border-amber-200 bg-amber-50 px-3 py-3 text-sm text-amber-900">
-                  <p className="font-semibold">Emision de documentos bloqueada.</p>
-                  <p className="mt-1 text-xs leading-5 text-amber-800">{issuanceGate.reason}</p>
-                  {canForceIssuance ? (
-                    <button
-                      className="mt-2 rounded-lg border border-amber-400 bg-white px-3 py-1.5 text-xs font-semibold text-amber-800 transition hover:bg-amber-100 disabled:cursor-not-allowed disabled:opacity-60"
-                      disabled={forceIssueStatus === "pending"}
-                      onClick={() => { void handleForceIssue(); }}
-                      type="button"
-                    >
-                      {forceIssueStatus === "pending" ? "Forzando..." : "Forzar emision"}
-                    </button>
-                  ) : null}
-                  {forceIssueMessage ? (
+                  <p className="font-semibold">Propuesta bloqueada por politica de margen.</p>
+                  <p className="mt-1 text-xs leading-5 text-amber-800">
+                    {selectedProposal.marginEvaluation?.summary}
+                  </p>
+
+                  {selectedHasOpenMarginOverrideWindow ? (
+                    <p className="mt-2 text-xs font-medium text-amber-800">
+                      Ya hay una ventana de override pendiente de consumir para esta propuesta.
+                    </p>
+                  ) : (
+                    <div className="mt-3 grid gap-2">
+                      <input
+                        className="w-full rounded-lg border border-amber-300 bg-white px-3 py-2 text-sm text-zinc-800"
+                        onChange={(event) => setOverrideReason(event.target.value)}
+                        placeholder="Motivo (obligatorio)"
+                        value={overrideReason}
+                      />
+                      <div className="flex flex-wrap gap-2">
+                        <button
+                          className="rounded-lg border border-rose-300 bg-rose-50 px-3 py-1.5 text-xs font-semibold text-rose-700 transition hover:bg-rose-100 disabled:cursor-not-allowed disabled:opacity-60"
+                          disabled={approvalPending || !overrideReason.trim()}
+                          onClick={() => {
+                            setApprovalReason(overrideReason);
+                            void handleApprovalDecision("rejected");
+                          }}
+                          type="button"
+                        >
+                          Bloqueo total (rechazar)
+                        </button>
+                        <button
+                          className="rounded-lg border border-amber-400 bg-white px-3 py-1.5 text-xs font-semibold text-amber-800 transition hover:bg-amber-100 disabled:cursor-not-allowed disabled:opacity-60"
+                          disabled={overrideStatus === "pending"}
+                          onClick={() => { void handleMarginOverride("direct"); }}
+                          type="button"
+                        >
+                          {overrideStatus === "pending" ? "Ejecutando..." : "Forzar override ahora"}
+                        </button>
+                        <button
+                          className="rounded-lg border border-amber-400 bg-white px-3 py-1.5 text-xs font-semibold text-amber-800 transition hover:bg-amber-100 disabled:cursor-not-allowed disabled:opacity-60"
+                          disabled={overrideStatus === "pending"}
+                          onClick={() => { void handleMarginOverride("grant"); }}
+                          type="button"
+                        >
+                          Habilitar para el vendedor
+                        </button>
+                      </div>
+                    </div>
+                  )}
+
+                  {overrideMessage ? (
                     <p
                       className={`mt-2 text-xs font-medium ${
-                        forceIssueStatus === "error" ? "text-rose-700" : "text-emerald-700"
+                        overrideStatus === "error" ? "text-rose-700" : "text-emerald-700"
                       }`}
                     >
-                      {forceIssueMessage}
+                      {overrideMessage}
+                    </p>
+                  ) : null}
+                </div>
+              ) : null}
+
+              {/* Vista del vendedor: aparece solo si el/la Owner/Superadmin le habilito
+                  una ventana de override especificamente a el/ella para esta propuesta.
+                  Desaparece en cuanto se consume o se cierra (isPendingOverrideTarget
+                  vuelve a false). */}
+              {selectedIsPendingOverrideTarget ? (
+                <div className="rounded-lg border border-sky-200 bg-sky-50 px-3 py-3 text-sm text-sky-900">
+                  <p className="font-semibold">Tienes una ventana de override habilitada.</p>
+                  <p className="mt-1 text-xs leading-5 text-sky-800">
+                    Un Owner o Superadmin te autorizo a forzar esta propuesta pese al margen fuera de
+                    politica. Es de un solo uso.
+                  </p>
+                  <button
+                    className="mt-2 rounded-lg border border-sky-400 bg-white px-3 py-1.5 text-xs font-semibold text-sky-800 transition hover:bg-sky-100 disabled:cursor-not-allowed disabled:opacity-60"
+                    disabled={executeOverrideStatus === "pending"}
+                    onClick={() => { void handleExecuteOverride(); }}
+                    type="button"
+                  >
+                    {executeOverrideStatus === "pending" ? "Ejecutando..." : "Ejecutar override"}
+                  </button>
+                  {executeOverrideMessage ? (
+                    <p
+                      className={`mt-2 text-xs font-medium ${
+                        executeOverrideStatus === "error" ? "text-rose-700" : "text-emerald-700"
+                      }`}
+                    >
+                      {executeOverrideMessage}
                     </p>
                   ) : null}
                 </div>
@@ -1675,7 +1844,22 @@ export function ProposalShell({ canForceIssuance, proposals, tenantName }: Propo
                           <tr key={row.approvalId}>
                             <td className="px-3 py-2 text-zinc-600">{formatDate(row.createdAt)}</td>
                             <td className="px-3 py-2 text-zinc-700">{formatApprovalRole(row.approverRole)}</td>
-                            <td className="px-3 py-2 text-zinc-700">{formatApprovalDecision(row.decision)}</td>
+                            <td className="px-3 py-2">
+                              {row.decision === "overridden" ? (
+                                <span className="inline-flex items-center rounded-full border border-amber-300 bg-amber-50 px-2 py-0.5 text-[10px] font-semibold text-amber-800">
+                                  Override
+                                </span>
+                              ) : (
+                                <span className="text-zinc-700">{formatApprovalDecision(row.decision)}</span>
+                              )}
+                              {row.decision === "overridden" &&
+                              row.executedByUserId &&
+                              row.executedByUserId !== row.approverUserId ? (
+                                <span className="mt-1 block text-[10px] text-zinc-500">
+                                  Ejecutado por {row.executedByUserId}
+                                </span>
+                              ) : null}
+                            </td>
                             <td className="px-3 py-2 text-zinc-600">{row.reason ?? "-"}</td>
                           </tr>
                         ))

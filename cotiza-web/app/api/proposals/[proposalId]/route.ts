@@ -49,7 +49,7 @@ export async function GET(request: Request, context: RouteContext) {
     return NextResponse.json({ error: "Propuesta no encontrada" }, { status: 404 });
   }
 
-  const proposal = await getProposalWorkflowByTenant(tenant.id, proposalId);
+  const proposal = await getProposalWorkflowByTenant(tenant.id, proposalId, { viewerUserId: tenant.userId });
 
   if (!proposal) {
     return NextResponse.json({ error: "Propuesta no encontrada" }, { status: 404 });
