@@ -1569,7 +1569,14 @@ export async function updateProposalWorkflowByTenant(
     nextStatus,
   });
 
-  if (shouldClearProposalApprovals(hasContentUpdate, current.approvals.length)) {
+  if (
+    shouldClearProposalApprovals({
+      approvalCount: current.approvals.length,
+      currentStatus,
+      hasContentUpdate,
+      nextStatus,
+    })
+  ) {
     await clearProposalApprovalsByTenant(tenantId, proposalId);
   }
 

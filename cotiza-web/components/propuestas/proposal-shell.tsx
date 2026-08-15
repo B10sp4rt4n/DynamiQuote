@@ -315,6 +315,10 @@ export function ProposalShell({ canForceIssuance, proposals, tenantName }: Propo
       }),
     [selectedIssuanceStatus, selectedStatus],
   );
+  // Contenido material (partidas, empresa receptora, asunto) solo se edita
+  // en draft -- fuera de ahi hay que reabrir explicitamente primero. Los
+  // campos "seguros" (terminos, datos de contacto) no dependen de esto.
+  const canEditContent = selectedStatus === "draft";
   const marginAllowsFinalAuthorization = selectedProposal?.marginEvaluation?.canAuthorizeFinal ?? true;
   const marginAllowsInformativeShare = selectedProposal?.marginEvaluation?.canShareInformative ?? false;
   const approvalAllowsFinalAuthorization = approvalGate?.canAuthorizeFinal ?? true;
@@ -1369,7 +1373,8 @@ export function ProposalShell({ canForceIssuance, proposals, tenantName }: Propo
                 Empresa receptora
               </label>
               <input
-                className="w-full rounded-lg border border-zinc-300 bg-white px-3 py-2 text-sm text-zinc-800"
+                className="w-full rounded-lg border border-zinc-300 bg-white px-3 py-2 text-sm text-zinc-800 disabled:cursor-not-allowed disabled:bg-zinc-100 disabled:text-zinc-500"
+                disabled={!canEditContent}
                 id="recipient-company"
                 onChange={(event) => setRecipientCompany(event.target.value)}
                 placeholder="Nombre de empresa cliente"
@@ -1418,7 +1423,8 @@ export function ProposalShell({ canForceIssuance, proposals, tenantName }: Propo
                 Asunto
               </label>
               <input
-                className="w-full rounded-lg border border-zinc-300 bg-white px-3 py-2 text-sm text-zinc-800"
+                className="w-full rounded-lg border border-zinc-300 bg-white px-3 py-2 text-sm text-zinc-800 disabled:cursor-not-allowed disabled:bg-zinc-100 disabled:text-zinc-500"
+                disabled={!canEditContent}
                 id="proposal-subject"
                 onChange={(event) => setSubject(event.target.value)}
                 placeholder="Asunto de la propuesta"
@@ -1429,7 +1435,8 @@ export function ProposalShell({ canForceIssuance, proposals, tenantName }: Propo
                 <div className="mb-2 flex items-center justify-between gap-2">
                   <p className="text-xs uppercase tracking-[0.18em] text-zinc-500">Partidas de la propuesta</p>
                   <button
-                    className="rounded-lg border border-zinc-300 px-3 py-1.5 text-xs font-medium text-zinc-700 hover:bg-zinc-100"
+                    className="rounded-lg border border-zinc-300 px-3 py-1.5 text-xs font-medium text-zinc-700 transition hover:bg-zinc-100 disabled:cursor-not-allowed disabled:opacity-60"
+                    disabled={!canEditContent}
                     onClick={addProposalItem}
                     type="button"
                   >
@@ -1456,14 +1463,16 @@ export function ProposalShell({ canForceIssuance, proposals, tenantName }: Propo
                           <td className="px-2 py-2 text-zinc-800 font-medium">{index + 1}</td>
                           <td className="px-2 py-2">
                             <input
-                              className="w-28 rounded border border-zinc-300 px-2 py-1"
+                              className="w-28 rounded border border-zinc-300 px-2 py-1 disabled:cursor-not-allowed disabled:bg-zinc-100 disabled:text-zinc-500"
+                              disabled={!canEditContent}
                               onChange={(event) => updateProposalItem(index, "sku", event.target.value)}
                               value={item.sku}
                             />
                           </td>
                           <td className="px-2 py-2">
                             <input
-                              className="w-56 rounded border border-zinc-300 px-2 py-1"
+                              className="w-56 rounded border border-zinc-300 px-2 py-1 disabled:cursor-not-allowed disabled:bg-zinc-100 disabled:text-zinc-500"
+                              disabled={!canEditContent}
                               onChange={(event) =>
                                 updateProposalItem(index, "description", event.target.value)
                               }
@@ -1472,7 +1481,8 @@ export function ProposalShell({ canForceIssuance, proposals, tenantName }: Propo
                           </td>
                           <td className="px-2 py-2">
                             <input
-                              className="w-20 rounded border border-zinc-300 px-2 py-1"
+                              className="w-20 rounded border border-zinc-300 px-2 py-1 disabled:cursor-not-allowed disabled:bg-zinc-100 disabled:text-zinc-500"
+                              disabled={!canEditContent}
                               min={0}
                               onChange={(event) => updateProposalItem(index, "quantity", event.target.value)}
                               step={1}
@@ -1482,7 +1492,8 @@ export function ProposalShell({ canForceIssuance, proposals, tenantName }: Propo
                           </td>
                           <td className="px-2 py-2">
                             <input
-                              className="w-24 rounded border border-zinc-300 px-2 py-1"
+                              className="w-24 rounded border border-zinc-300 px-2 py-1 disabled:cursor-not-allowed disabled:bg-zinc-100 disabled:text-zinc-500"
+                              disabled={!canEditContent}
                               min={0}
                               onChange={(event) => updateProposalItem(index, "costUnit", event.target.value)}
                               step={0.01}
@@ -1492,7 +1503,8 @@ export function ProposalShell({ canForceIssuance, proposals, tenantName }: Propo
                           </td>
                           <td className="px-2 py-2">
                             <input
-                              className="w-24 rounded border border-zinc-300 px-2 py-1"
+                              className="w-24 rounded border border-zinc-300 px-2 py-1 disabled:cursor-not-allowed disabled:bg-zinc-100 disabled:text-zinc-500"
+                              disabled={!canEditContent}
                               min={0}
                               onChange={(event) => updateProposalItem(index, "priceUnit", event.target.value)}
                               step={0.01}
@@ -1502,7 +1514,8 @@ export function ProposalShell({ canForceIssuance, proposals, tenantName }: Propo
                           </td>
                           <td className="px-2 py-2">
                             <button
-                              className="rounded border border-rose-300 px-2 py-1 text-xs text-rose-700 hover:bg-rose-50"
+                              className="rounded border border-rose-300 px-2 py-1 text-xs text-rose-700 transition hover:bg-rose-50 disabled:cursor-not-allowed disabled:opacity-60"
+                              disabled={!canEditContent}
                               onClick={() => removeProposalItem(index)}
                               type="button"
                             >
@@ -1537,6 +1550,17 @@ export function ProposalShell({ canForceIssuance, proposals, tenantName }: Propo
                   >
                     {saveStatus === "saving" ? "Guardando..." : "Guardar cambios"}
                   </button>
+                  {!canEditContent ? (
+                    <button
+                      className="rounded-lg border border-amber-300 bg-amber-50 px-4 py-2 text-sm font-medium text-amber-800 transition hover:bg-amber-100 disabled:cursor-not-allowed disabled:opacity-60"
+                      disabled={saveStatus === "saving" || loadingDetail}
+                      onClick={() => { void handleSave("draft"); }}
+                      title="El contenido (partidas, empresa receptora, asunto) solo se edita en borrador."
+                      type="button"
+                    >
+                      Reabrir a borrador
+                    </button>
+                  ) : null}
                   <button
                     className="rounded-lg border border-zinc-300 bg-white px-4 py-2 text-sm font-medium text-zinc-700 transition hover:bg-zinc-100 disabled:cursor-not-allowed disabled:opacity-60"
                     disabled={loadingDetail || issuanceGate.kind === "blocked"}
