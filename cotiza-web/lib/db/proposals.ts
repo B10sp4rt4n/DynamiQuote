@@ -1372,6 +1372,34 @@ export async function grantMarginOverrideWindow(input: {
 // (decision:'overridden'), distinguible de una aprobacion normal, con
 // approverUserId (quien documento el motivo) y executedByUserId (quien
 // ejecuto materialmente) -- pueden ser la misma persona (B1) o no (B2).
+// Transicion de status "pura" -- no toca contenido -- compartida entre
+// executeMarginOverride y el auto-avance de status en
+// registerProposalApprovalByTenant. Tambien cierra cualquier ventana de
+// override de margen pendiente: cualquier cambio real de status por
+// cualquier via cierra una ventana no consumida (mismo criterio que el
+// hook equivalente en updateProposalWorkflowByTenant).
+async function applyProposalStatusOnly(
+  tx: Prisma.TransactionClient,
+  input: { nextStatus: ProposalStatus; proposalId: string },
+): Promise<void> {
+  const now = new Date();
+  const shouldClose = terminalStatuses.includes(input.nextStatus);
+
+  await tx.proposals.update({
+    data: {
+      closed_at: shouldClose ? now : null,
+      margin_override_target_user_id: null,
+      status: input.nextStatus,
+    },
+    where: { proposal_id: input.proposalId },
+  });
+
+  await tx.formal_proposals.updateMany({
+    data: { status: input.nextStatus, updated_at: now },
+    where: { proposal_id: input.proposalId },
+  });
+}
+
 export async function executeMarginOverride(input: {
   approverRole: ProposalApproverRole;
   approverUserId: string;
@@ -1399,22 +1427,8 @@ export async function executeMarginOverride(input: {
     nextStatus: "approved",
   });
 
-  const now = new Date();
-
   await prisma.$transaction(async (tx) => {
-    await tx.proposals.update({
-      data: {
-        closed_at: now,
-        margin_override_target_user_id: null,
-        status: "approved",
-      },
-      where: { proposal_id: input.proposalId },
-    });
-
-    await tx.formal_proposals.updateMany({
-      data: { status: "approved", updated_at: now },
-      where: { proposal_id: input.proposalId },
-    });
+    await applyProposalStatusOnly(tx, { nextStatus: "approved", proposalId: input.proposalId });
 
     await registerProposalApprovalDecisionByTenant(
       {
@@ -1795,6 +1809,47 @@ export async function registerProposalApprovalByTenant(
       reason: input.reason ?? null,
       tenantId,
     });
+  }
+
+  // Sincronizar el status real con el resultado de esta decision -- antes
+  // registerProposalApprovalByTenant solo dejaba la decision en el
+  // historial sin mover proposals.status, lo que podia dejar el badge de
+  // estado contradiciendo al panel de Aprobaciones formales.
+  //
+  // Si el salto directo al status objetivo no es valido en la maquina de
+  // estados (ej. rejected -> approved, o approved -> rejected, ninguno es
+  // un hop directo permitido), cae a "in_review" en vez de no hacer nada --
+  // refleja honestamente "hay una decision registrada, pendiente de
+  // formalizarse" en vez de dejar el badge contradiciendo al panel.
+  let targetStatus: ProposalStatus | null = null;
+
+  if (input.decision === "rejected") {
+    targetStatus = canTransitionProposalStatus(current.status, "rejected")
+      ? "rejected"
+      : canTransitionProposalStatus(current.status, "in_review")
+        ? "in_review"
+        : null;
+  } else if (current.marginEvaluation.canAuthorizeFinal) {
+    const marginPolicy = await getMarginPolicyByTenant(tenantId);
+    const approvals = await getProposalApprovalsByTenant(tenantId, proposalId);
+    const gate = evaluateApprovalGate({
+      approvals,
+      requireObserverApproval: marginPolicy.requireObserverApproval,
+    });
+
+    if (gate.canAuthorizeFinal) {
+      targetStatus = canTransitionProposalStatus(current.status, "approved")
+        ? "approved"
+        : canTransitionProposalStatus(current.status, "in_review")
+          ? "in_review"
+          : null;
+    }
+  }
+
+  if (targetStatus && targetStatus !== current.status) {
+    await prisma.$transaction((tx) =>
+      applyProposalStatusOnly(tx, { nextStatus: targetStatus, proposalId }),
+    );
   }
 
   return getProposalWorkflowByTenant(tenantId, proposalId);
