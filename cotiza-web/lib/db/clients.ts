@@ -9,6 +9,8 @@ export type ClientSummary = {
   clientLogoId: string | null;
   company: string;
   contactEmail: string | null;
+  contactFirstName: string | null;
+  contactLastName: string | null;
   contactName: string | null;
   contactPhone: string | null;
   contactTitle: string | null;
@@ -25,7 +27,8 @@ export type CreateClientInput = {
   clientLogoId?: string | null;
   company: string;
   contactEmail?: string | null;
-  contactName?: string | null;
+  contactFirstName?: string | null;
+  contactLastName?: string | null;
   contactPhone?: string | null;
   contactTitle?: string | null;
   industry?: string | null;
@@ -44,6 +47,8 @@ function mapToSummary(row: {
   client_logo_id: string | null;
   company: string;
   contact_email: string | null;
+  contact_first_name: string | null;
+  contact_last_name: string | null;
   contact_name: string | null;
   contact_phone: string | null;
   contact_title: string | null;
@@ -61,6 +66,8 @@ function mapToSummary(row: {
     clientLogoId: row.client_logo_id,
     company: row.company,
     contactEmail: row.contact_email,
+    contactFirstName: row.contact_first_name,
+    contactLastName: row.contact_last_name,
     contactName: row.contact_name,
     contactPhone: row.contact_phone,
     contactTitle: row.contact_title,
@@ -137,6 +144,9 @@ export async function createClientForTenant(
   input: CreateClientInput,
 ): Promise<ClientSummary> {
   const clientLogoId = await resolveClientLogoIdForTenant(tenantId, input.clientLogoId);
+  const contactFirstName = input.contactFirstName?.trim() || null;
+  const contactLastName = input.contactLastName?.trim() || null;
+  const contactName = [contactFirstName, contactLastName].filter(Boolean).join(" ") || null;
 
   const row = await prisma.client.create({
     data: {
@@ -144,7 +154,9 @@ export async function createClientForTenant(
       client_logo_id: clientLogoId,
       company: input.company.trim(),
       contact_email: input.contactEmail?.trim() || null,
-      contact_name: input.contactName?.trim() || null,
+      contact_first_name: contactFirstName,
+      contact_last_name: contactLastName,
+      contact_name: contactName,
       contact_phone: input.contactPhone?.trim() || null,
       contact_title: input.contactTitle?.trim() || null,
       industry: input.industry?.trim() || null,
@@ -165,7 +177,7 @@ export async function updateClientForTenant(
 ): Promise<ClientSummary | null> {
   // Verificar que el cliente pertenece al tenant antes de actualizar
   const existing = await prisma.client.findFirst({
-    select: { client_id: true },
+    select: { client_id: true, contact_first_name: true, contact_last_name: true },
     where: { client_id: clientId, tenant_id: tenantId },
   });
 
@@ -178,6 +190,18 @@ export async function updateClientForTenant(
       ? await resolveClientLogoIdForTenant(tenantId, input.clientLogoId)
       : undefined;
 
+  // contact_name (combinado) se recalcula solo cuando el nombre o apellido
+  // cambian, para no borrar el valor legado de clientes que aun no tienen
+  // contact_first_name/contact_last_name poblados.
+  const nextContactFirstName =
+    input.contactFirstName !== undefined ? input.contactFirstName?.trim() || null : existing.contact_first_name;
+  const nextContactLastName =
+    input.contactLastName !== undefined ? input.contactLastName?.trim() || null : existing.contact_last_name;
+  const shouldRecomputeContactName = input.contactFirstName !== undefined || input.contactLastName !== undefined;
+  const nextContactName = shouldRecomputeContactName
+    ? [nextContactFirstName, nextContactLastName].filter(Boolean).join(" ") || null
+    : undefined;
+
   const row = await prisma.client.update({
     data: {
       ...(input.active !== undefined ? { active: input.active } : {}),
@@ -185,7 +209,9 @@ export async function updateClientForTenant(
       ...(input.clientLogoId !== undefined ? { client_logo_id: clientLogoId ?? null } : {}),
       ...(input.company !== undefined ? { company: input.company.trim() } : {}),
       ...(input.contactEmail !== undefined ? { contact_email: input.contactEmail?.trim() || null } : {}),
-      ...(input.contactName !== undefined ? { contact_name: input.contactName?.trim() || null } : {}),
+      ...(input.contactFirstName !== undefined ? { contact_first_name: nextContactFirstName } : {}),
+      ...(input.contactLastName !== undefined ? { contact_last_name: nextContactLastName } : {}),
+      ...(nextContactName !== undefined ? { contact_name: nextContactName } : {}),
       ...(input.contactPhone !== undefined ? { contact_phone: input.contactPhone?.trim() || null } : {}),
       ...(input.contactTitle !== undefined ? { contact_title: input.contactTitle?.trim() || null } : {}),
       ...(input.industry !== undefined ? { industry: input.industry?.trim() || null } : {}),

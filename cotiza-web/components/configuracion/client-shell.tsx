@@ -20,7 +20,8 @@ type FormState = {
   clientLogoId: string;
   company: string;
   contactEmail: string;
-  contactName: string;
+  contactFirstName: string;
+  contactLastName: string;
   contactPhone: string;
   contactTitle: string;
   industry: string;
@@ -33,13 +34,25 @@ const EMPTY_FORM: FormState = {
   clientLogoId: "",
   company: "",
   contactEmail: "",
-  contactName: "",
+  contactFirstName: "",
+  contactLastName: "",
   contactPhone: "",
   contactTitle: "",
   industry: "",
   notes: "",
   rfc: "",
 };
+
+// Adivina nombre/apellido a partir del contacto combinado legado, solo como
+// valor inicial editable en el formulario -- no se guarda nada hasta que el
+// usuario confirme (o corrija) y de "Guardar". No es backfill de BD.
+function splitLegacyContactName(contactName: string | null): { firstName: string; lastName: string } {
+  const trimmed = contactName?.trim() ?? "";
+  if (!trimmed) return { firstName: "", lastName: "" };
+
+  const [firstName, ...rest] = trimmed.split(/\s+/);
+  return { firstName: firstName ?? "", lastName: rest.join(" ") };
+}
 
 export function ClientShell({ clientLogos, initialClients }: ClientShellProps) {
   const [availableClientLogos, setAvailableClientLogos] = useState<ClientLogoOption[]>(clientLogos);
@@ -99,12 +112,17 @@ export function ClientShell({ clientLogos, initialClients }: ClientShellProps) {
 
   function openEdit(client: ClientSummary) {
     setEditingClient(client);
+    const hasSplitName = Boolean(client.contactFirstName || client.contactLastName);
+    const guessedName = hasSplitName
+      ? { firstName: client.contactFirstName ?? "", lastName: client.contactLastName ?? "" }
+      : splitLegacyContactName(client.contactName);
     setForm({
       address: client.address ?? "",
       clientLogoId: client.clientLogoId ?? "",
       company: client.company,
       contactEmail: client.contactEmail ?? "",
-      contactName: client.contactName ?? "",
+      contactFirstName: guessedName.firstName,
+      contactLastName: guessedName.lastName,
       contactPhone: client.contactPhone ?? "",
       contactTitle: client.contactTitle ?? "",
       industry: client.industry ?? "",
@@ -206,7 +224,8 @@ export function ClientShell({ clientLogos, initialClients }: ClientShellProps) {
       clientLogoId: form.clientLogoId || null,
       company: form.company.trim(),
       contactEmail: form.contactEmail.trim() || null,
-      contactName: form.contactName.trim() || null,
+      contactFirstName: form.contactFirstName.trim() || null,
+      contactLastName: form.contactLastName.trim() || null,
       contactPhone: form.contactPhone.trim() || null,
       contactTitle: form.contactTitle.trim() || null,
       industry: form.industry.trim() || null,
@@ -476,12 +495,21 @@ export function ClientShell({ clientLogos, initialClients }: ClientShellProps) {
                 </p>
               </div>
               <div>
-                <label className="mb-1 block text-xs font-medium text-zinc-700">Contacto principal</label>
+                <label className="mb-1 block text-xs font-medium text-zinc-700">Nombre del contacto</label>
                 <input
                   className="w-full rounded-lg border border-zinc-300 bg-white px-3 py-2 text-sm text-zinc-900"
-                  onChange={(e) => setField("contactName", e.target.value)}
-                  placeholder="Nombre del contacto"
-                  value={form.contactName}
+                  onChange={(e) => setField("contactFirstName", e.target.value)}
+                  placeholder="Nombre"
+                  value={form.contactFirstName}
+                />
+              </div>
+              <div>
+                <label className="mb-1 block text-xs font-medium text-zinc-700">Apellido del contacto</label>
+                <input
+                  className="w-full rounded-lg border border-zinc-300 bg-white px-3 py-2 text-sm text-zinc-900"
+                  onChange={(e) => setField("contactLastName", e.target.value)}
+                  placeholder="Apellido"
+                  value={form.contactLastName}
                 />
               </div>
               <div>

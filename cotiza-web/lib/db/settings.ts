@@ -12,6 +12,7 @@ export type AppUserSummary = {
   email: string | null;
   firstName: string;
   lastName: string;
+  phone: string | null;
   role: string;
   sellerCode: string | null;
   subtenantKey: string;
@@ -74,6 +75,7 @@ export async function getAppUsersByTenant(tenantId: string): Promise<AppUserSumm
       email: true,
       first_name: true,
       last_name: true,
+      phone: true,
       role: true,
       seller_code: true,
       tenant_id: true,
@@ -94,6 +96,7 @@ export async function getAppUsersByTenant(tenantId: string): Promise<AppUserSumm
     email: row.email ?? null,
     firstName: row.first_name,
     lastName: row.last_name,
+    phone: row.phone,
     role: row.role,
     sellerCode: row.seller_code,
     subtenantKey: `${row.tenant_id ?? "sin-tenant"}:${row.user_id}`,
@@ -113,6 +116,7 @@ export async function getAppUsersForSuperAdmin(): Promise<AppUserSummary[]> {
       email: true,
       first_name: true,
       last_name: true,
+      phone: true,
       role: true,
       seller_code: true,
       tenant_id: true,
@@ -132,6 +136,7 @@ export async function getAppUsersForSuperAdmin(): Promise<AppUserSummary[]> {
     email: row.email ?? null,
     firstName: row.first_name,
     lastName: row.last_name,
+    phone: row.phone,
     role: row.role,
     sellerCode: row.seller_code,
     subtenantKey: `${row.tenant_id ?? "sin-tenant"}:${row.user_id}`,
@@ -170,6 +175,7 @@ export async function toggleAppUserActivationByTenant(
       email: true,
       first_name: true,
       last_name: true,
+      phone: true,
       role: true,
       seller_code: true,
       tenant_id: true,
@@ -190,6 +196,7 @@ export async function toggleAppUserActivationByTenant(
     email: updated.email ?? null,
     firstName: updated.first_name,
     lastName: updated.last_name,
+    phone: updated.phone,
     role: updated.role,
     sellerCode: updated.seller_code,
     subtenantKey: `${updated.tenant_id ?? "sin-tenant"}:${updated.user_id}`,
@@ -220,8 +227,8 @@ export async function updateManagedUserByTenant({
 
   if (isProtectedSuperAdmin) {
     // Cuentas superadmin estan protegidas contra cambios de rol/tenant/estado/nombre/alias
-    // desde este panel -- las unicas excepciones son codigo de vendedor y correo, que no
-    // tienen implicaciones de privilegios ni de scoping multi-tenant.
+    // desde este panel -- las unicas excepciones son codigo de vendedor, correo y telefono,
+    // que no tienen implicaciones de privilegios ni de scoping multi-tenant.
     const onlyProtectedExceptionFields =
       payload.active === undefined &&
       payload.alias === undefined &&
@@ -229,7 +236,7 @@ export async function updateManagedUserByTenant({
       payload.lastName === undefined &&
       payload.role === undefined &&
       payload.tenantId === undefined &&
-      (payload.sellerCode !== undefined || payload.email !== undefined);
+      (payload.sellerCode !== undefined || payload.email !== undefined || payload.phone !== undefined);
 
     if (!onlyProtectedExceptionFields) {
       return null;
@@ -259,6 +266,7 @@ export async function updateManagedUserByTenant({
         : {}),
       ...(payload.firstName !== undefined ? { first_name: payload.firstName.trim() } : {}),
       ...(payload.lastName !== undefined ? { last_name: payload.lastName.trim() } : {}),
+      ...(payload.phone !== undefined ? { phone: payload.phone ? payload.phone.trim() : null } : {}),
       ...(payload.role !== undefined ? { role: payload.role } : {}),
       ...(payload.sellerCode !== undefined
         ? { seller_code: payload.sellerCode ? payload.sellerCode.trim() : null }
@@ -272,6 +280,7 @@ export async function updateManagedUserByTenant({
       email: true,
       first_name: true,
       last_name: true,
+      phone: true,
       role: true,
       seller_code: true,
       tenant_id: true,
@@ -292,6 +301,7 @@ export async function updateManagedUserByTenant({
     email: updated.email ?? null,
     firstName: updated.first_name,
     lastName: updated.last_name,
+    phone: updated.phone,
     role: updated.role,
     sellerCode: updated.seller_code,
     subtenantKey: `${updated.tenant_id ?? "sin-tenant"}:${updated.user_id}`,
@@ -363,6 +373,7 @@ export async function createManagedUserByTenant({
       first_name: payload.firstName,
       last_name: payload.lastName,
       password_hash: "CLERK_MANAGED",
+      phone: payload.phone?.trim() || null,
       role: payload.role ?? "user",
       seller_code: payload.sellerCode?.trim() || null,
       tenant_id: targetTenantId,
@@ -375,6 +386,7 @@ export async function createManagedUserByTenant({
       email: true,
       first_name: true,
       last_name: true,
+      phone: true,
       role: true,
       seller_code: true,
       tenant_id: true,
@@ -394,6 +406,7 @@ export async function createManagedUserByTenant({
     email: created.email ?? null,
     firstName: created.first_name,
     lastName: created.last_name,
+    phone: created.phone,
     role: created.role,
     sellerCode: created.seller_code,
     subtenantKey: `${created.tenant_id ?? "sin-tenant"}:${created.user_id}`,
@@ -442,6 +455,7 @@ export async function relinkManagedUserIdByTenant({
       email: true,
       first_name: true,
       last_name: true,
+      phone: true,
       role: true,
       seller_code: true,
       tenant_id: true,
@@ -462,6 +476,7 @@ export async function relinkManagedUserIdByTenant({
     email: updated.email ?? null,
     firstName: updated.first_name,
     lastName: updated.last_name,
+    phone: updated.phone,
     role: updated.role,
     sellerCode: updated.seller_code,
     subtenantKey: `${updated.tenant_id ?? "sin-tenant"}:${updated.user_id}`,

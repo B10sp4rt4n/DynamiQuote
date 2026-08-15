@@ -694,10 +694,12 @@ function UsersTab({
   const [editAlias, setEditAlias] = useState("");
   const [editRole, setEditRole] = useState<"user" | "admin" | "owner">("user");
   const [editSellerCode, setEditSellerCode] = useState("");
+  const [editPhone, setEditPhone] = useState("");
   const [editTenantId, setEditTenantId] = useState(tenantOptions[0]?.id ?? "");
   const [editingSuperAdminSellerCodeUserId, setEditingSuperAdminSellerCodeUserId] = useState<string | null>(null);
   const [editSuperAdminSellerCode, setEditSuperAdminSellerCode] = useState("");
   const [editSuperAdminEmail, setEditSuperAdminEmail] = useState("");
+  const [editSuperAdminPhone, setEditSuperAdminPhone] = useState("");
 
   async function toggleActive(userId: string) {
     setPending(userId);
@@ -722,6 +724,7 @@ function UsersTab({
     setEditAlias(user.alias);
     setEditRole((user.role === "admin" || user.role === "owner" ? user.role : "user") as "user" | "admin" | "owner");
     setEditSellerCode(user.sellerCode ?? "");
+    setEditPhone(user.phone ?? "");
     setEditTenantId(user.tenantId ?? tenantOptions[0]?.id ?? "");
   }
 
@@ -742,6 +745,7 @@ function UsersTab({
         alias: editAlias,
         firstName: editFirstName,
         lastName: editLastName,
+        phone: editPhone || null,
         role: editRole,
         sellerCode: editSellerCode || null,
         tenantId: canManageAllTenants ? editTenantId : undefined,
@@ -767,12 +771,13 @@ function UsersTab({
 
   // Las cuentas superadmin estan protegidas contra edicion de rol/tenant/estado/nombre/alias
   // desde este panel (ver updateManagedUserByTenant) -- este flujo aparte es la unica
-  // excepcion permitida, restringida a codigo de vendedor y correo.
+  // excepcion permitida, restringida a codigo de vendedor, correo y telefono.
   function beginEditSuperAdminSellerCode(user: AppUserSummary) {
     setError(null);
     setEditingSuperAdminSellerCodeUserId(user.userId);
     setEditSuperAdminSellerCode(user.sellerCode ?? "");
     setEditSuperAdminEmail(user.email ?? "");
+    setEditSuperAdminPhone(user.phone ?? "");
   }
 
   function cancelEditSuperAdminSellerCode() {
@@ -791,6 +796,7 @@ function UsersTab({
       const res = await fetch(`/api/settings/users/${editingSuperAdminSellerCodeUserId}`, {
         body: JSON.stringify({
           email: editSuperAdminEmail || null,
+          phone: editSuperAdminPhone || null,
           sellerCode: editSuperAdminSellerCode || null,
         }),
         headers: { "Content-Type": "application/json" },
@@ -798,7 +804,7 @@ function UsersTab({
       });
 
       const data = (await res.json()) as { error?: string; user?: AppUserSummary };
-      if (!res.ok || !data.user) throw new Error(data.error ?? "No se pudo editar el codigo de vendedor o correo");
+      if (!res.ok || !data.user) throw new Error(data.error ?? "No se pudo editar el codigo de vendedor, correo o telefono");
 
       onUserUpdated(data.user);
       setEditingSuperAdminSellerCodeUserId(null);
@@ -900,6 +906,12 @@ function UsersTab({
               placeholder="Código vendedor"
               value={editSellerCode}
             />
+            <input
+              className="rounded-lg border border-zinc-400 bg-white px-3 py-2 text-sm text-zinc-900 placeholder:text-zinc-500"
+              onChange={(event) => setEditPhone(event.target.value)}
+              placeholder="Teléfono"
+              value={editPhone}
+            />
             <select
               className="rounded-lg border border-zinc-400 bg-white px-3 py-2 text-sm text-zinc-900"
               onChange={(event) => setEditTenantId(event.target.value)}
@@ -937,10 +949,10 @@ function UsersTab({
           className="grid gap-3 rounded-xl border border-zinc-200 bg-zinc-50 p-4"
           onSubmit={submitEditSuperAdminSellerCode}
         >
-          <p className="text-sm font-semibold text-zinc-900">Editar código vendedor / correo (cuenta superadmin)</p>
+          <p className="text-sm font-semibold text-zinc-900">Editar código vendedor / correo / teléfono (cuenta superadmin)</p>
           <p className="text-xs text-zinc-500">
             Las cuentas superadmin están protegidas contra cambios de rol, tenant, estado, alias
-            o nombre desde este panel. Solo se pueden editar código vendedor y correo.
+            o nombre desde este panel. Solo se pueden editar código vendedor, correo y teléfono.
           </p>
           <div className="grid gap-3 md:grid-cols-2">
             <input
@@ -955,6 +967,12 @@ function UsersTab({
               placeholder="Correo"
               type="email"
               value={editSuperAdminEmail}
+            />
+            <input
+              className="rounded-lg border border-zinc-400 bg-white px-3 py-2 text-sm text-zinc-900 placeholder:text-zinc-500"
+              onChange={(event) => setEditSuperAdminPhone(event.target.value)}
+              placeholder="Teléfono"
+              value={editSuperAdminPhone}
             />
           </div>
           <div className="flex gap-2">
@@ -983,6 +1001,7 @@ function UsersTab({
               {canManageAllTenants ? <th className="px-4 py-3 font-medium">Empresa</th> : null}
               <th className="px-4 py-3 font-medium">Usuario</th>
               <th className="px-4 py-3 font-medium">Correo</th>
+              <th className="px-4 py-3 font-medium">Teléfono</th>
               <th className="px-4 py-3 font-medium">Alias</th>
               <th className="px-4 py-3 font-medium">Rol</th>
               <th className="px-4 py-3 font-medium">Subtenant</th>
@@ -1013,6 +1032,7 @@ function UsersTab({
                     <span className="text-zinc-400">—</span>
                   )}
                 </td>
+                <td className="px-4 py-3 text-zinc-500">{user.phone ?? "—"}</td>
                 <td className="px-4 py-3 font-mono text-xs text-zinc-600">{user.alias}</td>
                 <td className="px-4 py-3">
                   <RoleBadge role={user.role} />
@@ -1108,6 +1128,7 @@ function CreateUserForm({
   const [firstName, setFirstName] = useState("");
   const [lastName, setLastName] = useState("");
   const [sellerCode, setSellerCode] = useState("");
+  const [phone, setPhone] = useState("");
   const [role, setRole] = useState<"user" | "admin" | "owner">("user");
   const [tenantId, setTenantId] = useState("");
   const [userId, setUserId] = useState("");
@@ -1134,6 +1155,7 @@ function CreateUserForm({
         email,
         firstName,
         lastName,
+        phone: phone || null,
         role,
         sellerCode: sellerCode || null,
         tenantId: canSelectTenant ? tenantId : undefined,
@@ -1231,6 +1253,12 @@ function CreateUserForm({
           onChange={(event) => setSellerCode(event.target.value)}
           placeholder="Código vendedor (opcional)"
           value={sellerCode}
+        />
+        <input
+          className="rounded-lg border border-zinc-400 bg-white px-3 py-2 text-sm text-zinc-900 placeholder:text-zinc-500"
+          onChange={(event) => setPhone(event.target.value)}
+          placeholder="Teléfono (opcional)"
+          value={phone}
         />
         <input
           className="rounded-lg border border-zinc-400 bg-white px-3 py-2 text-sm text-zinc-900 placeholder:text-zinc-500"

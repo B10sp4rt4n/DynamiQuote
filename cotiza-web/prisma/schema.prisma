@@ -33,6 +33,8 @@ model Client {
   notes         String?
   active        Boolean   @default(true)
   contact_name  String?
+  contact_first_name String?
+  contact_last_name  String?
   contact_title String?
   contact_email String?
   contact_phone String?
@@ -136,6 +138,7 @@ model app_users {
   created_at    DateTime @db.Timestamp(6)
   tenant_id     String?
   seller_code   String?
+  phone         String?
   tenants       Tenant?  @relation(fields: [tenant_id], references: [tenant_id], onDelete: NoAction, onUpdate: NoAction)
 }
 

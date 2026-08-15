@@ -12,6 +12,7 @@ export const createManagedUserSchema = z.object({
   email: z.string().trim().email("Correo invalido").max(191),
   firstName: z.string().trim().min(1).max(120),
   lastName: z.string().trim().min(1).max(120),
+  phone: z.string().trim().max(30).optional().nullable(),
   role: z.enum(VALID_ROLES).optional().default("user"),
   sellerCode: z.string().trim().max(60).optional().nullable(),
   tenantId: z.string().trim().min(1).max(120).optional(),
@@ -31,6 +32,7 @@ export const updateManagedUserSchema = z
     email: z.string().trim().email("Correo invalido").max(191).nullable().optional(),
     firstName: z.string().trim().min(1).max(120).optional(),
     lastName: z.string().trim().min(1).max(120).optional(),
+    phone: z.string().trim().max(30).nullable().optional(),
     role: z.enum(VALID_ROLES).optional(),
     sellerCode: z.string().trim().max(60).nullable().optional(),
     tenantId: z.string().trim().min(1).max(120).optional(),
@@ -42,6 +44,7 @@ export const updateManagedUserSchema = z
       payload.email !== undefined ||
       payload.firstName !== undefined ||
       payload.lastName !== undefined ||
+      payload.phone !== undefined ||
       payload.role !== undefined ||
       payload.sellerCode !== undefined ||
       payload.tenantId !== undefined,

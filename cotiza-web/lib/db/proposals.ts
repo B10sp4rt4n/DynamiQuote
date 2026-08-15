@@ -251,6 +251,57 @@ async function resolveIssuerEmailByTenant(
   return null;
 }
 
+async function resolveIssuerPhoneByTenant(
+  tenantId: string,
+  raw: string | null | undefined,
+): Promise<string | null> {
+  const candidate = raw?.trim() ?? null;
+
+  if (candidate) {
+    const byUserId = await prisma.app_users.findFirst({
+      select: { phone: true },
+      where: {
+        tenant_id: tenantId,
+        user_id: candidate,
+      },
+    });
+
+    if (byUserId?.phone?.trim()) {
+      return byUserId.phone.trim();
+    }
+
+    const byAlias = await prisma.app_users.findFirst({
+      select: { phone: true },
+      where: {
+        tenant_id: tenantId,
+        alias: candidate,
+      },
+    });
+
+    if (byAlias?.phone?.trim()) {
+      return byAlias.phone.trim();
+    }
+  }
+
+  const ownerOrAdmin = await prisma.app_users.findFirst({
+    orderBy: [{ created_at: "asc" }],
+    select: { phone: true },
+    where: {
+      active: true,
+      role: {
+        in: ["owner", "admin"],
+      },
+      tenant_id: tenantId,
+    },
+  });
+
+  if (ownerOrAdmin?.phone?.trim()) {
+    return ownerOrAdmin.phone.trim();
+  }
+
+  return null;
+}
+
 async function resolveActorNameForTenant(
   tenantId: string,
   actorName: string | null,
@@ -1145,6 +1196,10 @@ export async function getProposalWorkflowByTenant(
     (enrichedFormal?.issuerEmail?.trim() ?? "").length > 0
       ? enrichedFormal?.issuerEmail ?? ""
       : (await resolveIssuerEmailByTenant(tenantId, latestFormal?.issuer_contact_name ?? row.created_by)) ?? "";
+  const resolvedIssuerPhone =
+    (enrichedFormal?.issuerPhone?.trim() ?? "").length > 0
+      ? enrichedFormal?.issuerPhone ?? ""
+      : (await resolveIssuerPhoneByTenant(tenantId, latestFormal?.issuer_contact_name ?? row.created_by)) ?? "";
   const marginPolicy = await getMarginPolicyByTenant(tenantId);
   const proposalItems = row.proposal_items.map((item) => ({
     componentType: item.component_type ?? "",
@@ -1181,6 +1236,7 @@ export async function getProposalWorkflowByTenant(
           ...enrichedFormal,
         issuerEmail: resolvedIssuerEmail,
           issuerContactName: resolvedIssuerContact,
+          issuerPhone: resolvedIssuerPhone,
         }
       : null,
     hasOpenMarginOverrideWindow: row.margin_override_target_user_id !== null,
