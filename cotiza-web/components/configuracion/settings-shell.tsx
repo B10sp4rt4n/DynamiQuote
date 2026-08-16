@@ -1064,7 +1064,7 @@ function UsersTab({
                           onClick={() => beginEditSuperAdminSellerCode(user)}
                           type="button"
                         >
-                          Editar código vendedor
+                          Editar código vendedor / correo / teléfono
                         </button>
                         <button
                           className="rounded-lg bg-sky-100 px-3 py-1 text-xs font-medium text-sky-700 transition hover:bg-sky-200 disabled:opacity-60"

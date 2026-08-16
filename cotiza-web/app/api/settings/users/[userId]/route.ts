@@ -29,13 +29,29 @@ export async function PATCH(request: Request, context: RouteContext) {
       return NextResponse.json({ error: "Solo superadmin puede editar usuarios" }, { status: 403 });
     }
 
-    if (tenant.userId && tenant.userId === userId) {
-      return NextResponse.json({ error: "No puedes editar tu propio usuario desde este panel" }, { status: 422 });
-    }
-
     const parsed = updateManagedUserSchema.safeParse(body);
     if (!parsed.success) {
       return NextResponse.json({ error: parsed.error.issues[0]?.message ?? "Payload invalido" }, { status: 422 });
+    }
+
+    if (tenant.userId && tenant.userId === userId) {
+      // Un superadmin puede editar su propio codigo de vendedor, correo o
+      // telefono -- los mismos campos ya permitidos para editar OTRAS
+      // cuentas superadmin (ver updateManagedUserByTenant). Cualquier otro
+      // campo (rol, tenant, alias, nombre, estado) sigue bloqueado para
+      // evitar que alguien se auto-privilegie desde este panel.
+      const onlySelfEditableFields =
+        parsed.data.active === undefined &&
+        parsed.data.alias === undefined &&
+        parsed.data.firstName === undefined &&
+        parsed.data.lastName === undefined &&
+        parsed.data.role === undefined &&
+        parsed.data.tenantId === undefined &&
+        (parsed.data.sellerCode !== undefined || parsed.data.email !== undefined || parsed.data.phone !== undefined);
+
+      if (!onlySelfEditableFields) {
+        return NextResponse.json({ error: "No puedes editar tu propio usuario desde este panel" }, { status: 422 });
+      }
     }
 
     try {

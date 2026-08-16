@@ -238,7 +238,7 @@ async function resolveIssuerEmailByTenant(
     where: {
       active: true,
       role: {
-        in: ["owner", "admin"],
+        in: ["owner", "admin", "superadmin"],
       },
       tenant_id: tenantId,
     },
@@ -289,7 +289,7 @@ async function resolveIssuerPhoneByTenant(
     where: {
       active: true,
       role: {
-        in: ["owner", "admin"],
+        in: ["owner", "admin", "superadmin"],
       },
       tenant_id: tenantId,
     },
@@ -1195,11 +1195,17 @@ export async function getProposalWorkflowByTenant(
   const resolvedIssuerEmail =
     (enrichedFormal?.issuerEmail?.trim() ?? "").length > 0
       ? enrichedFormal?.issuerEmail ?? ""
-      : (await resolveIssuerEmailByTenant(tenantId, latestFormal?.issuer_contact_name ?? row.created_by)) ?? "";
+      : (await resolveIssuerEmailByTenant(
+          tenantId,
+          row.created_by_user_id ?? latestFormal?.issuer_contact_name ?? row.created_by,
+        )) ?? "";
   const resolvedIssuerPhone =
     (enrichedFormal?.issuerPhone?.trim() ?? "").length > 0
       ? enrichedFormal?.issuerPhone ?? ""
-      : (await resolveIssuerPhoneByTenant(tenantId, latestFormal?.issuer_contact_name ?? row.created_by)) ?? "";
+      : (await resolveIssuerPhoneByTenant(
+          tenantId,
+          row.created_by_user_id ?? latestFormal?.issuer_contact_name ?? row.created_by,
+        )) ?? "";
   const marginPolicy = await getMarginPolicyByTenant(tenantId);
   const proposalItems = row.proposal_items.map((item) => ({
     componentType: item.component_type ?? "",
