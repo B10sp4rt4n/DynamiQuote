@@ -353,6 +353,69 @@ export async function updateQuoteLinesByTenant(
         },
       });
     }
+
+    // Si la edicion fue en el lugar (misma version, no se creo una nueva),
+    // y existe una propuesta ligada a esta cotizacion que todavia esta en
+    // Borrador (nadie la ha enviado/aprobado), sus partidas se refrescan
+    // para reflejar el estado mas reciente -- una propuesta ya avanzada de
+    // estado no se toca, mismo criterio que bloquea editar su contenido
+    // fuera de borrador (ver proposal-workflow-guard.ts).
+    if (!shouldCreateNewVersion) {
+      const linkedProposal = await tx.proposals.findFirst({
+        select: {
+          formal_proposals: {
+            orderBy: [{ created_at: "desc" }, { proposal_doc_id: "desc" }],
+            select: { status: true },
+            take: 1,
+          },
+          proposal_id: true,
+          status: true,
+        },
+        where: { origin: quoteId, tenant_id: tenantId },
+      });
+
+      const linkedProposalStatus = (
+        linkedProposal?.formal_proposals[0]?.status ??
+        linkedProposal?.status ??
+        "draft"
+      )
+        .trim()
+        .toLowerCase();
+
+      if (linkedProposal && linkedProposalStatus === "draft") {
+        await tx.proposal_items.deleteMany({ where: { proposal_id: linkedProposal.proposal_id } });
+
+        if (resolvedLines.length > 0) {
+          const itemsNow = new Date();
+
+          await tx.proposal_items.createMany({
+            data: resolvedLines.map((line, index) => {
+              const subtotalCost = line.quantity * line.costUnit;
+              const subtotalPrice = line.quantity * line.priceUnit;
+
+              return {
+                component_type: line.classification1 === "service" ? "service" : "product",
+                cost_unit: line.costUnit,
+                created_at: itemsNow,
+                description: line.description || "Sin descripcion",
+                item_id: randomUUID(),
+                item_number: index + 1,
+                origin: line.classification2 || "manual",
+                price_unit: line.priceUnit,
+                proposal_id: linkedProposal.proposal_id,
+                quantity: line.quantity,
+                sku: line.sku || null,
+                status: "active",
+                subtotal_cost: subtotalCost,
+                subtotal_price: subtotalPrice,
+                tenant_id: tenantId,
+                updated_at: itemsNow,
+              };
+            }),
+          });
+        }
+      }
+    }
   });
 
   const freshLines = await getEditableQuoteLinesByTenant(tenantId, resultQuoteId);
