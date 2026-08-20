@@ -7,7 +7,7 @@ export const quoteLineEditorInputSchema = z
     costUnit: z.number().min(0),
     description: z.string().trim().max(4000).optional(),
     lineId: z.string().min(1),
-    marginPct: z.number().min(0).max(99.99).optional(),
+    marginPct: z.number().max(99.99).optional(),
     mode: z.enum(["margin", "price"]),
     priceUnit: z.number().min(0).optional(),
     quantity: z.number().int().positive(),

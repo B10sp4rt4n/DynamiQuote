@@ -906,7 +906,7 @@ export function QuoteLineEditor({
           return line;
         }
 
-        const marginPct = Math.min(99.99, Math.max(0, toNumber(value)));
+        const marginPct = Math.min(99.99, toNumber(value));
         const pricing = resolveBidirectionalPricing({
           costUnit: line.costUnit,
           marginPct,
@@ -1876,10 +1876,17 @@ export function QuoteLineEditor({
                 </td>
                 <td className={`px-4 py-3 ${diffCellClass(Boolean(lineDiffMap[line.lineId]?.has("marginPct")))}`}>
                   <input
-                    className="w-24 rounded border border-zinc-300 px-2 py-1"
-                    title={lineDeltaMap[line.lineId]?.marginPct}
+                    className={`w-24 rounded border px-2 py-1 ${
+                      line.marginPct < 0
+                        ? "border-rose-400 bg-rose-50 text-rose-700"
+                        : "border-zinc-300"
+                    }`}
+                    title={
+                      line.marginPct < 0
+                        ? "Precio menor al costo: margen negativo"
+                        : lineDeltaMap[line.lineId]?.marginPct
+                    }
                     max={99.99}
-                    min={0}
                     onChange={(event) => {
                       onMarginChange(line.lineId, event.target.value);
                     }}
@@ -1887,6 +1894,9 @@ export function QuoteLineEditor({
                     type="number"
                     value={line.marginPct}
                   />
+                  {line.marginPct < 0 && (
+                    <p className="mt-1 text-[11px] font-medium text-rose-600">Precio bajo costo</p>
+                  )}
                 </td>
                 <td className={`px-4 py-3 ${diffCellClass(Boolean(lineDiffMap[line.lineId]?.has("classification1")))}`}>
                   <select
