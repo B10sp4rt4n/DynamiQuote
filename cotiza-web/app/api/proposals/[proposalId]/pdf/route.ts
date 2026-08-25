@@ -3,6 +3,7 @@ import { NextResponse } from "next/server";
 
 import { getCurrentTenantContext } from "@/lib/auth/tenant-context";
 import { consumeProposalIssuanceForce, getProposalWorkflowByTenant } from "@/lib/db/proposals";
+import { getTenantProfileByTenant } from "@/lib/db/tenants";
 import { resolveProposalIssuanceGate } from "@/lib/domain/proposal-issuance-gate";
 import { ProposalPdfDocument } from "@/lib/pdf/proposal-document";
 import { enforceRateLimit } from "@/lib/utils/rate-limit";
@@ -89,10 +90,15 @@ export async function GET(_: Request, context: RouteContext) {
       }
     : proposal;
 
+  const tenantProfile = await getTenantProfileByTenant(tenant.id);
+
   const document = ProposalPdfDocument({
     forcedIssuance: issuanceGate.forced,
     proposal: normalizedProposal,
+    tenantAddress: tenantProfile?.address ?? null,
     tenantName: tenant.name,
+    tenantRfc: tenantProfile?.rfc ?? null,
+    tenantWebsite: tenantProfile?.website ?? null,
   });
 
   const pdfBuffer = await renderToBuffer(document);

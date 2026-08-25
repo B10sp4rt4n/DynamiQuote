@@ -12,6 +12,9 @@ model Tenant {
   slug             String             @unique
   active           Boolean            @default(true)
   created_at       DateTime           @db.Timestamp(6)
+  rfc              String?
+  address          String?
+  website          String?
   app_users        app_users[]
   clients          Client[]
   company_logos    company_logos[]

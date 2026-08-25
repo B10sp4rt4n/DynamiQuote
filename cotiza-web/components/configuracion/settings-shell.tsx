@@ -6,7 +6,7 @@ import type { MarginPolicySummary } from "@/lib/db/margin-policies";
 import type { ProposalStatusCounts, ProposalSummary } from "@/lib/db/proposals";
 import type { QuoteDashboardSnapshot } from "@/lib/db/quotes";
 import type { AppUserSummary, IssuerProfileSummary } from "@/lib/db/settings";
-import type { ActiveTenantOption } from "@/lib/db/tenants";
+import type { ActiveTenantOption, TenantProfile } from "@/lib/db/tenants";
 
 type SettingsShellProps = {
   canSwitchTenant?: boolean;
@@ -25,6 +25,7 @@ type SettingsShellProps = {
   tenantSlug: string;
   tenantOptions?: ActiveTenantOption[];
   tenantName: string;
+  tenantProfile: TenantProfile | null;
   users: AppUserSummary[];
 };
 
@@ -1692,11 +1693,15 @@ function MarginPolicyTab({
 }
 
 function IssuerProfilesTab({
+  canEditProfile = false,
   issuerProfiles: initial,
   onProfilesUpdated,
+  tenantProfile,
 }: {
+  canEditProfile?: boolean;
   issuerProfiles: IssuerProfileSummary[];
   onProfilesUpdated?: (profiles: IssuerProfileSummary[]) => void;
+  tenantProfile: TenantProfile | null;
 }) {
   const [profiles, setProfiles] = useState(initial);
   const [companyName, setCompanyName] = useState("");
@@ -1707,6 +1712,43 @@ function IssuerProfilesTab({
   const [pending, setPending] = useState<string | null>(null);
   const [uploadPending, setUploadPending] = useState(false);
   const [error, setError] = useState<string | null>(null);
+  const [rfc, setRfc] = useState(tenantProfile?.rfc ?? "");
+  const [address, setAddress] = useState(tenantProfile?.address ?? "");
+  const [website, setWebsite] = useState(tenantProfile?.website ?? "");
+  const [savingProfile, setSavingProfile] = useState(false);
+  const [profileMessage, setProfileMessage] = useState<string | null>(null);
+
+  async function saveTenantProfile(event: FormEvent<HTMLFormElement>) {
+    event.preventDefault();
+    setSavingProfile(true);
+    setProfileMessage(null);
+
+    try {
+      const res = await fetch("/api/settings/tenant-profile", {
+        body: JSON.stringify({
+          address: address.trim() || null,
+          rfc: rfc.trim() || null,
+          website: website.trim() || null,
+        }),
+        headers: { "Content-Type": "application/json" },
+        method: "PUT",
+      });
+
+      const data = (await res.json()) as { error?: string; profile?: TenantProfile };
+      if (!res.ok || !data.profile) {
+        throw new Error(data.error ?? "No se pudieron guardar los datos fiscales");
+      }
+
+      setRfc(data.profile.rfc ?? "");
+      setAddress(data.profile.address ?? "");
+      setWebsite(data.profile.website ?? "");
+      setProfileMessage("Datos fiscales guardados.");
+    } catch (err) {
+      setProfileMessage(err instanceof Error ? err.message : "Error desconocido");
+    } finally {
+      setSavingProfile(false);
+    }
+  }
 
   useEffect(() => {
     startTransition(() => {
@@ -1797,6 +1839,55 @@ function IssuerProfilesTab({
 
   return (
     <div className="space-y-3">
+      <form className="grid gap-3 rounded-xl border border-zinc-200 bg-zinc-50 p-4 md:grid-cols-3" onSubmit={(event) => { void saveTenantProfile(event); }}>
+        <p className="text-sm font-semibold text-zinc-900 md:col-span-3">Datos fiscales del emisor</p>
+        <p className="text-xs text-zinc-500 md:col-span-3">
+          Aparecen en el recuadro &quot;Datos del emisor&quot; de las propuestas en PDF.
+        </p>
+        <label className="text-sm text-zinc-700">
+          RFC
+          <input
+            className="mt-1 w-full rounded-lg border border-zinc-300 bg-white px-3 py-2 text-sm text-zinc-900 disabled:cursor-not-allowed disabled:bg-zinc-100"
+            disabled={!canEditProfile}
+            onChange={(event) => setRfc(event.target.value)}
+            placeholder="RFC de la empresa"
+            value={rfc}
+          />
+        </label>
+        <label className="text-sm text-zinc-700">
+          Domicilio fiscal
+          <input
+            className="mt-1 w-full rounded-lg border border-zinc-300 bg-white px-3 py-2 text-sm text-zinc-900 disabled:cursor-not-allowed disabled:bg-zinc-100"
+            disabled={!canEditProfile}
+            onChange={(event) => setAddress(event.target.value)}
+            placeholder="Domicilio fiscal"
+            value={address}
+          />
+        </label>
+        <label className="text-sm text-zinc-700">
+          Sitio web
+          <input
+            className="mt-1 w-full rounded-lg border border-zinc-300 bg-white px-3 py-2 text-sm text-zinc-900 disabled:cursor-not-allowed disabled:bg-zinc-100"
+            disabled={!canEditProfile}
+            onChange={(event) => setWebsite(event.target.value)}
+            placeholder="www.empresa.com"
+            value={website}
+          />
+        </label>
+        {canEditProfile ? (
+          <div className="flex items-center gap-3 md:col-span-3">
+            <button
+              className="rounded-lg bg-zinc-900 px-3 py-2 text-sm font-medium text-white transition hover:bg-zinc-700 disabled:opacity-60"
+              disabled={savingProfile}
+              type="submit"
+            >
+              {savingProfile ? "Guardando..." : "Guardar datos fiscales"}
+            </button>
+            {profileMessage ? <p className="text-sm text-zinc-600">{profileMessage}</p> : null}
+          </div>
+        ) : null}
+      </form>
+
       <form className="grid gap-3 rounded-xl border border-zinc-200 bg-zinc-50 p-4 md:grid-cols-2" onSubmit={(event) => { void handleUpload(event); }}>
         <label className="text-sm text-zinc-700">
           Tipo de logo
@@ -1938,6 +2029,7 @@ export function SettingsShell({
   quoteDashboardSnapshot,
   recentProposals,
   tenantName,
+  tenantProfile,
   canViewControl = false,
   canViewTenantConfig = false,
   canManageAllTenants = false,
@@ -2118,7 +2210,12 @@ export function SettingsShell({
           />
         )}
         {tab === "issuer" && (
-          <IssuerProfilesTab issuerProfiles={issuerProfilesState} onProfilesUpdated={setIssuerProfilesState} />
+          <IssuerProfilesTab
+            canEditProfile={canManagePolicy}
+            issuerProfiles={issuerProfilesState}
+            onProfilesUpdated={setIssuerProfilesState}
+            tenantProfile={tenantProfile}
+          />
         )}
       </div>
     </section>

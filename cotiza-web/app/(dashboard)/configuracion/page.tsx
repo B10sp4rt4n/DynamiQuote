@@ -8,7 +8,7 @@ import {
 } from "@/lib/db/proposals";
 import { getQuoteDashboardSnapshotByTenant } from "@/lib/db/quotes";
 import { getAppUsersByTenant, getAppUsersForSuperAdmin, getIssuerProfilesByTenant } from "@/lib/db/settings";
-import { getActiveTenants } from "@/lib/db/tenants";
+import { getActiveTenants, getTenantProfileByTenant } from "@/lib/db/tenants";
 
 export const dynamic = "force-dynamic";
 
@@ -35,6 +35,7 @@ export default async function SettingsPage() {
     proposalMarginBlockedCount,
     quoteDashboardSnapshot,
     recentProposals,
+    tenantProfile,
   ] = await Promise.all([
     canManageUsers
       ? tenant.isSuperAdmin
@@ -48,6 +49,7 @@ export default async function SettingsPage() {
     getProposalMarginBlockedCountByTenant(tenant.id, tenant.userId, canManageUsers),
     getQuoteDashboardSnapshotByTenant(tenant.id, tenant.userId, canManageUsers),
     getProposalSummariesByTenant(tenant.id, 6, tenant.userId, canManageUsers),
+    getTenantProfileByTenant(tenant.id),
   ]);
 
   return (
@@ -68,6 +70,7 @@ export default async function SettingsPage() {
       issuerProfiles={issuerProfiles}
       tenantOptions={tenantOptions}
       tenantName={tenant.name}
+      tenantProfile={tenantProfile}
       users={users}
     />
   );

@@ -10,11 +10,13 @@ import {
 import type { ProposalWorkflowDetail } from "@/lib/db/proposals";
 
 const styles = StyleSheet.create({
+  // No lineHeight aca: @react-pdf/renderer deja de incluir el texto de los
+  // Text con "fixed" + "render" (usados en el footer para "Pagina X de Y")
+  // cuando el Page tiene lineHeight -- bug reproducido de forma aislada.
   page: {
     backgroundColor: "#ffffff",
     color: "#1f2937",
     fontSize: 10,
-    lineHeight: 1.4,
     paddingBottom: 36,
     paddingHorizontal: 26,
     paddingTop: 20,
@@ -314,17 +316,19 @@ const styles = StyleSheet.create({
     fontSize: 8,
     textAlign: "center",
   },
-  footer: {
+  footerWrap: {
     borderTopColor: "#e5e7eb",
     borderTopStyle: "solid",
     borderTopWidth: 1,
     bottom: 18,
-    color: "#6b7280",
-    fontSize: 8,
     left: 32,
     paddingTop: 4,
     position: "absolute",
     right: 32,
+  },
+  footerText: {
+    color: "#6b7280",
+    fontSize: 8,
     textAlign: "right",
   },
 });
@@ -414,15 +418,28 @@ function formatRecipientIdentity(formal: ProposalWorkflowDetail["formal"]): {
 type ProposalPdfInput = {
   forcedIssuance?: boolean;
   proposal: ProposalWorkflowDetail;
+  tenantAddress?: string | null;
   tenantName: string;
+  tenantRfc?: string | null;
+  tenantWebsite?: string | null;
 };
 
-export function ProposalPdfDocument({ forcedIssuance, proposal, tenantName }: ProposalPdfInput) {
+export function ProposalPdfDocument({
+  forcedIssuance,
+  proposal,
+  tenantAddress,
+  tenantName,
+  tenantRfc,
+  tenantWebsite,
+}: ProposalPdfInput) {
   const formal = proposal.formal;
   const recipientIdentity = formatRecipientIdentity(formal);
   const issuerPhoneDisplay = normalizeTextValue(formal?.issuerPhone) || "Telefono no disponible";
   const issuerEmailDisplay = normalizeTextValue(formal?.issuerEmail) || "correo no disponible";
   const recipientEmailDisplay = normalizeTextValue(formal?.recipientEmail) || "correo no disponible";
+  const issuerRfcDisplay = normalizeTextValue(tenantRfc);
+  const issuerAddressDisplay = normalizeTextValue(tenantAddress);
+  const issuerWebsiteDisplay = normalizeTextValue(tenantWebsite);
   const lines = proposal.items ?? [];
   const totalCost = lines.reduce((sum, item) => sum + item.subtotalCost, 0);
   const totalRevenue = lines.reduce((sum, item) => sum + item.subtotalPrice, 0);
@@ -482,6 +499,9 @@ export function ProposalPdfDocument({ forcedIssuance, proposal, tenantName }: Pr
             <Text style={styles.micro}>{formal?.issuerContactName || proposal.salesOwner || "Sin vendedor"}</Text>
             <Text style={styles.micro}>{issuerPhoneDisplay}</Text>
             <Text style={styles.micro}>{issuerEmailDisplay}</Text>
+            {issuerRfcDisplay ? <Text style={styles.micro}>RFC: {issuerRfcDisplay}</Text> : null}
+            {issuerAddressDisplay ? <Text style={styles.micro}>{issuerAddressDisplay}</Text> : null}
+            {issuerWebsiteDisplay ? <Text style={styles.micro}>{issuerWebsiteDisplay}</Text> : null}
           </View>
           <View style={styles.metadataColLast}>
             <Text style={styles.companyName}>{formal?.recipientCompany || "Cliente sin definir"}</Text>
@@ -556,20 +576,21 @@ export function ProposalPdfDocument({ forcedIssuance, proposal, tenantName }: Pr
           ))}
         </View>
 
-        <View style={styles.signatureWrap}>
+        <View style={styles.signatureWrap} wrap={false}>
           <View style={styles.signatureLine} />
           <Text style={styles.signatureName}>{formal?.issuerContactName || proposal.salesOwner || "Responsable comercial"}</Text>
           <Text style={styles.signatureRole}>Representante Comercial</Text>
           <Text style={styles.signatureRole}>{formal?.issuerCompany || tenantName}</Text>
         </View>
 
-        <Text
-          fixed
-          render={({ pageNumber, totalPages }: { pageNumber: number; totalPages: number }) =>
-            `Pagina ${pageNumber} de ${totalPages}`
-          }
-          style={styles.footer}
-        />
+        <View fixed style={styles.footerWrap}>
+          <Text
+            render={({ pageNumber, totalPages }: { pageNumber: number; totalPages: number }) =>
+              `Pagina ${pageNumber} de ${totalPages}`
+            }
+            style={styles.footerText}
+          />
+        </View>
       </Page>
 
       <Page size="A4" style={styles.page}>
@@ -624,13 +645,15 @@ export function ProposalPdfDocument({ forcedIssuance, proposal, tenantName }: Pr
         <Text style={styles.narrativeText}>
           Para cualquier aclaracion relacionada con esta propuesta, favor de contactar a {formal?.issuerContactName || proposal.salesOwner || "el representante comercial"} al correo {issuerEmailDisplay}{issuerPhoneDisplay !== "Telefono no disponible" ? ` o al telefono ${issuerPhoneDisplay}` : ""}.
         </Text>
-        <Text
-          fixed
-          render={({ pageNumber, totalPages }: { pageNumber: number; totalPages: number }) =>
-            `Pagina ${pageNumber} de ${totalPages}`
-          }
-          style={styles.footer}
-        />
+
+        <View fixed style={styles.footerWrap}>
+          <Text
+            render={({ pageNumber, totalPages }: { pageNumber: number; totalPages: number }) =>
+              `Pagina ${pageNumber} de ${totalPages}`
+            }
+            style={styles.footerText}
+          />
+        </View>
       </Page>
     </Document>
   );

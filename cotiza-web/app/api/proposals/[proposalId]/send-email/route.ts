@@ -9,6 +9,7 @@ import {
   getProposalWorkflowByTenant,
   updateProposalWorkflowByTenant,
 } from "@/lib/db/proposals";
+import { getTenantProfileByTenant } from "@/lib/db/tenants";
 import { resolveProposalIssuanceGate } from "@/lib/domain/proposal-issuance-gate";
 import { resolveResendConfig } from "@/lib/email/resend";
 import { ProposalPdfDocument } from "@/lib/pdf/proposal-document";
@@ -257,10 +258,15 @@ export async function POST(request: Request, context: RouteContext) {
       }
     : proposal;
 
+  const tenantProfile = await getTenantProfileByTenant(tenant.id);
+
   const pdfDocument = ProposalPdfDocument({
     forcedIssuance: issuanceGate.forced,
     proposal: normalizedProposal,
+    tenantAddress: tenantProfile?.address ?? null,
     tenantName: tenant.name,
+    tenantRfc: tenantProfile?.rfc ?? null,
+    tenantWebsite: tenantProfile?.website ?? null,
   });
   const pdfBuffer = await renderToBuffer(pdfDocument);
   const attachmentFilename = `${sanitizeFilename(proposalNumber)}.pdf`;
