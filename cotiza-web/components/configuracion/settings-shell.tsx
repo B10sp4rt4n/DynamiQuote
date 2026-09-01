@@ -1,6 +1,6 @@
 "use client";
 
-import { startTransition, useEffect, useState, type FormEvent } from "react";
+import { Fragment, startTransition, useEffect, useState, type FormEvent } from "react";
 
 import type { MarginPolicySummary } from "@/lib/db/margin-policies";
 import type { ProposalStatusCounts, ProposalSummary } from "@/lib/db/proposals";
@@ -696,11 +696,13 @@ function UsersTab({
   const [editRole, setEditRole] = useState<"user" | "admin" | "owner">("user");
   const [editSellerCode, setEditSellerCode] = useState("");
   const [editPhone, setEditPhone] = useState("");
+  const [editContactEmail, setEditContactEmail] = useState("");
   const [editTenantId, setEditTenantId] = useState(tenantOptions[0]?.id ?? "");
   const [editingSuperAdminSellerCodeUserId, setEditingSuperAdminSellerCodeUserId] = useState<string | null>(null);
   const [editSuperAdminSellerCode, setEditSuperAdminSellerCode] = useState("");
   const [editSuperAdminEmail, setEditSuperAdminEmail] = useState("");
   const [editSuperAdminPhone, setEditSuperAdminPhone] = useState("");
+  const [editSuperAdminContactEmail, setEditSuperAdminContactEmail] = useState("");
 
   async function toggleActive(userId: string) {
     setPending(userId);
@@ -726,6 +728,7 @@ function UsersTab({
     setEditRole((user.role === "admin" || user.role === "owner" ? user.role : "user") as "user" | "admin" | "owner");
     setEditSellerCode(user.sellerCode ?? "");
     setEditPhone(user.phone ?? "");
+    setEditContactEmail(user.contactEmail ?? "");
     setEditTenantId(user.tenantId ?? tenantOptions[0]?.id ?? "");
   }
 
@@ -744,6 +747,7 @@ function UsersTab({
     try {
       const payload = {
         alias: editAlias,
+        contactEmail: editContactEmail || null,
         firstName: editFirstName,
         lastName: editLastName,
         phone: editPhone || null,
@@ -772,13 +776,14 @@ function UsersTab({
 
   // Las cuentas superadmin estan protegidas contra edicion de rol/tenant/estado/nombre/alias
   // desde este panel (ver updateManagedUserByTenant) -- este flujo aparte es la unica
-  // excepcion permitida, restringida a codigo de vendedor, correo y telefono.
+  // excepcion permitida, restringida a codigo de vendedor, correo, telefono y correo de contacto.
   function beginEditSuperAdminSellerCode(user: AppUserSummary) {
     setError(null);
     setEditingSuperAdminSellerCodeUserId(user.userId);
     setEditSuperAdminSellerCode(user.sellerCode ?? "");
     setEditSuperAdminEmail(user.email ?? "");
     setEditSuperAdminPhone(user.phone ?? "");
+    setEditSuperAdminContactEmail(user.contactEmail ?? "");
   }
 
   function cancelEditSuperAdminSellerCode() {
@@ -796,6 +801,7 @@ function UsersTab({
     try {
       const res = await fetch(`/api/settings/users/${editingSuperAdminSellerCodeUserId}`, {
         body: JSON.stringify({
+          contactEmail: editSuperAdminContactEmail || null,
           email: editSuperAdminEmail || null,
           phone: editSuperAdminPhone || null,
           sellerCode: editSuperAdminSellerCode || null,
@@ -805,7 +811,7 @@ function UsersTab({
       });
 
       const data = (await res.json()) as { error?: string; user?: AppUserSummary };
-      if (!res.ok || !data.user) throw new Error(data.error ?? "No se pudo editar el codigo de vendedor, correo o telefono");
+      if (!res.ok || !data.user) throw new Error(data.error ?? "No se pudo editar el codigo de vendedor, correo, telefono o correo de contacto");
 
       onUserUpdated(data.user);
       setEditingSuperAdminSellerCodeUserId(null);
@@ -913,6 +919,13 @@ function UsersTab({
               placeholder="Teléfono"
               value={editPhone}
             />
+            <input
+              className="rounded-lg border border-zinc-400 bg-white px-3 py-2 text-sm text-zinc-900 placeholder:text-zinc-500"
+              onChange={(event) => setEditContactEmail(event.target.value)}
+              placeholder="Correo de contacto (aparece en documentos)"
+              type="email"
+              value={editContactEmail}
+            />
             <select
               className="rounded-lg border border-zinc-400 bg-white px-3 py-2 text-sm text-zinc-900"
               onChange={(event) => setEditTenantId(event.target.value)}
@@ -950,10 +963,11 @@ function UsersTab({
           className="grid gap-3 rounded-xl border border-zinc-200 bg-zinc-50 p-4"
           onSubmit={submitEditSuperAdminSellerCode}
         >
-          <p className="text-sm font-semibold text-zinc-900">Editar código vendedor / correo / teléfono (cuenta superadmin)</p>
+          <p className="text-sm font-semibold text-zinc-900">Editar código vendedor / correo / teléfono / correo de contacto (cuenta superadmin)</p>
           <p className="text-xs text-zinc-500">
             Las cuentas superadmin están protegidas contra cambios de rol, tenant, estado, alias
-            o nombre desde este panel. Solo se pueden editar código vendedor, correo y teléfono.
+            o nombre desde este panel. Solo se pueden editar código vendedor, correo, teléfono y
+            correo de contacto.
           </p>
           <div className="grid gap-3 md:grid-cols-2">
             <input
@@ -965,7 +979,7 @@ function UsersTab({
             <input
               className="rounded-lg border border-zinc-400 bg-white px-3 py-2 text-sm text-zinc-900 placeholder:text-zinc-500"
               onChange={(event) => setEditSuperAdminEmail(event.target.value)}
-              placeholder="Correo"
+              placeholder="Correo (acceso)"
               type="email"
               value={editSuperAdminEmail}
             />
@@ -974,6 +988,13 @@ function UsersTab({
               onChange={(event) => setEditSuperAdminPhone(event.target.value)}
               placeholder="Teléfono"
               value={editSuperAdminPhone}
+            />
+            <input
+              className="rounded-lg border border-zinc-400 bg-white px-3 py-2 text-sm text-zinc-900 placeholder:text-zinc-500"
+              onChange={(event) => setEditSuperAdminContactEmail(event.target.value)}
+              placeholder="Correo de contacto (aparece en documentos)"
+              type="email"
+              value={editSuperAdminContactEmail}
             />
           </div>
           <div className="flex gap-2">
@@ -1002,6 +1023,7 @@ function UsersTab({
               {canManageAllTenants ? <th className="px-4 py-3 font-medium">Empresa</th> : null}
               <th className="px-4 py-3 font-medium">Usuario</th>
               <th className="px-4 py-3 font-medium">Correo</th>
+              <th className="px-4 py-3 font-medium">Correo de contacto</th>
               <th className="px-4 py-3 font-medium">Teléfono</th>
               <th className="px-4 py-3 font-medium">Alias</th>
               <th className="px-4 py-3 font-medium">Rol</th>
@@ -1033,6 +1055,7 @@ function UsersTab({
                     <span className="text-zinc-400">—</span>
                   )}
                 </td>
+                <td className="px-4 py-3 text-zinc-500">{user.contactEmail ?? "—"}</td>
                 <td className="px-4 py-3 text-zinc-500">{user.phone ?? "—"}</td>
                 <td className="px-4 py-3 font-mono text-xs text-zinc-600">{user.alias}</td>
                 <td className="px-4 py-3">
@@ -1130,6 +1153,7 @@ function CreateUserForm({
   const [lastName, setLastName] = useState("");
   const [sellerCode, setSellerCode] = useState("");
   const [phone, setPhone] = useState("");
+  const [contactEmail, setContactEmail] = useState("");
   const [role, setRole] = useState<"user" | "admin" | "owner">("user");
   const [tenantId, setTenantId] = useState("");
   const [userId, setUserId] = useState("");
@@ -1153,6 +1177,7 @@ function CreateUserForm({
     try {
       const payload = {
         alias,
+        contactEmail: contactEmail || null,
         email,
         firstName,
         lastName,
@@ -1260,6 +1285,13 @@ function CreateUserForm({
           onChange={(event) => setPhone(event.target.value)}
           placeholder="Teléfono (opcional)"
           value={phone}
+        />
+        <input
+          className="rounded-lg border border-zinc-400 bg-white px-3 py-2 text-sm text-zinc-900 placeholder:text-zinc-500"
+          onChange={(event) => setContactEmail(event.target.value)}
+          placeholder="Correo de contacto (opcional, aparece en documentos)"
+          type="email"
+          value={contactEmail}
         />
         <input
           className="rounded-lg border border-zinc-400 bg-white px-3 py-2 text-sm text-zinc-900 placeholder:text-zinc-500"
@@ -1717,6 +1749,11 @@ function IssuerProfilesTab({
   const [website, setWebsite] = useState(tenantProfile?.website ?? "");
   const [savingProfile, setSavingProfile] = useState(false);
   const [profileMessage, setProfileMessage] = useState<string | null>(null);
+  const [editingLogoId, setEditingLogoId] = useState<string | null>(null);
+  const [editLogoName, setEditLogoName] = useState("");
+  const [editCompanyName, setEditCompanyName] = useState("");
+  const [editLogoFile, setEditLogoFile] = useState<File | null>(null);
+  const [savingEdit, setSavingEdit] = useState(false);
 
   async function saveTenantProfile(event: FormEvent<HTMLFormElement>) {
     event.preventDefault();
@@ -1775,6 +1812,80 @@ function IssuerProfilesTab({
       setError(err instanceof Error ? err.message : "Error desconocido");
     } finally {
       setPending(null);
+    }
+  }
+
+  async function deleteProfile(logoId: string) {
+    if (!confirm("¿Borrar este logo? Esta acción no se puede deshacer.")) {
+      return;
+    }
+
+    setPending(logoId);
+    setError(null);
+    try {
+      const res = await fetch(`/api/settings/issuer-profiles/${logoId}`, { method: "DELETE" });
+      const data = (await res.json()) as { error?: string; ok?: boolean };
+      if (!res.ok || !data.ok) throw new Error(data.error ?? "No se pudo borrar el logo");
+      setProfiles((prev) => {
+        const next = prev.filter((p) => p.logoId !== logoId);
+        onProfilesUpdated?.(next);
+        return next;
+      });
+    } catch (err) {
+      setError(err instanceof Error ? err.message : "Error desconocido");
+    } finally {
+      setPending(null);
+    }
+  }
+
+  function beginEditProfile(profile: IssuerProfileSummary) {
+    setError(null);
+    setEditingLogoId(profile.logoId);
+    setEditLogoName(profile.logoName);
+    setEditCompanyName(profile.companyName ?? "");
+    setEditLogoFile(null);
+  }
+
+  function cancelEditProfile() {
+    setEditingLogoId(null);
+    setEditLogoFile(null);
+  }
+
+  async function submitEditProfile(event: FormEvent<HTMLFormElement>) {
+    event.preventDefault();
+
+    if (!editingLogoId) return;
+
+    setSavingEdit(true);
+    setError(null);
+
+    try {
+      const payload = new FormData();
+      payload.append("logoName", editLogoName.trim());
+      payload.append("companyName", editCompanyName.trim());
+      if (editLogoFile) {
+        payload.append("logoFile", editLogoFile);
+      }
+
+      const res = await fetch(`/api/settings/issuer-profiles/${editingLogoId}`, {
+        body: payload,
+        method: "PATCH",
+      });
+
+      const data = (await res.json()) as { error?: string; profile?: IssuerProfileSummary };
+      if (!res.ok || !data.profile) throw new Error(data.error ?? "No se pudo editar el logo");
+
+      setProfiles((prev) => {
+        const next = prev.map((p) => (p.logoId === data.profile!.logoId ? data.profile! : p));
+        onProfilesUpdated?.(next);
+        return next;
+      });
+      setEditingLogoId(null);
+      setEditLogoFile(null);
+    } catch (err) {
+      setError(err instanceof Error ? err.message : "Error desconocido");
+    } finally {
+      setSavingEdit(false);
     }
   }
 
@@ -1965,11 +2076,13 @@ function IssuerProfilesTab({
               <th className="px-4 py-3 font-medium">Formato</th>
               <th className="px-4 py-3 font-medium">Subido</th>
               <th className="px-4 py-3 font-medium">Default</th>
+              <th className="px-4 py-3 font-medium">Acciones</th>
             </tr>
           </thead>
           <tbody className="divide-y divide-zinc-200 bg-white">
             {profiles.map((profile) => (
-              <tr key={profile.logoId} className={profile.isDefault ? "bg-emerald-50/50" : ""}>
+              <Fragment key={profile.logoId}>
+              <tr className={profile.isDefault ? "bg-emerald-50/50" : ""}>
                 <td className="px-4 py-3">
                   <div className="flex h-10 w-28 items-center justify-center overflow-hidden rounded-md border border-zinc-200 bg-white">
                     <img
@@ -2007,7 +2120,81 @@ function IssuerProfilesTab({
                     </button>
                   )}
                 </td>
+                <td className="px-4 py-3">
+                  <div className="flex gap-2">
+                    <button
+                      className="rounded-lg bg-zinc-100 px-3 py-1 text-xs font-medium text-zinc-700 transition hover:bg-zinc-200 disabled:cursor-not-allowed disabled:opacity-60"
+                      disabled={pending === profile.logoId || editingLogoId === profile.logoId}
+                      onClick={() => beginEditProfile(profile)}
+                      type="button"
+                    >
+                      Editar
+                    </button>
+                    <button
+                      className="rounded-lg bg-rose-100 px-3 py-1 text-xs font-medium text-rose-700 transition hover:bg-rose-200 disabled:cursor-not-allowed disabled:opacity-60"
+                      disabled={pending === profile.logoId}
+                      onClick={() => { void deleteProfile(profile.logoId); }}
+                      type="button"
+                    >
+                      {pending === profile.logoId ? "..." : "Borrar"}
+                    </button>
+                  </div>
+                </td>
               </tr>
+              {editingLogoId === profile.logoId && (
+                <tr className="bg-sky-50/50">
+                  <td colSpan={8} className="px-4 py-3">
+                    <form
+                      className="grid gap-3 md:grid-cols-4"
+                      onSubmit={(event) => { void submitEditProfile(event); }}
+                    >
+                      <label className="text-sm text-zinc-700">
+                        Nombre del logo
+                        <input
+                          className="mt-1 w-full rounded-lg border border-zinc-300 bg-white px-3 py-2 text-sm text-zinc-900"
+                          onChange={(event) => setEditLogoName(event.target.value)}
+                          value={editLogoName}
+                        />
+                      </label>
+                      <label className="text-sm text-zinc-700">
+                        Empresa asociada
+                        <input
+                          className="mt-1 w-full rounded-lg border border-zinc-300 bg-white px-3 py-2 text-sm text-zinc-900"
+                          onChange={(event) => setEditCompanyName(event.target.value)}
+                          placeholder="Nombre comercial"
+                          value={editCompanyName}
+                        />
+                      </label>
+                      <label className="text-sm text-zinc-700">
+                        Reemplazar archivo (opcional)
+                        <input
+                          accept="image/png,image/jpeg,image/jpg,image/webp,image/svg+xml"
+                          className="mt-1 block w-full rounded-lg border border-zinc-300 bg-white px-3 py-2 text-sm text-zinc-900"
+                          onChange={(event) => setEditLogoFile(event.target.files?.[0] ?? null)}
+                          type="file"
+                        />
+                      </label>
+                      <div className="flex items-end gap-2">
+                        <button
+                          className="rounded-lg bg-zinc-900 px-3 py-2 text-sm font-medium text-white transition hover:bg-zinc-700 disabled:opacity-60"
+                          disabled={savingEdit}
+                          type="submit"
+                        >
+                          {savingEdit ? "Guardando..." : "Guardar"}
+                        </button>
+                        <button
+                          className="rounded-lg bg-zinc-100 px-3 py-2 text-sm font-medium text-zinc-700 transition hover:bg-zinc-200"
+                          onClick={cancelEditProfile}
+                          type="button"
+                        >
+                          Cancelar
+                        </button>
+                      </div>
+                    </form>
+                  </td>
+                </tr>
+              )}
+              </Fragment>
             ))}
           </tbody>
         </table>

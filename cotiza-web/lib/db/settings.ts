@@ -8,6 +8,7 @@ import type { CreateManagedUserInput, UpdateManagedUserInput } from "@/lib/valid
 export type AppUserSummary = {
   active: boolean;
   alias: string;
+  contactEmail: string | null;
   createdAt: string;
   email: string | null;
   firstName: string;
@@ -71,6 +72,7 @@ export async function getAppUsersByTenant(tenantId: string): Promise<AppUserSumm
     select: {
       active: true,
       alias: true,
+      contact_email: true,
       created_at: true,
       email: true,
       first_name: true,
@@ -92,6 +94,7 @@ export async function getAppUsersByTenant(tenantId: string): Promise<AppUserSumm
   return rows.map((row) => ({
     active: row.active,
     alias: row.alias,
+    contactEmail: row.contact_email,
     createdAt: row.created_at.toISOString(),
     email: row.email ?? null,
     firstName: row.first_name,
@@ -112,6 +115,7 @@ export async function getAppUsersForSuperAdmin(): Promise<AppUserSummary[]> {
     select: {
       active: true,
       alias: true,
+      contact_email: true,
       created_at: true,
       email: true,
       first_name: true,
@@ -132,6 +136,7 @@ export async function getAppUsersForSuperAdmin(): Promise<AppUserSummary[]> {
   return rows.map((row) => ({
     active: row.active,
     alias: row.alias,
+    contactEmail: row.contact_email,
     createdAt: row.created_at.toISOString(),
     email: row.email ?? null,
     firstName: row.first_name,
@@ -171,6 +176,7 @@ export async function toggleAppUserActivationByTenant(
     select: {
       active: true,
       alias: true,
+      contact_email: true,
       created_at: true,
       email: true,
       first_name: true,
@@ -192,6 +198,7 @@ export async function toggleAppUserActivationByTenant(
   return {
     active: updated.active,
     alias: updated.alias,
+    contactEmail: updated.contact_email,
     createdAt: updated.created_at.toISOString(),
     email: updated.email ?? null,
     firstName: updated.first_name,
@@ -227,8 +234,8 @@ export async function updateManagedUserByTenant({
 
   if (isProtectedSuperAdmin) {
     // Cuentas superadmin estan protegidas contra cambios de rol/tenant/estado/nombre/alias
-    // desde este panel -- las unicas excepciones son codigo de vendedor, correo y telefono,
-    // que no tienen implicaciones de privilegios ni de scoping multi-tenant.
+    // desde este panel -- las unicas excepciones son codigo de vendedor, correo, telefono y
+    // correo de contacto, que no tienen implicaciones de privilegios ni de scoping multi-tenant.
     const onlyProtectedExceptionFields =
       payload.active === undefined &&
       payload.alias === undefined &&
@@ -236,7 +243,10 @@ export async function updateManagedUserByTenant({
       payload.lastName === undefined &&
       payload.role === undefined &&
       payload.tenantId === undefined &&
-      (payload.sellerCode !== undefined || payload.email !== undefined || payload.phone !== undefined);
+      (payload.sellerCode !== undefined ||
+        payload.email !== undefined ||
+        payload.phone !== undefined ||
+        payload.contactEmail !== undefined);
 
     if (!onlyProtectedExceptionFields) {
       return null;
@@ -261,6 +271,9 @@ export async function updateManagedUserByTenant({
     data: {
       ...(payload.active !== undefined ? { active: payload.active } : {}),
       ...(payload.alias !== undefined ? { alias: payload.alias.trim() } : {}),
+      ...(payload.contactEmail !== undefined
+        ? { contact_email: payload.contactEmail ? payload.contactEmail.trim().toLowerCase() : null }
+        : {}),
       ...(payload.email !== undefined
         ? { email: payload.email ? payload.email.trim().toLowerCase() : null }
         : {}),
@@ -276,6 +289,7 @@ export async function updateManagedUserByTenant({
     select: {
       active: true,
       alias: true,
+      contact_email: true,
       created_at: true,
       email: true,
       first_name: true,
@@ -297,6 +311,7 @@ export async function updateManagedUserByTenant({
   return {
     active: updated.active,
     alias: updated.alias,
+    contactEmail: updated.contact_email,
     createdAt: updated.created_at.toISOString(),
     email: updated.email ?? null,
     firstName: updated.first_name,
@@ -370,6 +385,7 @@ export async function createManagedUserByTenant({
       alias: payload.alias,
       created_at: new Date(),
       email: payload.email?.trim() || null,
+      contact_email: payload.contactEmail?.trim().toLowerCase() || null,
       first_name: payload.firstName,
       last_name: payload.lastName,
       password_hash: "CLERK_MANAGED",
@@ -382,6 +398,7 @@ export async function createManagedUserByTenant({
     select: {
       active: true,
       alias: true,
+      contact_email: true,
       created_at: true,
       email: true,
       first_name: true,
@@ -402,6 +419,7 @@ export async function createManagedUserByTenant({
   return {
     active: created.active,
     alias: created.alias,
+    contactEmail: created.contact_email,
     createdAt: created.created_at.toISOString(),
     email: created.email ?? null,
     firstName: created.first_name,
@@ -451,6 +469,7 @@ export async function relinkManagedUserIdByTenant({
     select: {
       active: true,
       alias: true,
+      contact_email: true,
       created_at: true,
       email: true,
       first_name: true,
@@ -472,6 +491,7 @@ export async function relinkManagedUserIdByTenant({
   return {
     active: updated.active,
     alias: updated.alias,
+    contactEmail: updated.contact_email,
     createdAt: updated.created_at.toISOString(),
     email: updated.email ?? null,
     firstName: updated.first_name,
@@ -665,6 +685,85 @@ export async function setDefaultIssuerProfileByTenant(
   return {
     companyName: updated.company_name,
     isDefault: updated.is_default ?? true,
+    logoFormat: updated.logo_format,
+    logoId: updated.logo_id,
+    logoName: updated.logo_name,
+    logoType: updated.logo_type,
+    uploadedAt: updated.uploaded_at.toISOString(),
+  };
+}
+
+// Borra un logo (issuer o client) del tenant. No hay restriccion de rol --
+// mismo criterio que subir/marcar default: cualquier usuario del tenant
+// puede administrar estos perfiles. Se bloquea si el logo ya esta en uso en
+// alguna propuesta formal (client_logo_id/issuer_logo_id con onDelete:
+// NoAction) para no dejar un FK roto ni un error crudo de Postgres.
+export async function deleteLogoProfileByTenant(tenantId: string, logoId: string): Promise<"deleted" | "not_found" | "in_use"> {
+  const logo = await prisma.company_logos.findFirst({
+    select: { logo_id: true },
+    where: { logo_id: logoId, tenant_id: tenantId },
+  });
+
+  if (!logo) return "not_found";
+
+  const inUse = await prisma.formal_proposals.findFirst({
+    select: { proposal_doc_id: true },
+    where: {
+      OR: [{ client_logo_id: logoId }, { issuer_logo_id: logoId }],
+    },
+  });
+
+  if (inUse) return "in_use";
+
+  await prisma.company_logos.delete({ where: { logo_id: logoId } });
+  return "deleted";
+}
+
+// Edita un logo existente en el lugar -- nombre, empresa asociada y/o el
+// archivo mismo (reemplaza logo_data/logo_format). A diferencia de borrar,
+// SI se permite editar un logo ya usado en una propuesta formal: como el
+// logo_id no cambia, la propuesta que ya lo referencia automaticamente
+// muestra la version actualizada. Esta es la via para "actualizar un logo"
+// sin crear un duplicado nuevo cada vez.
+export async function updateLogoProfileByTenant(
+  tenantId: string,
+  logoId: string,
+  input: {
+    companyName?: string | null;
+    logoBytes?: Uint8Array<ArrayBuffer>;
+    logoFormat?: string;
+    logoName?: string;
+  },
+): Promise<IssuerProfileSummary | null> {
+  const logo = await prisma.company_logos.findFirst({
+    select: { logo_id: true },
+    where: { logo_id: logoId, tenant_id: tenantId },
+  });
+
+  if (!logo) return null;
+
+  const updated = await prisma.company_logos.update({
+    data: {
+      ...(input.companyName !== undefined ? { company_name: input.companyName?.trim() || null } : {}),
+      ...(input.logoName !== undefined ? { logo_name: input.logoName.trim() } : {}),
+      ...(input.logoBytes !== undefined ? { logo_data: input.logoBytes } : {}),
+      ...(input.logoFormat !== undefined ? { logo_format: input.logoFormat } : {}),
+    },
+    select: {
+      company_name: true,
+      is_default: true,
+      logo_format: true,
+      logo_id: true,
+      logo_name: true,
+      logo_type: true,
+      uploaded_at: true,
+    },
+    where: { logo_id: logoId },
+  });
+
+  return {
+    companyName: updated.company_name,
+    isDefault: updated.is_default ?? false,
     logoFormat: updated.logo_format,
     logoId: updated.logo_id,
     logoName: updated.logo_name,

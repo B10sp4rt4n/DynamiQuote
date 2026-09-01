@@ -514,6 +514,10 @@ export function ProposalPdfDocument({
         <View style={styles.dates}>
           <Text style={styles.micro}>Fecha: {formatDate(formal?.issuedDate)}</Text>
           <Text style={styles.micro}>Estado: {statusLabel(proposal.status)}</Text>
+          <Text style={styles.micro}>Moneda: {formal?.currency ?? "N/D"}</Text>
+          {formal?.validUntil ? (
+            <Text style={styles.micro}>Válido hasta: {formatDate(formal.validUntil)}</Text>
+          ) : null}
         </View>
 
         <View style={styles.subjectBox}>

@@ -35,11 +35,11 @@ export async function PATCH(request: Request, context: RouteContext) {
     }
 
     if (tenant.userId && tenant.userId === userId) {
-      // Un superadmin puede editar su propio codigo de vendedor, correo o
-      // telefono -- los mismos campos ya permitidos para editar OTRAS
-      // cuentas superadmin (ver updateManagedUserByTenant). Cualquier otro
-      // campo (rol, tenant, alias, nombre, estado) sigue bloqueado para
-      // evitar que alguien se auto-privilegie desde este panel.
+      // Un superadmin puede editar su propio codigo de vendedor, correo,
+      // telefono o correo de contacto -- los mismos campos ya permitidos
+      // para editar OTRAS cuentas superadmin (ver updateManagedUserByTenant).
+      // Cualquier otro campo (rol, tenant, alias, nombre, estado) sigue
+      // bloqueado para evitar que alguien se auto-privilegie desde este panel.
       const onlySelfEditableFields =
         parsed.data.active === undefined &&
         parsed.data.alias === undefined &&
@@ -47,7 +47,10 @@ export async function PATCH(request: Request, context: RouteContext) {
         parsed.data.lastName === undefined &&
         parsed.data.role === undefined &&
         parsed.data.tenantId === undefined &&
-        (parsed.data.sellerCode !== undefined || parsed.data.email !== undefined || parsed.data.phone !== undefined);
+        (parsed.data.sellerCode !== undefined ||
+          parsed.data.email !== undefined ||
+          parsed.data.phone !== undefined ||
+          parsed.data.contactEmail !== undefined);
 
       if (!onlySelfEditableFields) {
         return NextResponse.json({ error: "No puedes editar tu propio usuario desde este panel" }, { status: 422 });

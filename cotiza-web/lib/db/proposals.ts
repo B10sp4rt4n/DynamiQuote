@@ -208,33 +208,33 @@ async function resolveIssuerEmailByTenant(
 
   if (candidate) {
     const byUserId = await prisma.app_users.findFirst({
-      select: { email: true },
+      select: { contact_email: true, email: true },
       where: {
         tenant_id: tenantId,
         user_id: candidate,
       },
     });
 
-    if (byUserId?.email?.trim()) {
-      return byUserId.email.trim();
+    if (byUserId?.contact_email?.trim() || byUserId?.email?.trim()) {
+      return (byUserId.contact_email ?? byUserId.email)!.trim();
     }
 
     const byAlias = await prisma.app_users.findFirst({
-      select: { email: true },
+      select: { contact_email: true, email: true },
       where: {
         tenant_id: tenantId,
         alias: candidate,
       },
     });
 
-    if (byAlias?.email?.trim()) {
-      return byAlias.email.trim();
+    if (byAlias?.contact_email?.trim() || byAlias?.email?.trim()) {
+      return (byAlias.contact_email ?? byAlias.email)!.trim();
     }
   }
 
   const ownerOrAdmin = await prisma.app_users.findFirst({
     orderBy: [{ created_at: "asc" }],
-    select: { email: true },
+    select: { contact_email: true, email: true },
     where: {
       active: true,
       role: {
@@ -244,8 +244,8 @@ async function resolveIssuerEmailByTenant(
     },
   });
 
-  if (ownerOrAdmin?.email?.trim()) {
-    return ownerOrAdmin.email.trim();
+  if (ownerOrAdmin?.contact_email?.trim() || ownerOrAdmin?.email?.trim()) {
+    return (ownerOrAdmin.contact_email ?? ownerOrAdmin.email)!.trim();
   }
 
   return null;
@@ -322,6 +322,7 @@ async function resolveActorNameForTenant(
 type FormalProposalSlice = {
   clientLogoId: string;
   clientLogoDataUrl: string;
+  currency: string | null;
   issuerCompany: string;
   issuerContactName: string;
   issuerEmail: string;
@@ -339,6 +340,7 @@ type FormalProposalSlice = {
   status: ProposalStatus;
   subject: string;
   termsAndConditions: string;
+  validUntil: string | null;
 };
 
 export type ProposalSummary = {
@@ -417,6 +419,7 @@ function decimalToNumber(value: Prisma.Decimal | null | undefined): number {
 function toFormalSlice(row: {
   client_logo_id?: string | null;
   client_logo_data_url?: string | null;
+  currency: string | null;
   issuer_company: string;
   issuer_contact_name: string | null;
   issuer_email: string | null;
@@ -434,10 +437,12 @@ function toFormalSlice(row: {
   status: string | null;
   subject: string | null;
   terms_and_conditions: string | null;
+  valid_until: Date | null;
 }): FormalProposalSlice {
   return {
     clientLogoId: row.client_logo_id ?? "",
     clientLogoDataUrl: row.client_logo_data_url ?? "",
+    currency: row.currency,
     issuerCompany: row.issuer_company,
     issuerContactName: row.issuer_contact_name ?? "",
     issuerEmail: row.issuer_email ?? "",
@@ -455,6 +460,7 @@ function toFormalSlice(row: {
     status: normalizeStatus(row.status),
     subject: row.subject ?? "Sin asunto",
     termsAndConditions: row.terms_and_conditions ?? "",
+    validUntil: dateToIso(row.valid_until),
   };
 }
 
@@ -670,6 +676,7 @@ export async function createProposalFromQuoteByTenant(
       formal_proposals: {
         orderBy: [{ created_at: "desc" }, { proposal_doc_id: "desc" }],
         select: {
+          currency: true,
           issuer_company: true,
           issuer_contact_name: true,
           issuer_email: true,
@@ -685,6 +692,7 @@ export async function createProposalFromQuoteByTenant(
           status: true,
           subject: true,
           terms_and_conditions: true,
+          valid_until: true,
         },
         take: 1,
       },
@@ -897,6 +905,7 @@ export async function createProposalFromQuoteByTenant(
     createdAt: now.toISOString(),
     formal: toFormalSlice({
       client_logo_id: catalogContact?.clientLogoId ?? null,
+      currency: null,
       issuer_company: issuerCompany,
       issuer_contact_name: issuerContactName,
       issuer_email: null,
@@ -913,6 +922,7 @@ export async function createProposalFromQuoteByTenant(
       status: "draft",
       subject,
       terms_and_conditions: "",
+      valid_until: null,
     }),
     origin: quote.quote_id,
     proposalId,
@@ -932,6 +942,7 @@ export async function getProposalSummariesByTenant(
         orderBy: [{ created_at: "desc" }, { proposal_doc_id: "desc" }],
         select: {
           client_logo_id: true,
+          currency: true,
           issuer_company: true,
           issuer_contact_name: true,
           issuer_email: true,
@@ -948,6 +959,7 @@ export async function getProposalSummariesByTenant(
           status: true,
           subject: true,
           terms_and_conditions: true,
+          valid_until: true,
         },
         take: 1,
       },
@@ -1015,6 +1027,7 @@ export async function getProposalWorkflowByTenant(
         orderBy: [{ created_at: "desc" }, { proposal_doc_id: "desc" }],
         select: {
           client_logo_id: true,
+          currency: true,
           issuer_company: true,
           issuer_contact_name: true,
           issuer_email: true,
@@ -1031,6 +1044,7 @@ export async function getProposalWorkflowByTenant(
           status: true,
           subject: true,
           terms_and_conditions: true,
+          valid_until: true,
         },
         take: 1,
       },
@@ -1558,6 +1572,12 @@ export async function updateProposalWorkflowByTenant(
   const hasRecipientContactTitleUpdate =
     input.recipientContactTitle !== undefined &&
     input.recipientContactTitle !== (currentFormal?.recipientContactTitle ?? "");
+  const hasCurrencyUpdate =
+    input.currency !== undefined &&
+    input.currency !== (currentFormal?.currency ?? "");
+  const hasValidUntilUpdate =
+    input.validUntil !== undefined &&
+    input.validUntil !== (currentFormal?.validUntil?.slice(0, 10) ?? "");
   const normalizedCurrentItems = current.items.map((item) => ({
     componentType: item.componentType,
     costUnit: item.costUnit,
@@ -1593,6 +1613,8 @@ export async function updateProposalWorkflowByTenant(
     hasRecipientContactNameUpdate ||
     hasRecipientEmailUpdate ||
     hasRecipientContactTitleUpdate ||
+    hasCurrencyUpdate ||
+    hasValidUntilUpdate ||
     hasItemsUpdate;
   const hasNonTermsContentUpdate =
     hasSubjectUpdate ||
@@ -1603,13 +1625,17 @@ export async function updateProposalWorkflowByTenant(
     hasRecipientContactNameUpdate ||
     hasRecipientEmailUpdate ||
     hasRecipientContactTitleUpdate ||
+    hasCurrencyUpdate ||
+    hasValidUntilUpdate ||
     hasItemsUpdate;
   const hasApprovedSafeContactUpdate =
     hasIssuerEmailUpdate ||
     hasIssuerPhoneUpdate ||
     hasRecipientContactNameUpdate ||
     hasRecipientEmailUpdate ||
-    hasRecipientContactTitleUpdate;
+    hasRecipientContactTitleUpdate ||
+    hasCurrencyUpdate ||
+    hasValidUntilUpdate;
   const hasApprovedMaterialUpdate =
     hasSubjectUpdate ||
     hasRecipientUpdate ||
@@ -1739,6 +1765,8 @@ export async function updateProposalWorkflowByTenant(
     const recipientContactNameToPersist = input.recipientContactName;
     const recipientEmailToPersist = input.recipientEmail;
     const recipientContactTitleToPersist = input.recipientContactTitle;
+    const currencyToPersist = input.currency;
+    const validUntilToPersist = input.validUntil;
     const itemsToPersist = input.items;
     if (
       !hasTermsUpdate &&
@@ -1750,7 +1778,9 @@ export async function updateProposalWorkflowByTenant(
       !hasIssuerPhoneUpdate &&
       !hasRecipientContactNameUpdate &&
       !hasRecipientEmailUpdate &&
-      !hasRecipientContactTitleUpdate
+      !hasRecipientContactTitleUpdate &&
+      !hasCurrencyUpdate &&
+      !hasValidUntilUpdate
     ) {
       if (!hasItemsUpdate) {
         return;
@@ -1802,7 +1832,9 @@ export async function updateProposalWorkflowByTenant(
       !hasIssuerPhoneUpdate &&
       !hasRecipientContactNameUpdate &&
       !hasRecipientEmailUpdate &&
-      !hasRecipientContactTitleUpdate
+      !hasRecipientContactTitleUpdate &&
+      !hasCurrencyUpdate &&
+      !hasValidUntilUpdate
     ) {
       return;
     }
@@ -1810,6 +1842,7 @@ export async function updateProposalWorkflowByTenant(
     // Solo filtrar por proposal_id: la validación de tenant se hizo en getProposalWorkflowByTenant
     await tx.formal_proposals.updateMany({
       data: {
+        currency: hasCurrencyUpdate ? currencyToPersist || null : undefined,
         issuer_company: hasIssuerCompanyUpdate ? issuerCompanyToPersist : undefined,
         issuer_email: hasIssuerEmailUpdate ? issuerEmailToPersist : undefined,
         issuer_phone: hasIssuerPhoneUpdate ? issuerPhoneToPersist : undefined,
@@ -1826,6 +1859,7 @@ export async function updateProposalWorkflowByTenant(
         subject: hasSubjectUpdate ? subjectToPersist : undefined,
         terms_and_conditions: hasTermsUpdate ? termsToPersist : undefined,
         updated_at: now,
+        valid_until: hasValidUntilUpdate ? (validUntilToPersist ? new Date(validUntilToPersist) : null) : undefined,
       },
       where: {
         proposal_id: proposalId,
@@ -1933,6 +1967,7 @@ export async function getProposalExcelPayloadByTenant(
       formal_proposals: {
         orderBy: [{ created_at: "desc" }, { proposal_doc_id: "desc" }],
         select: {
+          currency: true,
           issuer_company: true,
           issuer_contact_name: true,
           issuer_email: true,
@@ -1948,6 +1983,7 @@ export async function getProposalExcelPayloadByTenant(
           status: true,
           subject: true,
           terms_and_conditions: true,
+          valid_until: true,
         },
         take: 1,
       },

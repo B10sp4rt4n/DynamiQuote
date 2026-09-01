@@ -18,6 +18,11 @@ export type ProposalIssuanceDecision =
 //   === "force_pending") autorizado por Owner/Superadmin via el endpoint
 //   dedicado -- ese forzamiento es de un solo uso, lo consume quien primero
 //   lo use de las 3 rutas de entrega.
+//
+// La moneda NO es parte de este gate -- es un switch que se resuelve en el
+// momento de imprimir/emitir (ver proposal-shell.tsx: si no esta elegida,
+// se pregunta ahi mismo antes de continuar la accion), no una condicion
+// que bloquee la propuesta completa.
 export function resolveProposalIssuanceGate(input: {
   status: ProposalStatus;
   issuanceStatus: ProposalIssuanceStatus;

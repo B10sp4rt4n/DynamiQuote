@@ -21,8 +21,11 @@ export const proposalImportItemSchema = z.object({
   status: z.string().trim().max(60).optional().default("active"),
 });
 
+export const proposalCurrencySchema = z.enum(["MXN", "USD"]);
+
 export const updateProposalWorkflowSchema = z
   .object({
+    currency: z.union([proposalCurrencySchema, z.literal("")]).optional(),
     issuerCompany: z.string().trim().max(200).optional(),
     issuerEmail: z.string().trim().max(200).optional(),
     issuerPhone: z.string().trim().max(80).optional(),
@@ -34,9 +37,11 @@ export const updateProposalWorkflowSchema = z
     status: proposalStatusSchema.optional(),
     subject: z.string().trim().max(300).optional(),
     termsAndConditions: z.string().trim().max(12000).optional(),
+    validUntil: z.string().trim().max(30).optional(),
   })
   .refine(
     (value) =>
+      value.currency !== undefined ||
       value.status !== undefined ||
       value.termsAndConditions !== undefined ||
       value.subject !== undefined ||
@@ -47,6 +52,7 @@ export const updateProposalWorkflowSchema = z
       value.recipientContactName !== undefined ||
       value.recipientEmail !== undefined ||
       value.recipientContactTitle !== undefined ||
+      value.validUntil !== undefined ||
       value.items !== undefined,
     {
       message: "Debes enviar al menos un campo para actualizar",

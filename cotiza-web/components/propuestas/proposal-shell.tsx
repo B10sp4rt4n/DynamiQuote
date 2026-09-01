@@ -1,6 +1,6 @@
 "use client";
 
-import { useEffect, useMemo, useState } from "react";
+import { useEffect, useMemo, useRef, useState } from "react";
 import { usePathname, useRouter, useSearchParams } from "next/navigation";
 
 import type { ProposalSummary } from "@/lib/db/proposals";
@@ -171,6 +171,10 @@ function getFinalAuthorizationBadge(item: ProposalSummary): {
   return null;
 }
 
+function isMarginBlocked(item: ProposalSummary): boolean {
+  return Boolean(item.marginEvaluation && !item.marginEvaluation.canAuthorizeFinal);
+}
+
 export function ProposalShell({ canForceIssuance, proposals, tenantName }: ProposalShellProps) {
   const router = useRouter();
   const pathname = usePathname();
@@ -185,6 +189,15 @@ export function ProposalShell({ canForceIssuance, proposals, tenantName }: Propo
   const [issuerCompany, setIssuerCompany] = useState<string>(proposals[0]?.formal?.issuerCompany ?? "");
   const [issuerEmail, setIssuerEmail] = useState<string>(proposals[0]?.formal?.issuerEmail ?? "");
   const [issuerPhone, setIssuerPhone] = useState<string>(proposals[0]?.formal?.issuerPhone ?? "");
+  const [currency, setCurrency] = useState<string>(proposals[0]?.formal?.currency ?? "");
+  const [validUntil, setValidUntil] = useState<string>((proposals[0]?.formal?.validUntil ?? "").slice(0, 10));
+  // Switch de moneda al momento de emitir (no un gate que bloquee la
+  // propuesta): si ya se eligio moneda, las acciones de imprimir/enviar
+  // corren directo; si no, se pregunta aqui mismo antes de continuar.
+  const [currencyPromptOpen, setCurrencyPromptOpen] = useState(false);
+  const [currencyPromptValue, setCurrencyPromptValue] = useState("MXN");
+  const [currencyPromptSaving, setCurrencyPromptSaving] = useState(false);
+  const pendingIssuanceActionRef = useRef<(() => void) | null>(null);
   const [salesOwner, setSalesOwner] = useState<string>("");
   const [recipientCompany, setRecipientCompany] = useState<string>(
     proposals[0]?.formal?.recipientCompany ?? "",
@@ -435,6 +448,8 @@ export function ProposalShell({ canForceIssuance, proposals, tenantName }: Propo
     setIssuerCompany(found?.formal?.issuerCompany ?? "");
     setIssuerEmail(found?.formal?.issuerEmail ?? "");
     setIssuerPhone(found?.formal?.issuerPhone ?? "");
+    setCurrency(found?.formal?.currency ?? "");
+    setValidUntil((found?.formal?.validUntil ?? "").slice(0, 10));
     setRecipientCompany(found?.formal?.recipientCompany ?? "");
     setRecipientContactName(found?.formal?.recipientContactName ?? "");
     setRecipientEmail(found?.formal?.recipientEmail ?? "");
@@ -472,6 +487,7 @@ export function ProposalShell({ canForceIssuance, proposals, tenantName }: Propo
         error?: string;
         proposal?: {
           formal: {
+            currency: string | null;
             issuerCompany: string;
             issuerContactName: string;
             issuerEmail: string;
@@ -482,6 +498,7 @@ export function ProposalShell({ canForceIssuance, proposals, tenantName }: Propo
             recipientEmail: string;
             subject: string;
             termsAndConditions: string;
+            validUntil: string | null;
           } | null;
           items: Array<{
             componentType: string;
@@ -513,6 +530,8 @@ export function ProposalShell({ canForceIssuance, proposals, tenantName }: Propo
       setIssuerCompany(data.proposal.formal?.issuerCompany ?? "");
       setIssuerEmail(data.proposal.formal?.issuerEmail ?? "");
       setIssuerPhone(data.proposal.formal?.issuerPhone ?? "");
+      setCurrency(data.proposal.formal?.currency ?? "");
+      setValidUntil((data.proposal.formal?.validUntil ?? "").slice(0, 10));
       setRecipientCompany(data.proposal.formal?.recipientCompany ?? "");
       setRecipientContactName(data.proposal.formal?.recipientContactName ?? "");
       setRecipientEmail(data.proposal.formal?.recipientEmail ?? "");
@@ -552,6 +571,8 @@ export function ProposalShell({ canForceIssuance, proposals, tenantName }: Propo
                         data.proposal?.formal?.issuerContactName ?? item.formal.issuerContactName,
                       issuerEmail: data.proposal?.formal?.issuerEmail ?? item.formal.issuerEmail,
                       issuerPhone: data.proposal?.formal?.issuerPhone ?? item.formal.issuerPhone,
+                      currency: data.proposal?.formal?.currency ?? item.formal.currency,
+                      validUntil: data.proposal?.formal?.validUntil ?? item.formal.validUntil,
                       recipientCompany:
                         data.proposal?.formal?.recipientCompany ?? item.formal.recipientCompany,
                       recipientContactName:
@@ -686,6 +707,7 @@ export function ProposalShell({ canForceIssuance, proposals, tenantName }: Propo
     const hasItemsChanges = JSON.stringify(normalizedItems) !== JSON.stringify(baselineItems);
 
     const payload: {
+      currency?: string;
       issuerCompany?: string;
       issuerEmail?: string;
       issuerPhone?: string;
@@ -707,6 +729,7 @@ export function ProposalShell({ canForceIssuance, proposals, tenantName }: Propo
       status?: ProposalStatus;
       subject?: string;
       termsAndConditions?: string;
+      validUntil?: string;
     } = {};
 
     if (issuerCompany !== (currentFormal?.issuerCompany ?? "")) {
@@ -717,6 +740,12 @@ export function ProposalShell({ canForceIssuance, proposals, tenantName }: Propo
     }
     if (issuerPhone !== (currentFormal?.issuerPhone ?? "")) {
       payload.issuerPhone = issuerPhone;
+    }
+    if (currency !== (currentFormal?.currency ?? "")) {
+      payload.currency = currency;
+    }
+    if (validUntil !== (currentFormal?.validUntil?.slice(0, 10) ?? "")) {
+      payload.validUntil = validUntil;
     }
     if (recipientCompany !== (currentFormal?.recipientCompany ?? "")) {
       payload.recipientCompany = recipientCompany;
@@ -763,6 +792,7 @@ export function ProposalShell({ canForceIssuance, proposals, tenantName }: Propo
         error?: string;
         proposal?: {
           formal: {
+            currency: string | null;
             issuerCompany: string;
             issuerContactName: string;
             issuerEmail: string;
@@ -773,6 +803,7 @@ export function ProposalShell({ canForceIssuance, proposals, tenantName }: Propo
             recipientEmail: string;
             subject: string;
             termsAndConditions: string;
+            validUntil: string | null;
           } | null;
           items: Array<{
             componentType: string;
@@ -825,6 +856,8 @@ export function ProposalShell({ canForceIssuance, proposals, tenantName }: Propo
                       data.proposal?.formal?.issuerEmail ?? item.formal.issuerEmail,
                     issuerPhone:
                       data.proposal?.formal?.issuerPhone ?? item.formal.issuerPhone,
+                    currency: data.proposal?.formal?.currency ?? item.formal.currency,
+                    validUntil: data.proposal?.formal?.validUntil ?? item.formal.validUntil,
                     subject: data.proposal?.formal?.subject ?? item.formal.subject,
                     termsAndConditions:
                       data.proposal?.formal?.termsAndConditions ?? item.formal.termsAndConditions,
@@ -983,6 +1016,77 @@ export function ProposalShell({ canForceIssuance, proposals, tenantName }: Propo
       setImportStatus("error");
       setImportMessage(error instanceof Error ? error.message : "Error interno");
     }
+  }
+
+  async function saveCurrencyOnly(nextCurrency: string): Promise<boolean> {
+    if (!selectedProposal) {
+      return false;
+    }
+
+    try {
+      const response = await fetch(`/api/proposals/${selectedProposal.proposalId}`, {
+        body: JSON.stringify({ currency: nextCurrency }),
+        headers: { "Content-Type": "application/json" },
+        method: "PUT",
+      });
+
+      const data = (await response.json()) as {
+        error?: string;
+        proposal?: { formal: { currency: string | null } | null };
+      };
+
+      if (!response.ok || !data.proposal) {
+        return false;
+      }
+
+      setCurrency(nextCurrency);
+      setItems((current) =>
+        current.map((item) =>
+          item.proposalId === selectedProposal.proposalId
+            ? { ...item, formal: item.formal ? { ...item.formal, currency: nextCurrency } : item.formal }
+            : item,
+        ),
+      );
+      return true;
+    } catch {
+      return false;
+    }
+  }
+
+  // Switch de moneda al momento de imprimir/emitir: si la propuesta ya
+  // tiene moneda elegida, la accion corre directo; si no, se pregunta con
+  // un selector rapido antes de continuar -- no es un bloqueo permanente,
+  // solo se resuelve una vez y de ahi en adelante ya no vuelve a preguntar.
+  function ensureCurrencyThenRun(run: () => void) {
+    if (selectedProposal?.formal?.currency) {
+      run();
+      return;
+    }
+
+    pendingIssuanceActionRef.current = run;
+    setCurrencyPromptValue(currency || "MXN");
+    setCurrencyPromptOpen(true);
+  }
+
+  async function confirmCurrencyPrompt() {
+    setCurrencyPromptSaving(true);
+    const ok = await saveCurrencyOnly(currencyPromptValue);
+    setCurrencyPromptSaving(false);
+
+    if (!ok) {
+      setErrorMessage("No se pudo guardar la moneda. Intenta de nuevo.");
+      return;
+    }
+
+    setCurrencyPromptOpen(false);
+    const run = pendingIssuanceActionRef.current;
+    pendingIssuanceActionRef.current = null;
+    run?.();
+  }
+
+  function cancelCurrencyPrompt() {
+    pendingIssuanceActionRef.current = null;
+    setCurrencyPromptOpen(false);
   }
 
   async function handleSendEmailProposal() {
@@ -1218,8 +1322,9 @@ export function ProposalShell({ canForceIssuance, proposals, tenantName }: Propo
               </select>
             </div>
           </div>
-          <table className="min-w-full divide-y divide-zinc-200 text-sm">
-            <thead className="bg-zinc-50 text-left text-zinc-600">
+          <div className="max-h-[60vh] overflow-auto">
+            <table className="min-w-[760px] divide-y divide-zinc-200 text-sm">
+              <thead className="sticky top-0 z-10 bg-zinc-50 text-left text-zinc-600">
               <tr>
                 <th className="px-4 py-3 font-medium">Propuesta</th>
                 <th className="px-4 py-3 font-medium">Cliente</th>
@@ -1230,6 +1335,7 @@ export function ProposalShell({ canForceIssuance, proposals, tenantName }: Propo
             <tbody className="divide-y divide-zinc-200 bg-white">
               {filteredItems.map((item) => {
                 const finalAuthorizationBadge = getFinalAuthorizationBadge(item);
+                const marginBlocked = isMarginBlocked(item);
 
                 return (
                   <tr
@@ -1246,13 +1352,20 @@ export function ProposalShell({ canForceIssuance, proposals, tenantName }: Propo
                       {item.formal?.recipientCompany ?? "Sin cliente"}
                     </td>
                     <td className="px-4 py-3 text-zinc-600">
-                      <div className="flex items-center gap-2">
-                        <span>{formatStatus(item.status)}</span>
-                        {finalAuthorizationBadge ? (
-                          <span
-                            className={`rounded-full border px-2 py-0.5 text-[10px] font-medium ${finalAuthorizationBadge.className}`}
-                          >
-                            {finalAuthorizationBadge.label}
+                      <div className="flex flex-col gap-1">
+                        <div className="flex items-center gap-2">
+                          <span>{formatStatus(item.status)}</span>
+                          {finalAuthorizationBadge ? (
+                            <span
+                              className={`rounded-full border px-2 py-0.5 text-[10px] font-medium ${finalAuthorizationBadge.className}`}
+                            >
+                              {finalAuthorizationBadge.label}
+                            </span>
+                          ) : null}
+                        </div>
+                        {marginBlocked ? (
+                          <span className="w-fit rounded-full border border-rose-300 bg-rose-50 px-2 py-0.5 text-[10px] font-medium text-rose-700">
+                            Bloqueada por margen
                           </span>
                         ) : null}
                       </div>
@@ -1271,7 +1384,8 @@ export function ProposalShell({ canForceIssuance, proposals, tenantName }: Propo
                 </tr>
               ) : null}
             </tbody>
-          </table>
+            </table>
+          </div>
         </div>
 
         <article className="rounded-xl border border-zinc-200 bg-zinc-50 p-4">
@@ -1358,6 +1472,43 @@ export function ProposalShell({ canForceIssuance, proposals, tenantName }: Propo
                 id="issuer-email"
                 value={issuerEmail}
               />
+
+              <div className="grid gap-3 md:grid-cols-2">
+                <div>
+                  <label className="block text-sm font-medium text-zinc-700" htmlFor="proposal-currency">
+                    Moneda
+                  </label>
+                  <select
+                    className={`w-full rounded-lg border px-3 py-2 text-sm ${
+                      currency ? "border-zinc-300 bg-white text-zinc-800" : "border-rose-400 bg-rose-50 text-rose-700"
+                    }`}
+                    id="proposal-currency"
+                    onChange={(event) => setCurrency(event.target.value)}
+                    value={currency}
+                  >
+                    <option value="">Selecciona una moneda...</option>
+                    <option value="MXN">MXN — Peso mexicano</option>
+                    <option value="USD">USD — Dólar estadounidense</option>
+                  </select>
+                  {!currency ? (
+                    <p className="mt-1 text-xs text-rose-600">
+                      Sin elegir todavía — se preguntará al descargar o enviar el documento.
+                    </p>
+                  ) : null}
+                </div>
+                <div>
+                  <label className="block text-sm font-medium text-zinc-700" htmlFor="proposal-valid-until">
+                    Vigencia (válido hasta)
+                  </label>
+                  <input
+                    className="w-full rounded-lg border border-zinc-300 bg-white px-3 py-2 text-sm text-zinc-800"
+                    id="proposal-valid-until"
+                    onChange={(event) => setValidUntil(event.target.value)}
+                    type="date"
+                    value={validUntil}
+                  />
+                </div>
+              </div>
 
               <label className="block text-sm font-medium text-zinc-700" htmlFor="sales-owner">
                 Vendedor (tenant)
@@ -1561,11 +1712,14 @@ export function ProposalShell({ canForceIssuance, proposals, tenantName }: Propo
                       Reabrir a borrador
                     </button>
                   ) : null}
+                  <span className="text-xs text-zinc-500">Guardar recalcula margen y puede quitar el bloqueo.</span>
                   <button
                     className="rounded-lg border border-zinc-300 bg-white px-4 py-2 text-sm font-medium text-zinc-700 transition hover:bg-zinc-100 disabled:cursor-not-allowed disabled:opacity-60"
                     disabled={loadingDetail || issuanceGate.kind === "blocked"}
                     onClick={() => {
-                      window.open(`/api/proposals/${selectedProposal.proposalId}/pdf`, "_blank");
+                      ensureCurrencyThenRun(() => {
+                        window.open(`/api/proposals/${selectedProposal.proposalId}/pdf`, "_blank");
+                      });
                     }}
                     title={issuanceGate.kind === "blocked" ? issuanceGate.reason : undefined}
                     type="button"
@@ -1580,14 +1734,17 @@ export function ProposalShell({ canForceIssuance, proposals, tenantName }: Propo
                       Descargar Excel
                     </span>
                   ) : (
-                    <a
+                    <button
                       className="rounded-lg border border-zinc-300 bg-white px-4 py-2 text-sm font-medium text-zinc-700 transition hover:bg-zinc-100"
-                      href={`/api/proposals/${selectedProposal.proposalId}/xlsx`}
-                      rel="noreferrer"
-                      target="_blank"
+                      onClick={() => {
+                        ensureCurrencyThenRun(() => {
+                          window.open(`/api/proposals/${selectedProposal.proposalId}/xlsx`, "_blank");
+                        });
+                      }}
+                      type="button"
                     >
                       Descargar Excel
-                    </a>
+                    </button>
                   )}
                 </div>
                 {saveStatus === "success" ? (
@@ -1740,12 +1897,34 @@ export function ProposalShell({ canForceIssuance, proposals, tenantName }: Propo
               {/* Estado de la propuesta — solo lectura. El sistema gestiona las transiciones.
                   Las únicas actualizaciones manuales permitidas son la decisión del cliente
                   (cuando ya fue enviada) y el bloque de aprobaciones formales del owner. */}
-              <div className="flex items-center gap-3">
+              <div className="flex flex-wrap items-center gap-3">
                 <span className="text-sm font-medium text-zinc-700">Estado actual:</span>
                 <span className={`inline-flex items-center rounded-full px-3 py-1 text-xs font-semibold ${getStatusBadgeClass(selectedStatus)}`}>
                   {formatStatus(selectedStatus)}
                 </span>
+                {selectedProposal.marginEvaluation && !selectedProposal.marginEvaluation.canAuthorizeFinal ? (
+                  <span className="inline-flex items-center rounded-full border border-rose-300 bg-rose-50 px-3 py-1 text-xs font-semibold text-rose-700">
+                    Bloqueada por margen
+                  </span>
+                ) : null}
+                {selectedProposal.marginEvaluation ? (
+                  <span className="inline-flex items-center rounded-full border border-zinc-200 bg-white px-3 py-1 text-xs font-semibold text-zinc-700">
+                    Margen actual {selectedProposal.marginEvaluation.averageMarginPct.toFixed(2)}%
+                  </span>
+                ) : null}
               </div>
+
+              {selectedProposal.marginEvaluation && !selectedProposal.marginEvaluation.canAuthorizeFinal ? (
+                <div className="rounded-lg border border-rose-200 bg-rose-50 px-3 py-3 text-sm text-rose-900">
+                  <p className="font-semibold">Esta propuesta sigue bloqueada por margen.</p>
+                  <p className="mt-1 text-xs leading-5 text-rose-800">
+                    Ajusta costo o precio en las partidas y luego guarda cambios para recalcular el margen.
+                  </p>
+                  <p className="mt-2 text-xs font-medium text-rose-700">
+                    Margen actual {selectedProposal.marginEvaluation.averageMarginPct.toFixed(2)}% · mínimo requerido {selectedProposal.marginEvaluation.minMarginPct.toFixed(2)}% · faltan {(selectedProposal.marginEvaluation.minMarginPct - selectedProposal.marginEvaluation.averageMarginPct).toFixed(2)} puntos.
+                  </p>
+                </div>
+              ) : null}
 
               {/* Evaluación de margen: informativa, no editable */}
               {selectedProposal?.marginEvaluation && (selectedStatus === "draft" || selectedStatus === "in_review") ? (
@@ -1772,7 +1951,7 @@ export function ProposalShell({ canForceIssuance, proposals, tenantName }: Propo
                   <button
                     className="w-fit rounded-lg border border-blue-300 bg-blue-50 px-4 py-2 text-sm font-medium text-blue-700 transition hover:bg-blue-100 disabled:cursor-not-allowed disabled:opacity-60"
                     disabled={emailStatus === "sending" || issuanceGate.kind === "blocked"}
-                    onClick={handleSendEmailProposal}
+                    onClick={() => { ensureCurrencyThenRun(() => { void handleSendEmailProposal(); }); }}
                     title={issuanceGate.kind === "blocked" ? issuanceGate.reason : undefined}
                     type="button"
                   >
@@ -1905,6 +2084,43 @@ export function ProposalShell({ canForceIssuance, proposals, tenantName }: Propo
           )}
         </article>
       </div>
+
+      {currencyPromptOpen ? (
+        <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/40 p-4">
+          <div className="w-full max-w-sm rounded-xl bg-white p-6 shadow-xl">
+            <h2 className="text-base font-semibold text-zinc-900">¿En qué moneda vas a emitir esta propuesta?</h2>
+            <p className="mt-1 text-xs text-zinc-500">
+              Esta propuesta todavía no tiene moneda elegida. Se guarda una sola vez; no se vuelve a preguntar salvo
+              que la cambies.
+            </p>
+            <select
+              className="mt-4 w-full rounded-lg border border-zinc-300 bg-white px-3 py-2 text-sm text-zinc-900"
+              onChange={(event) => setCurrencyPromptValue(event.target.value)}
+              value={currencyPromptValue}
+            >
+              <option value="MXN">MXN — Peso mexicano</option>
+              <option value="USD">USD — Dólar estadounidense</option>
+            </select>
+            <div className="mt-5 flex justify-end gap-2">
+              <button
+                className="rounded-lg bg-zinc-100 px-3 py-2 text-sm font-medium text-zinc-700 transition hover:bg-zinc-200"
+                onClick={cancelCurrencyPrompt}
+                type="button"
+              >
+                Cancelar
+              </button>
+              <button
+                className="rounded-lg bg-zinc-900 px-3 py-2 text-sm font-medium text-white transition hover:bg-zinc-700 disabled:opacity-60"
+                disabled={currencyPromptSaving}
+                onClick={() => { void confirmCurrencyPrompt(); }}
+                type="button"
+              >
+                {currencyPromptSaving ? "Guardando..." : "Continuar"}
+              </button>
+            </div>
+          </div>
+        </div>
+      ) : null}
     </section>
   );
 }

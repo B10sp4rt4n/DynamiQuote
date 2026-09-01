@@ -142,6 +142,7 @@ model app_users {
   tenant_id     String?
   seller_code   String?
   phone         String?
+  contact_email String?
   tenants       Tenant?  @relation(fields: [tenant_id], references: [tenant_id], onDelete: NoAction, onUpdate: NoAction)
 }
 
@@ -191,6 +192,7 @@ model formal_proposals {
   signature_image_data                                         Bytes?
   iva_rate                                                     Decimal?       @default(0.16) @db.Decimal
   iva_included                                                 Boolean?       @default(false)
+  currency                                                     String?
   total_pages                                                  Int?
   pdf_file_data                                                Bytes?
   status                                                       String?        @default("draft")

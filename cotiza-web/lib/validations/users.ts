@@ -9,6 +9,7 @@ export const createManagedUserSchema = z.object({
     .min(3)
     .max(60)
     .regex(/^[a-zA-Z0-9._-]+$/, "Alias invalido"),
+  contactEmail: z.string().trim().email("Correo invalido").max(191).optional().nullable(),
   email: z.string().trim().email("Correo invalido").max(191),
   firstName: z.string().trim().min(1).max(120),
   lastName: z.string().trim().min(1).max(120),
@@ -29,6 +30,7 @@ export const updateManagedUserSchema = z
       .max(60)
       .regex(/^[a-zA-Z0-9._-]+$/, "Alias invalido")
       .optional(),
+    contactEmail: z.string().trim().email("Correo invalido").max(191).nullable().optional(),
     email: z.string().trim().email("Correo invalido").max(191).nullable().optional(),
     firstName: z.string().trim().min(1).max(120).optional(),
     lastName: z.string().trim().min(1).max(120).optional(),
@@ -41,6 +43,7 @@ export const updateManagedUserSchema = z
     (payload) =>
       payload.active !== undefined ||
       payload.alias !== undefined ||
+      payload.contactEmail !== undefined ||
       payload.email !== undefined ||
       payload.firstName !== undefined ||
       payload.lastName !== undefined ||
