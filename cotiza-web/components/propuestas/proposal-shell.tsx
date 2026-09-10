@@ -1,6 +1,7 @@
 "use client";
 
-import { useEffect, useMemo, useRef, useState } from "react";
+import Link from "next/link";
+import { useEffect, useMemo, useRef, useState, type MouseEvent } from "react";
 import { usePathname, useRouter, useSearchParams } from "next/navigation";
 
 import type { ProposalListCounts, ProposalSummary } from "@/lib/db/proposals";
@@ -1389,6 +1390,7 @@ export function ProposalShell({
                 <th className="px-4 py-3 font-medium">Cliente</th>
                 <th className="px-4 py-3 font-medium">Estado</th>
                 <th className="px-4 py-3 font-medium">Fecha</th>
+                <th className="px-4 py-3 font-medium">Acciones</th>
               </tr>
             </thead>
             <tbody className="divide-y divide-zinc-200 bg-white">
@@ -1432,12 +1434,21 @@ export function ProposalShell({
                     <td className="px-4 py-3 text-zinc-500">
                       {formatDate(item.formal?.issuedDate ?? null)}
                     </td>
+                    <td className="px-4 py-3">
+                      <Link
+                        className="rounded-lg border border-zinc-300 bg-white px-3 py-1.5 text-xs font-medium text-zinc-700 transition hover:bg-zinc-50"
+                        href={`/propuestas/${item.proposalId}`}
+                        onClick={(event: MouseEvent) => event.stopPropagation()}
+                      >
+                        Ver detalle
+                      </Link>
+                    </td>
                   </tr>
                 );
               })}
               {filteredItems.length === 0 ? (
                 <tr>
-                  <td className="px-4 py-4 text-sm text-zinc-500" colSpan={4}>
+                  <td className="px-4 py-4 text-sm text-zinc-500" colSpan={5}>
                     No hay propuestas para el filtro seleccionado.
                   </td>
                 </tr>
