@@ -4,10 +4,11 @@ import { getCurrentTenantContext } from "@/lib/auth/tenant-context";
 import {
   getProposalWorkflowByTenant,
   isProposalVisibleToViewer,
+  setProposalOutcomeByTenant,
   updateProposalWorkflowByTenant,
 } from "@/lib/db/proposals";
 import { enforceRateLimit, getRequestIdentity } from "@/lib/utils/rate-limit";
-import { updateProposalWorkflowSchema } from "@/lib/validations/proposals";
+import { updateProposalOutcomeSchema, updateProposalWorkflowSchema } from "@/lib/validations/proposals";
 
 type RouteContext = {
   params: Promise<{ proposalId: string }>;
@@ -135,4 +136,58 @@ export async function PUT(request: Request, context: RouteContext) {
     const message = error instanceof Error ? error.message : "Error interno";
     return NextResponse.json({ error: message }, { status: 400 });
   }
+}
+
+export async function PATCH(request: Request, context: RouteContext) {
+  const tenant = await getCurrentTenantContext();
+
+  if (!tenant) {
+    return NextResponse.json({ error: "No autorizado" }, { status: 401 });
+  }
+
+  const { proposalId } = await context.params;
+  const identity = getRequestIdentity(request, tenant.userId ?? tenant.id);
+  const rateLimit = enforceRateLimit(`proposal:outcome:${tenant.id}:${proposalId}:${identity}`, 30, 60_000);
+
+  if (!rateLimit.allowed) {
+    return NextResponse.json(
+      { error: "Demasiadas solicitudes, intenta en breve" },
+      {
+        headers: { "Retry-After": Math.ceil((rateLimit.resetAt - Date.now()) / 1000).toString() },
+        status: 429,
+      },
+    );
+  }
+
+  const parsed = updateProposalOutcomeSchema.safeParse(await request.json().catch(() => null));
+
+  if (!parsed.success) {
+    return NextResponse.json({ error: parsed.error.issues[0]?.message ?? "Datos invalidos" }, { status: 422 });
+  }
+
+  const canSeeAll = tenant.isSuperAdmin || tenant.userRole === "owner" || tenant.userRole === "admin";
+  const result = await setProposalOutcomeByTenant(
+    tenant.id,
+    proposalId,
+    parsed.data.outcome,
+    tenant.userId,
+    canSeeAll,
+  );
+
+  if (result === "not_found") {
+    return NextResponse.json({ error: "Propuesta no encontrada" }, { status: 404 });
+  }
+
+  if (result === "forbidden") {
+    return NextResponse.json({ error: "No tienes permiso para editar esta propuesta" }, { status: 403 });
+  }
+
+  if (result === "invalid_status") {
+    return NextResponse.json(
+      { error: "Solo se puede etiquetar ganada/perdida cuando la propuesta esta Enviada o Aprobada" },
+      { status: 409 },
+    );
+  }
+
+  return NextResponse.json({ outcome: parsed.data.outcome }, { status: 200 });
 }

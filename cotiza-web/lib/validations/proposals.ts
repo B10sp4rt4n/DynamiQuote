@@ -70,6 +70,12 @@ export const proposalImportPayloadSchema = z.object({
   items: z.array(proposalImportItemSchema).min(1),
 });
 
+export const proposalOutcomeSchema = z.enum(["won", "lost"]).nullable();
+
+export const updateProposalOutcomeSchema = z.object({
+  outcome: proposalOutcomeSchema,
+});
+
 export const proposalApprovalDecisionSchema = z.enum(["approved", "rejected"]);
 
 export const registerProposalApprovalSchema = z
@@ -83,6 +89,7 @@ export const registerProposalApprovalSchema = z
   });
 
 export type ProposalStatus = z.infer<typeof proposalStatusSchema>;
+export type ProposalOutcome = z.infer<typeof proposalOutcomeSchema>;
 export type CreateProposalFromQuoteInput = z.infer<typeof createProposalFromQuoteSchema>;
 export type UpdateProposalWorkflowInput = z.infer<typeof updateProposalWorkflowSchema>;
 export type ProposalImportItemInput = z.infer<typeof proposalImportItemSchema>;

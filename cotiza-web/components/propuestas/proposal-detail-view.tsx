@@ -1,3 +1,4 @@
+import { ProposalOutcomeActions } from "@/components/propuestas/proposal-outcome-actions";
 import type { ProposalWorkflowDetail } from "@/lib/db/proposals";
 import type { ProposalStatus } from "@/lib/validations/proposals";
 
@@ -114,6 +115,8 @@ export function ProposalDetailView({
           <p className="mt-1 text-lg font-semibold text-zinc-900">{items.length}</p>
         </div>
       </div>
+
+      <ProposalOutcomeActions initialOutcome={proposal.outcome} proposalId={proposal.proposalId} status={status} />
 
       <div className="grid gap-4 md:grid-cols-2">
         <div className="rounded-lg border border-zinc-200 p-4">

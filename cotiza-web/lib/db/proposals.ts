@@ -30,6 +30,7 @@ import {
 import type {
   CreateProposalFromQuoteInput,
   ProposalImportItemInput,
+  ProposalOutcome,
   ProposalStatus,
   RegisterProposalApprovalInput,
   UpdateProposalWorkflowInput,
@@ -368,6 +369,9 @@ export type ProposalWorkflowDetail = {
   items: ProposalExcelItem[];
   marginEvaluation: ProposalLiberationEvaluation;
   origin: string | null;
+  // Desenlace comercial real (ganada/perdida) -- separado del status de
+  // flujo interno. Puramente informativo por ahora, no alimenta KPIs.
+  outcome: ProposalOutcome;
   proposalId: string;
   salesOwner: string;
   status: ProposalStatus;
@@ -1444,10 +1448,50 @@ export async function getProposalWorkflowByTenant(
     items: proposalItems,
     marginEvaluation,
     origin: row.origin,
+    outcome: row.outcome === "won" || row.outcome === "lost" ? row.outcome : null,
     proposalId: row.proposal_id,
     salesOwner: resolvedSalesOwner ?? resolvedIssuerContact,
     status: normalizeStatus(latestFormal?.status ?? row.status),
   };
+}
+
+export type SetProposalOutcomeResult = "forbidden" | "invalid_status" | "not_found" | "updated";
+
+// Etiqueta el desenlace comercial real (ganada/perdida) -- separado del
+// status de flujo interno. Solo se puede asignar (won/lost) cuando el
+// status actual es "sent" o "approved" (esos son los dos puntos donde
+// tiene sentido preguntar si el cliente acepto); quitar la etiqueta
+// (null) siempre esta permitido, para poder corregir un error.
+export async function setProposalOutcomeByTenant(
+  tenantId: string,
+  proposalId: string,
+  outcome: ProposalOutcome,
+  viewerUserId: string | null,
+  canSeeAll: boolean,
+): Promise<SetProposalOutcomeResult> {
+  const row = await prisma.proposals.findFirst({
+    select: { created_by_user_id: true, status: true },
+    where: { proposal_id: proposalId, tenant_id: tenantId },
+  });
+
+  if (!row) {
+    return "not_found";
+  }
+
+  if (!canSeeAll && row.created_by_user_id !== null && row.created_by_user_id !== viewerUserId) {
+    return "forbidden";
+  }
+
+  if (outcome !== null && row.status !== "sent" && row.status !== "approved") {
+    return "invalid_status";
+  }
+
+  await prisma.proposals.update({
+    data: { outcome },
+    where: { proposal_id: proposalId },
+  });
+
+  return "updated";
 }
 
 // Consume un forzamiento de emision activo (issuance_status === "force_pending")
