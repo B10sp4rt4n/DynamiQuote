@@ -1253,9 +1253,17 @@ export function ProposalShell({ canForceIssuance, proposals, tenantName }: Propo
 
   return (
     <section className="rounded-xl border border-zinc-200 bg-white p-6 shadow-sm">
-      <div className="flex flex-col gap-2 border-b border-zinc-200 pb-4">
-        <p className="text-sm uppercase tracking-[0.18em] text-zinc-500">Tenant activo</p>
-        <h1 className="text-2xl font-semibold text-zinc-900">Propuestas de {tenantName}</h1>
+      <div className="flex flex-col gap-2 border-b border-zinc-200 pb-4 sm:flex-row sm:items-center sm:justify-between">
+        <div>
+          <p className="text-sm uppercase tracking-[0.18em] text-zinc-500">Tenant activo</p>
+          <h1 className="text-2xl font-semibold text-zinc-900">Propuestas de {tenantName}</h1>
+        </div>
+        <a
+          className="w-fit rounded-lg border border-zinc-300 bg-white px-3 py-1.5 text-sm font-medium text-zinc-700 transition hover:bg-zinc-100"
+          href="/propuestas/kpis"
+        >
+          Ver KPIs
+        </a>
       </div>
       <p className="mt-2 text-zinc-600">
         Gestiona estado y condiciones comerciales por propuesta con aislamiento estricto por
