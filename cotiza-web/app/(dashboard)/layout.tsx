@@ -6,6 +6,7 @@ import { redirect } from "next/navigation";
 
 import { hasClerkCredentials } from "@/lib/auth/clerk";
 import { getCurrentTenantContext } from "@/lib/auth/tenant-context";
+import { ExpiryAlertsBell } from "@/components/layout/expiry-alerts-bell";
 import { CotizaBrand } from "@/components/ui/cotiza-brand";
 
 type DashboardLayoutProps = {
@@ -55,6 +56,7 @@ export default async function DashboardLayout({ children }: DashboardLayoutProps
             <Link href="/paquetes">Paquetes</Link>
             <Link href="/configuracion/clientes">Clientes</Link>
             <Link href="/configuracion">Configuracion</Link>
+            <ExpiryAlertsBell />
             {clerkEnabled ? (
               <UserButton
                 appearance={{

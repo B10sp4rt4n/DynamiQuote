@@ -16,6 +16,7 @@ export type ActiveTenantOption = {
 
 export type TenantProfile = {
   address: string | null;
+  expiryAlertDaysBefore: number;
   name: string;
   rfc: string | null;
   website: string | null;
@@ -23,6 +24,7 @@ export type TenantProfile = {
 
 export type UpdateTenantProfileInput = {
   address?: string | null;
+  expiryAlertDaysBefore?: number;
   rfc?: string | null;
   website?: string | null;
 };
@@ -87,6 +89,7 @@ export async function getTenantProfileByTenant(tenantId: string): Promise<Tenant
   const tenant = await prisma.tenant.findFirst({
     select: {
       address: true,
+      expiry_alert_days_before: true,
       name: true,
       rfc: true,
       website: true,
@@ -100,6 +103,7 @@ export async function getTenantProfileByTenant(tenantId: string): Promise<Tenant
 
   return {
     address: tenant.address,
+    expiryAlertDaysBefore: tenant.expiry_alert_days_before,
     name: tenant.name,
     rfc: tenant.rfc,
     website: tenant.website,
@@ -122,11 +126,15 @@ export async function updateTenantProfileByTenant(
   const updated = await prisma.tenant.update({
     data: {
       ...(input.address !== undefined ? { address: input.address?.trim() || null } : {}),
+      ...(input.expiryAlertDaysBefore !== undefined
+        ? { expiry_alert_days_before: input.expiryAlertDaysBefore }
+        : {}),
       ...(input.rfc !== undefined ? { rfc: input.rfc?.trim() || null } : {}),
       ...(input.website !== undefined ? { website: input.website?.trim() || null } : {}),
     },
     select: {
       address: true,
+      expiry_alert_days_before: true,
       name: true,
       rfc: true,
       website: true,
@@ -136,6 +144,7 @@ export async function updateTenantProfileByTenant(
 
   return {
     address: updated.address,
+    expiryAlertDaysBefore: updated.expiry_alert_days_before,
     name: updated.name,
     rfc: updated.rfc,
     website: updated.website,

@@ -1749,6 +1749,11 @@ function IssuerProfilesTab({
   const [website, setWebsite] = useState(tenantProfile?.website ?? "");
   const [savingProfile, setSavingProfile] = useState(false);
   const [profileMessage, setProfileMessage] = useState<string | null>(null);
+  const [expiryAlertDaysBefore, setExpiryAlertDaysBefore] = useState(
+    String(tenantProfile?.expiryAlertDaysBefore ?? 3),
+  );
+  const [savingExpiryAlert, setSavingExpiryAlert] = useState(false);
+  const [expiryAlertMessage, setExpiryAlertMessage] = useState<string | null>(null);
   const [editingLogoId, setEditingLogoId] = useState<string | null>(null);
   const [editLogoName, setEditLogoName] = useState("");
   const [editCompanyName, setEditCompanyName] = useState("");
@@ -1784,6 +1789,39 @@ function IssuerProfilesTab({
       setProfileMessage(err instanceof Error ? err.message : "Error desconocido");
     } finally {
       setSavingProfile(false);
+    }
+  }
+
+  async function saveExpiryAlertDays(event: FormEvent<HTMLFormElement>) {
+    event.preventDefault();
+
+    const parsedDays = Number(expiryAlertDaysBefore);
+    if (!Number.isInteger(parsedDays) || parsedDays < 1) {
+      setExpiryAlertMessage("El valor mínimo es 1 día.");
+      return;
+    }
+
+    setSavingExpiryAlert(true);
+    setExpiryAlertMessage(null);
+
+    try {
+      const res = await fetch("/api/settings/tenant-profile", {
+        body: JSON.stringify({ expiryAlertDaysBefore: parsedDays }),
+        headers: { "Content-Type": "application/json" },
+        method: "PUT",
+      });
+
+      const data = (await res.json()) as { error?: string; profile?: TenantProfile };
+      if (!res.ok || !data.profile) {
+        throw new Error(data.error ?? "No se pudo guardar el umbral de alerta");
+      }
+
+      setExpiryAlertDaysBefore(String(data.profile.expiryAlertDaysBefore));
+      setExpiryAlertMessage("Umbral de alerta guardado.");
+    } catch (err) {
+      setExpiryAlertMessage(err instanceof Error ? err.message : "Error desconocido");
+    } finally {
+      setSavingExpiryAlert(false);
     }
   }
 
@@ -1995,6 +2033,40 @@ function IssuerProfilesTab({
               {savingProfile ? "Guardando..." : "Guardar datos fiscales"}
             </button>
             {profileMessage ? <p className="text-sm text-zinc-600">{profileMessage}</p> : null}
+          </div>
+        ) : null}
+      </form>
+
+      <form
+        className="grid gap-3 rounded-xl border border-zinc-200 bg-zinc-50 p-4 md:grid-cols-3"
+        onSubmit={(event) => { void saveExpiryAlertDays(event); }}
+      >
+        <p className="text-sm font-semibold text-zinc-900 md:col-span-3">Alertas de vigencia</p>
+        <p className="text-xs text-zinc-500 md:col-span-3">
+          Con cuántos días de anticipación (mínimo 1) se avisa en el panel de notificaciones que una
+          propuesta está por vencer. Aplica a todo el tenant.
+        </p>
+        <label className="text-sm text-zinc-700">
+          Días de anticipación
+          <input
+            className="mt-1 w-full rounded-lg border border-zinc-300 bg-white px-3 py-2 text-sm text-zinc-900 disabled:cursor-not-allowed disabled:bg-zinc-100"
+            disabled={!canEditProfile}
+            min={1}
+            onChange={(event) => setExpiryAlertDaysBefore(event.target.value)}
+            type="number"
+            value={expiryAlertDaysBefore}
+          />
+        </label>
+        {canEditProfile ? (
+          <div className="flex items-center gap-3 md:col-span-3">
+            <button
+              className="rounded-lg bg-zinc-900 px-3 py-2 text-sm font-medium text-white transition hover:bg-zinc-700 disabled:opacity-60"
+              disabled={savingExpiryAlert}
+              type="submit"
+            >
+              {savingExpiryAlert ? "Guardando..." : "Guardar umbral de alerta"}
+            </button>
+            {expiryAlertMessage ? <p className="text-sm text-zinc-600">{expiryAlertMessage}</p> : null}
           </div>
         ) : null}
       </form>
