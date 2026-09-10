@@ -2,9 +2,27 @@ import { NextResponse } from "next/server";
 
 import { getCurrentTenantContext } from "@/lib/auth/tenant-context";
 import { prisma } from "@/lib/db/prisma";
-import { createProposalFromQuoteByTenant } from "@/lib/db/proposals";
+import { createProposalFromQuoteByTenant, getProposalListPageByTenant } from "@/lib/db/proposals";
+import { normalizeProposalListFilter } from "@/lib/domain/proposal-list-state";
 import { enforceRateLimit, getRequestIdentity } from "@/lib/utils/rate-limit";
 import { createProposalFromQuoteSchema } from "@/lib/validations/proposals";
+
+export async function GET(request: Request) {
+  const tenant = await getCurrentTenantContext();
+
+  if (!tenant) {
+    return NextResponse.json({ error: "No autorizado" }, { status: 401 });
+  }
+
+  const canSeeAll = tenant.isSuperAdmin || tenant.userRole === "owner" || tenant.userRole === "admin";
+  const url = new URL(request.url);
+  const filter = normalizeProposalListFilter(url.searchParams.get("filter"));
+  const offset = Math.max(0, Number.parseInt(url.searchParams.get("offset") ?? "0", 10) || 0);
+
+  const page = await getProposalListPageByTenant(tenant.id, tenant.userId, canSeeAll, filter, offset);
+
+  return NextResponse.json(page, { status: 200 });
+}
 
 async function resolveActorName(tenantId: string, userId: string | null, fallback: string | null): Promise<string> {
   if (!userId) {

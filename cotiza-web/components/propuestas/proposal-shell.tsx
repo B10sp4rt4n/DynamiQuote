@@ -3,7 +3,7 @@
 import { useEffect, useMemo, useRef, useState } from "react";
 import { usePathname, useRouter, useSearchParams } from "next/navigation";
 
-import type { ProposalSummary } from "@/lib/db/proposals";
+import type { ProposalListCounts, ProposalSummary } from "@/lib/db/proposals";
 import {
   normalizeProposalListFilter,
   normalizeProposalSort,
@@ -49,6 +49,9 @@ type ProposalApprovalGateView = {
 
 type ProposalShellProps = {
   canForceIssuance: boolean;
+  counts: ProposalListCounts;
+  hasMore: boolean;
+  initialFilter: ProposalListFilter;
   proposals: ProposalSummary[];
   tenantName: string;
 };
@@ -175,11 +178,22 @@ function isMarginBlocked(item: ProposalSummary): boolean {
   return Boolean(item.marginEvaluation && !item.marginEvaluation.canAuthorizeFinal);
 }
 
-export function ProposalShell({ canForceIssuance, proposals, tenantName }: ProposalShellProps) {
+export function ProposalShell({
+  canForceIssuance,
+  counts,
+  hasMore,
+  initialFilter,
+  proposals,
+  tenantName,
+}: ProposalShellProps) {
   const router = useRouter();
   const pathname = usePathname();
   const searchParams = useSearchParams();
   const [items, setItems] = useState<ProposalSummary[]>(() => proposals);
+  const [hasMoreState, setHasMoreState] = useState(hasMore);
+  const [loadingMore, setLoadingMore] = useState(false);
+  const [listError, setListError] = useState<string | null>(null);
+  const previousListFilterRef = useRef<ProposalListFilter>(initialFilter);
   const [selectedProposalId, setSelectedProposalId] = useState<string | null>(() => {
     const fromQuery = typeof window !== "undefined"
       ? new URLSearchParams(window.location.search).get("proposalId")
@@ -273,19 +287,14 @@ export function ProposalShell({ canForceIssuance, proposals, tenantName }: Propo
   const listFilter = normalizeProposalListFilter(searchParams.get("filter"));
 
   const filteredItems = useMemo(() => {
-    const byFilter = (() => {
-      if (listFilter === "all") return items;
-      if (listFilter === "blocked_margin") {
-        return items.filter((item) => item.marginEvaluation && !item.marginEvaluation.canAuthorizeFinal);
-      }
-      return items.filter((item) => item.status === listFilter);
-    })();
-
+    // El filtro de estatus (incluido blocked_margin) ya se aplico en
+    // servidor -- items siempre corresponde al filtro activo. Aqui solo se
+    // aplican busqueda y orden sobre lo ya cargado.
     const q = searchQuery.trim().toLowerCase();
     const searchedItems =
       q.length === 0
-        ? byFilter
-        : byFilter.filter((item) =>
+        ? items
+        : items.filter((item) =>
             [
               item.formal?.proposalNumber,
               item.formal?.recipientCompany,
@@ -309,12 +318,7 @@ export function ProposalShell({ canForceIssuance, proposals, tenantName }: Propo
 
       return formatStatus(left.status).localeCompare(formatStatus(right.status), "es");
     });
-  }, [items, listFilter, searchQuery, sortBy]);
-
-  const blockedCount = useMemo(
-    () => items.filter((item) => item.marginEvaluation && !item.marginEvaluation.canAuthorizeFinal).length,
-    [items],
-  );
+  }, [items, searchQuery, sortBy]);
 
   const selectedProposal = useMemo(
     () => items.find((item) => item.proposalId === selectedProposalId) ?? null,
@@ -475,6 +479,58 @@ export function ProposalShell({ canForceIssuance, proposals, tenantName }: Propo
 
     const nextQuery = nextParams.toString();
     router.replace(nextQuery.length > 0 ? `${pathname}?${nextQuery}` : pathname, { scroll: false });
+  }
+
+  async function fetchProposalListPage(filter: ProposalListFilter, offset: number) {
+    const url = `/api/proposals?filter=${encodeURIComponent(filter)}&offset=${offset}`;
+    const response = await fetch(url);
+    const data = (await response.json()) as {
+      error?: string;
+      hasMore?: boolean;
+      items?: ProposalSummary[];
+    };
+
+    if (!response.ok || !data.items) {
+      throw new Error(data.error ?? "No se pudieron cargar las propuestas");
+    }
+
+    return { hasMore: data.hasMore ?? false, items: data.items };
+  }
+
+  // El filtro activo (chip) determina que trae el servidor -- cuando cambia,
+  // se reemplaza items por completo (no se re-filtra en cliente lo que ya
+  // estaba cargado, porque ya no representa el universo real del filtro).
+  useEffect(() => {
+    if (previousListFilterRef.current === listFilter) {
+      return;
+    }
+
+    previousListFilterRef.current = listFilter;
+    setListError(null);
+
+    fetchProposalListPage(listFilter, 0)
+      .then((page) => {
+        setItems(page.items);
+        setHasMoreState(page.hasMore);
+      })
+      .catch((err) => {
+        setListError(err instanceof Error ? err.message : "Error desconocido");
+      });
+  }, [listFilter]);
+
+  async function handleLoadMore() {
+    setLoadingMore(true);
+    setListError(null);
+
+    try {
+      const page = await fetchProposalListPage(listFilter, items.length);
+      setItems((prev) => [...prev, ...page.items]);
+      setHasMoreState(page.hasMore);
+    } catch (err) {
+      setListError(err instanceof Error ? err.message : "Error desconocido");
+    } finally {
+      setLoadingMore(false);
+    }
   }
 
   async function loadProposalDetail(proposalId: string) {
@@ -1275,12 +1331,7 @@ export function ProposalShell({ canForceIssuance, proposals, tenantName }: Propo
           <div className="flex flex-wrap items-center gap-2 border-b border-zinc-200 bg-zinc-50 px-4 py-3">
             <p className="shrink-0 text-xs uppercase tracking-[0.18em] text-zinc-500">Filtro</p>
             {STATUS_FILTERS.map((sf) => {
-              const count =
-                sf.value === "all"
-                  ? items.length
-                  : sf.value === "blocked_margin"
-                    ? blockedCount
-                    : items.filter((item) => item.status === sf.value).length;
+              const count = counts[sf.value];
               const isActive = listFilter === sf.value;
 
               return (
@@ -1394,6 +1445,21 @@ export function ProposalShell({ canForceIssuance, proposals, tenantName }: Propo
             </tbody>
             </table>
           </div>
+          {listError ? (
+            <p className="border-t border-zinc-200 px-4 py-2 text-sm font-medium text-rose-700">{listError}</p>
+          ) : null}
+          {hasMoreState ? (
+            <div className="border-t border-zinc-200 bg-white px-4 py-2 text-center">
+              <button
+                className="rounded-lg border border-zinc-300 bg-white px-3 py-1.5 text-xs font-medium text-zinc-700 transition hover:bg-zinc-50 disabled:opacity-60"
+                disabled={loadingMore}
+                onClick={() => void handleLoadMore()}
+                type="button"
+              >
+                {loadingMore ? "Cargando..." : "Cargar mas"}
+              </button>
+            </div>
+          ) : null}
         </div>
 
         <article className="rounded-xl border border-zinc-200 bg-zinc-50 p-4">

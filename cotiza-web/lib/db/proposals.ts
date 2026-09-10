@@ -19,6 +19,7 @@ import {
   type ProposalLiberationEvaluation,
 } from "@/lib/domain/proposal-liberation";
 import type { ProposalIssuanceStatus } from "@/lib/domain/proposal-issuance-gate";
+import type { ProposalListFilter } from "@/lib/domain/proposal-list-state";
 import {
   assertApprovalActorEligibility,
   assertProposalWorkflowGuard,
@@ -930,13 +931,52 @@ export async function createProposalFromQuoteByTenant(
   };
 }
 
-export async function getProposalSummariesByTenant(
-  tenantId: string,
-  limit = 20,
-  viewerUserId: string | null = null,
-  canSeeAll = true,
-): Promise<ProposalSummary[]> {
-  const rows = await prisma.proposals.findMany({
+const PROPOSAL_SUMMARY_ACTIVE_STATUSES = new Set(["draft", "sent", "in_review"]);
+
+type ProposalSummaryRow = Prisma.proposalsGetPayload<{
+  include: {
+    formal_proposals: {
+      select: {
+        client_logo_id: true;
+        currency: true;
+        issuer_company: true;
+        issuer_contact_name: true;
+        issuer_email: true;
+        issuer_logo_id: true;
+        issuer_phone: true;
+        issued_date: true;
+        proposal_doc_id: true;
+        proposal_number: true;
+        quote_id: true;
+        recipient_company: true;
+        recipient_contact_name: true;
+        recipient_contact_title: true;
+        recipient_email: true;
+        status: true;
+        subject: true;
+        terms_and_conditions: true;
+        valid_until: true;
+      };
+    };
+    proposal_items: {
+      select: {
+        cost_unit: true;
+        price_unit: true;
+        quantity: true;
+      };
+    };
+  };
+}>;
+
+// Query compartida por getProposalSummariesByTenant y getProposalListPageByTenant
+// -- mismo shape de datos (formal_proposals mas reciente + partidas activas),
+// solo cambia el where/take/skip segun el caller.
+async function fetchProposalSummaryRows(
+  where: Prisma.proposalsWhereInput,
+  take?: number,
+  skip?: number,
+): Promise<ProposalSummaryRow[]> {
+  return prisma.proposals.findMany({
     include: {
       formal_proposals: {
         orderBy: [{ created_at: "desc" }, { proposal_doc_id: "desc" }],
@@ -963,29 +1003,166 @@ export async function getProposalSummariesByTenant(
         },
         take: 1,
       },
+      proposal_items: {
+        select: {
+          cost_unit: true,
+          price_unit: true,
+          quantity: true,
+        },
+        where: {
+          status: {
+            not: "deleted",
+          },
+        },
+      },
     },
     orderBy: [{ created_at: "desc" }, { proposal_id: "desc" }],
-    take: limit,
-    where: {
-      tenant_id: tenantId,
-      ...(canSeeAll
-        ? {}
-        : { OR: [{ created_by_user_id: viewerUserId }, { created_by_user_id: null }] }),
-    },
+    ...(take !== undefined ? { take } : {}),
+    ...(skip !== undefined ? { skip } : {}),
+    where,
   });
+}
 
+// Solo se evalua margen para propuestas activas -- una aprobada/rechazada/
+// vencida ya no es accionable via el panel de override, asi que "bloqueada"
+// no aplica (mismo criterio que getProposalMarginBlockedCountByTenant).
+function mapProposalSummaryRows(
+  rows: ProposalSummaryRow[],
+  marginPolicy: Awaited<ReturnType<typeof getMarginPolicyByTenant>> | null,
+): ProposalSummary[] {
   return rows.map((row) => {
     const latestFormal = row.formal_proposals[0];
     const status = normalizeStatus(latestFormal?.status ?? row.status);
+    const marginEvaluation =
+      marginPolicy && PROPOSAL_SUMMARY_ACTIVE_STATUSES.has(status)
+        ? evaluateProposalLiberation(
+            marginPolicy,
+            row.proposal_items.map((item) => ({
+              costUnit: decimalToNumber(item.cost_unit),
+              priceUnit: decimalToNumber(item.price_unit),
+              quantity: decimalToNumber(item.quantity),
+            })),
+          )
+        : null;
 
     return {
       createdAt: row.created_at.toISOString(),
       formal: latestFormal ? toFormalSlice(latestFormal) : null,
+      marginEvaluation,
       origin: row.origin,
       proposalId: row.proposal_id,
       status,
     };
   });
+}
+
+function buildProposalScopeWhere(
+  tenantId: string,
+  viewerUserId: string | null,
+  canSeeAll: boolean,
+): Prisma.proposalsWhereInput {
+  return {
+    tenant_id: tenantId,
+    ...(canSeeAll ? {} : { OR: [{ created_by_user_id: viewerUserId }, { created_by_user_id: null }] }),
+  };
+}
+
+export async function getProposalSummariesByTenant(
+  tenantId: string,
+  limit = 20,
+  viewerUserId: string | null = null,
+  canSeeAll = true,
+): Promise<ProposalSummary[]> {
+  const rows = await fetchProposalSummaryRows(buildProposalScopeWhere(tenantId, viewerUserId, canSeeAll), limit);
+  const marginPolicy = rows.length > 0 ? await getMarginPolicyByTenant(tenantId) : null;
+  return mapProposalSummaryRows(rows, marginPolicy);
+}
+
+const PROPOSAL_LIST_PAGE_SIZE = 20;
+
+export type ProposalListPage = {
+  hasMore: boolean;
+  items: ProposalSummary[];
+};
+
+// Version paginada + filtrada en servidor de getProposalSummariesByTenant,
+// para la lista de /propuestas -- a diferencia de esa, aqui el filtro de
+// estatus (incluyendo "blocked_margin") se aplica ANTES de paginar, para que
+// "Cargar mas" siempre traiga mas resultados reales del filtro activo, no
+// solo mas del total sin filtrar.
+export async function getProposalListPageByTenant(
+  tenantId: string,
+  viewerUserId: string | null,
+  canSeeAll: boolean,
+  filter: ProposalListFilter,
+  offset = 0,
+  limit = PROPOSAL_LIST_PAGE_SIZE,
+): Promise<ProposalListPage> {
+  const scopeWhere = buildProposalScopeWhere(tenantId, viewerUserId, canSeeAll);
+
+  if (filter === "blocked_margin") {
+    // El margen se evalua en JS (no es un campo de BD) -- se traen TODAS las
+    // activas sin paginar en SQL, se evaluan, y la paginacion se aplica
+    // despues sobre el resultado ya filtrado (mismo enfoque que
+    // getProposalMarginBlockedCountByTenant, ahora tambien slice-ado).
+    const rows = await fetchProposalSummaryRows({
+      ...scopeWhere,
+      status: { in: Array.from(PROPOSAL_SUMMARY_ACTIVE_STATUSES) },
+    });
+    const marginPolicy = rows.length > 0 ? await getMarginPolicyByTenant(tenantId) : null;
+    const blocked = mapProposalSummaryRows(rows, marginPolicy).filter(
+      (item) => item.marginEvaluation && !item.marginEvaluation.canAuthorizeFinal,
+    );
+
+    return {
+      hasMore: offset + limit < blocked.length,
+      items: blocked.slice(offset, offset + limit),
+    };
+  }
+
+  const statusWhere: Prisma.proposalsWhereInput = filter === "all" ? {} : { status: filter };
+  const rows = await fetchProposalSummaryRows({ ...scopeWhere, ...statusWhere }, limit + 1, offset);
+  const marginPolicy = rows.length > 0 ? await getMarginPolicyByTenant(tenantId) : null;
+
+  return {
+    hasMore: rows.length > limit,
+    items: mapProposalSummaryRows(rows.slice(0, limit), marginPolicy),
+  };
+}
+
+export type ProposalListCounts = {
+  all: number;
+  approved: number;
+  blocked_margin: number;
+  draft: number;
+  expired: number;
+  in_review: number;
+  rejected: number;
+  sent: number;
+};
+
+// Conteos reales (tenant-wide, no limitados a lo que este cargado en la
+// lista) para los chips de filtro de /propuestas.
+export async function getProposalListCountsByTenant(
+  tenantId: string,
+  viewerUserId: string | null = null,
+  canSeeAll = true,
+): Promise<ProposalListCounts> {
+  const [statusCounts, blockedCount] = await Promise.all([
+    getProposalStatusCountsByTenant(tenantId, viewerUserId, canSeeAll),
+    getProposalMarginBlockedCountByTenant(tenantId, viewerUserId, canSeeAll),
+  ]);
+
+  return {
+    all: statusCounts.total,
+    approved: statusCounts.approved,
+    blocked_margin: blockedCount,
+    draft: statusCounts.draft,
+    expired: statusCounts.expired,
+    in_review: statusCounts.in_review,
+    rejected: statusCounts.rejected,
+    sent: statusCounts.sent,
+  };
 }
 
 // Gate de acceso por dueno para rutas de detalle/mutacion por ID. Sin
