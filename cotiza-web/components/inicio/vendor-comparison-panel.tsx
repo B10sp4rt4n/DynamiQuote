@@ -1,6 +1,6 @@
 "use client";
 
-import { useState } from "react";
+import { useMemo, useState } from "react";
 import { Bar, BarChart, CartesianGrid, Cell, ResponsiveContainer, Tooltip, XAxis, YAxis } from "recharts";
 
 export type ComparisonRow = {
@@ -12,6 +12,8 @@ export type ComparisonRow = {
   proposedAmount: number;
   totalCount: number;
 };
+
+type MetricKey = "approvedAmount" | "conversionRatePct" | "proposedAmount" | "totalCount";
 
 const OVERALL_COLOR = "#18181b";
 const VENDOR_COLOR = "#2a78d6";
@@ -33,8 +35,28 @@ function formatCompactCurrency(value: number): string {
   }).format(value);
 }
 
+function formatCount(value: number): string {
+  return String(Math.round(value));
+}
+
+function formatPct(value: number): string {
+  return `${value.toFixed(1)}%`;
+}
+
+const METRICS: Record<
+  MetricKey,
+  { formatAxis: (value: number) => string; formatValue: (value: number) => string; label: string }
+> = {
+  approvedAmount: { formatAxis: formatCompactCurrency, formatValue: formatCurrency, label: "Monto aprobado" },
+  conversionRatePct: { formatAxis: formatPct, formatValue: formatPct, label: "Tasa de conversión" },
+  proposedAmount: { formatAxis: formatCompactCurrency, formatValue: formatCurrency, label: "Monto propuesto" },
+  totalCount: { formatAxis: formatCount, formatValue: formatCount, label: "Propuestas totales" },
+};
+
 export function VendorComparisonPanel({ rows }: { rows: ComparisonRow[] }) {
   const [selectedIds, setSelectedIds] = useState<Set<string>>(() => new Set(rows.map((row) => row.id)));
+  const [searchQuery, setSearchQuery] = useState("");
+  const [metric, setMetric] = useState<MetricKey>("approvedAmount");
 
   function toggleRow(id: string) {
     setSelectedIds((prev) => {
@@ -48,24 +70,57 @@ export function VendorComparisonPanel({ rows }: { rows: ComparisonRow[] }) {
     });
   }
 
+  const visibleCheckboxRows = useMemo(() => {
+    const q = searchQuery.trim().toLowerCase();
+    if (q.length === 0) {
+      return rows;
+    }
+    return rows.filter((row) => row.id === "overall" || row.label.toLowerCase().includes(q));
+  }, [rows, searchQuery]);
+
   const selectedRows = rows.filter((row) => selectedIds.has(row.id));
+  const activeMetric = METRICS[metric];
   const chartData = selectedRows.map((row) => ({
-    approvedAmount: row.approvedAmount,
     fill: row.id === "overall" ? OVERALL_COLOR : VENDOR_COLOR,
     label: row.label,
+    value: row[metric],
   }));
 
   return (
     <section className="rounded-xl border border-zinc-200 bg-white p-4">
-      <div>
-        <h3 className="text-lg font-semibold text-zinc-900">Comparar desempeño por vendedor</h3>
-        <p className="text-sm text-zinc-600">
-          Marca o desmarca para comparar contra el total del tenant o entre vendedores.
-        </p>
+      <div className="flex flex-wrap items-start justify-between gap-3">
+        <div>
+          <h3 className="text-lg font-semibold text-zinc-900">Comparar desempeño por vendedor</h3>
+          <p className="text-sm text-zinc-600">
+            Marca o desmarca para comparar contra el total del tenant o entre vendedores.
+          </p>
+        </div>
+        <label className="text-sm text-zinc-700">
+          Graficar
+          <select
+            className="ml-2 rounded-lg border border-zinc-300 bg-white px-2 py-1 text-sm text-zinc-900"
+            onChange={(event) => setMetric(event.target.value as MetricKey)}
+            value={metric}
+          >
+            {Object.entries(METRICS).map(([key, config]) => (
+              <option key={key} value={key}>
+                {config.label}
+              </option>
+            ))}
+          </select>
+        </label>
       </div>
 
-      <div className="mt-4 flex flex-wrap gap-2">
-        {rows.map((row) => (
+      <input
+        className="mt-4 w-full max-w-xs rounded-lg border border-zinc-300 bg-zinc-50 px-3 py-1.5 text-sm text-zinc-800 placeholder:text-zinc-400"
+        onChange={(event) => setSearchQuery(event.target.value)}
+        placeholder="Buscar vendedor..."
+        type="search"
+        value={searchQuery}
+      />
+
+      <div className="mt-3 flex flex-wrap gap-2">
+        {visibleCheckboxRows.map((row) => (
           <label
             className="flex items-center gap-2 rounded-full border border-zinc-300 bg-zinc-50 px-3 py-1.5 text-sm text-zinc-700"
             key={row.id}
@@ -78,6 +133,9 @@ export function VendorComparisonPanel({ rows }: { rows: ComparisonRow[] }) {
             {row.label}
           </label>
         ))}
+        {visibleCheckboxRows.length === 0 ? (
+          <p className="text-sm text-zinc-500">Ningún vendedor coincide con la búsqueda.</p>
+        ) : null}
       </div>
 
       <div className="mt-4">
@@ -92,7 +150,7 @@ export function VendorComparisonPanel({ rows }: { rows: ComparisonRow[] }) {
               <XAxis
                 axisLine={{ stroke: "#e4e4e7" }}
                 tick={{ fill: "#71717a", fontSize: 11 }}
-                tickFormatter={(value: number) => formatCompactCurrency(value)}
+                tickFormatter={(value: number) => activeMetric.formatAxis(value)}
                 tickLine={false}
                 type="number"
               />
@@ -106,9 +164,9 @@ export function VendorComparisonPanel({ rows }: { rows: ComparisonRow[] }) {
               />
               <Tooltip
                 cursor={{ fill: "#fafafa" }}
-                formatter={(value, _name, _item, _index, _payload) => formatCurrency(Number(value))}
+                formatter={(value, _name, _item, _index, _payload) => activeMetric.formatValue(Number(value))}
               />
-              <Bar barSize={20} dataKey="approvedAmount" radius={[0, 4, 4, 0]}>
+              <Bar barSize={20} dataKey="value" radius={[0, 4, 4, 0]}>
                 {chartData.map((entry) => (
                   <Cell fill={entry.fill} key={entry.label} />
                 ))}
