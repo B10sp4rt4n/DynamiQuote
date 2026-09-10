@@ -2,6 +2,7 @@ import { InicioShell } from "@/components/inicio/inicio-shell";
 import { getCurrentTenantContext } from "@/lib/auth/tenant-context";
 import { getMarginPolicyByTenant } from "@/lib/db/margin-policies";
 import { getExpiringProposalsByTenant } from "@/lib/db/proposal-alerts";
+import { getProposalKpiSummaryByTenant, getSalesRepRankingByTenant } from "@/lib/db/proposal-kpis";
 import {
   getProposalMarginBlockedCountByTenant,
   getProposalStatusCountsByTenant,
@@ -35,6 +36,8 @@ export default async function InicioPage() {
     tenantProfile,
     issuerProfiles,
     users,
+    overallSummary,
+    ranking,
   ] = await Promise.all([
     getMarginPolicyByTenant(tenant.id),
     getProposalStatusCountsByTenant(tenant.id, tenant.userId, canSeeAll),
@@ -48,6 +51,8 @@ export default async function InicioPage() {
         ? getAppUsersForSuperAdmin()
         : getAppUsersByTenant(tenant.id)
       : Promise.resolve([]),
+    canSeeAll ? getProposalKpiSummaryByTenant(tenant.id, tenant.userId, canSeeAll) : Promise.resolve(null),
+    canSeeAll ? getSalesRepRankingByTenant(tenant.id) : Promise.resolve([]),
   ]);
 
   const expiringAlerts = await getExpiringProposalsByTenant(
@@ -66,7 +71,9 @@ export default async function InicioPage() {
       proposalMarginBlockedCount={proposalMarginBlockedCount}
       proposalStatusCounts={proposalStatusCounts}
       quoteDashboardSnapshot={quoteDashboardSnapshot}
+      ranking={ranking}
       recentProposals={recentProposals}
+      overallSummary={overallSummary}
       tenantName={tenant.name}
       users={users}
     />

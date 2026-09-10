@@ -1,5 +1,7 @@
+import { VendorComparisonPanel, type ComparisonRow } from "@/components/inicio/vendor-comparison-panel";
 import type { MarginPolicySummary } from "@/lib/db/margin-policies";
 import type { ExpiringProposalAlert } from "@/lib/db/proposal-alerts";
+import type { ProposalKpiSummary, SalesRepRankingRow } from "@/lib/db/proposal-kpis";
 import type { ProposalStatusCounts, ProposalSummary } from "@/lib/db/proposals";
 import type { QuoteDashboardSnapshot } from "@/lib/db/quotes";
 import type { AppUserSummary, IssuerProfileSummary } from "@/lib/db/settings";
@@ -49,9 +51,11 @@ type InicioShellProps = {
   expiringAlerts: ExpiringProposalAlert[];
   issuerProfiles: IssuerProfileSummary[];
   marginPolicy: MarginPolicySummary;
+  overallSummary: ProposalKpiSummary | null;
   proposalMarginBlockedCount: number;
   proposalStatusCounts: ProposalStatusCounts;
   quoteDashboardSnapshot: QuoteDashboardSnapshot;
+  ranking: SalesRepRankingRow[];
   recentProposals: ProposalSummary[];
   tenantName: string;
   users: AppUserSummary[];
@@ -62,9 +66,11 @@ export function InicioShell({
   expiringAlerts,
   issuerProfiles,
   marginPolicy,
+  overallSummary,
   proposalMarginBlockedCount,
   proposalStatusCounts,
   quoteDashboardSnapshot,
+  ranking,
   recentProposals,
   tenantName,
   users,
@@ -150,6 +156,30 @@ export function InicioShell({
           : null,
       ].filter((item): item is NonNullable<typeof item> => item !== null)
     : [];
+
+  const comparisonRows: ComparisonRow[] =
+    canSeeAll && overallSummary
+      ? [
+          {
+            approvedAmount: overallSummary.approvedAmount,
+            approvedCount: overallSummary.approvedCount,
+            conversionRatePct: overallSummary.conversionRatePct,
+            id: "overall",
+            label: "Todo el tenant",
+            proposedAmount: overallSummary.proposedAmount,
+            totalCount: overallSummary.totalCount,
+          },
+          ...ranking.map((row) => ({
+            approvedAmount: row.approvedAmount,
+            approvedCount: row.approvedCount,
+            conversionRatePct: row.conversionRatePct,
+            id: row.userId,
+            label: row.displayName,
+            proposedAmount: row.proposedAmount,
+            totalCount: row.totalCount,
+          })),
+        ]
+      : [];
 
   return (
     <div className="space-y-5">
@@ -295,6 +325,8 @@ export function InicioShell({
           </section>
         </div>
       ) : null}
+
+      {canSeeAll && comparisonRows.length > 0 ? <VendorComparisonPanel rows={comparisonRows} /> : null}
 
       <section className="rounded-xl border border-zinc-200 bg-white p-4">
         <div className="flex items-center justify-between gap-3">
