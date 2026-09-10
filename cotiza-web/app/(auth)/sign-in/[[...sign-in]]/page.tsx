@@ -103,7 +103,7 @@ export default async function SignInPage({ searchParams }: SignInPageProps) {
                     rootBox: "w-full",
                   },
                 }}
-                fallbackRedirectUrl="/cotizaciones"
+                fallbackRedirectUrl="/inicio"
                 path="/sign-in"
                 routing="path"
                 signUpUrl="/sign-up"

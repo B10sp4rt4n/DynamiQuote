@@ -105,6 +105,37 @@ export function QuoteShell({
   const importFileRef = useRef<HTMLInputElement>(null);
   const clientSearchTimeout = useRef<ReturnType<typeof setTimeout> | null>(null);
   const clientDropdownRef = useRef<HTMLDivElement>(null);
+  const [deletingQuoteId, setDeletingQuoteId] = useState<string | null>(null);
+  const [deleteError, setDeleteError] = useState<string | null>(null);
+
+  async function handleDeleteQuote(item: QuoteGroupSummary) {
+    if (
+      !confirm(
+        `¿Borrar la cotización de "${item.clientName}" (${item.quoteGroupId})? Se borran todas sus versiones. Esta acción no se puede deshacer.`,
+      )
+    ) {
+      return;
+    }
+
+    setDeletingQuoteId(item.quoteId);
+    setDeleteError(null);
+
+    try {
+      const response = await fetch(`/api/quotes/${item.quoteId}`, { method: "DELETE" });
+      const data = (await response.json()) as { error?: string; ok?: boolean };
+
+      if (!response.ok || !data.ok) {
+        throw new Error(data.error ?? "No se pudo borrar la cotización");
+      }
+
+      setQuoteItems((prev) => prev.filter((quote) => quote.quoteGroupId !== item.quoteGroupId));
+      setActiveQuoteId((prev) => (prev === item.quoteId ? null : prev));
+    } catch (err) {
+      setDeleteError(err instanceof Error ? err.message : "Error desconocido");
+    } finally {
+      setDeletingQuoteId(null);
+    }
+  }
 
   const filteredQuoteItems = useMemo(() => {
     const normalizedSearch = quoteSearch.trim().toLowerCase();
@@ -701,6 +732,7 @@ export function QuoteShell({
                 </select>
               </div>
             </div>
+            {deleteError ? <p className="mt-2 text-sm font-medium text-rose-700">{deleteError}</p> : null}
             <div className="overflow-hidden">
               <table className="min-w-full divide-y divide-zinc-200 text-sm">
                 <thead className="bg-zinc-50 text-left text-zinc-600">
@@ -712,6 +744,7 @@ export function QuoteShell({
                     <th className="px-4 py-3 font-medium">Versiones</th>
                     <th className="px-4 py-3 font-medium">Total</th>
                     <th className="px-4 py-3 font-medium">Margen</th>
+                    <th className="px-4 py-3 font-medium">Acciones</th>
                   </tr>
                 </thead>
                 <tbody className="divide-y divide-zinc-200 bg-white">
@@ -734,18 +767,33 @@ export function QuoteShell({
                       <td className="px-4 py-3 text-zinc-600">
                         {item.avgMargin !== null ? `${item.avgMargin.toFixed(1)}%` : "N/D"}
                       </td>
+                      <td className="px-4 py-3">
+                        {item.status.trim().toLowerCase() !== "closed" ? (
+                          <button
+                            className="rounded-lg border border-rose-200 bg-rose-50 px-3 py-1.5 text-xs font-medium text-rose-700 transition hover:bg-rose-100 disabled:opacity-60"
+                            disabled={deletingQuoteId === item.quoteId}
+                            onClick={(event) => {
+                              event.stopPropagation();
+                              void handleDeleteQuote(item);
+                            }}
+                            type="button"
+                          >
+                            {deletingQuoteId === item.quoteId ? "Borrando..." : "Borrar"}
+                          </button>
+                        ) : null}
+                      </td>
                     </tr>
                   ))}
                   {quoteItems.length === 0 ? (
                     <tr>
-                      <td className="px-4 py-6 text-center text-zinc-500" colSpan={6}>
+                      <td className="px-4 py-6 text-center text-zinc-500" colSpan={8}>
                         Aun no hay cotizaciones para este tenant.
                       </td>
                     </tr>
                   ) : null}
                   {quoteItems.length > 0 && filteredQuoteItems.length === 0 ? (
                     <tr>
-                      <td className="px-4 py-6 text-center text-zinc-500" colSpan={6}>
+                      <td className="px-4 py-6 text-center text-zinc-500" colSpan={8}>
                         No hay resultados para esa busqueda.
                       </td>
                     </tr>

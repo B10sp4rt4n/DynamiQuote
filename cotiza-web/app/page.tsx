@@ -39,7 +39,7 @@ export default function Home() {
             <div className="mt-10 flex flex-wrap gap-3">
               <Link
                 className="rounded-xl bg-zinc-950 px-5 py-3 text-sm font-semibold text-white transition hover:bg-zinc-800"
-                href="/cotizaciones"
+                href="/inicio"
               >
                 Entrar al cotizador
               </Link>

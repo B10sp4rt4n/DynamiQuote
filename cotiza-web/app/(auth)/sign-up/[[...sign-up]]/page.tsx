@@ -61,7 +61,7 @@ export default async function SignUpPage() {
                     rootBox: "w-full",
                   },
                 }}
-                fallbackRedirectUrl="/cotizaciones"
+                fallbackRedirectUrl="/inicio"
                 path="/sign-up"
                 routing="path"
                 signInUrl="/sign-in"

@@ -1,12 +1,6 @@
 import { SettingsShell } from "@/components/configuracion/settings-shell";
 import { getCurrentTenantContext } from "@/lib/auth/tenant-context";
 import { getMarginPolicyByTenant } from "@/lib/db/margin-policies";
-import {
-  getProposalMarginBlockedCountByTenant,
-  getProposalStatusCountsByTenant,
-  getProposalSummariesByTenant,
-} from "@/lib/db/proposals";
-import { getQuoteDashboardSnapshotByTenant } from "@/lib/db/quotes";
 import { getAppUsersByTenant, getAppUsersForSuperAdmin, getIssuerProfilesByTenant } from "@/lib/db/settings";
 import { getActiveTenants, getTenantProfileByTenant } from "@/lib/db/tenants";
 
@@ -26,17 +20,7 @@ export default async function SettingsPage() {
   const canSwitchTenant = tenant.isSuperAdmin;
   const canManageUsers = tenant.isSuperAdmin || tenant.userRole === "owner" || tenant.userRole === "admin";
 
-  const [
-    users,
-    issuerProfiles,
-    marginPolicy,
-    tenantOptions,
-    proposalStatusCounts,
-    proposalMarginBlockedCount,
-    quoteDashboardSnapshot,
-    recentProposals,
-    tenantProfile,
-  ] = await Promise.all([
+  const [users, issuerProfiles, marginPolicy, tenantOptions, tenantProfile] = await Promise.all([
     canManageUsers
       ? tenant.isSuperAdmin
         ? getAppUsersForSuperAdmin()
@@ -45,10 +29,6 @@ export default async function SettingsPage() {
     getIssuerProfilesByTenant(tenant.id),
     getMarginPolicyByTenant(tenant.id),
     canSwitchTenant ? getActiveTenants() : Promise.resolve([{ id: tenant.id, name: tenant.name, slug: tenant.slug }]),
-    getProposalStatusCountsByTenant(tenant.id, tenant.userId, canManageUsers),
-    getProposalMarginBlockedCountByTenant(tenant.id, tenant.userId, canManageUsers),
-    getQuoteDashboardSnapshotByTenant(tenant.id, tenant.userId, canManageUsers),
-    getProposalSummariesByTenant(tenant.id, 6, tenant.userId, canManageUsers),
     getTenantProfileByTenant(tenant.id),
   ]);
 
@@ -56,15 +36,10 @@ export default async function SettingsPage() {
     <SettingsShell
       canSwitchTenant={canSwitchTenant}
       canManageAllTenants={tenant.isSuperAdmin}
-      canViewControl={tenant.isSuperAdmin || tenant.userRole === "owner"}
       canViewTenantConfig={tenant.isSuperAdmin || tenant.userRole === "owner"}
       canManagePolicy={tenant.isSuperAdmin || tenant.userRole === "owner" || tenant.userRole === "admin"}
       canManageUsers={canManageUsers}
       marginPolicy={marginPolicy}
-      proposalMarginBlockedCount={proposalMarginBlockedCount}
-      proposalStatusCounts={proposalStatusCounts}
-      quoteDashboardSnapshot={quoteDashboardSnapshot}
-      recentProposals={recentProposals}
       tenantId={tenant.id}
       tenantSlug={tenant.slug}
       issuerProfiles={issuerProfiles}

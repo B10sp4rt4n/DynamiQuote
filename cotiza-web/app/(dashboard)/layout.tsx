@@ -49,8 +49,9 @@ export default async function DashboardLayout({ children }: DashboardLayoutProps
     <div className="min-h-screen bg-zinc-100">
       <header className="border-b border-zinc-200 bg-white">
         <div className="mx-auto flex max-w-7xl items-center justify-between px-6 py-4">
-          <CotizaBrand href="/cotizaciones" subtitle={`Tenant activo: ${tenant.name}`} />
+          <CotizaBrand href="/inicio" subtitle={`Tenant activo: ${tenant.name}`} />
           <nav className="flex items-center gap-4 text-sm text-zinc-600">
+            <Link href="/inicio">Inicio</Link>
             <Link href="/cotizaciones">Cotizaciones</Link>
             <Link href="/propuestas">Propuestas</Link>
             <Link href="/paquetes">Paquetes</Link>

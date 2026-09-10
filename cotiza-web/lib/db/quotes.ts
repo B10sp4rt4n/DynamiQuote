@@ -128,6 +128,63 @@ export async function isQuoteVisibleToViewer(
   return quote.created_by_user_id === null || quote.created_by_user_id === viewerUserId;
 }
 
+export type DeleteQuoteGroupResult = "closed" | "deleted" | "forbidden" | "in_use" | "not_found";
+
+// Borra TODAS las versiones de un quote_group_id (no una version suelta --
+// una cotizacion es el grupo completo a traves de sus versiones). Bloquea
+// si alguna version ya esta cerrada (registro de negocio valido, no
+// "basura") o si el grupo tiene una propuesta formal generada o un archivo
+// Excel importado ligado (mismo criterio que deleteLogoProfileByTenant:
+// no huerfanar algo con historia real). Sin canSeeAll, solo permite borrar
+// grupos donde ninguna version pertenezca a otro usuario.
+export async function deleteQuoteGroupByTenant(
+  tenantId: string,
+  quoteGroupId: string,
+  viewerUserId: string | null,
+  canSeeAll: boolean,
+): Promise<DeleteQuoteGroupResult> {
+  const versions = await prisma.quote.findMany({
+    select: { created_by_user_id: true, quote_id: true, status: true },
+    where: { quote_group_id: quoteGroupId, tenantId },
+  });
+
+  if (versions.length === 0) {
+    return "not_found";
+  }
+
+  if (!canSeeAll) {
+    const ownedByOther = versions.some(
+      (version) => version.created_by_user_id !== null && version.created_by_user_id !== viewerUserId,
+    );
+    if (ownedByOther) {
+      return "forbidden";
+    }
+  }
+
+  if (versions.some((version) => (version.status ?? "").trim().toLowerCase() === "closed")) {
+    return "closed";
+  }
+
+  const quoteIds = versions.map((version) => version.quote_id);
+
+  const [proposalCount, importFileCount] = await Promise.all([
+    prisma.formal_proposals.count({ where: { quote_id: { in: quoteIds } } }),
+    prisma.import_files.count({ where: { quote_id: { in: quoteIds } } }),
+  ]);
+
+  if (proposalCount > 0 || importFileCount > 0) {
+    return "in_use";
+  }
+
+  await prisma.$transaction([
+    prisma.quote_lines.deleteMany({ where: { quote_id: { in: quoteIds } } }),
+    prisma.quote_search_index.deleteMany({ where: { quote_group_id: quoteGroupId } }),
+    prisma.quote.deleteMany({ where: { quote_id: { in: quoteIds } } }),
+  ]);
+
+  return "deleted";
+}
+
 export async function createQuoteForTenant(
   tenantId: string,
   input: CreateQuoteInput,
