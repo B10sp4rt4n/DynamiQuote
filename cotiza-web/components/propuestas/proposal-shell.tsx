@@ -1390,7 +1390,6 @@ export function ProposalShell({
                 <th className="px-4 py-3 font-medium">Cliente</th>
                 <th className="px-4 py-3 font-medium">Estado</th>
                 <th className="px-4 py-3 font-medium">Fecha</th>
-                <th className="px-4 py-3 font-medium">Acciones</th>
               </tr>
             </thead>
             <tbody className="divide-y divide-zinc-200 bg-white">
@@ -1406,8 +1405,15 @@ export function ProposalShell({
                     key={item.proposalId}
                     onClick={() => handleSelectProposal(item.proposalId)}
                   >
-                    <td className="px-4 py-3 font-mono text-xs text-zinc-700">
-                      {item.formal?.proposalNumber ?? item.proposalId}
+                    <td className="px-4 py-3 font-mono text-xs">
+                      <Link
+                        className="text-zinc-700 underline decoration-dotted underline-offset-2 hover:text-zinc-900"
+                        href={`/propuestas/${item.proposalId}`}
+                        onClick={(event: MouseEvent) => event.stopPropagation()}
+                        title="Ver detalle de la propuesta"
+                      >
+                        {item.formal?.proposalNumber ?? item.proposalId}
+                      </Link>
                     </td>
                     <td className="px-4 py-3 text-zinc-900">
                       {item.formal?.recipientCompany ?? "Sin cliente"}
@@ -1434,21 +1440,12 @@ export function ProposalShell({
                     <td className="px-4 py-3 text-zinc-500">
                       {formatDate(item.formal?.issuedDate ?? null)}
                     </td>
-                    <td className="px-4 py-3">
-                      <Link
-                        className="rounded-lg border border-zinc-300 bg-white px-3 py-1.5 text-xs font-medium text-zinc-700 transition hover:bg-zinc-50"
-                        href={`/propuestas/${item.proposalId}`}
-                        onClick={(event: MouseEvent) => event.stopPropagation()}
-                      >
-                        Ver detalle
-                      </Link>
-                    </td>
                   </tr>
                 );
               })}
               {filteredItems.length === 0 ? (
                 <tr>
-                  <td className="px-4 py-4 text-sm text-zinc-500" colSpan={5}>
+                  <td className="px-4 py-4 text-sm text-zinc-500" colSpan={4}>
                     No hay propuestas para el filtro seleccionado.
                   </td>
                 </tr>
