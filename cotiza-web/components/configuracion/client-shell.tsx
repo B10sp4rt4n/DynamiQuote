@@ -2,6 +2,7 @@
 
 import { useCallback, useEffect, useRef, useState } from "react";
 
+import type { ClientContact } from "@/lib/db/client-contacts";
 import type { ClientSummary } from "@/lib/db/clients";
 
 type ClientLogoOption = {
@@ -83,6 +84,15 @@ export function ClientShell({ clientLogos, initialClients }: ClientShellProps) {
   const [taskSaving, setTaskSaving] = useState(false);
   const [taskMessage, setTaskMessage] = useState<{ text: string; type: "success" | "error" } | null>(null);
 
+  const [otherContacts, setOtherContacts] = useState<ClientContact[]>([]);
+  const [newContactFirstName, setNewContactFirstName] = useState("");
+  const [newContactLastName, setNewContactLastName] = useState("");
+  const [newContactTitle, setNewContactTitle] = useState("");
+  const [newContactEmail, setNewContactEmail] = useState("");
+  const [newContactPhone, setNewContactPhone] = useState("");
+  const [contactSaving, setContactSaving] = useState(false);
+  const [contactMessage, setContactMessage] = useState<{ text: string; type: "success" | "error" } | null>(null);
+
   const fetchClients = useCallback(async (q: string) => {
     try {
       const params = q.trim() ? `?search=${encodeURIComponent(q.trim())}` : "";
@@ -124,7 +134,7 @@ export function ClientShell({ clientLogos, initialClients }: ClientShellProps) {
     setShowModal(true);
   }
 
-  function openEdit(client: ClientSummary) {
+  async function openEdit(client: ClientSummary) {
     setEditingClient(client);
     const hasSplitName = Boolean(client.contactFirstName || client.contactLastName);
     const guessedName = hasSplitName
@@ -147,6 +157,88 @@ export function ClientShell({ clientLogos, initialClients }: ClientShellProps) {
     setLogoName("");
     setMessage(null);
     setShowModal(true);
+
+    setOtherContacts([]);
+    setNewContactFirstName("");
+    setNewContactLastName("");
+    setNewContactTitle("");
+    setNewContactEmail("");
+    setNewContactPhone("");
+    setContactMessage(null);
+
+    try {
+      const res = await fetch(`/api/clients/${client.clientId}/contacts`);
+      if (res.ok) {
+        const data = (await res.json()) as { contacts?: ClientContact[] };
+        setOtherContacts(data.contacts ?? []);
+      }
+    } catch {
+      // silencioso -- la seccion simplemente queda vacia
+    }
+  }
+
+  async function handleAddContact() {
+    if (!editingClient) return;
+
+    if (!newContactFirstName.trim()) {
+      setContactMessage({ text: "El nombre es requerido.", type: "error" });
+      return;
+    }
+
+    setContactSaving(true);
+    setContactMessage(null);
+
+    try {
+      const res = await fetch(`/api/clients/${editingClient.clientId}/contacts`, {
+        body: JSON.stringify({
+          email: newContactEmail.trim() || null,
+          firstName: newContactFirstName.trim(),
+          lastName: newContactLastName.trim() || null,
+          phone: newContactPhone.trim() || null,
+          title: newContactTitle.trim() || null,
+        }),
+        headers: { "Content-Type": "application/json" },
+        method: "POST",
+      });
+
+      const data = (await res.json()) as { contact?: ClientContact; error?: string };
+
+      if (!res.ok || !data.contact) {
+        setContactMessage({ text: data.error ?? "No se pudo agregar el contacto.", type: "error" });
+        return;
+      }
+
+      setOtherContacts((prev) => [...prev, data.contact!]);
+      setNewContactFirstName("");
+      setNewContactLastName("");
+      setNewContactTitle("");
+      setNewContactEmail("");
+      setNewContactPhone("");
+    } catch {
+      setContactMessage({ text: "Error de conexión. Intenta nuevamente.", type: "error" });
+    } finally {
+      setContactSaving(false);
+    }
+  }
+
+  async function handleDeleteContact(contact: ClientContact) {
+    if (!editingClient) return;
+    if (!confirm(`¿Borrar a ${contact.firstName} de los contactos de este cliente?`)) return;
+
+    try {
+      const res = await fetch(`/api/clients/${editingClient.clientId}/contacts/${contact.contactId}`, {
+        method: "DELETE",
+      });
+
+      if (!res.ok) {
+        setContactMessage({ text: "No se pudo borrar el contacto.", type: "error" });
+        return;
+      }
+
+      setOtherContacts((prev) => prev.filter((c) => c.contactId !== contact.contactId));
+    } catch {
+      setContactMessage({ text: "Error de conexión. Intenta nuevamente.", type: "error" });
+    }
   }
 
   function closeModal() {
@@ -457,7 +549,7 @@ export function ClientShell({ clientLogos, initialClients }: ClientShellProps) {
                     <div className="flex items-center gap-2">
                       <button
                         className="text-xs font-medium text-zinc-600 hover:text-zinc-900"
-                        onClick={() => openEdit(client)}
+                        onClick={() => { void openEdit(client); }}
                         type="button"
                       >
                         Editar
@@ -640,6 +732,93 @@ export function ClientShell({ clientLogos, initialClients }: ClientShellProps) {
                   value={form.notes}
                 />
               </div>
+              {editingClient ? (
+                <div className="sm:col-span-2 rounded-lg border border-zinc-200 bg-zinc-50 p-3">
+                  <p className="text-xs font-medium text-zinc-700">Otros contactos</p>
+                  <p className="mt-1 text-xs text-zinc-500">
+                    Directorio adicional de personas en esta cuenta. No sustituye el contacto principal de arriba.
+                  </p>
+                  {otherContacts.length > 0 ? (
+                    <ul className="mt-2 space-y-1">
+                      {otherContacts.map((contact) => (
+                        <li
+                          className="flex items-center justify-between gap-2 rounded-md border border-zinc-200 bg-white px-2 py-1.5 text-xs text-zinc-700"
+                          key={contact.contactId}
+                        >
+                          <span>
+                            <span className="font-medium text-zinc-900">
+                              {contact.firstName}
+                              {contact.lastName ? ` ${contact.lastName}` : ""}
+                            </span>
+                            {contact.title ? ` — ${contact.title}` : ""}
+                            {contact.email ? ` · ${contact.email}` : ""}
+                            {contact.phone ? ` · ${contact.phone}` : ""}
+                          </span>
+                          <button
+                            className="shrink-0 text-rose-600 hover:text-rose-800"
+                            onClick={() => { void handleDeleteContact(contact); }}
+                            type="button"
+                          >
+                            Borrar
+                          </button>
+                        </li>
+                      ))}
+                    </ul>
+                  ) : (
+                    <p className="mt-2 text-xs text-zinc-500">Sin otros contactos registrados.</p>
+                  )}
+                  <div className="mt-3 grid gap-2 sm:grid-cols-2">
+                    <input
+                      className="w-full rounded-lg border border-zinc-300 bg-white px-3 py-2 text-sm text-zinc-900"
+                      onChange={(e) => setNewContactFirstName(e.target.value)}
+                      placeholder="Nombre *"
+                      value={newContactFirstName}
+                    />
+                    <input
+                      className="w-full rounded-lg border border-zinc-300 bg-white px-3 py-2 text-sm text-zinc-900"
+                      onChange={(e) => setNewContactLastName(e.target.value)}
+                      placeholder="Apellido"
+                      value={newContactLastName}
+                    />
+                    <input
+                      className="w-full rounded-lg border border-zinc-300 bg-white px-3 py-2 text-sm text-zinc-900"
+                      onChange={(e) => setNewContactTitle(e.target.value)}
+                      placeholder="Cargo"
+                      value={newContactTitle}
+                    />
+                    <input
+                      className="w-full rounded-lg border border-zinc-300 bg-white px-3 py-2 text-sm text-zinc-900"
+                      onChange={(e) => setNewContactEmail(e.target.value)}
+                      placeholder="Email"
+                      type="email"
+                      value={newContactEmail}
+                    />
+                    <input
+                      className="w-full rounded-lg border border-zinc-300 bg-white px-3 py-2 text-sm text-zinc-900"
+                      onChange={(e) => setNewContactPhone(e.target.value)}
+                      placeholder="Teléfono"
+                      value={newContactPhone}
+                    />
+                    <button
+                      className="rounded-lg bg-zinc-900 px-3 py-2 text-xs font-medium text-white disabled:opacity-60"
+                      disabled={contactSaving}
+                      onClick={() => { void handleAddContact(); }}
+                      type="button"
+                    >
+                      {contactSaving ? "Agregando..." : "Agregar contacto"}
+                    </button>
+                  </div>
+                  {contactMessage ? (
+                    <p
+                      className={`mt-2 text-xs ${
+                        contactMessage.type === "error" ? "text-rose-700" : "text-emerald-700"
+                      }`}
+                    >
+                      {contactMessage.text}
+                    </p>
+                  ) : null}
+                </div>
+              ) : null}
             </div>
             {message ? (
               <div className="px-6 pb-2">

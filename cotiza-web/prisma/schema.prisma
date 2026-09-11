@@ -294,6 +294,21 @@ model tasks {
   created_at         DateTime  @db.Timestamp(6)
 }
 
+// Directorio adicional de personas por cliente -- no reemplaza ni migra el
+// contacto unico que ya existe en Client (ese sigue siendo el que usan el
+// PDF y las propuestas). Sin conexion todavia a documentos/propuestas.
+model client_contacts {
+  contact_id String    @id
+  tenant_id  String
+  client_id  String
+  first_name String
+  last_name  String?
+  title      String?
+  email      String?
+  phone      String?
+  created_at DateTime  @db.Timestamp(6)
+}
+
 /// The underlying table does not contain a valid unique identifier and can therefore currently not be handled by Prisma Client.
 model proposal_derivations {
   base_proposal_id                                              String
