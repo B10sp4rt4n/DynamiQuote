@@ -775,6 +775,7 @@ export async function createProposalFromQuoteByTenant(
     select: {
       client_id: true,
       client_name: true,
+      opportunity_id: true,
       proposal_name: true,
       quote_group_id: true,
       quote_id: true,
@@ -884,6 +885,7 @@ export async function createProposalFromQuoteByTenant(
         created_at: now,
         created_by: issuerContactName,
         created_by_user_id: actorUserId,
+        opportunity_id: quote.opportunity_id,
         origin: quote.quote_id,
         proposal_id: proposalId,
         status: "draft",

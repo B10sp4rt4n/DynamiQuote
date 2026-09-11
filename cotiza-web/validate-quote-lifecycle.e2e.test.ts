@@ -113,15 +113,20 @@ afterAll(async () => {
   if (!quoteGroupId) return;
 
   const quotes = await prisma.quote.findMany({
-    select: { quote_id: true },
+    select: { opportunity_id: true, quote_id: true },
     where: { quote_group_id: quoteGroupId, tenantId: TENANT_ID },
   });
 
   const ids = quotes.map((q) => q.quote_id);
+  const opportunityIds = [...new Set(quotes.map((q) => q.opportunity_id).filter((id): id is string => Boolean(id)))];
 
   if (ids.length > 0) {
     await prisma.quote_lines.deleteMany({ where: { quote_id: { in: ids } } });
     await prisma.quote.deleteMany({ where: { quote_id: { in: ids } } });
+  }
+
+  if (opportunityIds.length > 0) {
+    await prisma.opportunities.deleteMany({ where: { opportunity_id: { in: opportunityIds } } });
   }
 
   console.log(`\n  🧹 Limpieza: eliminados ${ids.length} registros del grupo ${quoteGroupId}\n`);
@@ -718,10 +723,17 @@ describe("Paso 14 — Nudge de propuesta al cerrar cotización", () => {
     console.log(`     proposalId: ${testProposalId} | audit event: quote_closed_nudge ✓`);
 
     // Limpiar
+    const nudgeQuoteForCleanup = await prisma.quote.findFirst({
+      select: { opportunity_id: true },
+      where: { quote_id: nudgeQuoteId },
+    });
     await prisma.proposal_audit_events.deleteMany({ where: { proposal_id: testProposalId } });
     await prisma.proposals.delete({ where: { proposal_id: testProposalId } });
     await prisma.quote_lines.deleteMany({ where: { quote_id: nudgeQuoteId } });
     await prisma.quote.delete({ where: { quote_id: nudgeQuoteId } });
+    if (nudgeQuoteForCleanup?.opportunity_id) {
+      await prisma.opportunities.deleteMany({ where: { opportunity_id: nudgeQuoteForCleanup.opportunity_id } });
+    }
   });
 
   it("propuesta 'draft' vinculada → NO se toca (draft → in_review bloqueado)", async () => {
@@ -765,9 +777,18 @@ describe("Paso 14 — Nudge de propuesta al cerrar cotización", () => {
     console.log(`  ✅ PASO 14b: Propuesta draft NO fue tocada ✓`);
 
     // Limpiar
+    const draftNudgeQuoteForCleanup = await prisma.quote.findFirst({
+      select: { opportunity_id: true },
+      where: { quote_id: draftNudgeQuoteId },
+    });
     await prisma.proposals.delete({ where: { proposal_id: draftProposalId } });
     await prisma.quote_lines.deleteMany({ where: { quote_id: draftNudgeQuoteId } });
     await prisma.quote.delete({ where: { quote_id: draftNudgeQuoteId } });
+    if (draftNudgeQuoteForCleanup?.opportunity_id) {
+      await prisma.opportunities.deleteMany({
+        where: { opportunity_id: draftNudgeQuoteForCleanup.opportunity_id },
+      });
+    }
   });
 
   it("con formal_proposals vinculado → proposalNumber incluido en affectedProposals", async () => {
@@ -823,10 +844,17 @@ describe("Paso 14 — Nudge de propuesta al cerrar cotización", () => {
     console.log(`  ✅ PASO 14c: proposalNumber incluido → ${testProposalNumber} ✓`);
 
     // Limpiar
+    const folioQuoteForCleanup = await prisma.quote.findFirst({
+      select: { opportunity_id: true },
+      where: { quote_id: folioQuoteId },
+    });
     await prisma.proposal_audit_events.deleteMany({ where: { proposal_id: folioProposalId } });
     await prisma.formal_proposals.delete({ where: { proposal_doc_id: formalDocId } });
     await prisma.proposals.delete({ where: { proposal_id: folioProposalId } });
     await prisma.quote_lines.deleteMany({ where: { quote_id: folioQuoteId } });
     await prisma.quote.delete({ where: { quote_id: folioQuoteId } });
+    if (folioQuoteForCleanup?.opportunity_id) {
+      await prisma.opportunities.deleteMany({ where: { opportunity_id: folioQuoteForCleanup.opportunity_id } });
+    }
   });
 });

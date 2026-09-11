@@ -4,6 +4,7 @@ import { randomUUID } from "crypto";
 import { Prisma } from "@prisma/client";
 
 import { prisma } from "@/lib/db/prisma";
+import { createOpportunityForTenant } from "@/lib/db/opportunities";
 
 type QuoteSummaryRow = {
   quote_group_id: string | null;
@@ -195,6 +196,21 @@ export async function createQuoteForTenant(
   const now = new Date();
 
   await prisma.$transaction(async (tx) => {
+    // Cada cotizacion nueva (v1 de un quote_group_id nuevo) nace con su
+    // propia Oportunidad -- identidad del trato por encima de esta
+    // cotizacion y de cualquier propuesta que salga de ella. Las versiones
+    // siguientes (v2, v3...) heredan esta misma Oportunidad al copiarse
+    // desde v1 (ver updateQuoteLinesByTenant).
+    const opportunityId = await createOpportunityForTenant(
+      tenantId,
+      {
+        clientId: input.clientId ?? null,
+        createdByUserId,
+        title: input.proposalName?.trim() || input.clientName,
+      },
+      tx,
+    );
+
     await tx.quote.create({
       data: {
         avg_margin: 0,
@@ -203,6 +219,7 @@ export async function createQuoteForTenant(
         createdAt: now,
         created_by_user_id: createdByUserId,
         gross_profit: 0,
+        opportunity_id: opportunityId,
         playbook_name: input.playbookName?.trim() || "General",
         proposal_name: input.proposalName?.trim() || "Sin propuesta",
         quote_group_id: quoteGroupId,
@@ -406,6 +423,7 @@ export async function importQuoteLinesByTenant(
       client_id: true,
       client_name: true,
       created_by_user_id: true,
+      opportunity_id: true,
       playbook_name: true,
       proposal_name: true,
       quote_group_id: true,
@@ -446,6 +464,7 @@ export async function importQuoteLinesByTenant(
         created_by_user_id: quote.created_by_user_id,
         createdAt: now,
         gross_profit: grossProfit,
+        opportunity_id: quote.opportunity_id,
         parent_quote_id: quote.quote_id,
         playbook_name: quote.playbook_name,
         proposal_name: quote.proposal_name,

@@ -110,6 +110,7 @@ model Quote {
   client_id          String?              @map("client_id")
   quoted_by          String?
   proposal_name      String?
+  opportunity_id     String?
   tenantId           String?              @map("tenant_id")
   created_by_user_id String?
   sent_at            DateTime?            @map("sent_at") @db.Timestamp(6)
@@ -255,6 +256,30 @@ model proposal_audit_events {
   proposals   proposals @relation(fields: [proposal_id], references: [proposal_id], onDelete: NoAction, onUpdate: NoAction)
 }
 
+// Identidad propia del trato comercial -- por encima del enlace pairwise
+// de proposal_derivations. Nace automaticamente con cada cotizacion nueva
+// (v1 de un quote_group_id nuevo); las versiones siguientes heredan la
+// misma Oportunidad. Sin backfill: toda cotizacion/propuesta previa a este
+// cambio queda sin opportunity_id, permanentemente.
+model opportunities {
+  opportunity_id       String    @id
+  opportunity_number   String
+  tenant_id            String
+  client_id            String?
+  title                String
+  stage                String    @default("open")
+  owner_user_id        String?
+  estimated_value      Decimal?  @db.Decimal
+  expected_close_date  DateTime? @db.Date
+  created_at           DateTime  @db.Timestamp(6)
+  closed_at            DateTime? @db.Timestamp(6)
+
+  // Folio unico POR TENANT, no global -- mismo criterio que COT-/PROP-
+  // (ver CLAUDE.md). Corregido 2026-09-11 tras detectar en vivo que un
+  // @unique global chocaba entre tenants distintos con el mismo folio.
+  @@unique([tenant_id, opportunity_number], map: "opportunities_tenant_number_unique")
+}
+
 /// The underlying table does not contain a valid unique identifier and can therefore currently not be handled by Prisma Client.
 model proposal_derivations {
   base_proposal_id                                              String
@@ -325,6 +350,7 @@ model proposals {
   issuance_status                                                          String                       @default("normal")
   margin_override_target_user_id                                          String?
   outcome                                                                  String?
+  opportunity_id                                                          String?
   formal_proposals                                                         formal_proposals[]
   project_expenses                                                         project_expenses[]
   proposal_approvals                                                       proposal_approvals[]
