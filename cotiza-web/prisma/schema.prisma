@@ -264,7 +264,7 @@ model proposal_derivations {
   proposals_proposal_derivations_base_proposal_idToproposals    proposals @relation("proposal_derivations_base_proposal_idToproposals", fields: [base_proposal_id], references: [proposal_id], onDelete: NoAction, onUpdate: NoAction)
   proposals_proposal_derivations_derived_proposal_idToproposals proposals @relation("proposal_derivations_derived_proposal_idToproposals", fields: [derived_proposal_id], references: [proposal_id], onDelete: NoAction, onUpdate: NoAction)
 
-  @@ignore
+  @@id([base_proposal_id, derived_proposal_id])
 }
 
 model proposal_integrated_node {
@@ -329,8 +329,8 @@ model proposals {
   project_expenses                                                         project_expenses[]
   proposal_approvals                                                       proposal_approvals[]
   proposal_audit_events                                                    proposal_audit_events[]
-  proposal_derivations_proposal_derivations_base_proposal_idToproposals    proposal_derivations[]       @relation("proposal_derivations_base_proposal_idToproposals") @ignore
-  proposal_derivations_proposal_derivations_derived_proposal_idToproposals proposal_derivations[]       @relation("proposal_derivations_derived_proposal_idToproposals") @ignore
+  proposal_derivations_proposal_derivations_base_proposal_idToproposals    proposal_derivations[]       @relation("proposal_derivations_base_proposal_idToproposals")
+  proposal_derivations_proposal_derivations_derived_proposal_idToproposals proposal_derivations[]       @relation("proposal_derivations_derived_proposal_idToproposals")
   proposal_integrated_node                                                 proposal_integrated_node?
   proposal_items                                                           proposal_items[]
   proposal_profitability_node                                              proposal_profitability_node?
