@@ -38,6 +38,17 @@ import type {
 
 const terminalStatuses: ProposalStatus[] = ["approved", "rejected", "expired"];
 
+// Ganada/perdida solo tienen sentido mientras la propuesta esta en el punto
+// real de decision del cliente (Enviada/Aprobada) -- si el status se mueve
+// fuera de ahi (se reabre a borrador, se rechaza internamente, etc.), la
+// etiqueta queda contradiciendo al estatus y se limpia sola. "Descartada" no
+// se toca: esa sí convive con cualquier estatus por diseño.
+const OUTCOME_DECISION_STATUSES = new Set<ProposalStatus>(["sent", "approved"]);
+
+function shouldClearOutcomeOnStatusChange(nextStatus: ProposalStatus, currentOutcome: ProposalOutcome): boolean {
+  return (currentOutcome === "won" || currentOutcome === "lost") && !OUTCOME_DECISION_STATUSES.has(nextStatus);
+}
+
 const legacyStatusMap: Record<string, ProposalStatus> = {
   "aprobada": "approved",
   "approved": "approved",
@@ -1738,15 +1749,17 @@ export async function grantMarginOverrideWindow(input: {
 // hook equivalente en updateProposalWorkflowByTenant).
 async function applyProposalStatusOnly(
   tx: Prisma.TransactionClient,
-  input: { nextStatus: ProposalStatus; proposalId: string },
+  input: { currentOutcome: ProposalOutcome; nextStatus: ProposalStatus; proposalId: string },
 ): Promise<void> {
   const now = new Date();
   const shouldClose = terminalStatuses.includes(input.nextStatus);
+  const clearOutcome = shouldClearOutcomeOnStatusChange(input.nextStatus, input.currentOutcome);
 
   await tx.proposals.update({
     data: {
       closed_at: shouldClose ? now : null,
       margin_override_target_user_id: null,
+      ...(clearOutcome ? { outcome: null } : {}),
       status: input.nextStatus,
     },
     where: { proposal_id: input.proposalId },
@@ -1786,7 +1799,11 @@ export async function executeMarginOverride(input: {
   });
 
   await prisma.$transaction(async (tx) => {
-    await applyProposalStatusOnly(tx, { nextStatus: "approved", proposalId: input.proposalId });
+    await applyProposalStatusOnly(tx, {
+      currentOutcome: current.outcome,
+      nextStatus: "approved",
+      proposalId: input.proposalId,
+    });
 
     await registerProposalApprovalDecisionByTenant(
       {
@@ -2031,6 +2048,7 @@ export async function updateProposalWorkflowByTenant(
         // vendedor. Distinto de executeMarginOverride, que la consume con
         // registro cuando SI se ejecuta.
         ...(hasStatusUpdate ? { margin_override_target_user_id: null } : {}),
+        ...(shouldClearOutcomeOnStatusChange(nextStatus, current.outcome) ? { outcome: null } : {}),
         status: nextStatus,
       },
       where: {
@@ -2233,7 +2251,7 @@ export async function registerProposalApprovalByTenant(
 
   if (targetStatus && targetStatus !== current.status) {
     await prisma.$transaction((tx) =>
-      applyProposalStatusOnly(tx, { nextStatus: targetStatus, proposalId }),
+      applyProposalStatusOnly(tx, { currentOutcome: current.outcome, nextStatus: targetStatus, proposalId }),
     );
   }
 
