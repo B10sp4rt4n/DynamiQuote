@@ -5,6 +5,7 @@ import { getExpiringProposalsByTenant } from "@/lib/db/proposal-alerts";
 import { getProposalKpiSummaryByTenant, getSalesRepRankingByTenant } from "@/lib/db/proposal-kpis";
 import {
   getProposalMarginBlockedCountByTenant,
+  getProposalOutcomeCountsByTenant,
   getProposalStatusCountsByTenant,
   getProposalSummariesByTenant,
 } from "@/lib/db/proposals";
@@ -38,6 +39,7 @@ export default async function InicioPage() {
     users,
     overallSummary,
     ranking,
+    outcomeCounts,
   ] = await Promise.all([
     getMarginPolicyByTenant(tenant.id),
     getProposalStatusCountsByTenant(tenant.id, tenant.userId, canSeeAll),
@@ -53,6 +55,7 @@ export default async function InicioPage() {
       : Promise.resolve([]),
     canSeeAll ? getProposalKpiSummaryByTenant(tenant.id, tenant.userId, canSeeAll) : Promise.resolve(null),
     canSeeAll ? getSalesRepRankingByTenant(tenant.id) : Promise.resolve([]),
+    getProposalOutcomeCountsByTenant(tenant.id, tenant.userId, canSeeAll),
   ]);
 
   const expiringAlerts = await getExpiringProposalsByTenant(
@@ -68,6 +71,7 @@ export default async function InicioPage() {
       expiringAlerts={expiringAlerts}
       issuerProfiles={issuerProfiles}
       marginPolicy={marginPolicy}
+      outcomeCounts={outcomeCounts}
       proposalMarginBlockedCount={proposalMarginBlockedCount}
       proposalStatusCounts={proposalStatusCounts}
       quoteDashboardSnapshot={quoteDashboardSnapshot}

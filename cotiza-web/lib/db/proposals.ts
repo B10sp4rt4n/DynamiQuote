@@ -1124,6 +1124,16 @@ export async function getProposalListPageByTenant(
     };
   }
 
+  if (filter === "won" || filter === "lost" || filter === "discarded") {
+    const rows = await fetchProposalSummaryRows({ ...scopeWhere, outcome: filter }, limit + 1, offset);
+    const marginPolicy = rows.length > 0 ? await getMarginPolicyByTenant(tenantId) : null;
+
+    return {
+      hasMore: rows.length > limit,
+      items: mapProposalSummaryRows(rows.slice(0, limit), marginPolicy),
+    };
+  }
+
   const statusWhere: Prisma.proposalsWhereInput = filter === "all" ? {} : { status: filter };
   const rows = await fetchProposalSummaryRows({ ...scopeWhere, ...statusWhere }, limit + 1, offset);
   const marginPolicy = rows.length > 0 ? await getMarginPolicyByTenant(tenantId) : null;
@@ -1138,12 +1148,53 @@ export type ProposalListCounts = {
   all: number;
   approved: number;
   blocked_margin: number;
+  discarded: number;
   draft: number;
   expired: number;
   in_review: number;
+  lost: number;
   rejected: number;
   sent: number;
+  won: number;
 };
+
+export type ProposalOutcomeCounts = {
+  discarded: number;
+  lost: number;
+  won: number;
+};
+
+// Conteos reales (tenant-wide) por desenlace comercial -- base para la tasa
+// de cierre real (ganadas / (ganadas+perdidas), deliberadamente sin contar
+// las descartadas, que son ruido de versiones superadas por ajustes).
+export async function getProposalOutcomeCountsByTenant(
+  tenantId: string,
+  viewerUserId: string | null = null,
+  canSeeAll = true,
+): Promise<ProposalOutcomeCounts> {
+  const rows = await prisma.proposals.groupBy({
+    by: ["outcome"],
+    _count: { proposal_id: true },
+    where: {
+      tenant_id: tenantId,
+      outcome: { in: ["won", "lost", "discarded"] },
+      ...(canSeeAll ? {} : { OR: [{ created_by_user_id: viewerUserId }, { created_by_user_id: null }] }),
+    },
+  });
+
+  const counts: Record<string, number> = {};
+  for (const row of rows) {
+    if (row.outcome) {
+      counts[row.outcome] = row._count.proposal_id;
+    }
+  }
+
+  return {
+    discarded: counts["discarded"] ?? 0,
+    lost: counts["lost"] ?? 0,
+    won: counts["won"] ?? 0,
+  };
+}
 
 // Conteos reales (tenant-wide, no limitados a lo que este cargado en la
 // lista) para los chips de filtro de /propuestas.
@@ -1152,20 +1203,24 @@ export async function getProposalListCountsByTenant(
   viewerUserId: string | null = null,
   canSeeAll = true,
 ): Promise<ProposalListCounts> {
-  const [statusCounts, blockedCount] = await Promise.all([
+  const [statusCounts, blockedCount, outcomeCounts] = await Promise.all([
     getProposalStatusCountsByTenant(tenantId, viewerUserId, canSeeAll),
     getProposalMarginBlockedCountByTenant(tenantId, viewerUserId, canSeeAll),
+    getProposalOutcomeCountsByTenant(tenantId, viewerUserId, canSeeAll),
   ]);
 
   return {
     all: statusCounts.total,
     approved: statusCounts.approved,
     blocked_margin: blockedCount,
+    discarded: outcomeCounts.discarded,
     draft: statusCounts.draft,
     expired: statusCounts.expired,
     in_review: statusCounts.in_review,
+    lost: outcomeCounts.lost,
     rejected: statusCounts.rejected,
     sent: statusCounts.sent,
+    won: outcomeCounts.won,
   };
 }
 
@@ -1448,7 +1503,8 @@ export async function getProposalWorkflowByTenant(
     items: proposalItems,
     marginEvaluation,
     origin: row.origin,
-    outcome: row.outcome === "won" || row.outcome === "lost" ? row.outcome : null,
+    outcome:
+      row.outcome === "won" || row.outcome === "lost" || row.outcome === "discarded" ? row.outcome : null,
     proposalId: row.proposal_id,
     salesOwner: resolvedSalesOwner ?? resolvedIssuerContact,
     status: normalizeStatus(latestFormal?.status ?? row.status),
@@ -1482,7 +1538,12 @@ export async function setProposalOutcomeByTenant(
     return "forbidden";
   }
 
-  if (outcome !== null && row.status !== "sent" && row.status !== "approved") {
+  // "Ganada"/"perdida" solo aplican al punto real de decision del cliente
+  // (Enviada/Aprobada). "Descartada" es distinto: marca una version que
+  // quedo superada por un ajuste de configuracion/margen antes de llegar a
+  // esa decision -- aplica en cualquier estatus, incluido Borrador (ver
+  // conversacion de producto 2026-09-10).
+  if ((outcome === "won" || outcome === "lost") && row.status !== "sent" && row.status !== "approved") {
     return "invalid_status";
   }
 

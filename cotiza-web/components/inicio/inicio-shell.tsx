@@ -2,7 +2,7 @@ import { VendorComparisonPanel, type ComparisonRow } from "@/components/inicio/v
 import type { MarginPolicySummary } from "@/lib/db/margin-policies";
 import type { ExpiringProposalAlert } from "@/lib/db/proposal-alerts";
 import type { ProposalKpiSummary, SalesRepRankingRow } from "@/lib/db/proposal-kpis";
-import type { ProposalStatusCounts, ProposalSummary } from "@/lib/db/proposals";
+import type { ProposalOutcomeCounts, ProposalStatusCounts, ProposalSummary } from "@/lib/db/proposals";
 import type { QuoteDashboardSnapshot } from "@/lib/db/quotes";
 import type { AppUserSummary, IssuerProfileSummary } from "@/lib/db/settings";
 
@@ -51,6 +51,7 @@ type InicioShellProps = {
   expiringAlerts: ExpiringProposalAlert[];
   issuerProfiles: IssuerProfileSummary[];
   marginPolicy: MarginPolicySummary;
+  outcomeCounts: ProposalOutcomeCounts;
   overallSummary: ProposalKpiSummary | null;
   proposalMarginBlockedCount: number;
   proposalStatusCounts: ProposalStatusCounts;
@@ -66,6 +67,7 @@ export function InicioShell({
   expiringAlerts,
   issuerProfiles,
   marginPolicy,
+  outcomeCounts,
   overallSummary,
   proposalMarginBlockedCount,
   proposalStatusCounts,
@@ -77,6 +79,11 @@ export function InicioShell({
 }: InicioShellProps) {
   const activeUsers = users.filter((user) => user.active).length;
   const ownerUsers = users.filter((user) => user.active && user.role === "owner").length;
+  // Tasa de cierre real: ganadas / (ganadas+perdidas), deliberadamente sin
+  // contar descartadas -- esas son ruido de versiones superadas por ajustes,
+  // no un desenlace comercial real.
+  const decidedCount = outcomeCounts.won + outcomeCounts.lost;
+  const closingRatePct = decidedCount > 0 ? (outcomeCounts.won / decidedCount) * 100 : null;
   const defaultIssuerProfiles = issuerProfiles.filter((profile) => profile.isDefault).length;
   const missingSellerCodes = users.filter((user) => user.active && !user.sellerCode).length;
 
@@ -216,6 +223,26 @@ export function InicioShell({
           <MetricCard helper="Usuarios operando dentro del tenant" title="Usuarios activos" value={activeUsers} />
         ) : null}
       </div>
+
+      <section className="rounded-xl border border-zinc-200 bg-white p-4">
+        <div className="flex flex-wrap items-center justify-between gap-3">
+          <div>
+            <h3 className="text-lg font-semibold text-zinc-900">Tasa de cierre real</h3>
+            <p className="text-sm text-zinc-600">
+              Ganadas sobre ganadas+perdidas -- las descartadas no cuentan, son ruido de versiones
+              superadas por ajustes.
+            </p>
+          </div>
+          <p className="text-3xl font-semibold text-zinc-900">
+            {closingRatePct === null ? "N/D" : `${closingRatePct.toFixed(1)}%`}
+          </p>
+        </div>
+        <div className="mt-3 flex flex-wrap gap-4 text-sm text-zinc-600">
+          <span>Ganadas: {outcomeCounts.won}</span>
+          <span>Perdidas: {outcomeCounts.lost}</span>
+          <span>Descartadas: {outcomeCounts.discarded}</span>
+        </div>
+      </section>
 
       <section className="rounded-xl border border-zinc-200 bg-white p-4">
         <div className="flex items-center justify-between gap-3">

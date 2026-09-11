@@ -4,12 +4,14 @@ import { useState } from "react";
 
 import type { ProposalOutcome, ProposalStatus } from "@/lib/validations/proposals";
 
-const OUTCOME_LABELS: Record<"lost" | "won", string> = {
+const OUTCOME_LABELS: Record<"discarded" | "lost" | "won", string> = {
+  discarded: "Descartada",
   lost: "Perdida",
   won: "Ganada",
 };
 
-const OUTCOME_BADGE_CLASS: Record<"lost" | "won", string> = {
+const OUTCOME_BADGE_CLASS: Record<"discarded" | "lost" | "won", string> = {
+  discarded: "border-amber-300 bg-amber-50 text-amber-800",
   lost: "border-zinc-400 bg-zinc-100 text-zinc-700",
   won: "border-emerald-300 bg-emerald-50 text-emerald-800",
 };
@@ -25,7 +27,11 @@ export function ProposalOutcomeActions({ initialOutcome, proposalId, status }: P
   const [saving, setSaving] = useState(false);
   const [error, setError] = useState<string | null>(null);
 
-  const canAssign = status === "sent" || status === "approved";
+  // Ganada/perdida solo aplican en el punto real de decision del cliente.
+  // Descartada marca una version superada por un ajuste de configuracion o
+  // margen antes de llegar a esa decision -- aplica en cualquier estatus,
+  // incluido Borrador.
+  const canAssignWonLost = status === "sent" || status === "approved";
 
   async function setOutcomeValue(next: ProposalOutcome) {
     setSaving(true);
@@ -52,10 +58,6 @@ export function ProposalOutcomeActions({ initialOutcome, proposalId, status }: P
     }
   }
 
-  if (!canAssign && !outcome) {
-    return null;
-  }
-
   return (
     <div className="rounded-lg border border-zinc-200 p-4">
       <div className="flex flex-wrap items-center justify-between gap-3">
@@ -69,37 +71,36 @@ export function ProposalOutcomeActions({ initialOutcome, proposalId, status }: P
         )}
       </div>
 
-      {canAssign ? (
-        <div className="mt-3 flex flex-wrap gap-2">
-          <button
-            className="rounded-lg border border-emerald-300 bg-emerald-50 px-3 py-1.5 text-xs font-medium text-emerald-800 transition hover:bg-emerald-100 disabled:opacity-60"
-            disabled={saving || outcome === "won"}
-            onClick={() => void setOutcomeValue("won")}
-            type="button"
-          >
-            Marcar como ganada
-          </button>
-          <button
-            className="rounded-lg border border-zinc-300 bg-white px-3 py-1.5 text-xs font-medium text-zinc-700 transition hover:bg-zinc-50 disabled:opacity-60"
-            disabled={saving || outcome === "lost"}
-            onClick={() => void setOutcomeValue("lost")}
-            type="button"
-          >
-            Marcar como perdida
-          </button>
-          {outcome ? (
+      <div className="mt-3 flex flex-wrap gap-2">
+        {canAssignWonLost ? (
+          <>
             <button
-              className="rounded-lg border border-zinc-200 bg-white px-3 py-1.5 text-xs font-medium text-zinc-500 transition hover:bg-zinc-50 disabled:opacity-60"
-              disabled={saving}
-              onClick={() => void setOutcomeValue(null)}
+              className="rounded-lg border border-emerald-300 bg-emerald-50 px-3 py-1.5 text-xs font-medium text-emerald-800 transition hover:bg-emerald-100 disabled:opacity-60"
+              disabled={saving || outcome === "won"}
+              onClick={() => void setOutcomeValue("won")}
               type="button"
             >
-              Quitar etiqueta
+              Marcar como ganada
             </button>
-          ) : null}
-        </div>
-      ) : outcome ? (
-        <div className="mt-3">
+            <button
+              className="rounded-lg border border-zinc-300 bg-white px-3 py-1.5 text-xs font-medium text-zinc-700 transition hover:bg-zinc-50 disabled:opacity-60"
+              disabled={saving || outcome === "lost"}
+              onClick={() => void setOutcomeValue("lost")}
+              type="button"
+            >
+              Marcar como perdida
+            </button>
+          </>
+        ) : null}
+        <button
+          className="rounded-lg border border-amber-300 bg-amber-50 px-3 py-1.5 text-xs font-medium text-amber-800 transition hover:bg-amber-100 disabled:opacity-60"
+          disabled={saving || outcome === "discarded"}
+          onClick={() => void setOutcomeValue("discarded")}
+          type="button"
+        >
+          Marcar como descartada
+        </button>
+        {outcome ? (
           <button
             className="rounded-lg border border-zinc-200 bg-white px-3 py-1.5 text-xs font-medium text-zinc-500 transition hover:bg-zinc-50 disabled:opacity-60"
             disabled={saving}
@@ -108,12 +109,13 @@ export function ProposalOutcomeActions({ initialOutcome, proposalId, status }: P
           >
             Quitar etiqueta
           </button>
-        </div>
-      ) : null}
+        ) : null}
+      </div>
 
-      {!canAssign ? (
+      {!canAssignWonLost ? (
         <p className="mt-2 text-xs text-zinc-500">
-          Solo se puede marcar ganada/perdida mientras la propuesta esta Enviada o Aprobada.
+          Ganada/perdida solo aplican mientras la propuesta esta Enviada o Aprobada. Descartada aplica en
+          cualquier estatus.
         </p>
       ) : null}
 

@@ -66,6 +66,9 @@ const STATUS_FILTERS: Array<{ className: string; label: string; value: ProposalL
   { className: "border-rose-300 bg-white text-rose-700 hover:bg-rose-50", label: "Rechazadas", value: "rejected" },
   { className: "border-zinc-300 bg-white text-zinc-500 hover:bg-zinc-50", label: "Vencidas", value: "expired" },
   { className: "border-rose-300 bg-white text-rose-700 hover:bg-rose-50", label: "Bloqueadas margen", value: "blocked_margin" },
+  { className: "border-emerald-300 bg-white text-emerald-700 hover:bg-emerald-50", label: "Ganadas", value: "won" },
+  { className: "border-zinc-400 bg-white text-zinc-600 hover:bg-zinc-50", label: "Perdidas", value: "lost" },
+  { className: "border-amber-300 bg-white text-amber-700 hover:bg-amber-50", label: "Descartadas", value: "discarded" },
 ];
 
 type ProposalStatusOption = {
@@ -1343,7 +1346,7 @@ export function ProposalShell({
                         ? "border-zinc-900 bg-zinc-900 text-white"
                         : sf.value === "blocked_margin"
                           ? "border-rose-700 bg-rose-700 text-white"
-                          : sf.value === "approved"
+                          : sf.value === "approved" || sf.value === "won"
                             ? "border-emerald-700 bg-emerald-700 text-white"
                             : sf.value === "in_review"
                               ? "border-amber-600 bg-amber-600 text-white"

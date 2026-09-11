@@ -1,12 +1,15 @@
 export type ProposalListFilter =
   | "all"
   | "blocked_margin"
+  | "discarded"
   | "draft"
   | "sent"
   | "in_review"
   | "approved"
   | "rejected"
-  | "expired";
+  | "expired"
+  | "lost"
+  | "won";
 
 export type ProposalSort = "date_desc" | "date_asc" | "client_asc" | "status_asc";
 
@@ -19,6 +22,9 @@ export const proposalListFilters: ProposalListFilter[] = [
   "approved",
   "rejected",
   "expired",
+  "won",
+  "lost",
+  "discarded",
 ];
 
 export const proposalSorts: ProposalSort[] = ["date_desc", "date_asc", "client_asc", "status_asc"];

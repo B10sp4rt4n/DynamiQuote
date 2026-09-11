@@ -70,7 +70,7 @@ export const proposalImportPayloadSchema = z.object({
   items: z.array(proposalImportItemSchema).min(1),
 });
 
-export const proposalOutcomeSchema = z.enum(["won", "lost"]).nullable();
+export const proposalOutcomeSchema = z.enum(["won", "lost", "discarded"]).nullable();
 
 export const updateProposalOutcomeSchema = z.object({
   outcome: proposalOutcomeSchema,
