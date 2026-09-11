@@ -309,6 +309,19 @@ model client_contacts {
   created_at DateTime  @db.Timestamp(6)
 }
 
+// Bitacora de interacciones por cliente -- notas de texto libre (llamadas,
+// reuniones, correos), opcionalmente ligadas a una Oportunidad. Sin tipo/
+// canal en v1, mismo criterio minimalista que tasks.
+model interaction_logs {
+  interaction_id     String    @id
+  tenant_id          String
+  client_id          String
+  opportunity_id     String?
+  note               String
+  created_by_user_id String?
+  created_at         DateTime  @db.Timestamp(6)
+}
+
 /// The underlying table does not contain a valid unique identifier and can therefore currently not be handled by Prisma Client.
 model proposal_derivations {
   base_proposal_id                                              String

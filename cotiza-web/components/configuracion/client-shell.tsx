@@ -4,6 +4,7 @@ import { useCallback, useEffect, useRef, useState } from "react";
 
 import type { ClientContact } from "@/lib/db/client-contacts";
 import type { ClientSummary } from "@/lib/db/clients";
+import type { InteractionLog } from "@/lib/db/interaction-logs";
 
 type ClientLogoOption = {
   companyName: string | null;
@@ -93,6 +94,15 @@ export function ClientShell({ clientLogos, initialClients }: ClientShellProps) {
   const [contactSaving, setContactSaving] = useState(false);
   const [contactMessage, setContactMessage] = useState<{ text: string; type: "success" | "error" } | null>(null);
 
+  const [interactionLogs, setInteractionLogs] = useState<InteractionLog[]>([]);
+  const [editOpportunities, setEditOpportunities] = useState<OpenOpportunityOption[]>([]);
+  const [newInteractionNote, setNewInteractionNote] = useState("");
+  const [newInteractionOpportunityId, setNewInteractionOpportunityId] = useState("");
+  const [interactionSaving, setInteractionSaving] = useState(false);
+  const [interactionMessage, setInteractionMessage] = useState<{ text: string; type: "success" | "error" } | null>(
+    null,
+  );
+
   const fetchClients = useCallback(async (q: string) => {
     try {
       const params = q.trim() ? `?search=${encodeURIComponent(q.trim())}` : "";
@@ -166,11 +176,36 @@ export function ClientShell({ clientLogos, initialClients }: ClientShellProps) {
     setNewContactPhone("");
     setContactMessage(null);
 
+    setInteractionLogs([]);
+    setEditOpportunities([]);
+    setNewInteractionNote("");
+    setNewInteractionOpportunityId("");
+    setInteractionMessage(null);
+
     try {
       const res = await fetch(`/api/clients/${client.clientId}/contacts`);
       if (res.ok) {
         const data = (await res.json()) as { contacts?: ClientContact[] };
         setOtherContacts(data.contacts ?? []);
+      }
+    } catch {
+      // silencioso -- la seccion simplemente queda vacia
+    }
+
+    try {
+      const [interactionsRes, opportunitiesRes] = await Promise.all([
+        fetch(`/api/clients/${client.clientId}/interactions`),
+        fetch(`/api/clients/${client.clientId}/opportunities`),
+      ]);
+
+      if (interactionsRes.ok) {
+        const data = (await interactionsRes.json()) as { interactions?: InteractionLog[] };
+        setInteractionLogs(data.interactions ?? []);
+      }
+
+      if (opportunitiesRes.ok) {
+        const data = (await opportunitiesRes.json()) as { opportunities?: OpenOpportunityOption[] };
+        setEditOpportunities(data.opportunities ?? []);
       }
     } catch {
       // silencioso -- la seccion simplemente queda vacia
@@ -238,6 +273,65 @@ export function ClientShell({ clientLogos, initialClients }: ClientShellProps) {
       setOtherContacts((prev) => prev.filter((c) => c.contactId !== contact.contactId));
     } catch {
       setContactMessage({ text: "Error de conexión. Intenta nuevamente.", type: "error" });
+    }
+  }
+
+  async function handleAddInteraction() {
+    if (!editingClient) return;
+
+    if (!newInteractionNote.trim()) {
+      setInteractionMessage({ text: "La nota no puede estar vacía.", type: "error" });
+      return;
+    }
+
+    setInteractionSaving(true);
+    setInteractionMessage(null);
+
+    try {
+      const res = await fetch(`/api/clients/${editingClient.clientId}/interactions`, {
+        body: JSON.stringify({
+          note: newInteractionNote.trim(),
+          opportunityId: newInteractionOpportunityId || null,
+        }),
+        headers: { "Content-Type": "application/json" },
+        method: "POST",
+      });
+
+      const data = (await res.json()) as { error?: string; interaction?: InteractionLog };
+
+      if (!res.ok || !data.interaction) {
+        setInteractionMessage({ text: data.error ?? "No se pudo agregar la nota.", type: "error" });
+        return;
+      }
+
+      setInteractionLogs((prev) => [data.interaction!, ...prev]);
+      setNewInteractionNote("");
+      setNewInteractionOpportunityId("");
+    } catch {
+      setInteractionMessage({ text: "Error de conexión. Intenta nuevamente.", type: "error" });
+    } finally {
+      setInteractionSaving(false);
+    }
+  }
+
+  async function handleDeleteInteraction(interaction: InteractionLog) {
+    if (!editingClient) return;
+    if (!confirm("¿Borrar esta nota del historial?")) return;
+
+    try {
+      const res = await fetch(
+        `/api/clients/${editingClient.clientId}/interactions/${interaction.interactionId}`,
+        { method: "DELETE" },
+      );
+
+      if (!res.ok) {
+        setInteractionMessage({ text: "No se pudo borrar la nota.", type: "error" });
+        return;
+      }
+
+      setInteractionLogs((prev) => prev.filter((i) => i.interactionId !== interaction.interactionId));
+    } catch {
+      setInteractionMessage({ text: "Error de conexión. Intenta nuevamente.", type: "error" });
     }
   }
 
@@ -815,6 +909,86 @@ export function ClientShell({ clientLogos, initialClients }: ClientShellProps) {
                       }`}
                     >
                       {contactMessage.text}
+                    </p>
+                  ) : null}
+                </div>
+              ) : null}
+              {editingClient ? (
+                <div className="sm:col-span-2 rounded-lg border border-zinc-200 bg-zinc-50 p-3">
+                  <p className="text-xs font-medium text-zinc-700">Historial</p>
+                  <p className="mt-1 text-xs text-zinc-500">
+                    Notas de llamadas, reuniones o correos con esta cuenta. Opcionalmente ligadas a una oportunidad
+                    abierta.
+                  </p>
+                  {interactionLogs.length > 0 ? (
+                    <ul className="mt-2 space-y-1">
+                      {interactionLogs.map((interaction) => (
+                        <li
+                          className="rounded-md border border-zinc-200 bg-white px-2 py-1.5 text-xs text-zinc-700"
+                          key={interaction.interactionId}
+                        >
+                          <div className="flex items-start justify-between gap-2">
+                            <p className="whitespace-pre-wrap text-zinc-900">{interaction.note}</p>
+                            <button
+                              className="shrink-0 text-rose-600 hover:text-rose-800"
+                              onClick={() => { void handleDeleteInteraction(interaction); }}
+                              type="button"
+                            >
+                              Borrar
+                            </button>
+                          </div>
+                          <p className="mt-1 text-zinc-500">
+                            {new Date(interaction.createdAt).toLocaleString("es-MX", {
+                              dateStyle: "medium",
+                              timeStyle: "short",
+                            })}
+                            {interaction.authorDisplayName ? ` · ${interaction.authorDisplayName}` : ""}
+                            {interaction.opportunityNumber ? ` · ${interaction.opportunityNumber}` : ""}
+                          </p>
+                        </li>
+                      ))}
+                    </ul>
+                  ) : (
+                    <p className="mt-2 text-xs text-zinc-500">Sin notas registradas todavía.</p>
+                  )}
+                  <div className="mt-3 space-y-2">
+                    <textarea
+                      className="w-full rounded-lg border border-zinc-300 bg-white px-3 py-2 text-sm text-zinc-900"
+                      onChange={(e) => setNewInteractionNote(e.target.value)}
+                      placeholder="Nueva nota..."
+                      rows={2}
+                      value={newInteractionNote}
+                    />
+                    <div className="grid gap-2 sm:grid-cols-[1fr_auto]">
+                      <select
+                        className="w-full rounded-lg border border-zinc-300 bg-white px-3 py-2 text-sm text-zinc-900"
+                        onChange={(e) => setNewInteractionOpportunityId(e.target.value)}
+                        value={newInteractionOpportunityId}
+                      >
+                        <option value="">Sin oportunidad ligada</option>
+                        {editOpportunities.map((opp) => (
+                          <option key={opp.opportunityId} value={opp.opportunityId}>
+                            {opp.opportunityNumber} — {opp.title}
+                          </option>
+                        ))}
+                      </select>
+                      <button
+                        className="rounded-lg bg-zinc-900 px-3 py-2 text-xs font-medium text-white disabled:opacity-60"
+                        disabled={interactionSaving}
+                        onClick={() => { void handleAddInteraction(); }}
+                        type="button"
+                      >
+                        {interactionSaving ? "Agregando..." : "Agregar nota"}
+                      </button>
+                    </div>
+                  </div>
+                  {interactionMessage ? (
+                    <p
+                      className={`mt-2 text-xs ${
+                        interactionMessage.type === "error" ? "text-rose-700" : "text-emerald-700"
+                      }`}
+                    >
+                      {interactionMessage.text}
                     </p>
                   ) : null}
                 </div>
