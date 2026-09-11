@@ -1,3 +1,4 @@
+import { PendingTasksPanel } from "@/components/inicio/pending-tasks-panel";
 import { VendorComparisonPanel, type ComparisonRow } from "@/components/inicio/vendor-comparison-panel";
 import type { MarginPolicySummary } from "@/lib/db/margin-policies";
 import type { ExpiringProposalAlert } from "@/lib/db/proposal-alerts";
@@ -5,6 +6,7 @@ import type { ProposalKpiSummary, SalesRepRankingRow } from "@/lib/db/proposal-k
 import type { ProposalOutcomeCounts, ProposalStatusCounts, ProposalSummary } from "@/lib/db/proposals";
 import type { QuoteDashboardSnapshot } from "@/lib/db/quotes";
 import type { AppUserSummary, IssuerProfileSummary } from "@/lib/db/settings";
+import type { PendingTask } from "@/lib/db/tasks";
 
 type PendingItem = {
   action: string;
@@ -53,6 +55,7 @@ type InicioShellProps = {
   marginPolicy: MarginPolicySummary;
   outcomeCounts: ProposalOutcomeCounts;
   overallSummary: ProposalKpiSummary | null;
+  pendingTasks: PendingTask[];
   proposalMarginBlockedCount: number;
   proposalStatusCounts: ProposalStatusCounts;
   quoteDashboardSnapshot: QuoteDashboardSnapshot;
@@ -69,6 +72,7 @@ export function InicioShell({
   marginPolicy,
   outcomeCounts,
   overallSummary,
+  pendingTasks,
   proposalMarginBlockedCount,
   proposalStatusCounts,
   quoteDashboardSnapshot,
@@ -286,6 +290,8 @@ export function InicioShell({
           )}
         </div>
       </section>
+
+      <PendingTasksPanel tasks={pendingTasks} />
 
       {canSeeAll ? (
         <div className="grid gap-5 xl:grid-cols-[1.15fr_0.85fr]">

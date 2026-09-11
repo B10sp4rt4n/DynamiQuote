@@ -54,6 +54,12 @@ function splitLegacyContactName(contactName: string | null): { firstName: string
   return { firstName: firstName ?? "", lastName: rest.join(" ") };
 }
 
+type OpenOpportunityOption = {
+  opportunityId: string;
+  opportunityNumber: string;
+  title: string;
+};
+
 export function ClientShell({ clientLogos, initialClients }: ClientShellProps) {
   const [availableClientLogos, setAvailableClientLogos] = useState<ClientLogoOption[]>(clientLogos);
   const [clients, setClients] = useState<ClientSummary[]>(initialClients);
@@ -68,6 +74,14 @@ export function ClientShell({ clientLogos, initialClients }: ClientShellProps) {
   const [message, setMessage] = useState<{ text: string; type: "success" | "error" } | null>(null);
   const searchTimeout = useRef<ReturnType<typeof setTimeout> | null>(null);
   const clientLogoFileInputRef = useRef<HTMLInputElement | null>(null);
+
+  const [taskClient, setTaskClient] = useState<ClientSummary | null>(null);
+  const [taskDescription, setTaskDescription] = useState("");
+  const [taskDueDate, setTaskDueDate] = useState("");
+  const [taskOpportunityId, setTaskOpportunityId] = useState("");
+  const [taskOpportunities, setTaskOpportunities] = useState<OpenOpportunityOption[]>([]);
+  const [taskSaving, setTaskSaving] = useState(false);
+  const [taskMessage, setTaskMessage] = useState<{ text: string; type: "success" | "error" } | null>(null);
 
   const fetchClients = useCallback(async (q: string) => {
     try {
@@ -139,6 +153,75 @@ export function ClientShell({ clientLogos, initialClients }: ClientShellProps) {
     setShowModal(false);
     setEditingClient(null);
     setMessage(null);
+  }
+
+  async function openTaskModal(client: ClientSummary) {
+    setTaskClient(client);
+    setTaskDescription("");
+    setTaskDueDate("");
+    setTaskOpportunityId("");
+    setTaskMessage(null);
+    setTaskOpportunities([]);
+
+    try {
+      const res = await fetch(`/api/clients/${client.clientId}/opportunities`);
+      if (res.ok) {
+        const data = (await res.json()) as { opportunities?: OpenOpportunityOption[] };
+        setTaskOpportunities(data.opportunities ?? []);
+      }
+    } catch {
+      // silencioso -- el selector simplemente queda vacio
+    }
+  }
+
+  function closeTaskModal() {
+    setTaskClient(null);
+    setTaskMessage(null);
+  }
+
+  async function handleSaveTask() {
+    if (!taskClient) return;
+
+    if (!taskDescription.trim()) {
+      setTaskMessage({ text: "Describe la tarea.", type: "error" });
+      return;
+    }
+
+    if (!taskDueDate) {
+      setTaskMessage({ text: "Elige una fecha.", type: "error" });
+      return;
+    }
+
+    setTaskSaving(true);
+    setTaskMessage(null);
+
+    try {
+      const res = await fetch("/api/tasks", {
+        body: JSON.stringify({
+          clientId: taskClient.clientId,
+          description: taskDescription.trim(),
+          dueDate: taskDueDate,
+          opportunityId: taskOpportunityId || null,
+        }),
+        headers: { "Content-Type": "application/json" },
+        method: "POST",
+      });
+
+      if (!res.ok) {
+        const data = (await res.json().catch(() => null)) as { error?: string } | null;
+        setTaskMessage({ text: data?.error ?? "No se pudo guardar la tarea.", type: "error" });
+        return;
+      }
+
+      setTaskMessage({ text: "Tarea creada.", type: "success" });
+      setTimeout(() => {
+        closeTaskModal();
+      }, 800);
+    } catch {
+      setTaskMessage({ text: "Error de conexión. Intenta nuevamente.", type: "error" });
+    } finally {
+      setTaskSaving(false);
+    }
   }
 
   function setField(field: keyof FormState, value: string) {
@@ -380,6 +463,13 @@ export function ClientShell({ clientLogos, initialClients }: ClientShellProps) {
                         Editar
                       </button>
                       <button
+                        className="text-xs font-medium text-blue-600 hover:text-blue-800"
+                        onClick={() => { void openTaskModal(client); }}
+                        type="button"
+                      >
+                        Tarea
+                      </button>
+                      <button
                         className="text-xs font-medium text-zinc-400 hover:text-zinc-600"
                         onClick={() => { void handleToggleActive(client); }}
                         type="button"
@@ -573,6 +663,82 @@ export function ClientShell({ clientLogos, initialClients }: ClientShellProps) {
                 type="button"
               >
                 {saving ? "Guardando..." : "Guardar"}
+              </button>
+            </div>
+          </div>
+        </div>
+      ) : null}
+
+      {/* Modal nueva tarea */}
+      {taskClient ? (
+        <div className="fixed inset-0 z-50 flex items-start justify-center overflow-y-auto bg-black/40 p-4 sm:items-center">
+          <div className="w-full max-w-md overflow-hidden rounded-xl bg-white shadow-xl">
+            <div className="flex items-center justify-between border-b border-zinc-200 px-6 py-4">
+              <h2 className="text-base font-semibold text-zinc-900">Nueva tarea — {taskClient.company}</h2>
+              <button className="text-zinc-400 hover:text-zinc-700" onClick={closeTaskModal} type="button">
+                ✕
+              </button>
+            </div>
+            <div className="space-y-4 px-6 py-5">
+              <div>
+                <label className="mb-1 block text-xs font-medium text-zinc-700">Descripción *</label>
+                <textarea
+                  className="w-full rounded-lg border border-zinc-300 bg-white px-3 py-2 text-sm text-zinc-900"
+                  onChange={(e) => setTaskDescription(e.target.value)}
+                  placeholder="Ej. Llamar para dar seguimiento"
+                  rows={2}
+                  value={taskDescription}
+                />
+              </div>
+              <div>
+                <label className="mb-1 block text-xs font-medium text-zinc-700">Fecha *</label>
+                <input
+                  className="w-full rounded-lg border border-zinc-300 bg-white px-3 py-2 text-sm text-zinc-900"
+                  onChange={(e) => setTaskDueDate(e.target.value)}
+                  type="date"
+                  value={taskDueDate}
+                />
+              </div>
+              {taskOpportunities.length > 0 ? (
+                <div>
+                  <label className="mb-1 block text-xs font-medium text-zinc-700">Trato relacionado (opcional)</label>
+                  <select
+                    className="w-full rounded-lg border border-zinc-300 bg-white px-3 py-2 text-sm text-zinc-900"
+                    onChange={(e) => setTaskOpportunityId(e.target.value)}
+                    value={taskOpportunityId}
+                  >
+                    <option value="">Sin trato específico</option>
+                    {taskOpportunities.map((opp) => (
+                      <option key={opp.opportunityId} value={opp.opportunityId}>
+                        {opp.opportunityNumber} — {opp.title}
+                      </option>
+                    ))}
+                  </select>
+                </div>
+              ) : null}
+            </div>
+            {taskMessage ? (
+              <div className="px-6 pb-2">
+                <p className={`text-sm ${taskMessage.type === "error" ? "text-rose-700" : "text-emerald-700"}`}>
+                  {taskMessage.text}
+                </p>
+              </div>
+            ) : null}
+            <div className="flex justify-end gap-3 border-t border-zinc-200 bg-white px-6 py-4">
+              <button
+                className="rounded-lg border border-zinc-300 px-4 py-2 text-sm font-medium text-zinc-700 hover:bg-zinc-50"
+                onClick={closeTaskModal}
+                type="button"
+              >
+                Cancelar
+              </button>
+              <button
+                className="rounded-lg bg-zinc-900 px-4 py-2 text-sm font-medium text-white disabled:opacity-50"
+                disabled={taskSaving}
+                onClick={() => { void handleSaveTask(); }}
+                type="button"
+              >
+                {taskSaving ? "Guardando..." : "Guardar"}
               </button>
             </div>
           </div>

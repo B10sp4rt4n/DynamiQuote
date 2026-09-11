@@ -280,6 +280,20 @@ model opportunities {
   @@unique([tenant_id, opportunity_number], map: "opportunities_tenant_number_unique")
 }
 
+// Tarea/recordatorio generico ligado a un cliente y, opcionalmente, a una
+// Oportunidad especifica. completed_at NULL = pendiente.
+model tasks {
+  task_id            String    @id
+  tenant_id          String
+  client_id          String
+  opportunity_id     String?
+  description        String
+  due_date           DateTime  @db.Date
+  completed_at       DateTime? @db.Timestamp(6)
+  created_by_user_id String?
+  created_at         DateTime  @db.Timestamp(6)
+}
+
 /// The underlying table does not contain a valid unique identifier and can therefore currently not be handled by Prisma Client.
 model proposal_derivations {
   base_proposal_id                                              String

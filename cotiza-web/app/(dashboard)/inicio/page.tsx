@@ -11,6 +11,7 @@ import {
 } from "@/lib/db/proposals";
 import { getQuoteDashboardSnapshotByTenant } from "@/lib/db/quotes";
 import { getAppUsersByTenant, getAppUsersForSuperAdmin, getIssuerProfilesByTenant } from "@/lib/db/settings";
+import { getPendingTasksByTenant } from "@/lib/db/tasks";
 import { getTenantProfileByTenant } from "@/lib/db/tenants";
 
 export const dynamic = "force-dynamic";
@@ -40,6 +41,7 @@ export default async function InicioPage() {
     overallSummary,
     ranking,
     outcomeCounts,
+    pendingTasks,
   ] = await Promise.all([
     getMarginPolicyByTenant(tenant.id),
     getProposalStatusCountsByTenant(tenant.id, tenant.userId, canSeeAll),
@@ -56,6 +58,7 @@ export default async function InicioPage() {
     canSeeAll ? getProposalKpiSummaryByTenant(tenant.id, tenant.userId, canSeeAll) : Promise.resolve(null),
     canSeeAll ? getSalesRepRankingByTenant(tenant.id) : Promise.resolve([]),
     getProposalOutcomeCountsByTenant(tenant.id, tenant.userId, canSeeAll),
+    getPendingTasksByTenant(tenant.id, tenant.userId, canSeeAll),
   ]);
 
   const expiringAlerts = await getExpiringProposalsByTenant(
@@ -72,6 +75,7 @@ export default async function InicioPage() {
       issuerProfiles={issuerProfiles}
       marginPolicy={marginPolicy}
       outcomeCounts={outcomeCounts}
+      pendingTasks={pendingTasks}
       proposalMarginBlockedCount={proposalMarginBlockedCount}
       proposalStatusCounts={proposalStatusCounts}
       quoteDashboardSnapshot={quoteDashboardSnapshot}
