@@ -1,5 +1,7 @@
+import Link from "next/link";
+
 import { ProposalOutcomeActions } from "@/components/propuestas/proposal-outcome-actions";
-import type { ProposalWorkflowDetail } from "@/lib/db/proposals";
+import type { ProposalDerivationInfo, ProposalWorkflowDetail } from "@/lib/db/proposals";
 import type { ProposalStatus } from "@/lib/validations/proposals";
 
 const STATUS_LABELS: Record<ProposalStatus, string> = {
@@ -36,6 +38,7 @@ function formatDate(value: string | null): string {
 }
 
 type ProposalDetailViewProps = {
+  derivationInfo: ProposalDerivationInfo;
   proposal: ProposalWorkflowDetail;
   tenantAddress: string | null;
   tenantName: string;
@@ -44,6 +47,7 @@ type ProposalDetailViewProps = {
 };
 
 export function ProposalDetailView({
+  derivationInfo,
   proposal,
   tenantAddress,
   tenantName,
@@ -65,6 +69,23 @@ export function ProposalDetailView({
             {formal?.proposalNumber ?? proposal.proposalId}
           </h1>
           <p className="mt-1 text-zinc-600">{formal?.recipientCompany ?? "Sin cliente"}</p>
+          {derivationInfo.basedOn ? (
+            <p className="mt-1 text-xs text-amber-700">
+              Deriva de{" "}
+              <Link className="underline" href={`/propuestas/${derivationInfo.basedOn.proposalId}`}>
+                {derivationInfo.basedOn.proposalNumber}
+              </Link>{" "}
+              (ajuste solicitado por el cliente)
+            </p>
+          ) : null}
+          {derivationInfo.supersededBy ? (
+            <p className="mt-1 text-xs text-amber-700">
+              Reemplazada por{" "}
+              <Link className="underline" href={`/propuestas/${derivationInfo.supersededBy.proposalId}`}>
+                {derivationInfo.supersededBy.proposalNumber}
+              </Link>
+            </p>
+          ) : null}
         </div>
         <div className="flex flex-col items-end gap-2">
           <span className={`rounded-full px-3 py-1 text-sm font-medium ${STATUS_BADGE_CLASS[status]}`}>

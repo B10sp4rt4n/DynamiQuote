@@ -2,7 +2,11 @@ import Link from "next/link";
 
 import { ProposalDetailView } from "@/components/propuestas/proposal-detail-view";
 import { getCurrentTenantContext } from "@/lib/auth/tenant-context";
-import { getProposalWorkflowByTenant, isProposalVisibleToViewer } from "@/lib/db/proposals";
+import {
+  getProposalDerivationInfoByTenant,
+  getProposalWorkflowByTenant,
+  isProposalVisibleToViewer,
+} from "@/lib/db/proposals";
 import { getTenantProfileByTenant } from "@/lib/db/tenants";
 
 export const dynamic = "force-dynamic";
@@ -42,9 +46,10 @@ export default async function ProposalDetailPage({ params }: ProposalDetailPageP
     );
   }
 
-  const [proposal, tenantProfile] = await Promise.all([
+  const [proposal, tenantProfile, derivationInfo] = await Promise.all([
     getProposalWorkflowByTenant(tenant.id, proposalId, { viewerUserId: tenant.userId }),
     getTenantProfileByTenant(tenant.id),
+    getProposalDerivationInfoByTenant(tenant.id, proposalId),
   ]);
 
   if (!proposal) {
@@ -96,6 +101,7 @@ export default async function ProposalDetailPage({ params }: ProposalDetailPageP
       </div>
 
       <ProposalDetailView
+        derivationInfo={derivationInfo}
         proposal={normalizedProposal}
         tenantAddress={tenantProfile?.address ?? null}
         tenantName={tenant.name}

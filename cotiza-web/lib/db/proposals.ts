@@ -776,6 +776,7 @@ export async function createProposalFromQuoteByTenant(
       client_id: true,
       client_name: true,
       proposal_name: true,
+      quote_group_id: true,
       quote_id: true,
       quote_lines: {
         orderBy: [{ created_at: "asc" }, { line_id: "asc" }],
@@ -800,6 +801,36 @@ export async function createProposalFromQuoteByTenant(
 
   if (!quote) {
     return null;
+  }
+
+  // Si esta versión de la cotización no tiene propuesta propia (no hubo
+  // match exacto arriba), pero otra versión DEL MISMO quote_group_id ya
+  // generó una, esta nueva propuesta deriva de esa -- se registra el
+  // enlace en proposal_derivations para no perder el hilo cuando el
+  // cliente pide ajustes que requieren una nueva versión de cotización.
+  let predecessorProposalId: string | null = null;
+
+  if (quote.quote_group_id) {
+    const siblingQuotes = await prisma.quote.findMany({
+      select: { quote_id: true },
+      where: {
+        quote_group_id: quote.quote_group_id,
+        quote_id: { not: quote.quote_id },
+        tenantId,
+      },
+    });
+
+    if (siblingQuotes.length > 0) {
+      const predecessorProposal = await prisma.proposals.findFirst({
+        orderBy: { created_at: "desc" },
+        select: { proposal_id: true },
+        where: {
+          origin: { in: siblingQuotes.map((sibling) => sibling.quote_id) },
+          tenant_id: tenantId,
+        },
+      });
+      predecessorProposalId = predecessorProposal?.proposal_id ?? null;
+    }
   }
 
   const tenant = await prisma.tenant.findUnique({
@@ -913,6 +944,17 @@ export async function createProposalFromQuoteByTenant(
             updated_at: now,
           };
         }),
+      });
+    }
+
+    if (predecessorProposalId) {
+      await tx.proposal_derivations.create({
+        data: {
+          base_proposal_id: predecessorProposalId,
+          created_at: now,
+          derived_proposal_id: proposalId,
+          tenant_id: tenantId,
+        },
       });
     }
   });
@@ -1261,6 +1303,67 @@ export async function isProposalVisibleToViewer(
   }
 
   return proposal.created_by_user_id === null || proposal.created_by_user_id === viewerUserId;
+}
+
+export type ProposalDerivationLink = {
+  proposalId: string;
+  proposalNumber: string;
+};
+
+export type ProposalDerivationInfo = {
+  // Esta propuesta nacio de un ajuste sobre esta otra (version anterior del
+  // mismo hilo de cotizacion).
+  basedOn: ProposalDerivationLink | null;
+  // Esta propuesta ya fue reemplazada por una version mas nueva.
+  supersededBy: ProposalDerivationLink | null;
+};
+
+async function resolveProposalNumberByTenant(tenantId: string, proposalId: string): Promise<string> {
+  const latestFormal = await prisma.formal_proposals.findFirst({
+    orderBy: [{ created_at: "desc" }, { proposal_doc_id: "desc" }],
+    select: { proposal_number: true },
+    where: { proposal_id: proposalId, tenant_id: tenantId },
+  });
+
+  return latestFormal?.proposal_number ?? proposalId;
+}
+
+// Enlaces de derivacion (ver createProposalFromQuoteByTenant) -- para
+// mostrar en el detalle de la propuesta "Deriva de PROP-XXXX" y/o
+// "Reemplazada por PROP-YYYY", sin depender de que el usuario recuerde
+// marcar manualmente las versiones superadas.
+export async function getProposalDerivationInfoByTenant(
+  tenantId: string,
+  proposalId: string,
+): Promise<ProposalDerivationInfo> {
+  const [asDerived, asBase] = await Promise.all([
+    prisma.proposal_derivations.findFirst({
+      select: { base_proposal_id: true },
+      where: { derived_proposal_id: proposalId, tenant_id: tenantId },
+    }),
+    prisma.proposal_derivations.findFirst({
+      orderBy: { created_at: "desc" },
+      select: { derived_proposal_id: true },
+      where: { base_proposal_id: proposalId, tenant_id: tenantId },
+    }),
+  ]);
+
+  const [basedOnNumber, supersededByNumber] = await Promise.all([
+    asDerived ? resolveProposalNumberByTenant(tenantId, asDerived.base_proposal_id) : null,
+    asBase ? resolveProposalNumberByTenant(tenantId, asBase.derived_proposal_id) : null,
+  ]);
+
+  return {
+    basedOn: asDerived
+      ? { proposalId: asDerived.base_proposal_id, proposalNumber: basedOnNumber ?? asDerived.base_proposal_id }
+      : null,
+    supersededBy: asBase
+      ? {
+          proposalId: asBase.derived_proposal_id,
+          proposalNumber: supersededByNumber ?? asBase.derived_proposal_id,
+        }
+      : null,
+  };
 }
 
 export async function getProposalWorkflowByTenant(
