@@ -62,6 +62,89 @@ type OpenOpportunityOption = {
   title: string;
 };
 
+const AVATAR_TINTS = [
+  { bg: "bg-teal-100", text: "text-teal-700" },
+  { bg: "bg-orange-100", text: "text-orange-700" },
+  { bg: "bg-slate-200", text: "text-slate-700" },
+];
+
+function getAvatarTint(index: number) {
+  return AVATAR_TINTS[index % AVATAR_TINTS.length]!;
+}
+
+function getInitials(company: string): string {
+  const words = company.trim().split(/\s+/).filter(Boolean);
+  if (words.length === 0) return "?";
+  if (words.length === 1) return words[0]!.slice(0, 2).toUpperCase();
+  return `${words[0]![0]}${words[1]![0]}`.toUpperCase();
+}
+
+function IconSearch({ className }: { className?: string }) {
+  return (
+    <svg className={className} fill="none" stroke="currentColor" strokeLinecap="round" strokeLinejoin="round" strokeWidth={1.75} viewBox="0 0 24 24">
+      <circle cx="11" cy="11" r="7" />
+      <line x1="21" x2="16.65" y1="21" y2="16.65" />
+    </svg>
+  );
+}
+
+function IconPlus({ className }: { className?: string }) {
+  return (
+    <svg className={className} fill="none" stroke="currentColor" strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} viewBox="0 0 24 24">
+      <line x1="12" x2="12" y1="5" y2="19" />
+      <line x1="5" x2="19" y1="12" y2="12" />
+    </svg>
+  );
+}
+
+function IconPencil({ className }: { className?: string }) {
+  return (
+    <svg className={className} fill="none" stroke="currentColor" strokeLinecap="round" strokeLinejoin="round" strokeWidth={1.75} viewBox="0 0 24 24">
+      <path d="M12 20h9" />
+      <path d="M16.5 3.5a2.121 2.121 0 0 1 3 3L7 19l-4 1 1-4Z" />
+    </svg>
+  );
+}
+
+function IconCalendarPlus({ className }: { className?: string }) {
+  return (
+    <svg className={className} fill="none" stroke="currentColor" strokeLinecap="round" strokeLinejoin="round" strokeWidth={1.75} viewBox="0 0 24 24">
+      <rect height="18" rx="2" width="18" x="3" y="4" />
+      <line x1="16" x2="16" y1="2" y2="6" />
+      <line x1="8" x2="8" y1="2" y2="6" />
+      <line x1="3" x2="21" y1="10" y2="10" />
+      <line x1="12" x2="12" y1="14" y2="18" />
+      <line x1="10" x2="14" y1="16" y2="16" />
+    </svg>
+  );
+}
+
+function IconPower({ className }: { className?: string }) {
+  return (
+    <svg className={className} fill="none" stroke="currentColor" strokeLinecap="round" strokeLinejoin="round" strokeWidth={1.75} viewBox="0 0 24 24">
+      <path d="M18.36 6.64a9 9 0 1 1-12.73 0" />
+      <line x1="12" x2="12" y1="2" y2="12" />
+    </svg>
+  );
+}
+
+function IconMail({ className }: { className?: string }) {
+  return (
+    <svg className={className} fill="none" stroke="currentColor" strokeLinecap="round" strokeLinejoin="round" strokeWidth={1.75} viewBox="0 0 24 24">
+      <rect height="16" rx="2" width="20" x="2" y="4" />
+      <path d="m22 6-10 7L2 6" />
+    </svg>
+  );
+}
+
+function IconPhone({ className }: { className?: string }) {
+  return (
+    <svg className={className} fill="none" stroke="currentColor" strokeLinecap="round" strokeLinejoin="round" strokeWidth={1.75} viewBox="0 0 24 24">
+      <path d="M22 16.92v3a2 2 0 0 1-2.18 2 19.79 19.79 0 0 1-8.63-3.07 19.5 19.5 0 0 1-6-6 19.79 19.79 0 0 1-3.07-8.67A2 2 0 0 1 4.11 2h3a2 2 0 0 1 2 1.72 12.84 12.84 0 0 0 .7 2.81 2 2 0 0 1-.45 2.11L8.09 9.91a16 16 0 0 0 6 6l1.27-1.27a2 2 0 0 1 2.11-.45 12.84 12.84 0 0 0 2.81.7A2 2 0 0 1 22 16.92Z" />
+    </svg>
+  );
+}
+
 export function ClientShell({ clientLogos, initialClients }: ClientShellProps) {
   const [availableClientLogos, setAvailableClientLogos] = useState<ClientLogoOption[]>(clientLogos);
   const [clients, setClients] = useState<ClientSummary[]>(initialClients);
@@ -571,26 +654,35 @@ export function ClientShell({ clientLogos, initialClients }: ClientShellProps) {
 
   return (
     <section className="space-y-6">
-      <div className="flex flex-col gap-3 sm:flex-row sm:items-center sm:justify-between">
+      <div className="flex flex-col gap-3 sm:flex-row sm:items-start sm:justify-between">
         <div>
-          <h1 className="text-2xl font-semibold text-zinc-900">Clientes</h1>
+          <div className="flex items-center gap-2">
+            <h1 className="text-2xl font-semibold tracking-tight text-slate-950">Clientes</h1>
+            <span className="inline-flex items-center rounded-full bg-zinc-100 px-2.5 py-0.5 text-xs font-medium text-zinc-600">
+              {clients.length} {clients.length === 1 ? "cuenta" : "cuentas"}
+            </span>
+          </div>
           <p className="mt-1 text-sm text-zinc-500">Catálogo de clientes del tenant. Los datos se reutilizan en cotizaciones y propuestas.</p>
         </div>
         <button
-          className="rounded-lg bg-zinc-900 px-4 py-2 text-sm font-medium text-white transition hover:bg-zinc-700"
+          className="inline-flex items-center gap-2 rounded-lg bg-slate-950 px-4 py-2 text-sm font-medium text-white transition hover:bg-slate-800"
           onClick={openNew}
           type="button"
         >
-          + Nuevo cliente
+          <IconPlus className="h-4 w-4" />
+          Nuevo cliente
         </button>
       </div>
 
-      <input
-        className="w-full rounded-lg border border-zinc-300 bg-white px-3 py-2 text-sm text-zinc-900 sm:max-w-sm"
-        onChange={(e) => setSearch(e.target.value)}
-        placeholder="Buscar por empresa, contacto o email"
-        value={search}
-      />
+      <div className="relative sm:max-w-sm">
+        <IconSearch className="pointer-events-none absolute left-3 top-1/2 h-4 w-4 -translate-y-1/2 text-zinc-400" />
+        <input
+          className="w-full rounded-lg border border-zinc-300 bg-white py-2 pl-9 pr-3 text-sm text-zinc-900"
+          onChange={(e) => setSearch(e.target.value)}
+          placeholder="Buscar por empresa, contacto o email"
+          value={search}
+        />
+      </div>
 
       {clients.length === 0 ? (
         <div className="rounded-xl border border-dashed border-zinc-300 bg-white px-6 py-12 text-center">
@@ -599,76 +691,174 @@ export function ClientShell({ clientLogos, initialClients }: ClientShellProps) {
           </p>
         </div>
       ) : (
-        <div className="overflow-hidden rounded-xl border border-zinc-200 bg-white">
-          <table className="min-w-full divide-y divide-zinc-200 text-sm">
-            <thead className="bg-zinc-50 text-left text-zinc-600">
-              <tr>
-                <th className="px-4 py-3 font-medium">Empresa</th>
-                <th className="hidden px-4 py-3 font-medium md:table-cell">Contacto</th>
-                <th className="hidden px-4 py-3 font-medium md:table-cell">Logo</th>
-                <th className="hidden px-4 py-3 font-medium lg:table-cell">Email</th>
-                <th className="hidden px-4 py-3 font-medium lg:table-cell">Teléfono</th>
-                <th className="px-4 py-3 font-medium">Estado</th>
-                <th className="px-4 py-3 font-medium">Acciones</th>
-              </tr>
-            </thead>
-            <tbody className="divide-y divide-zinc-200">
-              {clients.map((client) => (
-                <tr className={`hover:bg-zinc-50 ${!client.active ? "opacity-50" : ""}`} key={client.clientId}>
-                  <td className="px-4 py-3 font-medium text-zinc-900">
-                    {client.company}
-                    {client.rfc ? <span className="ml-2 text-xs text-zinc-400">{client.rfc}</span> : null}
-                  </td>
-                  <td className="hidden px-4 py-3 text-zinc-600 md:table-cell">
-                    {client.contactName ?? "—"}
-                    {client.contactTitle ? <span className="block text-xs text-zinc-400">{client.contactTitle}</span> : null}
-                  </td>
-                  <td className="hidden px-4 py-3 text-zinc-600 md:table-cell">
-                    {client.clientLogoId
-                      ? availableClientLogos.find((logo) => logo.logoId === client.clientLogoId)?.logoName ?? "Logo no disponible"
-                      : "—"}
-                  </td>
-                  <td className="hidden px-4 py-3 text-zinc-600 lg:table-cell">{client.contactEmail ?? "—"}</td>
-                  <td className="hidden px-4 py-3 text-zinc-600 lg:table-cell">{client.contactPhone ?? "—"}</td>
-                  <td className="px-4 py-3">
+        <>
+          <div className="hidden overflow-hidden rounded-xl border border-zinc-200 bg-white md:block">
+            <table className="min-w-full divide-y divide-zinc-200 text-sm">
+              <thead className="bg-zinc-50 text-left">
+                <tr>
+                  <th className="px-4 py-3 text-xs font-semibold uppercase tracking-wide text-zinc-500">Empresa</th>
+                  <th className="px-4 py-3 text-xs font-semibold uppercase tracking-wide text-zinc-500">Contacto</th>
+                  <th className="px-4 py-3 text-xs font-semibold uppercase tracking-wide text-zinc-500">Email</th>
+                  <th className="px-4 py-3 text-xs font-semibold uppercase tracking-wide text-zinc-500">Teléfono</th>
+                  <th className="px-4 py-3 text-xs font-semibold uppercase tracking-wide text-zinc-500">Estado</th>
+                  <th className="px-4 py-3 text-xs font-semibold uppercase tracking-wide text-zinc-500">Acciones</th>
+                </tr>
+              </thead>
+              <tbody className="divide-y divide-zinc-100">
+                {clients.map((client, index) => {
+                  const tint = getAvatarTint(index);
+                  return (
+                    <tr className={`hover:bg-zinc-50 ${!client.active ? "opacity-50" : ""}`} key={client.clientId}>
+                      <td className="px-4 py-3">
+                        <div className="flex items-center gap-3">
+                          <div
+                            className={`flex h-10 w-10 shrink-0 items-center justify-center rounded-lg text-xs font-semibold ${tint.bg} ${tint.text}`}
+                          >
+                            {getInitials(client.company)}
+                          </div>
+                          <div>
+                            <div className="font-medium text-zinc-900">{client.company}</div>
+                            {client.rfc ? <div className="mt-0.5 text-xs text-zinc-400">RFC {client.rfc}</div> : null}
+                          </div>
+                        </div>
+                      </td>
+                      <td className="px-4 py-3 text-zinc-600">
+                        {client.contactName ?? "—"}
+                        {client.contactTitle ? <span className="block text-xs text-zinc-400">{client.contactTitle}</span> : null}
+                      </td>
+                      <td className="px-4 py-3 text-zinc-600">{client.contactEmail ?? "—"}</td>
+                      <td className="px-4 py-3 text-zinc-600">{client.contactPhone ?? "—"}</td>
+                      <td className="px-4 py-3">
+                        <span
+                          className={`inline-flex items-center gap-1.5 rounded-full px-2.5 py-1 text-xs font-medium ${
+                            client.active ? "bg-emerald-50 text-emerald-700" : "bg-zinc-100 text-zinc-500"
+                          }`}
+                        >
+                          <span className={`h-1.5 w-1.5 rounded-full ${client.active ? "bg-emerald-500" : "bg-zinc-400"}`} />
+                          {client.active ? "Activo" : "Inactivo"}
+                        </span>
+                      </td>
+                      <td className="px-4 py-3">
+                        <div className="flex items-center gap-0.5">
+                          <button
+                            className="inline-flex items-center gap-1.5 rounded-lg px-2.5 py-1.5 text-xs font-medium text-zinc-600 transition hover:bg-zinc-100 hover:text-zinc-900"
+                            onClick={() => { void openEdit(client); }}
+                            type="button"
+                          >
+                            <IconPencil className="h-3.5 w-3.5" />
+                            Editar
+                          </button>
+                          <button
+                            className="inline-flex items-center gap-1.5 rounded-lg px-2.5 py-1.5 text-xs font-medium text-zinc-600 transition hover:bg-teal-50 hover:text-teal-700"
+                            onClick={() => { void openTaskModal(client); }}
+                            type="button"
+                          >
+                            <IconCalendarPlus className="h-3.5 w-3.5" />
+                            Tarea
+                          </button>
+                          <button
+                            className={`inline-flex items-center gap-1.5 rounded-lg px-2.5 py-1.5 text-xs font-medium text-zinc-600 transition ${
+                              client.active ? "hover:bg-rose-50 hover:text-rose-700" : "hover:bg-emerald-50 hover:text-emerald-700"
+                            }`}
+                            onClick={() => { void handleToggleActive(client); }}
+                            type="button"
+                          >
+                            <IconPower className="h-3.5 w-3.5" />
+                            {client.active ? "Desactivar" : "Activar"}
+                          </button>
+                        </div>
+                      </td>
+                    </tr>
+                  );
+                })}
+              </tbody>
+            </table>
+            <div className="flex items-center justify-between border-t border-zinc-100 bg-zinc-50 px-4 py-2.5">
+              <span className="text-xs text-zinc-400">
+                {clients.length} {clients.length === 1 ? "cliente" : "clientes"}
+              </span>
+            </div>
+          </div>
+
+          <div className="flex flex-col gap-3 md:hidden">
+            {clients.map((client, index) => {
+              const tint = getAvatarTint(index);
+              return (
+                <div
+                  className={`rounded-xl border border-zinc-200 bg-white p-4 ${!client.active ? "opacity-60" : ""}`}
+                  key={client.clientId}
+                >
+                  <div className="flex items-start justify-between gap-3">
+                    <div className="flex min-w-0 items-center gap-3">
+                      <div
+                        className={`flex h-10 w-10 shrink-0 items-center justify-center rounded-lg text-xs font-semibold ${tint.bg} ${tint.text}`}
+                      >
+                        {getInitials(client.company)}
+                      </div>
+                      <div className="min-w-0">
+                        <p className="truncate text-sm font-semibold text-zinc-900">{client.company}</p>
+                        {client.rfc ? <p className="text-xs text-zinc-400">RFC {client.rfc}</p> : null}
+                      </div>
+                    </div>
                     <span
-                      className={`inline-flex items-center rounded-full px-2 py-0.5 text-xs font-medium ${
-                        client.active ? "bg-emerald-100 text-emerald-700" : "bg-zinc-100 text-zinc-500"
+                      className={`inline-flex shrink-0 items-center gap-1.5 rounded-full px-2 py-0.5 text-xs font-medium ${
+                        client.active ? "bg-emerald-50 text-emerald-700" : "bg-zinc-100 text-zinc-500"
                       }`}
                     >
+                      <span className={`h-1.5 w-1.5 rounded-full ${client.active ? "bg-emerald-500" : "bg-zinc-400"}`} />
                       {client.active ? "Activo" : "Inactivo"}
                     </span>
-                  </td>
-                  <td className="px-4 py-3">
-                    <div className="flex items-center gap-2">
-                      <button
-                        className="text-xs font-medium text-zinc-600 hover:text-zinc-900"
-                        onClick={() => { void openEdit(client); }}
-                        type="button"
-                      >
-                        Editar
-                      </button>
-                      <button
-                        className="text-xs font-medium text-blue-600 hover:text-blue-800"
-                        onClick={() => { void openTaskModal(client); }}
-                        type="button"
-                      >
-                        Tarea
-                      </button>
-                      <button
-                        className="text-xs font-medium text-zinc-400 hover:text-zinc-600"
-                        onClick={() => { void handleToggleActive(client); }}
-                        type="button"
-                      >
-                        {client.active ? "Desactivar" : "Activar"}
-                      </button>
-                    </div>
-                  </td>
-                </tr>
-              ))}
-            </tbody>
-          </table>
-        </div>
+                  </div>
+                  <div className="mt-3 space-y-1 border-t border-zinc-100 pt-3">
+                    <p className="text-xs text-zinc-600">
+                      {client.contactName ?? "—"}
+                      {client.contactTitle ? ` · ${client.contactTitle}` : ""}
+                    </p>
+                    {client.contactEmail ? (
+                      <p className="flex items-center gap-1.5 text-xs text-zinc-500">
+                        <IconMail className="h-3 w-3 shrink-0" />
+                        <span className="truncate">{client.contactEmail}</span>
+                      </p>
+                    ) : null}
+                    {client.contactPhone ? (
+                      <p className="flex items-center gap-1.5 text-xs text-zinc-500">
+                        <IconPhone className="h-3 w-3 shrink-0" />
+                        {client.contactPhone}
+                      </p>
+                    ) : null}
+                  </div>
+                  <div className="mt-3 flex items-center gap-2">
+                    <button
+                      className="flex flex-1 items-center justify-center gap-1.5 rounded-lg border border-zinc-200 px-3 py-2 text-xs font-medium text-zinc-700"
+                      onClick={() => { void openEdit(client); }}
+                      type="button"
+                    >
+                      <IconPencil className="h-3.5 w-3.5" />
+                      Editar
+                    </button>
+                    <button
+                      className="flex flex-1 items-center justify-center gap-1.5 rounded-lg border border-zinc-200 px-3 py-2 text-xs font-medium text-teal-700"
+                      onClick={() => { void openTaskModal(client); }}
+                      type="button"
+                    >
+                      <IconCalendarPlus className="h-3.5 w-3.5" />
+                      Tarea
+                    </button>
+                    <button
+                      className={`flex h-[34px] w-[34px] shrink-0 items-center justify-center rounded-lg border border-zinc-200 ${
+                        client.active ? "text-zinc-400" : "text-emerald-600"
+                      }`}
+                      onClick={() => { void handleToggleActive(client); }}
+                      type="button"
+                    >
+                      <IconPower className="h-3.5 w-3.5" />
+                    </button>
+                  </div>
+                </div>
+              );
+            })}
+          </div>
+        </>
       )}
 
       {/* Modal nuevo/editar cliente */}
