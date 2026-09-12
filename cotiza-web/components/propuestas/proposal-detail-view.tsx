@@ -170,6 +170,23 @@ export function ProposalDetailView({
         </div>
       ) : null}
 
+      {formal?.customIntro || formal?.objective ? (
+        <div className="space-y-3 rounded-lg border border-zinc-200 p-4">
+          {formal?.customIntro ? (
+            <div>
+              <p className="text-sm font-semibold text-zinc-900">Descripción</p>
+              <p className="mt-1 whitespace-pre-wrap text-sm text-zinc-700">{formal.customIntro}</p>
+            </div>
+          ) : null}
+          {formal?.objective ? (
+            <div>
+              <p className="text-sm font-semibold text-zinc-900">Objetivo</p>
+              <p className="mt-1 whitespace-pre-wrap text-sm text-zinc-700">{formal.objective}</p>
+            </div>
+          ) : null}
+        </div>
+      ) : null}
+
       <div className="overflow-x-auto rounded-lg border border-zinc-200">
         <table className="min-w-full divide-y divide-zinc-200 text-sm">
           <thead className="bg-zinc-50 text-left text-zinc-600">

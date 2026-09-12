@@ -250,6 +250,11 @@ export function ProposalShell({
     proposals[0]?.formal?.recipientContactTitle ?? "",
   );
   const [subject, setSubject] = useState<string>(proposals[0]?.formal?.subject ?? "");
+  const [customIntro, setCustomIntro] = useState<string>(proposals[0]?.formal?.customIntro ?? "");
+  const [objective, setObjective] = useState<string>(proposals[0]?.formal?.objective ?? "");
+  const [descriptionEnabled, setDescriptionEnabled] = useState<boolean>(
+    Boolean(proposals[0]?.formal?.customIntro || proposals[0]?.formal?.objective),
+  );
   const [selectedStatus, setSelectedStatus] = useState<ProposalStatus>(
     proposals[0]?.status ?? "draft",
   );
@@ -486,6 +491,9 @@ export function ProposalShell({
     setRecipientEmail(found?.formal?.recipientEmail ?? "");
     setRecipientContactTitle(found?.formal?.recipientContactTitle ?? "");
     setSubject(found?.formal?.subject ?? "");
+    setCustomIntro(found?.formal?.customIntro ?? "");
+    setObjective(found?.formal?.objective ?? "");
+    setDescriptionEnabled(Boolean(found?.formal?.customIntro || found?.formal?.objective));
     setSelectedStatus(found?.status ?? "draft");
     setTermsAndConditions(found?.formal?.termsAndConditions ?? "");
     setSaveStatus("idle");
@@ -571,10 +579,12 @@ export function ProposalShell({
         proposal?: {
           formal: {
             currency: string | null;
+            customIntro: string | null;
             issuerCompany: string;
             issuerContactName: string;
             issuerEmail: string;
             issuerPhone: string;
+            objective: string | null;
             recipientCompany: string;
             recipientContactName: string;
             recipientContactTitle: string;
@@ -620,6 +630,9 @@ export function ProposalShell({
       setRecipientEmail(data.proposal.formal?.recipientEmail ?? "");
       setRecipientContactTitle(data.proposal.formal?.recipientContactTitle ?? "");
       setSubject(data.proposal.formal?.subject ?? "");
+      setCustomIntro(data.proposal.formal?.customIntro ?? "");
+      setObjective(data.proposal.formal?.objective ?? "");
+      setDescriptionEnabled(Boolean(data.proposal.formal?.customIntro || data.proposal.formal?.objective));
       setTermsAndConditions(data.proposal.formal?.termsAndConditions ?? "");
       setSelectedStatus(data.proposal.status);
       setSelectedIssuanceStatus(data.proposal.issuanceStatus ?? "normal");
@@ -791,6 +804,7 @@ export function ProposalShell({
 
     const payload: {
       currency?: string;
+      customIntro?: string;
       issuerCompany?: string;
       issuerEmail?: string;
       issuerPhone?: string;
@@ -805,6 +819,7 @@ export function ProposalShell({
         sku: string;
         status: string;
       }>;
+      objective?: string;
       recipientCompany?: string;
       recipientContactName?: string;
       recipientContactTitle?: string;
@@ -845,6 +860,17 @@ export function ProposalShell({
     if (subject !== (currentFormal?.subject ?? "")) {
       payload.subject = subject;
     }
+    // Si el toggle "¿Se requiere descripción?" está apagado, se envía vacío
+    // sin importar lo que haya quedado tecleado -- comportamiento "como hasta
+    // hoy" (sin descripción), no un guardado parcial de texto oculto.
+    const effectiveCustomIntro = descriptionEnabled ? customIntro : "";
+    const effectiveObjective = descriptionEnabled ? objective : "";
+    if (effectiveCustomIntro !== (currentFormal?.customIntro ?? "")) {
+      payload.customIntro = effectiveCustomIntro;
+    }
+    if (effectiveObjective !== (currentFormal?.objective ?? "")) {
+      payload.objective = effectiveObjective;
+    }
     if (termsAndConditions !== (currentFormal?.termsAndConditions ?? "")) {
       payload.termsAndConditions = termsAndConditions;
     }
@@ -876,10 +902,12 @@ export function ProposalShell({
         proposal?: {
           formal: {
             currency: string | null;
+            customIntro: string | null;
             issuerCompany: string;
             issuerContactName: string;
             issuerEmail: string;
             issuerPhone: string;
+            objective: string | null;
             recipientCompany: string;
             recipientContactName: string;
             recipientContactTitle: string;
@@ -1646,6 +1674,64 @@ export function ProposalShell({
                   </div>
                   <p className="mt-1 text-sm text-zinc-900">{salesOwner || "Sin asignar"}</p>
                 </div>
+              </div>
+
+              {/* Descripción */}
+              <div className="space-y-3 border-t border-zinc-200 pt-4">
+                <div className="flex items-center justify-between">
+                  <p className="text-xs font-semibold uppercase tracking-[0.12em] text-zinc-500">Descripción</p>
+                  <div className="inline-flex overflow-hidden rounded-lg border border-zinc-300 text-xs font-medium">
+                    <button
+                      className={`px-3 py-1 transition ${
+                        !descriptionEnabled ? "bg-zinc-900 text-white" : "bg-white text-zinc-600 hover:bg-zinc-50"
+                      }`}
+                      onClick={() => setDescriptionEnabled(false)}
+                      type="button"
+                    >
+                      No se requiere
+                    </button>
+                    <button
+                      className={`border-l border-zinc-300 px-3 py-1 transition ${
+                        descriptionEnabled ? "bg-zinc-900 text-white" : "bg-white text-zinc-600 hover:bg-zinc-50"
+                      }`}
+                      onClick={() => setDescriptionEnabled(true)}
+                      type="button"
+                    >
+                      Se requiere
+                    </button>
+                  </div>
+                </div>
+
+                {descriptionEnabled ? (
+                  <>
+                    <div>
+                      <label className="block text-sm font-medium text-zinc-700" htmlFor="proposal-custom-intro">
+                        Descripción
+                      </label>
+                      <textarea
+                        className="mt-1 w-full rounded-lg border border-zinc-300 bg-white px-3 py-2 text-sm text-zinc-800"
+                        id="proposal-custom-intro"
+                        onChange={(event) => setCustomIntro(event.target.value)}
+                        placeholder="Qué se va a hacer"
+                        rows={3}
+                        value={customIntro}
+                      />
+                    </div>
+                    <div>
+                      <label className="block text-sm font-medium text-zinc-700" htmlFor="proposal-objective">
+                        Objetivo
+                      </label>
+                      <textarea
+                        className="mt-1 w-full rounded-lg border border-zinc-300 bg-white px-3 py-2 text-sm text-zinc-800"
+                        id="proposal-objective"
+                        onChange={(event) => setObjective(event.target.value)}
+                        placeholder="Para qué se va a hacer"
+                        rows={3}
+                        value={objective}
+                      />
+                    </div>
+                  </>
+                ) : null}
               </div>
 
               {/* Receptor */}

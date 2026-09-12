@@ -26,10 +26,12 @@ export const proposalCurrencySchema = z.enum(["MXN", "USD"]);
 export const updateProposalWorkflowSchema = z
   .object({
     currency: z.union([proposalCurrencySchema, z.literal("")]).optional(),
+    customIntro: z.string().trim().max(2000).optional(),
     issuerCompany: z.string().trim().max(200).optional(),
     issuerEmail: z.string().trim().max(200).optional(),
     issuerPhone: z.string().trim().max(80).optional(),
     items: z.array(proposalImportItemSchema).min(1).optional(),
+    objective: z.string().trim().max(2000).optional(),
     recipientCompany: z.string().trim().max(200).optional(),
     recipientContactName: z.string().trim().max(200).optional(),
     recipientEmail: z.string().trim().max(200).optional(),
@@ -45,6 +47,8 @@ export const updateProposalWorkflowSchema = z
       value.status !== undefined ||
       value.termsAndConditions !== undefined ||
       value.subject !== undefined ||
+      value.customIntro !== undefined ||
+      value.objective !== undefined ||
       value.issuerCompany !== undefined ||
       value.issuerEmail !== undefined ||
       value.issuerPhone !== undefined ||

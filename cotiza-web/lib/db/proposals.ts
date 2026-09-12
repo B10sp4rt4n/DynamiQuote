@@ -336,6 +336,7 @@ type FormalProposalSlice = {
   clientLogoId: string;
   clientLogoDataUrl: string;
   currency: string | null;
+  customIntro: string | null;
   issuerCompany: string;
   issuerContactName: string;
   issuerEmail: string;
@@ -343,6 +344,7 @@ type FormalProposalSlice = {
   issuerLogoDataUrl: string;
   issuerPhone: string;
   issuedDate: string | null;
+  objective: string | null;
   proposalDocId: string;
   proposalNumber: string;
   quoteId: string | null;
@@ -437,6 +439,7 @@ function toFormalSlice(row: {
   client_logo_id?: string | null;
   client_logo_data_url?: string | null;
   currency: string | null;
+  custom_intro?: string | null;
   issuer_company: string;
   issuer_contact_name: string | null;
   issuer_email: string | null;
@@ -444,6 +447,7 @@ function toFormalSlice(row: {
   issuer_logo_data_url?: string | null;
   issuer_phone: string | null;
   issued_date: Date;
+  objective?: string | null;
   proposal_doc_id: string;
   proposal_number: string;
   quote_id: string | null;
@@ -460,6 +464,7 @@ function toFormalSlice(row: {
     clientLogoId: row.client_logo_id ?? "",
     clientLogoDataUrl: row.client_logo_data_url ?? "",
     currency: row.currency,
+    customIntro: row.custom_intro ?? null,
     issuerCompany: row.issuer_company,
     issuerContactName: row.issuer_contact_name ?? "",
     issuerEmail: row.issuer_email ?? "",
@@ -467,6 +472,7 @@ function toFormalSlice(row: {
     issuerLogoDataUrl: row.issuer_logo_data_url ?? "",
     issuerPhone: row.issuer_phone ?? "",
     issuedDate: dateToIso(row.issued_date),
+    objective: row.objective ?? null,
     proposalDocId: row.proposal_doc_id,
     proposalNumber: row.proposal_number,
     quoteId: row.quote_id,
@@ -704,6 +710,8 @@ export async function createProposalFromQuoteByTenant(
           quote_id: true,
           recipient_company: true,
           recipient_contact_name: true,
+          custom_intro: true,
+          objective: true,
           recipient_contact_title: true,
           recipient_email: true,
           status: true,
@@ -1014,6 +1022,8 @@ type ProposalSummaryRow = Prisma.proposalsGetPayload<{
         recipient_email: true;
         status: true;
         subject: true;
+        custom_intro: true;
+        objective: true;
         terms_and_conditions: true;
         valid_until: true;
       };
@@ -1054,6 +1064,8 @@ async function fetchProposalSummaryRows(
           quote_id: true,
           recipient_company: true,
           recipient_contact_name: true,
+          custom_intro: true,
+          objective: true,
           recipient_contact_title: true,
           recipient_email: true,
           status: true,
@@ -1449,6 +1461,8 @@ export async function getProposalWorkflowByTenant(
           quote_id: true,
           recipient_company: true,
           recipient_contact_name: true,
+          custom_intro: true,
+          objective: true,
           recipient_contact_title: true,
           recipient_email: true,
           status: true,
@@ -2011,6 +2025,12 @@ export async function updateProposalWorkflowByTenant(
   const hasSubjectUpdate =
     input.subject !== undefined &&
     input.subject !== (currentFormal?.subject ?? "");
+  const hasCustomIntroUpdate =
+    input.customIntro !== undefined &&
+    input.customIntro !== (currentFormal?.customIntro ?? "");
+  const hasObjectiveUpdate =
+    input.objective !== undefined &&
+    input.objective !== (currentFormal?.objective ?? "");
   const hasRecipientUpdate =
     input.recipientCompany !== undefined &&
     input.recipientCompany !== (currentFormal?.recipientCompany ?? "");
@@ -2068,6 +2088,8 @@ export async function updateProposalWorkflowByTenant(
   const hasContentUpdate =
     hasTermsUpdate ||
     hasSubjectUpdate ||
+    hasCustomIntroUpdate ||
+    hasObjectiveUpdate ||
     hasRecipientUpdate ||
     hasIssuerCompanyUpdate ||
     hasIssuerEmailUpdate ||
@@ -2080,6 +2102,8 @@ export async function updateProposalWorkflowByTenant(
     hasItemsUpdate;
   const hasNonTermsContentUpdate =
     hasSubjectUpdate ||
+    hasCustomIntroUpdate ||
+    hasObjectiveUpdate ||
     hasRecipientUpdate ||
     hasIssuerCompanyUpdate ||
     hasIssuerEmailUpdate ||
@@ -2100,6 +2124,8 @@ export async function updateProposalWorkflowByTenant(
     hasValidUntilUpdate;
   const hasApprovedMaterialUpdate =
     hasSubjectUpdate ||
+    hasCustomIntroUpdate ||
+    hasObjectiveUpdate ||
     hasRecipientUpdate ||
     hasIssuerCompanyUpdate ||
     hasItemsUpdate;
@@ -2224,6 +2250,8 @@ export async function updateProposalWorkflowByTenant(
     const issuerEmailToPersist = issuerEmailInput;
     const issuerPhoneToPersist = input.issuerPhone;
     const subjectToPersist = input.subject;
+    const customIntroToPersist = input.customIntro;
+    const objectiveToPersist = input.objective;
     const recipientToPersist = input.recipientCompany;
     const recipientContactNameToPersist = input.recipientContactName;
     const recipientEmailToPersist = input.recipientEmail;
@@ -2235,6 +2263,8 @@ export async function updateProposalWorkflowByTenant(
       !hasTermsUpdate &&
       !hasStatusUpdate &&
       !hasSubjectUpdate &&
+      !hasCustomIntroUpdate &&
+      !hasObjectiveUpdate &&
       !hasRecipientUpdate &&
       !hasIssuerCompanyUpdate &&
       !hasIssuerEmailUpdate &&
@@ -2289,6 +2319,8 @@ export async function updateProposalWorkflowByTenant(
       !hasTermsUpdate &&
       !hasStatusUpdate &&
       !hasSubjectUpdate &&
+      !hasCustomIntroUpdate &&
+      !hasObjectiveUpdate &&
       !hasRecipientUpdate &&
       !hasIssuerCompanyUpdate &&
       !hasIssuerEmailUpdate &&
@@ -2320,6 +2352,8 @@ export async function updateProposalWorkflowByTenant(
         sent_at: nextStatus === "sent" ? now : undefined,
         status: hasStatusUpdate ? nextStatus : undefined,
         subject: hasSubjectUpdate ? subjectToPersist : undefined,
+        custom_intro: hasCustomIntroUpdate ? customIntroToPersist || null : undefined,
+        objective: hasObjectiveUpdate ? objectiveToPersist || null : undefined,
         terms_and_conditions: hasTermsUpdate ? termsToPersist : undefined,
         updated_at: now,
         valid_until: hasValidUntilUpdate ? (validUntilToPersist ? new Date(validUntilToPersist) : null) : undefined,
@@ -2441,6 +2475,8 @@ export async function getProposalExcelPayloadByTenant(
           quote_id: true,
           recipient_company: true,
           recipient_contact_name: true,
+          custom_intro: true,
+          objective: true,
           recipient_contact_title: true,
           recipient_email: true,
           status: true,

@@ -524,6 +524,17 @@ export function ProposalPdfDocument({
           <Text style={styles.rowText}>Asunto: {formal?.subject ?? "Sin asunto"}</Text>
         </View>
 
+        {formal?.customIntro || formal?.objective ? (
+          <View style={styles.subjectBox}>
+            {formal?.customIntro ? (
+              <Text style={styles.rowText}>Descripción: {formal.customIntro}</Text>
+            ) : null}
+            {formal?.objective ? (
+              <Text style={styles.rowText}>Objetivo: {formal.objective}</Text>
+            ) : null}
+          </View>
+        ) : null}
+
         <Text style={styles.narrativeText}>
           {recipientIdentity.displayName || "Cliente"}: Adjuntamos la propuesta comercial para {formal?.recipientCompany || "su negocio"}. A continuación encontrará el detalle de partidas, precios y condiciones de negociación.
         </Text>

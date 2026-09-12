@@ -186,6 +186,7 @@ model formal_proposals {
   market_sector                                                String?
   subject                                                      String?
   custom_intro                                                 String?
+  objective                                                    String?
   issuer_logo_id                                               String?
   client_logo_id                                               String?
   terms_and_conditions                                         String?
