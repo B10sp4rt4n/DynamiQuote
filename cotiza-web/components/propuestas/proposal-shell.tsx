@@ -57,18 +57,31 @@ type ProposalShellProps = {
   tenantName: string;
 };
 
-const STATUS_FILTERS: Array<{ className: string; label: string; value: ProposalListFilter }> = [
-  { className: "border-zinc-900 bg-zinc-900 text-white", label: "Todas", value: "all" },
-  { className: "border-zinc-300 bg-white text-zinc-600 hover:bg-zinc-50", label: "Borrador", value: "draft" },
-  { className: "border-blue-300 bg-white text-blue-700 hover:bg-blue-50", label: "Enviadas", value: "sent" },
-  { className: "border-amber-300 bg-white text-amber-700 hover:bg-amber-50", label: "En revision", value: "in_review" },
-  { className: "border-emerald-300 bg-white text-emerald-700 hover:bg-emerald-50", label: "Aprobadas", value: "approved" },
-  { className: "border-rose-300 bg-white text-rose-700 hover:bg-rose-50", label: "Rechazadas", value: "rejected" },
-  { className: "border-zinc-300 bg-white text-zinc-500 hover:bg-zinc-50", label: "Vencidas", value: "expired" },
-  { className: "border-rose-300 bg-white text-rose-700 hover:bg-rose-50", label: "Bloqueadas margen", value: "blocked_margin" },
-  { className: "border-emerald-300 bg-white text-emerald-700 hover:bg-emerald-50", label: "Ganadas", value: "won" },
-  { className: "border-zinc-400 bg-white text-zinc-600 hover:bg-zinc-50", label: "Perdidas", value: "lost" },
-  { className: "border-amber-300 bg-white text-amber-700 hover:bg-amber-50", label: "Descartadas", value: "discarded" },
+type StatusFilterGroup = "estatus" | "riesgo" | "desenlace";
+
+const STATUS_FILTER_GROUPS: Array<{ group: StatusFilterGroup; label: string }> = [
+  { group: "estatus", label: "Estatus" },
+  { group: "riesgo", label: "Riesgo" },
+  { group: "desenlace", label: "Desenlace" },
+];
+
+const STATUS_FILTERS: Array<{
+  className: string;
+  group: StatusFilterGroup;
+  label: string;
+  value: ProposalListFilter;
+}> = [
+  { className: "border-zinc-900 bg-zinc-900 text-white", group: "estatus", label: "Todas", value: "all" },
+  { className: "border-zinc-300 bg-white text-zinc-600 hover:bg-zinc-50", group: "estatus", label: "Borrador", value: "draft" },
+  { className: "border-blue-300 bg-white text-blue-700 hover:bg-blue-50", group: "estatus", label: "Enviadas", value: "sent" },
+  { className: "border-amber-300 bg-white text-amber-700 hover:bg-amber-50", group: "estatus", label: "En revision", value: "in_review" },
+  { className: "border-emerald-300 bg-white text-emerald-700 hover:bg-emerald-50", group: "estatus", label: "Aprobadas", value: "approved" },
+  { className: "border-rose-300 bg-white text-rose-700 hover:bg-rose-50", group: "estatus", label: "Rechazadas", value: "rejected" },
+  { className: "border-zinc-300 bg-white text-zinc-500 hover:bg-zinc-50", group: "estatus", label: "Vencidas", value: "expired" },
+  { className: "border-rose-300 bg-white text-rose-700 hover:bg-rose-50", group: "riesgo", label: "Bloqueadas margen", value: "blocked_margin" },
+  { className: "border-emerald-300 bg-white text-emerald-700 hover:bg-emerald-50", group: "desenlace", label: "Ganadas", value: "won" },
+  { className: "border-zinc-400 bg-white text-zinc-600 hover:bg-zinc-50", group: "desenlace", label: "Perdidas", value: "lost" },
+  { className: "border-amber-300 bg-white text-amber-700 hover:bg-amber-50", group: "desenlace", label: "Descartadas", value: "discarded" },
 ];
 
 type ProposalStatusOption = {
@@ -99,6 +112,15 @@ function getStatusBadgeClass(value: ProposalStatus): string {
     case "sent":      return "bg-blue-100 text-blue-800";
     case "expired":   return "bg-zinc-200 text-zinc-600";
   }
+}
+
+function IconLock({ className }: { className?: string }) {
+  return (
+    <svg className={className} fill="none" stroke="currentColor" strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} viewBox="0 0 24 24">
+      <rect height="11" rx="2" width="18" x="3" y="11" />
+      <path d="M7 11V7a5 5 0 0 1 10 0v4" />
+    </svg>
+  );
 }
 
 function formatDate(value: string | null): string {
@@ -1333,37 +1355,41 @@ export function ProposalShell({
 
       <div className="mt-6 grid gap-6 lg:grid-cols-[1.1fr_1fr]">
         <div className="overflow-hidden rounded-xl border border-zinc-200">
-          <div className="flex flex-wrap items-center gap-2 border-b border-zinc-200 bg-zinc-50 px-4 py-3">
-            <p className="shrink-0 text-xs uppercase tracking-[0.18em] text-zinc-500">Filtro</p>
-            {STATUS_FILTERS.map((sf) => {
-              const count = counts[sf.value];
-              const isActive = listFilter === sf.value;
+          <div className="flex flex-col gap-2 border-b border-zinc-200 bg-zinc-50 px-4 py-3">
+            {STATUS_FILTER_GROUPS.map((group) => (
+              <div className="flex flex-wrap items-center gap-2" key={group.group}>
+                <p className="w-16 shrink-0 text-[11px] uppercase tracking-[0.14em] text-zinc-400">{group.label}</p>
+                {STATUS_FILTERS.filter((sf) => sf.group === group.group).map((sf) => {
+                  const count = counts[sf.value];
+                  const isActive = listFilter === sf.value;
 
-              return (
-                <button
-                  className={`rounded-full border px-3 py-1 text-xs font-medium transition ${
-                    isActive
-                      ? sf.value === "all"
-                        ? "border-zinc-900 bg-zinc-900 text-white"
-                        : sf.value === "blocked_margin"
-                          ? "border-rose-700 bg-rose-700 text-white"
-                          : sf.value === "approved" || sf.value === "won"
-                            ? "border-emerald-700 bg-emerald-700 text-white"
-                            : sf.value === "in_review"
-                              ? "border-amber-600 bg-amber-600 text-white"
-                              : sf.value === "sent"
-                                ? "border-blue-600 bg-blue-600 text-white"
-                                : "border-zinc-600 bg-zinc-600 text-white"
-                      : sf.className
-                  }`}
-                  key={sf.value}
-                  onClick={() => handleListFilterChange(sf.value)}
-                  type="button"
-                >
-                  {sf.label} ({count})
-                </button>
-              );
-            })}
+                  return (
+                    <button
+                      className={`rounded-full border px-3 py-1 text-xs font-medium transition ${
+                        isActive
+                          ? sf.value === "all"
+                            ? "border-zinc-900 bg-zinc-900 text-white"
+                            : sf.value === "blocked_margin"
+                              ? "border-rose-700 bg-rose-700 text-white"
+                              : sf.value === "approved" || sf.value === "won"
+                                ? "border-emerald-700 bg-emerald-700 text-white"
+                                : sf.value === "in_review"
+                                  ? "border-amber-600 bg-amber-600 text-white"
+                                  : sf.value === "sent"
+                                    ? "border-blue-600 bg-blue-600 text-white"
+                                    : "border-zinc-600 bg-zinc-600 text-white"
+                          : sf.className
+                      }`}
+                      key={sf.value}
+                      onClick={() => handleListFilterChange(sf.value)}
+                      type="button"
+                    >
+                      {sf.label} ({count})
+                    </button>
+                  );
+                })}
+              </div>
+            ))}
           </div>
           <div className="border-b border-zinc-200 bg-white px-4 py-2">
             <div className="flex flex-col gap-2 md:flex-row md:items-center">
@@ -1513,148 +1539,171 @@ export function ProposalShell({
                 })}
               </div>
 
-              <label className="block text-sm font-medium text-zinc-700" htmlFor="issuer-company">
-                Empresa emisora (fijo por tenant)
-              </label>
-              <input
-                className="w-full rounded-lg border border-zinc-200 bg-zinc-100 px-3 py-2 text-sm text-zinc-700"
-                disabled
-                id="issuer-company"
-                value={issuerCompany}
-              />
+              {/* Emisor */}
+              <div className="space-y-3 border-t border-zinc-200 pt-4">
+                <p className="text-xs font-semibold uppercase tracking-[0.12em] text-zinc-500">Emisor</p>
 
-              <div className="grid gap-3 md:grid-cols-2">
                 <div>
-                  <label className="block text-sm font-medium text-zinc-700" htmlFor="issuer-contact-name">
-                    Contacto emisor (fijo por vendedor)
-                  </label>
-                  <input
-                    className="w-full rounded-lg border border-zinc-200 bg-zinc-100 px-3 py-2 text-sm text-zinc-700"
-                    disabled
-                    id="issuer-contact-name"
-                    value={salesOwner || selectedProposal.formal?.issuerContactName || "Sin asignar"}
-                  />
+                  <div className="flex items-center justify-between">
+                    <span className="text-sm font-medium text-zinc-700">Empresa emisora</span>
+                    <span className="inline-flex items-center gap-1 text-xs text-zinc-400">
+                      <IconLock className="h-2.5 w-2.5" />
+                      fijo por tenant
+                    </span>
+                  </div>
+                  <p className="mt-1 text-sm text-zinc-900">{issuerCompany}</p>
                 </div>
-                <div>
-                  <label className="block text-sm font-medium text-zinc-700" htmlFor="issuer-phone">
-                    Telefono emisor
-                  </label>
-                  <input
-                    className="w-full rounded-lg border border-zinc-300 bg-white px-3 py-2 text-sm text-zinc-800"
-                    id="issuer-phone"
-                    onChange={(event) => setIssuerPhone(event.target.value)}
-                    placeholder="Telefono emisor"
-                    value={issuerPhone}
-                  />
-                </div>
-              </div>
 
-              <label className="block text-sm font-medium text-zinc-700" htmlFor="issuer-email">
-                Email emisor (fijo por usuario)
-              </label>
-              <input
-                className="w-full rounded-lg border border-zinc-200 bg-zinc-100 px-3 py-2 text-sm text-zinc-700"
-                disabled
-                id="issuer-email"
-                value={issuerEmail}
-              />
-
-              <div className="grid gap-3 md:grid-cols-2">
-                <div>
-                  <label className="block text-sm font-medium text-zinc-700" htmlFor="proposal-currency">
-                    Moneda
-                  </label>
-                  <select
-                    className={`w-full rounded-lg border px-3 py-2 text-sm ${
-                      currency ? "border-zinc-300 bg-white text-zinc-800" : "border-rose-400 bg-rose-50 text-rose-700"
-                    }`}
-                    id="proposal-currency"
-                    onChange={(event) => setCurrency(event.target.value)}
-                    value={currency}
-                  >
-                    <option value="">Selecciona una moneda...</option>
-                    <option value="MXN">MXN — Peso mexicano</option>
-                    <option value="USD">USD — Dólar estadounidense</option>
-                  </select>
-                  {!currency ? (
-                    <p className="mt-1 text-xs text-rose-600">
-                      Sin elegir todavía — se preguntará al descargar o enviar el documento.
+                <div className="grid gap-3 md:grid-cols-2">
+                  <div>
+                    <div className="flex items-center justify-between">
+                      <span className="text-sm font-medium text-zinc-700">Contacto emisor</span>
+                      <span className="inline-flex items-center gap-1 text-xs text-zinc-400">
+                        <IconLock className="h-2.5 w-2.5" />
+                        fijo por vendedor
+                      </span>
+                    </div>
+                    <p className="mt-1 text-sm text-zinc-900">
+                      {salesOwner || selectedProposal.formal?.issuerContactName || "Sin asignar"}
                     </p>
-                  ) : null}
+                  </div>
+                  <div>
+                    <label className="block text-sm font-medium text-zinc-700" htmlFor="issuer-phone">
+                      Telefono emisor
+                    </label>
+                    <input
+                      className="mt-1 w-full rounded-lg border border-zinc-300 bg-white px-3 py-2 text-sm text-zinc-800"
+                      id="issuer-phone"
+                      onChange={(event) => setIssuerPhone(event.target.value)}
+                      placeholder="Telefono emisor"
+                      value={issuerPhone}
+                    />
+                  </div>
                 </div>
+
                 <div>
-                  <label className="block text-sm font-medium text-zinc-700" htmlFor="proposal-valid-until">
-                    Vigencia (válido hasta)
-                  </label>
-                  <input
-                    className="w-full rounded-lg border border-zinc-300 bg-white px-3 py-2 text-sm text-zinc-800"
-                    id="proposal-valid-until"
-                    onChange={(event) => setValidUntil(event.target.value)}
-                    type="date"
-                    value={validUntil}
-                  />
+                  <div className="flex items-center justify-between">
+                    <span className="text-sm font-medium text-zinc-700">Email emisor</span>
+                    <span className="inline-flex items-center gap-1 text-xs text-zinc-400">
+                      <IconLock className="h-2.5 w-2.5" />
+                      fijo por usuario
+                    </span>
+                  </div>
+                  <p className="mt-1 text-sm text-zinc-900">{issuerEmail}</p>
                 </div>
               </div>
 
-              <label className="block text-sm font-medium text-zinc-700" htmlFor="sales-owner">
-                Vendedor (tenant)
-              </label>
-              <input
-                className="w-full rounded-lg border border-zinc-200 bg-zinc-100 px-3 py-2 text-sm text-zinc-700"
-                disabled
-                id="sales-owner"
-                value={salesOwner || "Sin asignar"}
-              />
+              {/* Documento */}
+              <div className="space-y-3 border-t border-zinc-200 pt-4">
+                <p className="text-xs font-semibold uppercase tracking-[0.12em] text-zinc-500">Documento</p>
 
-              <label className="block text-sm font-medium text-zinc-700" htmlFor="recipient-company">
-                Empresa receptora
-              </label>
-              <input
-                className="w-full rounded-lg border border-zinc-300 bg-white px-3 py-2 text-sm text-zinc-800 disabled:cursor-not-allowed disabled:bg-zinc-100 disabled:text-zinc-500"
-                disabled={!canEditContent}
-                id="recipient-company"
-                onChange={(event) => setRecipientCompany(event.target.value)}
-                placeholder="Nombre de empresa cliente"
-                value={recipientCompany}
-              />
-
-              <div className="grid gap-3 md:grid-cols-2">
-                <div>
-                  <label className="block text-sm font-medium text-zinc-700" htmlFor="recipient-contact-name">
-                    Contacto receptor
-                  </label>
-                  <input
-                    className="w-full rounded-lg border border-zinc-300 bg-white px-3 py-2 text-sm text-zinc-800"
-                    id="recipient-contact-name"
-                    onChange={(event) => setRecipientContactName(event.target.value)}
-                    placeholder="Nombre contacto receptor"
-                    value={recipientContactName}
-                  />
+                <div className="grid gap-3 md:grid-cols-2">
+                  <div>
+                    <label className="block text-sm font-medium text-zinc-700" htmlFor="proposal-currency">
+                      Moneda
+                    </label>
+                    <select
+                      className={`mt-1 w-full rounded-lg border px-3 py-2 text-sm ${
+                        currency ? "border-zinc-300 bg-white text-zinc-800" : "border-rose-400 bg-rose-50 text-rose-700"
+                      }`}
+                      id="proposal-currency"
+                      onChange={(event) => setCurrency(event.target.value)}
+                      value={currency}
+                    >
+                      <option value="">Selecciona una moneda...</option>
+                      <option value="MXN">MXN — Peso mexicano</option>
+                      <option value="USD">USD — Dólar estadounidense</option>
+                    </select>
+                    {!currency ? (
+                      <p className="mt-1 text-xs text-rose-600">
+                        Sin elegir todavía — se preguntará al descargar o enviar el documento.
+                      </p>
+                    ) : null}
+                  </div>
+                  <div>
+                    <label className="block text-sm font-medium text-zinc-700" htmlFor="proposal-valid-until">
+                      Vigencia (válido hasta)
+                    </label>
+                    <input
+                      className="mt-1 w-full rounded-lg border border-zinc-300 bg-white px-3 py-2 text-sm text-zinc-800"
+                      id="proposal-valid-until"
+                      onChange={(event) => setValidUntil(event.target.value)}
+                      type="date"
+                      value={validUntil}
+                    />
+                  </div>
                 </div>
+
                 <div>
-                  <label className="block text-sm font-medium text-zinc-700" htmlFor="recipient-contact-title">
-                    Cargo receptor
-                  </label>
-                  <input
-                    className="w-full rounded-lg border border-zinc-300 bg-white px-3 py-2 text-sm text-zinc-800"
-                    id="recipient-contact-title"
-                    onChange={(event) => setRecipientContactTitle(event.target.value)}
-                    placeholder="Cargo o area del contacto"
-                    value={recipientContactTitle}
-                  />
+                  <div className="flex items-center justify-between">
+                    <span className="text-sm font-medium text-zinc-700">Vendedor</span>
+                    <span className="inline-flex items-center gap-1 text-xs text-zinc-400">
+                      <IconLock className="h-2.5 w-2.5" />
+                      fijo por tenant
+                    </span>
+                  </div>
+                  <p className="mt-1 text-sm text-zinc-900">{salesOwner || "Sin asignar"}</p>
                 </div>
               </div>
 
-              <label className="block text-sm font-medium text-zinc-700" htmlFor="recipient-email">
-                Email receptor
-              </label>
-              <input
-                className="w-full rounded-lg border border-zinc-300 bg-white px-3 py-2 text-sm text-zinc-800"
-                id="recipient-email"
-                onChange={(event) => setRecipientEmail(event.target.value)}
-                placeholder="contacto@cliente.com"
-                value={recipientEmail}
-              />
+              {/* Receptor */}
+              <div className="space-y-3 border-t border-zinc-200 pt-4">
+                <p className="text-xs font-semibold uppercase tracking-[0.12em] text-zinc-500">Receptor</p>
+
+                <div>
+                  <label className="block text-sm font-medium text-zinc-700" htmlFor="recipient-company">
+                    Empresa receptora
+                  </label>
+                  <input
+                    className="mt-1 w-full rounded-lg border border-zinc-300 bg-white px-3 py-2 text-sm text-zinc-800 disabled:cursor-not-allowed disabled:bg-zinc-100 disabled:text-zinc-500"
+                    disabled={!canEditContent}
+                    id="recipient-company"
+                    onChange={(event) => setRecipientCompany(event.target.value)}
+                    placeholder="Nombre de empresa cliente"
+                    value={recipientCompany}
+                  />
+                </div>
+
+                <div className="grid gap-3 md:grid-cols-2">
+                  <div>
+                    <label className="block text-sm font-medium text-zinc-700" htmlFor="recipient-contact-name">
+                      Contacto receptor
+                    </label>
+                    <input
+                      className="mt-1 w-full rounded-lg border border-zinc-300 bg-white px-3 py-2 text-sm text-zinc-800"
+                      id="recipient-contact-name"
+                      onChange={(event) => setRecipientContactName(event.target.value)}
+                      placeholder="Nombre contacto receptor"
+                      value={recipientContactName}
+                    />
+                  </div>
+                  <div>
+                    <label className="block text-sm font-medium text-zinc-700" htmlFor="recipient-contact-title">
+                      Cargo receptor
+                    </label>
+                    <input
+                      className="mt-1 w-full rounded-lg border border-zinc-300 bg-white px-3 py-2 text-sm text-zinc-800"
+                      id="recipient-contact-title"
+                      onChange={(event) => setRecipientContactTitle(event.target.value)}
+                      placeholder="Cargo o area del contacto"
+                      value={recipientContactTitle}
+                    />
+                  </div>
+                </div>
+
+                <div>
+                  <label className="block text-sm font-medium text-zinc-700" htmlFor="recipient-email">
+                    Email receptor
+                  </label>
+                  <input
+                    className="mt-1 w-full rounded-lg border border-zinc-300 bg-white px-3 py-2 text-sm text-zinc-800"
+                    id="recipient-email"
+                    onChange={(event) => setRecipientEmail(event.target.value)}
+                    placeholder="contacto@cliente.com"
+                    value={recipientEmail}
+                  />
+                </div>
+              </div>
 
               <label className="block text-sm font-medium text-zinc-700" htmlFor="proposal-subject">
                 Asunto
