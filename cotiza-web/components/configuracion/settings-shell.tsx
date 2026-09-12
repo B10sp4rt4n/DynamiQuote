@@ -1448,6 +1448,8 @@ function IssuerProfilesTab({
   );
   const [savingProfile, setSavingProfile] = useState(false);
   const [profileMessage, setProfileMessage] = useState<string | null>(null);
+  const [savingClosingContact, setSavingClosingContact] = useState(false);
+  const [closingContactMessage, setClosingContactMessage] = useState<string | null>(null);
   const [expiryAlertDaysBefore, setExpiryAlertDaysBefore] = useState(
     String(tenantProfile?.expiryAlertDaysBefore ?? 3),
   );
@@ -1468,8 +1470,6 @@ function IssuerProfilesTab({
       const res = await fetch("/api/settings/tenant-profile", {
         body: JSON.stringify({
           address: address.trim() || null,
-          closingContactLabel: closingContactLabel.trim() || null,
-          closingContactLevel,
           rfc: rfc.trim() || null,
           website: website.trim() || null,
         }),
@@ -1485,13 +1485,41 @@ function IssuerProfilesTab({
       setRfc(data.profile.rfc ?? "");
       setAddress(data.profile.address ?? "");
       setWebsite(data.profile.website ?? "");
-      setClosingContactLabel(data.profile.closingContactLabel ?? "");
-      setClosingContactLevel(data.profile.closingContactLevel);
       setProfileMessage("Datos fiscales guardados.");
     } catch (err) {
       setProfileMessage(err instanceof Error ? err.message : "Error desconocido");
     } finally {
       setSavingProfile(false);
+    }
+  }
+
+  async function saveClosingContact(event: FormEvent<HTMLFormElement>) {
+    event.preventDefault();
+    setSavingClosingContact(true);
+    setClosingContactMessage(null);
+
+    try {
+      const res = await fetch("/api/settings/tenant-profile", {
+        body: JSON.stringify({
+          closingContactLabel: closingContactLabel.trim() || null,
+          closingContactLevel,
+        }),
+        headers: { "Content-Type": "application/json" },
+        method: "PUT",
+      });
+
+      const data = (await res.json()) as { error?: string; profile?: TenantProfile };
+      if (!res.ok || !data.profile) {
+        throw new Error(data.error ?? "No se pudo guardar el contacto de cierre");
+      }
+
+      setClosingContactLabel(data.profile.closingContactLabel ?? "");
+      setClosingContactLevel(data.profile.closingContactLevel);
+      setClosingContactMessage("Contacto de cierre guardado.");
+    } catch (err) {
+      setClosingContactMessage(err instanceof Error ? err.message : "Error desconocido");
+    } finally {
+      setSavingClosingContact(false);
     }
   }
 
@@ -1726,8 +1754,27 @@ function IssuerProfilesTab({
             value={website}
           />
         </label>
+        {canEditProfile ? (
+          <div className="flex items-center gap-3 md:col-span-3">
+            <button
+              className="rounded-lg bg-zinc-900 px-3 py-2 text-sm font-medium text-white transition hover:bg-zinc-700 disabled:opacity-60"
+              disabled={savingProfile}
+              type="submit"
+            >
+              {savingProfile ? "Guardando..." : "Guardar datos fiscales"}
+            </button>
+            {profileMessage ? <p className="text-sm text-zinc-600">{profileMessage}</p> : null}
+          </div>
+        ) : null}
+      </form>
+
+      <form className="grid gap-3 rounded-xl border border-zinc-200 bg-zinc-50 p-4 md:grid-cols-3" onSubmit={(event) => { void saveClosingContact(event); }}>
+        <p className="text-sm font-semibold text-zinc-900 md:col-span-3">Contacto de cierre en el PDF</p>
+        <p className="text-xs text-zinc-500 md:col-span-3">
+          Aparece al final de la propuesta, en &quot;Para cualquier aclaración...&quot;. No son datos fiscales -- es independiente.
+        </p>
         <label className="text-sm text-zinc-700 md:col-span-3">
-          Punto de contacto para aclaraciones (cierre del PDF)
+          Punto de contacto para aclaraciones
           <input
             className="mt-1 w-full rounded-lg border border-zinc-300 bg-white px-3 py-2 text-sm text-zinc-900 disabled:cursor-not-allowed disabled:bg-zinc-100"
             disabled={!canEditProfile}
@@ -1783,12 +1830,12 @@ function IssuerProfilesTab({
           <div className="flex items-center gap-3 md:col-span-3">
             <button
               className="rounded-lg bg-zinc-900 px-3 py-2 text-sm font-medium text-white transition hover:bg-zinc-700 disabled:opacity-60"
-              disabled={savingProfile}
+              disabled={savingClosingContact}
               type="submit"
             >
-              {savingProfile ? "Guardando..." : "Guardar datos fiscales"}
+              {savingClosingContact ? "Guardando..." : "Guardar contacto de cierre"}
             </button>
-            {profileMessage ? <p className="text-sm text-zinc-600">{profileMessage}</p> : null}
+            {closingContactMessage ? <p className="text-sm text-zinc-600">{closingContactMessage}</p> : null}
           </div>
         ) : null}
       </form>

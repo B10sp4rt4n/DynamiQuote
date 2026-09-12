@@ -185,6 +185,11 @@ const styles = StyleSheet.create({
     fontSize: 8.5,
     marginBottom: 3,
   },
+  closingIntro: {
+    fontSize: 8.5,
+    marginBottom: 4,
+    marginTop: 10,
+  },
   sectionHeader: {
     borderColor: "#60a5fa",
     borderStyle: "solid",
@@ -684,7 +689,7 @@ export function ProposalPdfDocument({
             <Text style={styles.traceValue}>{formatCurrency(grandTotal)}</Text>
           </View>
         </View>
-        <Text style={styles.greetingText}>Para cualquier aclaración relacionada con esta propuesta:</Text>
+        <Text style={styles.closingIntro}>Para dudas sobre esta propuesta:</Text>
         <View style={styles.traceWrap}>
           <View style={styles.traceLine}>
             <Text style={styles.traceLabel}>Contacto:</Text>
