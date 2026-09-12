@@ -117,6 +117,7 @@ export async function GET(_: Request, context: RouteContext) {
 
   const issuanceGate = resolveProposalIssuanceGate({
     issuanceStatus: payload.issuanceStatus,
+    marginCanAuthorizeFinal: payload.marginCanAuthorizeFinal,
     status: payload.status,
   });
 

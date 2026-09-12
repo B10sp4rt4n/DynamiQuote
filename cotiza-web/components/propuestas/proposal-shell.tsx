@@ -328,19 +328,20 @@ export function ProposalShell({
     () => items.find((item) => item.proposalId === selectedProposalId) ?? null,
     [items, selectedProposalId],
   );
-  const issuanceGate = useMemo(
-    () =>
-      resolveProposalIssuanceGate({
-        issuanceStatus: selectedIssuanceStatus,
-        status: selectedStatus,
-      }),
-    [selectedIssuanceStatus, selectedStatus],
-  );
   // Contenido material (partidas, empresa receptora, asunto) solo se edita
   // en draft -- fuera de ahi hay que reabrir explicitamente primero. Los
   // campos "seguros" (terminos, datos de contacto) no dependen de esto.
   const canEditContent = selectedStatus === "draft";
   const marginAllowsFinalAuthorization = selectedProposal?.marginEvaluation?.canAuthorizeFinal ?? true;
+  const issuanceGate = useMemo(
+    () =>
+      resolveProposalIssuanceGate({
+        issuanceStatus: selectedIssuanceStatus,
+        marginCanAuthorizeFinal: marginAllowsFinalAuthorization,
+        status: selectedStatus,
+      }),
+    [selectedIssuanceStatus, marginAllowsFinalAuthorization, selectedStatus],
+  );
   const marginAllowsInformativeShare = selectedProposal?.marginEvaluation?.canShareInformative ?? false;
   const approvalAllowsFinalAuthorization = approvalGate?.canAuthorizeFinal ?? true;
   const canRequestFinalAuthorization =

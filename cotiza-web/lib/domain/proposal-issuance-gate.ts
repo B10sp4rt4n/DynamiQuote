@@ -13,11 +13,20 @@ export type ProposalIssuanceDecision =
 // estado de la propuesta:
 // - draft: permitido siempre, con marca de "no validado" en el documento.
 // - approved: permitido siempre, sin marca.
-// - cualquier otro estado (sent, in_review, rejected, expired): bloqueado
-//   por default, salvo que haya un forzamiento activo (issuance_status
-//   === "force_pending") autorizado por Owner/Superadmin via el endpoint
-//   dedicado -- ese forzamiento es de un solo uso, lo consume quien primero
-//   lo use de las 3 rutas de entrega.
+// - sent (enviada al cliente por correo): permitido, sin marca, SOLO si el
+//   margen ya calificaba para autorizacion final (marginCanAuthorizeFinal).
+//   "sent" es alcanzable directo desde "draft" sin pasar por aprobacion
+//   interna -- si el margen ya estaba dentro de politica en ese momento, no
+//   tiene sentido bloquear la re-emision del mismo documento que ya se
+//   entrego. Esto NO cambia el estatus a "approved": ese salto sigue
+//   reservado a que el cliente decida ("Cliente acepto"/"Cliente rechazo"
+//   en proposal-shell.tsx) o a una aprobacion formal -- aqui solo se deja
+//   de bloquear la emision del documento.
+// - cualquier otro estado (sent bloqueada por margen, in_review, rejected,
+//   expired): bloqueado por default, salvo que haya un forzamiento activo
+//   (issuance_status === "force_pending") autorizado por Owner/Superadmin
+//   via el endpoint dedicado -- ese forzamiento es de un solo uso, lo
+//   consume quien primero lo use de las 3 rutas de entrega.
 //
 // La moneda NO es parte de este gate -- es un switch que se resuelve en el
 // momento de imprimir/emitir (ver proposal-shell.tsx: si no esta elegida,
@@ -26,12 +35,17 @@ export type ProposalIssuanceDecision =
 export function resolveProposalIssuanceGate(input: {
   status: ProposalStatus;
   issuanceStatus: ProposalIssuanceStatus;
+  marginCanAuthorizeFinal?: boolean;
 }): ProposalIssuanceDecision {
   if (input.status === "draft") {
     return { kind: "allowed", watermark: true, forced: false };
   }
 
   if (input.status === "approved") {
+    return { kind: "allowed", watermark: false, forced: false };
+  }
+
+  if (input.status === "sent" && input.marginCanAuthorizeFinal) {
     return { kind: "allowed", watermark: false, forced: false };
   }
 

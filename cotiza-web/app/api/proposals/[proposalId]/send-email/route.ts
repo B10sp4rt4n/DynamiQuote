@@ -190,6 +190,7 @@ export async function POST(request: Request, context: RouteContext) {
 
   const issuanceGate = resolveProposalIssuanceGate({
     issuanceStatus: proposal.issuanceStatus,
+    marginCanAuthorizeFinal: proposal.marginEvaluation.canAuthorizeFinal,
     status: proposal.status,
   });
 

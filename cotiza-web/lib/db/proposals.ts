@@ -406,6 +406,7 @@ export type ProposalExcelPayload = {
   formal: FormalProposalSlice | null;
   issuanceStatus: ProposalIssuanceStatus;
   items: ProposalExcelItem[];
+  marginCanAuthorizeFinal: boolean;
   origin: string | null;
   proposalId: string;
   status: ProposalStatus;
@@ -2420,23 +2421,27 @@ export async function getProposalExcelPayloadByTenant(
   }
 
   const latestFormal = row.formal_proposals[0];
+  const excelItems = row.proposal_items.map((item) => ({
+    componentType: item.component_type ?? "",
+    costUnit: decimalToNumber(item.cost_unit),
+    description: item.description ?? "",
+    itemNumber: item.item_number,
+    origin: item.origin ?? "",
+    priceUnit: decimalToNumber(item.price_unit),
+    quantity: decimalToNumber(item.quantity),
+    sku: item.sku ?? "",
+    status: item.status,
+    subtotalCost: decimalToNumber(item.subtotal_cost),
+    subtotalPrice: decimalToNumber(item.subtotal_price),
+  }));
+  const marginPolicy = await getMarginPolicyByTenant(tenantId);
+  const marginEvaluation = evaluateProposalLiberation(marginPolicy, excelItems);
 
   return {
     formal: latestFormal ? toFormalSlice(latestFormal) : null,
     issuanceStatus: normalizeIssuanceStatus(row.issuance_status),
-    items: row.proposal_items.map((item) => ({
-      componentType: item.component_type ?? "",
-      costUnit: decimalToNumber(item.cost_unit),
-      description: item.description ?? "",
-      itemNumber: item.item_number,
-      origin: item.origin ?? "",
-      priceUnit: decimalToNumber(item.price_unit),
-      quantity: decimalToNumber(item.quantity),
-      sku: item.sku ?? "",
-      status: item.status,
-      subtotalCost: decimalToNumber(item.subtotal_cost),
-      subtotalPrice: decimalToNumber(item.subtotal_price),
-    })),
+    items: excelItems,
+    marginCanAuthorizeFinal: marginEvaluation.canAuthorizeFinal,
     origin: row.origin,
     proposalId: row.proposal_id,
     status: normalizeStatus(latestFormal?.status ?? row.status),
