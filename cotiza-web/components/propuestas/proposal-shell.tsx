@@ -1358,7 +1358,9 @@ export function ProposalShell({
           <div className="flex flex-col gap-2 border-b border-zinc-200 bg-zinc-50 px-4 py-3">
             {STATUS_FILTER_GROUPS.map((group) => (
               <div className="flex flex-wrap items-center gap-2" key={group.group}>
-                <p className="w-16 shrink-0 text-[11px] uppercase tracking-[0.14em] text-zinc-400">{group.label}</p>
+                <p className="w-24 shrink-0 whitespace-nowrap text-[11px] uppercase tracking-[0.14em] text-zinc-400">
+                  {group.label}
+                </p>
                 {STATUS_FILTERS.filter((sf) => sf.group === group.group).map((sf) => {
                   const count = counts[sf.value];
                   const isActive = listFilter === sf.value;
