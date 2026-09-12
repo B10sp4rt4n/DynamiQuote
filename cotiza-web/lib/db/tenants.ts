@@ -22,6 +22,7 @@ export type TenantProfile = {
   closingContactLevel: ClosingContactLevel;
   expiryAlertDaysBefore: number;
   name: string;
+  razonSocial: string | null;
   rfc: string | null;
   website: string | null;
 };
@@ -31,6 +32,7 @@ export type UpdateTenantProfileInput = {
   closingContactLabel?: string | null;
   closingContactLevel?: ClosingContactLevel;
   expiryAlertDaysBefore?: number;
+  razonSocial?: string | null;
   rfc?: string | null;
   website?: string | null;
 };
@@ -94,9 +96,11 @@ export async function getActiveTenants(): Promise<ActiveTenantOption[]> {
   }));
 }
 
-// Datos fiscales del emisor (RFC, domicilio, sitio web) -- se muestran en el
-// recuadro "Datos del emisor" del documento de propuesta. Sin backfill: nacen
-// vacios hasta que owner/admin/superadmin los capture en Configuracion.
+// Datos fiscales del emisor (RFC, razon social, domicilio, sitio web) -- se
+// muestran en el recuadro "Datos del emisor" del documento de propuesta. Sin
+// backfill: nacen vacios hasta que owner/admin/superadmin los capture en
+// Configuracion. `name` es el nombre comercial del tenant (no es lo mismo
+// que la razon social fiscal, que puede ser distinta).
 export async function getTenantProfileByTenant(tenantId: string): Promise<TenantProfile | null> {
   const tenant = await prisma.tenant.findFirst({
     select: {
@@ -105,6 +109,7 @@ export async function getTenantProfileByTenant(tenantId: string): Promise<Tenant
       closing_contact_level: true,
       expiry_alert_days_before: true,
       name: true,
+      razon_social: true,
       rfc: true,
       website: true,
     },
@@ -121,6 +126,7 @@ export async function getTenantProfileByTenant(tenantId: string): Promise<Tenant
     closingContactLevel: normalizeClosingContactLevel(tenant.closing_contact_level),
     expiryAlertDaysBefore: tenant.expiry_alert_days_before,
     name: tenant.name,
+    razonSocial: tenant.razon_social,
     rfc: tenant.rfc,
     website: tenant.website,
   };
@@ -151,6 +157,7 @@ export async function updateTenantProfileByTenant(
       ...(input.expiryAlertDaysBefore !== undefined
         ? { expiry_alert_days_before: input.expiryAlertDaysBefore }
         : {}),
+      ...(input.razonSocial !== undefined ? { razon_social: input.razonSocial?.trim() || null } : {}),
       ...(input.rfc !== undefined ? { rfc: input.rfc?.trim() || null } : {}),
       ...(input.website !== undefined ? { website: input.website?.trim() || null } : {}),
     },
@@ -160,6 +167,7 @@ export async function updateTenantProfileByTenant(
       closing_contact_level: true,
       expiry_alert_days_before: true,
       name: true,
+      razon_social: true,
       rfc: true,
       website: true,
     },
@@ -172,6 +180,7 @@ export async function updateTenantProfileByTenant(
     closingContactLevel: normalizeClosingContactLevel(updated.closing_contact_level),
     expiryAlertDaysBefore: updated.expiry_alert_days_before,
     name: updated.name,
+    razonSocial: updated.razon_social,
     rfc: updated.rfc,
     website: updated.website,
   };

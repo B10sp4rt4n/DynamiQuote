@@ -13,6 +13,7 @@ model Tenant {
   active           Boolean            @default(true)
   created_at       DateTime           @db.Timestamp(6)
   rfc              String?
+  razon_social     String?
   address          String?
   website          String?
   closing_contact_label String?

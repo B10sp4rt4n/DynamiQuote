@@ -268,6 +268,7 @@ export async function POST(request: Request, context: RouteContext) {
     tenantClosingContact: tenantProfile?.closingContactLabel ?? null,
     tenantClosingContactLevel: tenantProfile?.closingContactLevel,
     tenantName: tenant.name,
+    tenantRazonSocial: tenantProfile?.razonSocial ?? null,
     tenantRfc: tenantProfile?.rfc ?? null,
     tenantWebsite: tenantProfile?.website ?? null,
   });

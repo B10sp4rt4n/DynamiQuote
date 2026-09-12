@@ -433,6 +433,7 @@ type ProposalPdfInput = {
   tenantClosingContact?: string | null;
   tenantClosingContactLevel?: ClosingContactLevel;
   tenantName: string;
+  tenantRazonSocial?: string | null;
   tenantRfc?: string | null;
   tenantWebsite?: string | null;
 };
@@ -444,6 +445,7 @@ export function ProposalPdfDocument({
   tenantClosingContact,
   tenantClosingContactLevel,
   tenantName,
+  tenantRazonSocial,
   tenantRfc,
   tenantWebsite,
 }: ProposalPdfInput) {
@@ -452,6 +454,10 @@ export function ProposalPdfDocument({
   const issuerPhoneDisplay = normalizeTextValue(formal?.issuerPhone) || "Telefono no disponible";
   const issuerEmailDisplay = normalizeTextValue(formal?.issuerEmail) || "correo no disponible";
   const recipientEmailDisplay = normalizeTextValue(formal?.recipientEmail) || "correo no disponible";
+  // Razon social (nombre legal ante el SAT) es distinta del nombre comercial
+  // (issuerCompany/tenantName) que se usa como marca en el resto del
+  // documento -- no asumir que son lo mismo.
+  const issuerRazonSocialDisplay = normalizeTextValue(tenantRazonSocial);
   const issuerRfcDisplay = normalizeTextValue(tenantRfc);
   const issuerAddressDisplay = normalizeTextValue(tenantAddress);
   const issuerWebsiteDisplay = normalizeTextValue(tenantWebsite);
@@ -528,6 +534,7 @@ export function ProposalPdfDocument({
             <Text style={styles.micro}>{formal?.issuerContactName || proposal.salesOwner || "Sin vendedor"}</Text>
             <Text style={styles.micro}>{issuerPhoneDisplay}</Text>
             <Text style={styles.micro}>{issuerEmailDisplay}</Text>
+            {issuerRazonSocialDisplay ? <Text style={styles.micro}>Razón social: {issuerRazonSocialDisplay}</Text> : null}
             {issuerRfcDisplay ? <Text style={styles.micro}>RFC: {issuerRfcDisplay}</Text> : null}
             {issuerAddressDisplay ? <Text style={styles.micro}>{issuerAddressDisplay}</Text> : null}
             {issuerWebsiteDisplay ? <Text style={styles.micro}>{issuerWebsiteDisplay}</Text> : null}

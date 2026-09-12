@@ -1440,6 +1440,7 @@ function IssuerProfilesTab({
   const [uploadPending, setUploadPending] = useState(false);
   const [error, setError] = useState<string | null>(null);
   const [rfc, setRfc] = useState(tenantProfile?.rfc ?? "");
+  const [razonSocial, setRazonSocial] = useState(tenantProfile?.razonSocial ?? "");
   const [address, setAddress] = useState(tenantProfile?.address ?? "");
   const [website, setWebsite] = useState(tenantProfile?.website ?? "");
   const [closingContactLabel, setClosingContactLabel] = useState(tenantProfile?.closingContactLabel ?? "");
@@ -1470,6 +1471,7 @@ function IssuerProfilesTab({
       const res = await fetch("/api/settings/tenant-profile", {
         body: JSON.stringify({
           address: address.trim() || null,
+          razonSocial: razonSocial.trim() || null,
           rfc: rfc.trim() || null,
           website: website.trim() || null,
         }),
@@ -1483,6 +1485,7 @@ function IssuerProfilesTab({
       }
 
       setRfc(data.profile.rfc ?? "");
+      setRazonSocial(data.profile.razonSocial ?? "");
       setAddress(data.profile.address ?? "");
       setWebsite(data.profile.website ?? "");
       setProfileMessage("Datos fiscales guardados.");
@@ -1724,6 +1727,19 @@ function IssuerProfilesTab({
         <p className="text-xs text-zinc-500 md:col-span-3">
           Aparecen en el recuadro &quot;Datos del emisor&quot; de las propuestas en PDF.
         </p>
+        <label className="text-sm text-zinc-700 md:col-span-3">
+          Razón social
+          <input
+            className="mt-1 w-full rounded-lg border border-zinc-300 bg-white px-3 py-2 text-sm text-zinc-900 disabled:cursor-not-allowed disabled:bg-zinc-100"
+            disabled={!canEditProfile}
+            onChange={(event) => setRazonSocial(event.target.value)}
+            placeholder="Ej. SynAppsSys Labs S.A. de C.V."
+            value={razonSocial}
+          />
+          <span className="mt-1 block text-xs font-normal text-zinc-500">
+            El nombre legal ante el SAT, ligado al RFC -- no siempre es igual al nombre comercial (&quot;{tenantProfile?.name}&quot;) que usan las propuestas.
+          </span>
+        </label>
         <label className="text-sm text-zinc-700">
           RFC
           <input
