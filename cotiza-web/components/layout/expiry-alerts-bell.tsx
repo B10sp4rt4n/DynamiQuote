@@ -10,15 +10,28 @@ type ExpiringProposalAlert = {
   validUntil: string;
 };
 
+type UnlabeledProposalAlert = {
+  proposalId: string;
+  proposalNumber: string;
+  recipientCompany: string;
+  validUntil: string;
+};
+
 function formatValidUntil(iso: string): string {
   return new Intl.DateTimeFormat("es-MX", { day: "2-digit", month: "short", year: "numeric" }).format(
     new Date(iso),
   );
 }
 
+function formatDaysOverdue(iso: string): string {
+  const days = Math.max(1, Math.floor((Date.now() - new Date(iso).getTime()) / (1000 * 60 * 60 * 24)));
+  return days === 1 ? "Venció hace 1 día" : `Venció hace ${days} días`;
+}
+
 export function ExpiryAlertsBell() {
   const [open, setOpen] = useState(false);
   const [alerts, setAlerts] = useState<ExpiringProposalAlert[]>([]);
+  const [unlabeled, setUnlabeled] = useState<UnlabeledProposalAlert[]>([]);
   const [loading, setLoading] = useState(false);
   const [loaded, setLoaded] = useState(false);
   const containerRef = useRef<HTMLDivElement>(null);
@@ -30,9 +43,13 @@ export function ExpiryAlertsBell() {
       setLoading(true);
       try {
         const res = await fetch("/api/proposals/expiring-alerts");
-        const data = (await res.json()) as { alerts?: ExpiringProposalAlert[] };
+        const data = (await res.json()) as {
+          alerts?: ExpiringProposalAlert[];
+          unlabeled?: UnlabeledProposalAlert[];
+        };
         if (!cancelled) {
           setAlerts(data.alerts ?? []);
+          setUnlabeled(data.unlabeled ?? []);
         }
       } catch {
         // Silencioso: no bloquear la navegacion por un fallo de alertas.
@@ -76,9 +93,9 @@ export function ExpiryAlertsBell() {
             strokeLinejoin="round"
           />
         </svg>
-        {loaded && alerts.length > 0 ? (
+        {loaded && alerts.length + unlabeled.length > 0 ? (
           <span className="absolute -right-0.5 -top-0.5 flex h-4 min-w-4 items-center justify-center rounded-full bg-red-600 px-1 text-[10px] font-semibold text-white">
-            {alerts.length}
+            {alerts.length + unlabeled.length}
           </span>
         ) : null}
       </button>
@@ -104,6 +121,31 @@ export function ExpiryAlertsBell() {
                     <span className="block text-xs text-red-600">
                       Vence {formatValidUntil(alert.validUntil)}
                     </span>
+                  </Link>
+                </li>
+              ))}
+            </ul>
+          )}
+
+          <p className="mt-3 border-t border-zinc-100 px-1 pt-3 text-sm font-semibold text-zinc-900">
+            Propuestas sin etiquetar
+          </p>
+          {loading ? (
+            <p className="px-1 py-3 text-sm text-zinc-500">Cargando...</p>
+          ) : unlabeled.length === 0 ? (
+            <p className="px-1 py-3 text-sm text-zinc-500">No hay propuestas pendientes de etiquetar.</p>
+          ) : (
+            <ul className="mt-2 max-h-80 space-y-1 overflow-y-auto">
+              {unlabeled.map((item) => (
+                <li key={item.proposalId}>
+                  <Link
+                    className="block rounded-lg px-2 py-2 text-sm transition hover:bg-zinc-50"
+                    href={`/propuestas/${item.proposalId}`}
+                    onClick={() => setOpen(false)}
+                  >
+                    <span className="block font-medium text-zinc-900">{item.proposalNumber}</span>
+                    <span className="block text-zinc-500">{item.recipientCompany}</span>
+                    <span className="block text-xs text-amber-600">{formatDaysOverdue(item.validUntil)} · márcala ganada, perdida o descartada</span>
                   </Link>
                 </li>
               ))}

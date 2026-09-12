@@ -1,7 +1,7 @@
 import { NextResponse } from "next/server";
 
 import { getCurrentTenantContext } from "@/lib/auth/tenant-context";
-import { getExpiringProposalsByTenant } from "@/lib/db/proposal-alerts";
+import { getExpiringProposalsByTenant, getUnlabeledExpiredProposalsByTenant } from "@/lib/db/proposal-alerts";
 import { getTenantProfileByTenant } from "@/lib/db/tenants";
 
 export async function GET() {
@@ -15,7 +15,10 @@ export async function GET() {
   const profile = await getTenantProfileByTenant(tenant.id);
   const daysAhead = profile?.expiryAlertDaysBefore ?? 3;
 
-  const alerts = await getExpiringProposalsByTenant(tenant.id, daysAhead, tenant.userId, canSeeAll);
+  const [alerts, unlabeled] = await Promise.all([
+    getExpiringProposalsByTenant(tenant.id, daysAhead, tenant.userId, canSeeAll),
+    getUnlabeledExpiredProposalsByTenant(tenant.id, tenant.userId, canSeeAll),
+  ]);
 
-  return NextResponse.json({ alerts, daysAhead }, { status: 200 });
+  return NextResponse.json({ alerts, daysAhead, unlabeled }, { status: 200 });
 }
