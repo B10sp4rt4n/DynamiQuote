@@ -1,5 +1,6 @@
 "use client";
 
+import Link from "next/link";
 import { useCallback, useEffect, useRef, useState } from "react";
 
 import type { ClientContact } from "@/lib/db/client-contacts";
@@ -141,6 +142,15 @@ function IconPhone({ className }: { className?: string }) {
   return (
     <svg className={className} fill="none" stroke="currentColor" strokeLinecap="round" strokeLinejoin="round" strokeWidth={1.75} viewBox="0 0 24 24">
       <path d="M22 16.92v3a2 2 0 0 1-2.18 2 19.79 19.79 0 0 1-8.63-3.07 19.5 19.5 0 0 1-6-6 19.79 19.79 0 0 1-3.07-8.67A2 2 0 0 1 4.11 2h3a2 2 0 0 1 2 1.72 12.84 12.84 0 0 0 .7 2.81 2 2 0 0 1-.45 2.11L8.09 9.91a16 16 0 0 0 6 6l1.27-1.27a2 2 0 0 1 2.11-.45 12.84 12.84 0 0 0 2.81.7A2 2 0 0 1 22 16.92Z" />
+    </svg>
+  );
+}
+
+function IconEye({ className }: { className?: string }) {
+  return (
+    <svg className={className} fill="none" stroke="currentColor" strokeLinecap="round" strokeLinejoin="round" strokeWidth={1.75} viewBox="0 0 24 24">
+      <path d="M1 12s4-8 11-8 11 8 11 8-4 8-11 8-11-8-11-8Z" />
+      <circle cx="12" cy="12" r="3" />
     </svg>
   );
 }
@@ -740,6 +750,13 @@ export function ClientShell({ clientLogos, initialClients }: ClientShellProps) {
                       </td>
                       <td className="px-4 py-3">
                         <div className="flex items-center gap-0.5">
+                          <Link
+                            className="inline-flex items-center gap-1.5 rounded-lg px-2.5 py-1.5 text-xs font-medium text-zinc-600 transition hover:bg-zinc-100 hover:text-zinc-900"
+                            href={`/clientes/${client.clientId}`}
+                          >
+                            <IconEye className="h-3.5 w-3.5" />
+                            Ver 360°
+                          </Link>
                           <button
                             className="inline-flex items-center gap-1.5 rounded-lg px-2.5 py-1.5 text-xs font-medium text-zinc-600 transition hover:bg-zinc-100 hover:text-zinc-900"
                             onClick={() => { void openEdit(client); }}
@@ -828,6 +845,12 @@ export function ClientShell({ clientLogos, initialClients }: ClientShellProps) {
                     ) : null}
                   </div>
                   <div className="mt-3 flex items-center gap-2">
+                    <Link
+                      className="flex h-[34px] w-[34px] shrink-0 items-center justify-center rounded-lg border border-zinc-200 text-zinc-600"
+                      href={`/clientes/${client.clientId}`}
+                    >
+                      <IconEye className="h-3.5 w-3.5" />
+                    </Link>
                     <button
                       className="flex flex-1 items-center justify-center gap-1.5 rounded-lg border border-zinc-200 px-3 py-2 text-xs font-medium text-zinc-700"
                       onClick={() => { void openEdit(client); }}

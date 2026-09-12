@@ -92,6 +92,55 @@ export async function getPendingTasksByTenant(
   }));
 }
 
+export type ClientTask = {
+  description: string;
+  dueDate: string;
+  opportunityId: string | null;
+  opportunityNumber: string | null;
+  taskId: string;
+};
+
+// Tareas pendientes de UN cliente especifico -- para la Vista 360, donde
+// ya se sabe el cliente y no hace falta repetir su nombre por fila.
+export async function getPendingTasksByClientForTenant(
+  tenantId: string,
+  clientId: string,
+  viewerUserId: string | null = null,
+  canSeeAll = true,
+): Promise<ClientTask[]> {
+  const rows = await prisma.tasks.findMany({
+    orderBy: { due_date: "asc" },
+    where: {
+      client_id: clientId,
+      completed_at: null,
+      tenant_id: tenantId,
+      ...(canSeeAll ? {} : { OR: [{ created_by_user_id: viewerUserId }, { created_by_user_id: null }] }),
+    },
+  });
+
+  if (rows.length === 0) {
+    return [];
+  }
+
+  const opportunityIds = [...new Set(rows.map((row) => row.opportunity_id).filter((id): id is string => Boolean(id)))];
+  const opportunities =
+    opportunityIds.length > 0
+      ? await prisma.opportunities.findMany({
+          select: { opportunity_id: true, opportunity_number: true },
+          where: { opportunity_id: { in: opportunityIds }, tenant_id: tenantId },
+        })
+      : [];
+  const opportunityById = new Map(opportunities.map((opp) => [opp.opportunity_id, opp.opportunity_number]));
+
+  return rows.map((row) => ({
+    description: row.description,
+    dueDate: row.due_date.toISOString(),
+    opportunityId: row.opportunity_id,
+    opportunityNumber: row.opportunity_id ? (opportunityById.get(row.opportunity_id) ?? null) : null,
+    taskId: row.task_id,
+  }));
+}
+
 export type CompleteTaskResult = "forbidden" | "not_found" | "updated";
 
 export async function completeTaskByTenant(

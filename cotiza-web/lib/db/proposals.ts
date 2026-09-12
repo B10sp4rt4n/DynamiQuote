@@ -1138,6 +1138,63 @@ export async function getProposalSummariesByTenant(
   return mapProposalSummaryRows(rows, marginPolicy);
 }
 
+export type ClientProposalHistoryItem = {
+  createdAt: string;
+  outcome: "won" | "lost" | "discarded" | null;
+  proposalId: string;
+  proposalNumber: string;
+  status: ProposalStatus;
+};
+
+// Historial de propuestas de un cliente para la Vista 360 -- se llega al
+// cliente via quotes.client_id (proposals no tiene client_id directo, se
+// crean a partir de un quote_id, guardado en proposals.origin).
+export async function getClientProposalHistoryByTenant(
+  tenantId: string,
+  clientId: string,
+  viewerUserId: string | null = null,
+  canSeeAll = true,
+): Promise<ClientProposalHistoryItem[]> {
+  const quotes = await prisma.quote.findMany({
+    select: { quote_id: true },
+    where: { client_id: clientId, tenantId },
+  });
+
+  if (quotes.length === 0) {
+    return [];
+  }
+
+  const quoteIds = quotes.map((q) => q.quote_id);
+
+  const rows = await prisma.proposals.findMany({
+    include: {
+      formal_proposals: {
+        orderBy: [{ created_at: "desc" }, { proposal_doc_id: "desc" }],
+        select: { proposal_number: true, status: true },
+        take: 1,
+      },
+    },
+    orderBy: { created_at: "desc" },
+    where: {
+      origin: { in: quoteIds },
+      tenant_id: tenantId,
+      ...(canSeeAll ? {} : { OR: [{ created_by_user_id: viewerUserId }, { created_by_user_id: null }] }),
+    },
+  });
+
+  return rows.map((row) => {
+    const latestFormal = row.formal_proposals[0];
+    return {
+      createdAt: row.created_at.toISOString(),
+      outcome:
+        row.outcome === "won" || row.outcome === "lost" || row.outcome === "discarded" ? row.outcome : null,
+      proposalId: row.proposal_id,
+      proposalNumber: latestFormal?.proposal_number ?? row.proposal_id,
+      status: normalizeStatus(latestFormal?.status ?? row.status),
+    };
+  });
+}
+
 const PROPOSAL_LIST_PAGE_SIZE = 20;
 
 export type ProposalListPage = {

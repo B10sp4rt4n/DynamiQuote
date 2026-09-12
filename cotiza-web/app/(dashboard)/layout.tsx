@@ -56,6 +56,7 @@ export default async function DashboardLayout({ children }: DashboardLayoutProps
             <Link href="/propuestas">Propuestas</Link>
             <Link href="/paquetes">Paquetes</Link>
             <Link href="/configuracion/clientes">Clientes</Link>
+            <Link href="/pipeline">Pipeline</Link>
             <Link href="/configuracion">Configuracion</Link>
             <ExpiryAlertsBell />
             {clerkEnabled ? (

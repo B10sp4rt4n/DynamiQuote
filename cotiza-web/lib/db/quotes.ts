@@ -337,6 +337,75 @@ export async function getQuoteGroupsSummaryByTenant(
     }));
 }
 
+// Igual que getQuoteGroupsSummaryByTenant pero acotado a un cliente
+// especifico (via quotes.client_id) -- para la Vista 360.
+export async function getQuoteGroupsByClientForTenant(
+  tenantId: string,
+  clientId: string,
+  viewerUserId: string | null = null,
+  canSeeAll = true,
+): Promise<QuoteGroupSummary[]> {
+  const scopeFilter = canSeeAll
+    ? Prisma.empty
+    : Prisma.sql`AND (created_by_user_id = ${viewerUserId} OR created_by_user_id IS NULL)`;
+
+  const rows = await prisma.$queryRaw<QuoteSummaryRow[]>(Prisma.sql`
+    WITH latest_versions AS (
+      SELECT DISTINCT ON (quote_group_id)
+        quote_group_id,
+        quote_id,
+        version,
+        created_at,
+        status,
+        total_revenue,
+        avg_margin,
+        client_name,
+        proposal_name,
+        playbook_name
+      FROM quotes
+      WHERE tenant_id = ${tenantId} AND client_id = ${clientId} ${scopeFilter}
+      ORDER BY quote_group_id, version DESC
+    ),
+    version_counts AS (
+      SELECT quote_group_id, COUNT(*) AS version_count
+      FROM quotes
+      WHERE tenant_id = ${tenantId} AND client_id = ${clientId}
+      GROUP BY quote_group_id
+    )
+    SELECT
+      lv.quote_group_id,
+      lv.quote_id,
+      lv.version,
+      vc.version_count,
+      lv.created_at,
+      lv.status,
+      lv.total_revenue,
+      lv.avg_margin,
+      lv.client_name,
+      lv.proposal_name,
+      lv.playbook_name
+    FROM latest_versions lv
+    JOIN version_counts vc ON lv.quote_group_id = vc.quote_group_id
+    ORDER BY lv.created_at DESC NULLS LAST
+  `);
+
+  return rows
+    .filter((row) => row.quote_group_id)
+    .map((row) => ({
+      avgMargin: decimalToNumber(row.avg_margin),
+      clientName: row.client_name ?? "Sin cliente",
+      createdAt: dateToIso(row.created_at),
+      playbookName: row.playbook_name,
+      proposalName: row.proposal_name ?? "Sin propuesta",
+      quoteGroupId: row.quote_group_id ?? row.quote_id,
+      quoteId: row.quote_id,
+      status: row.status ?? "draft",
+      totalRevenue: decimalToNumber(row.total_revenue),
+      version: row.version ?? 1,
+      versionCount: Number(row.version_count),
+    }));
+}
+
 export async function getQuoteDashboardSnapshotByTenant(
   tenantId: string,
   viewerUserId: string | null = null,
