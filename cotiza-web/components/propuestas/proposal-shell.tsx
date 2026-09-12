@@ -1353,7 +1353,7 @@ export function ProposalShell({
         tenant.
       </p>
 
-      <div className="mt-6 grid gap-6 lg:grid-cols-[1.1fr_1fr]">
+      <div className="mt-6 grid gap-6 lg:grid-cols-[minmax(0,1.1fr)_minmax(0,1fr)]">
         <div className="overflow-hidden rounded-xl border border-zinc-200">
           <div className="flex flex-col gap-2 border-b border-zinc-200 bg-zinc-50 px-4 py-3">
             {STATUS_FILTER_GROUPS.map((group) => (
