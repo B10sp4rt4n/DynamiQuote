@@ -265,6 +265,7 @@ export async function POST(request: Request, context: RouteContext) {
     forcedIssuance: issuanceGate.forced,
     proposal: normalizedProposal,
     tenantAddress: tenantProfile?.address ?? null,
+    tenantClosingContact: tenantProfile?.closingContactLabel ?? null,
     tenantName: tenant.name,
     tenantRfc: tenantProfile?.rfc ?? null,
     tenantWebsite: tenantProfile?.website ?? null,

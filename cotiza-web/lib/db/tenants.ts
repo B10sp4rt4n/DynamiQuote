@@ -16,6 +16,7 @@ export type ActiveTenantOption = {
 
 export type TenantProfile = {
   address: string | null;
+  closingContactLabel: string | null;
   expiryAlertDaysBefore: number;
   name: string;
   rfc: string | null;
@@ -24,6 +25,7 @@ export type TenantProfile = {
 
 export type UpdateTenantProfileInput = {
   address?: string | null;
+  closingContactLabel?: string | null;
   expiryAlertDaysBefore?: number;
   rfc?: string | null;
   website?: string | null;
@@ -89,6 +91,7 @@ export async function getTenantProfileByTenant(tenantId: string): Promise<Tenant
   const tenant = await prisma.tenant.findFirst({
     select: {
       address: true,
+      closing_contact_label: true,
       expiry_alert_days_before: true,
       name: true,
       rfc: true,
@@ -103,6 +106,7 @@ export async function getTenantProfileByTenant(tenantId: string): Promise<Tenant
 
   return {
     address: tenant.address,
+    closingContactLabel: tenant.closing_contact_label,
     expiryAlertDaysBefore: tenant.expiry_alert_days_before,
     name: tenant.name,
     rfc: tenant.rfc,
@@ -126,6 +130,9 @@ export async function updateTenantProfileByTenant(
   const updated = await prisma.tenant.update({
     data: {
       ...(input.address !== undefined ? { address: input.address?.trim() || null } : {}),
+      ...(input.closingContactLabel !== undefined
+        ? { closing_contact_label: input.closingContactLabel?.trim() || null }
+        : {}),
       ...(input.expiryAlertDaysBefore !== undefined
         ? { expiry_alert_days_before: input.expiryAlertDaysBefore }
         : {}),
@@ -134,6 +141,7 @@ export async function updateTenantProfileByTenant(
     },
     select: {
       address: true,
+      closing_contact_label: true,
       expiry_alert_days_before: true,
       name: true,
       rfc: true,
@@ -144,6 +152,7 @@ export async function updateTenantProfileByTenant(
 
   return {
     address: updated.address,
+    closingContactLabel: updated.closing_contact_label,
     expiryAlertDaysBefore: updated.expiry_alert_days_before,
     name: updated.name,
     rfc: updated.rfc,

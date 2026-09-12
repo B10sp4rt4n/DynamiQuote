@@ -15,6 +15,7 @@ model Tenant {
   rfc              String?
   address          String?
   website          String?
+  closing_contact_label String?
   expiry_alert_days_before Int        @default(3)
   app_users        app_users[]
   clients          Client[]

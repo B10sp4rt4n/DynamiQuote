@@ -423,6 +423,7 @@ type ProposalPdfInput = {
   forcedIssuance?: boolean;
   proposal: ProposalWorkflowDetail;
   tenantAddress?: string | null;
+  tenantClosingContact?: string | null;
   tenantName: string;
   tenantRfc?: string | null;
   tenantWebsite?: string | null;
@@ -432,6 +433,7 @@ export function ProposalPdfDocument({
   forcedIssuance,
   proposal,
   tenantAddress,
+  tenantClosingContact,
   tenantName,
   tenantRfc,
   tenantWebsite,
@@ -444,6 +446,14 @@ export function ProposalPdfDocument({
   const issuerRfcDisplay = normalizeTextValue(tenantRfc);
   const issuerAddressDisplay = normalizeTextValue(tenantAddress);
   const issuerWebsiteDisplay = normalizeTextValue(tenantWebsite);
+  // Punto de contacto para el cierre del documento -- no necesariamente es
+  // una persona (puede ser un area/equipo). Si el tenant no lo configuro,
+  // cae al vendedor de la propuesta, igual que antes.
+  const closingContactDisplay =
+    normalizeTextValue(tenantClosingContact) ||
+    normalizeTextValue(formal?.issuerContactName) ||
+    normalizeTextValue(proposal.salesOwner) ||
+    "el representante comercial";
   const lines = proposal.items ?? [];
   const totalCost = lines.reduce((sum, item) => sum + item.subtotalCost, 0);
   const totalRevenue = lines.reduce((sum, item) => sum + item.subtotalPrice, 0);
@@ -664,9 +674,23 @@ export function ProposalPdfDocument({
             <Text style={styles.traceValue}>{formatCurrency(grandTotal)}</Text>
           </View>
         </View>
-        <Text style={styles.narrativeText}>
-          Para cualquier aclaracion relacionada con esta propuesta, favor de contactar a {formal?.issuerContactName || proposal.salesOwner || "el representante comercial"} al correo {issuerEmailDisplay}{issuerPhoneDisplay !== "Telefono no disponible" ? ` o al telefono ${issuerPhoneDisplay}` : ""}.
-        </Text>
+        <Text style={styles.greetingText}>Para cualquier aclaración relacionada con esta propuesta:</Text>
+        <View style={styles.traceWrap}>
+          <View style={styles.traceLine}>
+            <Text style={styles.traceLabel}>Contacto:</Text>
+            <Text style={styles.traceValue}>{closingContactDisplay}</Text>
+          </View>
+          <View style={styles.traceLine}>
+            <Text style={styles.traceLabel}>Correo:</Text>
+            <Text style={styles.traceValue}>{issuerEmailDisplay}</Text>
+          </View>
+          {issuerPhoneDisplay !== "Telefono no disponible" ? (
+            <View style={styles.traceLine}>
+              <Text style={styles.traceLabel}>Telefono:</Text>
+              <Text style={styles.traceValue}>{issuerPhoneDisplay}</Text>
+            </View>
+          ) : null}
+        </View>
 
         <View fixed style={styles.footerWrap}>
           <Text

@@ -1442,6 +1442,7 @@ function IssuerProfilesTab({
   const [rfc, setRfc] = useState(tenantProfile?.rfc ?? "");
   const [address, setAddress] = useState(tenantProfile?.address ?? "");
   const [website, setWebsite] = useState(tenantProfile?.website ?? "");
+  const [closingContactLabel, setClosingContactLabel] = useState(tenantProfile?.closingContactLabel ?? "");
   const [savingProfile, setSavingProfile] = useState(false);
   const [profileMessage, setProfileMessage] = useState<string | null>(null);
   const [expiryAlertDaysBefore, setExpiryAlertDaysBefore] = useState(
@@ -1464,6 +1465,7 @@ function IssuerProfilesTab({
       const res = await fetch("/api/settings/tenant-profile", {
         body: JSON.stringify({
           address: address.trim() || null,
+          closingContactLabel: closingContactLabel.trim() || null,
           rfc: rfc.trim() || null,
           website: website.trim() || null,
         }),
@@ -1479,6 +1481,7 @@ function IssuerProfilesTab({
       setRfc(data.profile.rfc ?? "");
       setAddress(data.profile.address ?? "");
       setWebsite(data.profile.website ?? "");
+      setClosingContactLabel(data.profile.closingContactLabel ?? "");
       setProfileMessage("Datos fiscales guardados.");
     } catch (err) {
       setProfileMessage(err instanceof Error ? err.message : "Error desconocido");
@@ -1717,6 +1720,19 @@ function IssuerProfilesTab({
             placeholder="www.empresa.com"
             value={website}
           />
+        </label>
+        <label className="text-sm text-zinc-700 md:col-span-3">
+          Punto de contacto para aclaraciones (cierre del PDF)
+          <input
+            className="mt-1 w-full rounded-lg border border-zinc-300 bg-white px-3 py-2 text-sm text-zinc-900 disabled:cursor-not-allowed disabled:bg-zinc-100"
+            disabled={!canEditProfile}
+            onChange={(event) => setClosingContactLabel(event.target.value)}
+            placeholder="Ej. Salvador Ruiz Esparza, o Departamento de Ventas"
+            value={closingContactLabel}
+          />
+          <span className="mt-1 block text-xs font-normal text-zinc-500">
+            No tiene que ser una persona -- puede ser un equipo o área. Si se deja vacío, se usa el vendedor de la propuesta.
+          </span>
         </label>
         {canEditProfile ? (
           <div className="flex items-center gap-3 md:col-span-3">

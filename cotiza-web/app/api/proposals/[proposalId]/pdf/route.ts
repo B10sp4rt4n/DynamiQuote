@@ -97,6 +97,7 @@ export async function GET(_: Request, context: RouteContext) {
     forcedIssuance: issuanceGate.forced,
     proposal: normalizedProposal,
     tenantAddress: tenantProfile?.address ?? null,
+    tenantClosingContact: tenantProfile?.closingContactLabel ?? null,
     tenantName: tenant.name,
     tenantRfc: tenantProfile?.rfc ?? null,
     tenantWebsite: tenantProfile?.website ?? null,

@@ -3,6 +3,7 @@ import { z } from "zod";
 export const updateTenantProfileSchema = z
   .object({
     address: z.string().trim().max(300).optional().nullable(),
+    closingContactLabel: z.string().trim().max(200).optional().nullable(),
     expiryAlertDaysBefore: z.number().int().min(1).max(90).optional(),
     rfc: z.string().trim().max(20).optional().nullable(),
     website: z.string().trim().max(200).optional().nullable(),
@@ -10,6 +11,7 @@ export const updateTenantProfileSchema = z
   .refine(
     (payload) =>
       payload.address !== undefined ||
+      payload.closingContactLabel !== undefined ||
       payload.expiryAlertDaysBefore !== undefined ||
       payload.rfc !== undefined ||
       payload.website !== undefined,
