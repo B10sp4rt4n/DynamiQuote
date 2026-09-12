@@ -419,11 +419,14 @@ function formatRecipientIdentity(formal: ProposalWorkflowDetail["formal"]): {
   };
 }
 
+type ClosingContactLevel = "contacto" | "contacto_correo" | "contacto_correo_telefono";
+
 type ProposalPdfInput = {
   forcedIssuance?: boolean;
   proposal: ProposalWorkflowDetail;
   tenantAddress?: string | null;
   tenantClosingContact?: string | null;
+  tenantClosingContactLevel?: ClosingContactLevel;
   tenantName: string;
   tenantRfc?: string | null;
   tenantWebsite?: string | null;
@@ -434,6 +437,7 @@ export function ProposalPdfDocument({
   proposal,
   tenantAddress,
   tenantClosingContact,
+  tenantClosingContactLevel,
   tenantName,
   tenantRfc,
   tenantWebsite,
@@ -454,6 +458,12 @@ export function ProposalPdfDocument({
     normalizeTextValue(formal?.issuerContactName) ||
     normalizeTextValue(proposal.salesOwner) ||
     "el representante comercial";
+  // Techo de que tan detallado es el cierre -- el tenant puede ocultar
+  // correo/telefono aunque existan (ej. politica de privacidad), no solo
+  // cuando faltan. El dato sigue ocultandose si no existe, igual que antes.
+  const closingLevel = tenantClosingContactLevel ?? "contacto_correo_telefono";
+  const showClosingEmail = closingLevel === "contacto_correo" || closingLevel === "contacto_correo_telefono";
+  const showClosingPhone = closingLevel === "contacto_correo_telefono";
   const lines = proposal.items ?? [];
   const totalCost = lines.reduce((sum, item) => sum + item.subtotalCost, 0);
   const totalRevenue = lines.reduce((sum, item) => sum + item.subtotalPrice, 0);
@@ -680,11 +690,13 @@ export function ProposalPdfDocument({
             <Text style={styles.traceLabel}>Contacto:</Text>
             <Text style={styles.traceValue}>{closingContactDisplay}</Text>
           </View>
-          <View style={styles.traceLine}>
-            <Text style={styles.traceLabel}>Correo:</Text>
-            <Text style={styles.traceValue}>{issuerEmailDisplay}</Text>
-          </View>
-          {issuerPhoneDisplay !== "Telefono no disponible" ? (
+          {showClosingEmail ? (
+            <View style={styles.traceLine}>
+              <Text style={styles.traceLabel}>Correo:</Text>
+              <Text style={styles.traceValue}>{issuerEmailDisplay}</Text>
+            </View>
+          ) : null}
+          {showClosingPhone && issuerPhoneDisplay !== "Telefono no disponible" ? (
             <View style={styles.traceLine}>
               <Text style={styles.traceLabel}>Telefono:</Text>
               <Text style={styles.traceValue}>{issuerPhoneDisplay}</Text>

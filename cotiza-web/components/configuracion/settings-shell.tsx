@@ -5,7 +5,7 @@ import { Fragment, startTransition, useEffect, useState, type FormEvent } from "
 
 import type { MarginPolicySummary } from "@/lib/db/margin-policies";
 import type { AppUserSummary, IssuerProfileSummary } from "@/lib/db/settings";
-import type { ActiveTenantOption, TenantProfile } from "@/lib/db/tenants";
+import type { ActiveTenantOption, ClosingContactLevel, TenantProfile } from "@/lib/db/tenants";
 
 type SettingsShellProps = {
   canSwitchTenant?: boolean;
@@ -1443,6 +1443,9 @@ function IssuerProfilesTab({
   const [address, setAddress] = useState(tenantProfile?.address ?? "");
   const [website, setWebsite] = useState(tenantProfile?.website ?? "");
   const [closingContactLabel, setClosingContactLabel] = useState(tenantProfile?.closingContactLabel ?? "");
+  const [closingContactLevel, setClosingContactLevel] = useState<ClosingContactLevel>(
+    tenantProfile?.closingContactLevel ?? "contacto_correo_telefono",
+  );
   const [savingProfile, setSavingProfile] = useState(false);
   const [profileMessage, setProfileMessage] = useState<string | null>(null);
   const [expiryAlertDaysBefore, setExpiryAlertDaysBefore] = useState(
@@ -1466,6 +1469,7 @@ function IssuerProfilesTab({
         body: JSON.stringify({
           address: address.trim() || null,
           closingContactLabel: closingContactLabel.trim() || null,
+          closingContactLevel,
           rfc: rfc.trim() || null,
           website: website.trim() || null,
         }),
@@ -1482,6 +1486,7 @@ function IssuerProfilesTab({
       setAddress(data.profile.address ?? "");
       setWebsite(data.profile.website ?? "");
       setClosingContactLabel(data.profile.closingContactLabel ?? "");
+      setClosingContactLevel(data.profile.closingContactLevel);
       setProfileMessage("Datos fiscales guardados.");
     } catch (err) {
       setProfileMessage(err instanceof Error ? err.message : "Error desconocido");
@@ -1734,6 +1739,46 @@ function IssuerProfilesTab({
             No tiene que ser una persona -- puede ser un equipo o área. Si se deja vacío, se usa el vendedor de la propuesta.
           </span>
         </label>
+        <div className="text-sm text-zinc-700 md:col-span-3">
+          <p>Nivel de detalle en el cierre</p>
+          <div className="mt-1 inline-flex overflow-hidden rounded-lg border border-zinc-300 text-xs font-medium">
+            <button
+              className={`px-3 py-1.5 transition ${
+                closingContactLevel === "contacto" ? "bg-zinc-900 text-white" : "bg-white text-zinc-600 hover:bg-zinc-50"
+              } disabled:cursor-not-allowed disabled:opacity-60`}
+              disabled={!canEditProfile}
+              onClick={() => setClosingContactLevel("contacto")}
+              type="button"
+            >
+              Solo contacto
+            </button>
+            <button
+              className={`border-l border-zinc-300 px-3 py-1.5 transition ${
+                closingContactLevel === "contacto_correo" ? "bg-zinc-900 text-white" : "bg-white text-zinc-600 hover:bg-zinc-50"
+              } disabled:cursor-not-allowed disabled:opacity-60`}
+              disabled={!canEditProfile}
+              onClick={() => setClosingContactLevel("contacto_correo")}
+              type="button"
+            >
+              Contacto + correo
+            </button>
+            <button
+              className={`border-l border-zinc-300 px-3 py-1.5 transition ${
+                closingContactLevel === "contacto_correo_telefono"
+                  ? "bg-zinc-900 text-white"
+                  : "bg-white text-zinc-600 hover:bg-zinc-50"
+              } disabled:cursor-not-allowed disabled:opacity-60`}
+              disabled={!canEditProfile}
+              onClick={() => setClosingContactLevel("contacto_correo_telefono")}
+              type="button"
+            >
+              Contacto + correo + teléfono
+            </button>
+          </div>
+          <span className="mt-1 block text-xs font-normal text-zinc-500">
+            Controla qué tanto se muestra en el cierre del PDF -- si el correo o el teléfono no están disponibles, igual se ocultan.
+          </span>
+        </div>
         {canEditProfile ? (
           <div className="flex items-center gap-3 md:col-span-3">
             <button

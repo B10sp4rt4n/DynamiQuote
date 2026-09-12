@@ -14,9 +14,12 @@ export type ActiveTenantOption = {
   slug: string;
 };
 
+export type ClosingContactLevel = "contacto" | "contacto_correo" | "contacto_correo_telefono";
+
 export type TenantProfile = {
   address: string | null;
   closingContactLabel: string | null;
+  closingContactLevel: ClosingContactLevel;
   expiryAlertDaysBefore: number;
   name: string;
   rfc: string | null;
@@ -26,10 +29,17 @@ export type TenantProfile = {
 export type UpdateTenantProfileInput = {
   address?: string | null;
   closingContactLabel?: string | null;
+  closingContactLevel?: ClosingContactLevel;
   expiryAlertDaysBefore?: number;
   rfc?: string | null;
   website?: string | null;
 };
+
+function normalizeClosingContactLevel(value: string): ClosingContactLevel {
+  return value === "contacto" || value === "contacto_correo" || value === "contacto_correo_telefono"
+    ? value
+    : "contacto_correo_telefono";
+}
 
 export async function getBootstrapTenant(): Promise<BootstrapTenant | null> {
   const slug = process.env["DEFAULT_TENANT_SLUG"];
@@ -92,6 +102,7 @@ export async function getTenantProfileByTenant(tenantId: string): Promise<Tenant
     select: {
       address: true,
       closing_contact_label: true,
+      closing_contact_level: true,
       expiry_alert_days_before: true,
       name: true,
       rfc: true,
@@ -107,6 +118,7 @@ export async function getTenantProfileByTenant(tenantId: string): Promise<Tenant
   return {
     address: tenant.address,
     closingContactLabel: tenant.closing_contact_label,
+    closingContactLevel: normalizeClosingContactLevel(tenant.closing_contact_level),
     expiryAlertDaysBefore: tenant.expiry_alert_days_before,
     name: tenant.name,
     rfc: tenant.rfc,
@@ -133,6 +145,9 @@ export async function updateTenantProfileByTenant(
       ...(input.closingContactLabel !== undefined
         ? { closing_contact_label: input.closingContactLabel?.trim() || null }
         : {}),
+      ...(input.closingContactLevel !== undefined
+        ? { closing_contact_level: input.closingContactLevel }
+        : {}),
       ...(input.expiryAlertDaysBefore !== undefined
         ? { expiry_alert_days_before: input.expiryAlertDaysBefore }
         : {}),
@@ -142,6 +157,7 @@ export async function updateTenantProfileByTenant(
     select: {
       address: true,
       closing_contact_label: true,
+      closing_contact_level: true,
       expiry_alert_days_before: true,
       name: true,
       rfc: true,
@@ -153,6 +169,7 @@ export async function updateTenantProfileByTenant(
   return {
     address: updated.address,
     closingContactLabel: updated.closing_contact_label,
+    closingContactLevel: normalizeClosingContactLevel(updated.closing_contact_level),
     expiryAlertDaysBefore: updated.expiry_alert_days_before,
     name: updated.name,
     rfc: updated.rfc,
