@@ -181,6 +181,10 @@ const styles = StyleSheet.create({
     marginBottom: 9,
     textAlign: "justify",
   },
+  greetingText: {
+    fontSize: 8.5,
+    marginBottom: 3,
+  },
   sectionHeader: {
     borderColor: "#60a5fa",
     borderStyle: "solid",
@@ -535,8 +539,11 @@ export function ProposalPdfDocument({
           </View>
         ) : null}
 
+        <Text style={styles.greetingText}>
+          Estimado{recipientIdentity.displayName ? ` ${recipientIdentity.displayName}` : ""},
+        </Text>
         <Text style={styles.narrativeText}>
-          {recipientIdentity.displayName || "Cliente"}: Adjuntamos la propuesta comercial para {formal?.recipientCompany || "su negocio"}. A continuación encontrará el detalle de partidas, precios y condiciones de negociación.
+          A continuación le presentamos el detalle de nuestra propuesta comercial para {formal?.recipientCompany || "su negocio"}, incluyendo partidas, precios y condiciones aplicables.
         </Text>
 
         <Text style={styles.sectionHeader}>Detalle de la propuesta</Text>
