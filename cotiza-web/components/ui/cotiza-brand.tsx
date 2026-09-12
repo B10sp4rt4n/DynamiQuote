@@ -12,8 +12,32 @@ function Mark({ compact = false }: { compact?: boolean }) {
   return (
     <span className={`relative inline-flex ${size} overflow-hidden rounded-2xl bg-slate-950 shadow-sm`}>
       <span className="absolute inset-[18%] rounded-[0.9rem] bg-slate-50" />
-      <span className="absolute left-[24%] top-[24%] h-[42%] w-[42%] bg-orange-500 [clip-path:polygon(0_0,100%_0,100%_42%,58%_42%,58%_100%,0_100%)]" />
-      <span className="absolute left-[50%] top-[24%] h-[28%] w-[28%] bg-teal-500" />
+      <svg aria-hidden="true" className="absolute left-[18%] top-[18%] h-[64%] w-[64%]" viewBox="0 0 100 100">
+        <circle
+          cx="50"
+          cy="50"
+          fill="none"
+          r="35"
+          stroke="#14b8a6"
+          strokeDasharray="72.8 147.1"
+          strokeDashoffset="0"
+          strokeLinecap="round"
+          strokeWidth="16"
+          transform="rotate(-90 50 50)"
+        />
+        <circle
+          cx="50"
+          cy="50"
+          fill="none"
+          r="35"
+          stroke="#f97316"
+          strokeDasharray="135.1 84.8"
+          strokeDashoffset="-78.8"
+          strokeLinecap="round"
+          strokeWidth="16"
+          transform="rotate(-90 50 50)"
+        />
+      </svg>
     </span>
   );
 }
