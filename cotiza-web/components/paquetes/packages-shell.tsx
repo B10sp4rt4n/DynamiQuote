@@ -262,15 +262,15 @@ export function PackagesShell({ initialPackages, tenantName }: PackagesShellProp
             <div className="grid gap-4 md:grid-cols-3">
               <div className="flex flex-col gap-1">
                 <label className="text-xs text-zinc-600" htmlFor="pkg-name">Nombre *</label>
-                <input className="rounded-lg border border-zinc-300 px-3 py-2 text-sm" id="pkg-name" required value={createForm.name} onChange={(e) => setCreateForm((f) => ({ ...f, name: e.target.value }))} />
+                <input className="rounded-lg border border-zinc-300 bg-white px-3 py-2 text-sm text-zinc-900" id="pkg-name" required value={createForm.name} onChange={(e) => setCreateForm((f) => ({ ...f, name: e.target.value }))} />
               </div>
               <div className="flex flex-col gap-1">
                 <label className="text-xs text-zinc-600" htmlFor="pkg-tag">Tag / Playbook</label>
-                <input className="rounded-lg border border-zinc-300 px-3 py-2 text-sm" id="pkg-tag" placeholder="Ej. limpieza-industrial" value={createForm.playbookTag} onChange={(e) => setCreateForm((f) => ({ ...f, playbookTag: e.target.value }))} />
+                <input className="rounded-lg border border-zinc-300 bg-white px-3 py-2 text-sm text-zinc-900" id="pkg-tag" placeholder="Ej. limpieza-industrial" value={createForm.playbookTag} onChange={(e) => setCreateForm((f) => ({ ...f, playbookTag: e.target.value }))} />
               </div>
               <div className="flex flex-col gap-1">
                 <label className="text-xs text-zinc-600" htmlFor="pkg-desc">Descripción</label>
-                <input className="rounded-lg border border-zinc-300 px-3 py-2 text-sm" id="pkg-desc" value={createForm.description} onChange={(e) => setCreateForm((f) => ({ ...f, description: e.target.value }))} />
+                <input className="rounded-lg border border-zinc-300 bg-white px-3 py-2 text-sm text-zinc-900" id="pkg-desc" value={createForm.description} onChange={(e) => setCreateForm((f) => ({ ...f, description: e.target.value }))} />
               </div>
             </div>
 
@@ -282,12 +282,12 @@ export function PackagesShell({ initialPackages, tenantName }: PackagesShellProp
               <div className="space-y-2">
                 {createForm.lines.map((line, i) => (
                   <div key={i} className="grid grid-cols-[1fr_3fr_1fr_1fr_1fr_1fr_auto] gap-2 items-end rounded-lg border border-zinc-100 bg-zinc-50 p-2 text-xs">
-                    <input className="rounded border border-zinc-300 px-2 py-1" placeholder="SKU" value={line.sku} onChange={(e) => updateLineField(i, "sku", e.target.value)} />
-                    <input className="rounded border border-zinc-300 px-2 py-1" placeholder="Descripción *" required value={line.description} onChange={(e) => updateLineField(i, "description", e.target.value)} />
-                    <input className="rounded border border-zinc-300 px-2 py-1" placeholder="Cantidad" type="number" min="0.01" step="0.01" value={line.quantity} onChange={(e) => updateLineField(i, "quantity", e.target.value)} />
-                    <input className="rounded border border-zinc-300 px-2 py-1" placeholder="Costo" type="number" min="0" step="0.01" value={line.costUnit} onChange={(e) => updateLineField(i, "costUnit", e.target.value)} />
-                    <input className="rounded border border-zinc-300 px-2 py-1" placeholder="Precio" type="number" min="0" step="0.01" value={line.priceUnit} onChange={(e) => updateLineField(i, "priceUnit", e.target.value)} />
-                    <input className="rounded border border-zinc-300 px-2 py-1" placeholder="Margen%" type="number" min="-100" max="100" step="0.1" value={line.marginPct} onChange={(e) => updateLineField(i, "marginPct", e.target.value)} />
+                    <input className="rounded border border-zinc-300 bg-white px-2 py-1 text-zinc-900" placeholder="SKU" value={line.sku} onChange={(e) => updateLineField(i, "sku", e.target.value)} />
+                    <input className="rounded border border-zinc-300 bg-white px-2 py-1 text-zinc-900" placeholder="Descripción *" required value={line.description} onChange={(e) => updateLineField(i, "description", e.target.value)} />
+                    <input className="rounded border border-zinc-300 bg-white px-2 py-1 text-zinc-900" placeholder="Cantidad" type="number" min="0.01" step="0.01" value={line.quantity} onChange={(e) => updateLineField(i, "quantity", e.target.value)} />
+                    <input className="rounded border border-zinc-300 bg-white px-2 py-1 text-zinc-900" placeholder="Costo" type="number" min="0" step="0.01" value={line.costUnit} onChange={(e) => updateLineField(i, "costUnit", e.target.value)} />
+                    <input className="rounded border border-zinc-300 bg-white px-2 py-1 text-zinc-900" placeholder="Precio" type="number" min="0" step="0.01" value={line.priceUnit} onChange={(e) => updateLineField(i, "priceUnit", e.target.value)} />
+                    <input className="rounded border border-zinc-300 bg-white px-2 py-1 text-zinc-900" placeholder="Margen%" type="number" min="-100" max="100" step="0.1" value={line.marginPct} onChange={(e) => updateLineField(i, "marginPct", e.target.value)} />
                     <button className="text-rose-500 hover:text-rose-700" disabled={createForm.lines.length === 1} onClick={() => removeLine(i)} type="button">✕</button>
                   </div>
                 ))}
