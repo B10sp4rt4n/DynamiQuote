@@ -1026,6 +1026,103 @@ function CreateUserForm({
   );
 }
 
+function slugifyTenantName(value: string): string {
+  return value
+    .trim()
+    .toLowerCase()
+    .normalize("NFD")
+    .replace(/[̀-ͯ]/g, "")
+    .replace(/[^a-z0-9]+/g, "-")
+    .replace(/^-+|-+$/g, "");
+}
+
+function CreateTenantForm() {
+  const [name, setName] = useState("");
+  const [slug, setSlug] = useState("");
+  const [slugTouched, setSlugTouched] = useState(false);
+  const [pending, setPending] = useState(false);
+  const [message, setMessage] = useState<string | null>(null);
+  const [isError, setIsError] = useState(false);
+
+  async function onSubmit(event: FormEvent<HTMLFormElement>) {
+    event.preventDefault();
+    setPending(true);
+    setMessage(null);
+    setIsError(false);
+
+    try {
+      const res = await fetch("/api/settings/tenants", {
+        body: JSON.stringify({ name: name.trim(), slug: slug.trim() }),
+        headers: { "Content-Type": "application/json" },
+        method: "POST",
+      });
+
+      const data = (await res.json()) as { error?: string; tenant?: ActiveTenantOption };
+      if (!res.ok || !data.tenant) {
+        throw new Error(data.error ?? "No se pudo crear el tenant");
+      }
+
+      setMessage(`Tenant "${data.tenant.name}" creado. Recargando...`);
+      window.location.reload();
+    } catch (err) {
+      setIsError(true);
+      setMessage(err instanceof Error ? err.message : "Error desconocido");
+      setPending(false);
+    }
+  }
+
+  return (
+    <form className="grid gap-3 rounded-xl border border-zinc-200 bg-zinc-50 p-4 md:grid-cols-2" onSubmit={onSubmit}>
+      <p className="text-sm font-semibold text-zinc-900 md:col-span-2">Nueva empresa (tenant)</p>
+      <p className="text-xs text-zinc-500 md:col-span-2">
+        Solo crea el registro del tenant. El primer usuario se invita despues desde la pestaña &quot;Usuarios&quot;.
+      </p>
+      <label className="text-sm text-zinc-700">
+        Nombre
+        <input
+          className="mt-1 w-full rounded-lg border border-zinc-300 bg-white px-3 py-2 text-sm text-zinc-900"
+          onChange={(event) => {
+            const value = event.target.value;
+            setName(value);
+            if (!slugTouched) {
+              setSlug(slugifyTenantName(value));
+            }
+          }}
+          placeholder="Ej. Grupo Industrial Acme"
+          required
+          value={name}
+        />
+      </label>
+      <label className="text-sm text-zinc-700">
+        Slug
+        <input
+          className="mt-1 w-full rounded-lg border border-zinc-300 bg-white px-3 py-2 text-sm text-zinc-900"
+          onChange={(event) => {
+            setSlugTouched(true);
+            setSlug(event.target.value);
+          }}
+          pattern="[a-z0-9]+(-[a-z0-9]+)*"
+          placeholder="grupo-industrial-acme"
+          required
+          value={slug}
+        />
+      </label>
+      <div className="flex items-center gap-3 md:col-span-2">
+        <button
+          className="rounded-lg bg-zinc-900 px-3 py-2 text-sm font-medium text-white transition hover:bg-zinc-700 disabled:opacity-60"
+          disabled={pending}
+          type="submit"
+        >
+          {pending ? "Creando..." : "Crear tenant"}
+        </button>
+        {message ? (
+          <p className={`text-sm ${isError ? "text-rose-700" : "text-zinc-600"}`}>{message}</p>
+        ) : null}
+      </div>
+    </form>
+  );
+}
+
 function TestEmailForm({ tenantName }: { tenantName: string }) {
   const [to, setTo] = useState("");
   const [template, setTemplate] = useState<TestEmailTemplate>("alta");
@@ -2235,17 +2332,20 @@ export function SettingsShell({
 
       <div className="mt-5">
         {tab === "tenant" && canViewTenantConfig && (
-          <TenantConfigurationTab
-            issuerProfiles={issuerProfilesState}
-            marginPolicy={marginPolicyState}
-            onOpenTab={(nextTab) => setTab(nextTab)}
-            onIssuerProfilesUpdated={setIssuerProfilesState}
-            onMarginPolicyUpdated={setMarginPolicyState}
-            tenantId={tenantId}
-            tenantName={tenantName}
-            tenantSlug={tenantSlug}
-            users={usersState}
-          />
+          <div className="space-y-4">
+            {canManageAllTenants ? <CreateTenantForm /> : null}
+            <TenantConfigurationTab
+              issuerProfiles={issuerProfilesState}
+              marginPolicy={marginPolicyState}
+              onOpenTab={(nextTab) => setTab(nextTab)}
+              onIssuerProfilesUpdated={setIssuerProfilesState}
+              onMarginPolicyUpdated={setMarginPolicyState}
+              tenantId={tenantId}
+              tenantName={tenantName}
+              tenantSlug={tenantSlug}
+              users={usersState}
+            />
+          </div>
         )}
         {tab === "users" && canManageUsers && (
           <div className="space-y-4">

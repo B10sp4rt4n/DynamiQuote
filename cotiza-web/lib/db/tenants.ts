@@ -1,5 +1,7 @@
 import "server-only";
 
+import { randomUUID } from "crypto";
+
 import { prisma } from "@/lib/db/prisma";
 
 export type BootstrapTenant = {
@@ -94,6 +96,48 @@ export async function getActiveTenants(): Promise<ActiveTenantOption[]> {
     name: tenant.name,
     slug: tenant.slug,
   }));
+}
+
+export type NewTenantInput = {
+  name: string;
+  slug: string;
+};
+
+// Alta de un tenant nuevo -- antes de esto no existia ningun camino en la
+// app para crear uno (siempre se hacia con un INSERT manual en Neon). Solo
+// crea el registro de `tenants`; el primer usuario se agrega despues con el
+// flujo de invitar ya existente (createManagedUserByTenant). Retorna null si
+// el slug ya esta en uso (es @unique en el schema).
+export async function createTenant(input: NewTenantInput): Promise<ActiveTenantOption | null> {
+  const existing = await prisma.tenant.findUnique({
+    select: { tenant_id: true },
+    where: { slug: input.slug },
+  });
+
+  if (existing) {
+    return null;
+  }
+
+  const tenant = await prisma.tenant.create({
+    data: {
+      active: true,
+      created_at: new Date(),
+      name: input.name,
+      slug: input.slug,
+      tenant_id: randomUUID(),
+    },
+    select: {
+      name: true,
+      slug: true,
+      tenant_id: true,
+    },
+  });
+
+  return {
+    id: tenant.tenant_id,
+    name: tenant.name,
+    slug: tenant.slug,
+  };
 }
 
 // Datos fiscales del emisor (RFC, razon social, domicilio, sitio web) -- se
