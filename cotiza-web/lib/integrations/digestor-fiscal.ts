@@ -194,14 +194,27 @@ export async function getBillingDraft(draftId: string): Promise<DigestorFiscalDr
 export type StampBillingDraftResult = {
   draft: DigestorFiscalDraft;
   ok: boolean;
+  // Detalle real del PAC cuando ok=false -- ej. "CFDI40139 - El campo Nombre
+  // del emisor, debe pertenecer al nombre asociado al RFC..." -- sin esto,
+  // el unico rastro del motivo de rechazo queda en Digestor Fiscal, no
+  // accesible por la app.
+  rejectionMessage: string | null;
   uuid: string | null;
 };
 
+type ProviderErrorResponse = {
+  Mensaje?: string;
+  MensajeSat?: string;
+  Valores?: { message?: string };
+};
+
 export async function stampBillingDraft(draftId: string): Promise<StampBillingDraftResult> {
-  const raw = await request<{ draft: RawDraft; ok: boolean; xml_base64: string }>(
-    `/v1/billing/drafts/${draftId}/stamp`,
-    { body: JSON.stringify({}), method: "POST" },
-  );
+  const raw = await request<{
+    draft: RawDraft;
+    ok: boolean;
+    provider_response?: ProviderErrorResponse | string | null;
+    xml_base64: string;
+  }>(`/v1/billing/drafts/${draftId}/stamp`, { body: JSON.stringify({}), method: "POST" });
 
   let uuid: string | null = null;
   if (raw.xml_base64) {
@@ -210,7 +223,20 @@ export async function stampBillingDraft(draftId: string): Promise<StampBillingDr
     uuid = match ? match[1] : null;
   }
 
-  return { draft: mapDraft(raw.draft), ok: raw.ok, uuid };
+  let rejectionMessage: string | null = null;
+  if (!raw.ok && raw.provider_response) {
+    if (typeof raw.provider_response === "string") {
+      rejectionMessage = raw.provider_response;
+    } else {
+      rejectionMessage =
+        raw.provider_response.MensajeSat ??
+        raw.provider_response.Mensaje ??
+        raw.provider_response.Valores?.message ??
+        null;
+    }
+  }
+
+  return { draft: mapDraft(raw.draft), ok: raw.ok, rejectionMessage, uuid };
 }
 
 // Los endpoints de preview/pdf de Digestor Fiscal tambien exigen Bearer --

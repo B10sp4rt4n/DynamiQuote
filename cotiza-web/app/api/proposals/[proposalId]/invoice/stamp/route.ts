@@ -41,8 +41,9 @@ export async function POST(_: Request, context: RouteContext) {
     await markProposalInvoiceStampedByTenant(tenant.id, proposalId, result.ok ? result.uuid : null);
 
     if (!result.ok) {
+      const detail = result.rejectionMessage ? ` Detalle del PAC: ${result.rejectionMessage}` : "";
       return NextResponse.json(
-        { error: "El PAC rechazó el timbrado. Revisa los datos fiscales e intenta de nuevo.", ok: false },
+        { error: `El PAC rechazó el timbrado.${detail}`, ok: false },
         { status: 422 },
       );
     }
