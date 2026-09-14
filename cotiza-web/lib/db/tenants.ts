@@ -23,6 +23,8 @@ export type TenantProfile = {
   closingContactLabel: string | null;
   closingContactLevel: ClosingContactLevel;
   expiryAlertDaysBefore: number;
+  fiscalRegime: string | null;
+  fiscalZipCode: string | null;
   name: string;
   razonSocial: string | null;
   rfc: string | null;
@@ -34,6 +36,8 @@ export type UpdateTenantProfileInput = {
   closingContactLabel?: string | null;
   closingContactLevel?: ClosingContactLevel;
   expiryAlertDaysBefore?: number;
+  fiscalRegime?: string | null;
+  fiscalZipCode?: string | null;
   razonSocial?: string | null;
   rfc?: string | null;
   website?: string | null;
@@ -152,6 +156,8 @@ export async function getTenantProfileByTenant(tenantId: string): Promise<Tenant
       closing_contact_label: true,
       closing_contact_level: true,
       expiry_alert_days_before: true,
+      fiscal_regime: true,
+      fiscal_zip_code: true,
       name: true,
       razon_social: true,
       rfc: true,
@@ -169,6 +175,8 @@ export async function getTenantProfileByTenant(tenantId: string): Promise<Tenant
     closingContactLabel: tenant.closing_contact_label,
     closingContactLevel: normalizeClosingContactLevel(tenant.closing_contact_level),
     expiryAlertDaysBefore: tenant.expiry_alert_days_before,
+    fiscalRegime: tenant.fiscal_regime,
+    fiscalZipCode: tenant.fiscal_zip_code,
     name: tenant.name,
     razonSocial: tenant.razon_social,
     rfc: tenant.rfc,
@@ -201,6 +209,8 @@ export async function updateTenantProfileByTenant(
       ...(input.expiryAlertDaysBefore !== undefined
         ? { expiry_alert_days_before: input.expiryAlertDaysBefore }
         : {}),
+      ...(input.fiscalRegime !== undefined ? { fiscal_regime: input.fiscalRegime?.trim() || null } : {}),
+      ...(input.fiscalZipCode !== undefined ? { fiscal_zip_code: input.fiscalZipCode?.trim() || null } : {}),
       ...(input.razonSocial !== undefined ? { razon_social: input.razonSocial?.trim() || null } : {}),
       ...(input.rfc !== undefined ? { rfc: input.rfc?.trim() || null } : {}),
       ...(input.website !== undefined ? { website: input.website?.trim() || null } : {}),
@@ -210,6 +220,8 @@ export async function updateTenantProfileByTenant(
       closing_contact_label: true,
       closing_contact_level: true,
       expiry_alert_days_before: true,
+      fiscal_regime: true,
+      fiscal_zip_code: true,
       name: true,
       razon_social: true,
       rfc: true,
@@ -223,6 +235,8 @@ export async function updateTenantProfileByTenant(
     closingContactLabel: updated.closing_contact_label,
     closingContactLevel: normalizeClosingContactLevel(updated.closing_contact_level),
     expiryAlertDaysBefore: updated.expiry_alert_days_before,
+    fiscalRegime: updated.fiscal_regime,
+    fiscalZipCode: updated.fiscal_zip_code,
     name: updated.name,
     razonSocial: updated.razon_social,
     rfc: updated.rfc,

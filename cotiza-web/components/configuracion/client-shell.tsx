@@ -20,6 +20,7 @@ type ClientShellProps = {
 
 type FormState = {
   address: string;
+  cfdiUse: string;
   clientLogoId: string;
   company: string;
   contactEmail: string;
@@ -27,13 +28,16 @@ type FormState = {
   contactLastName: string;
   contactPhone: string;
   contactTitle: string;
+  fiscalRegime: string;
   industry: string;
   notes: string;
   rfc: string;
+  zipCode: string;
 };
 
 const EMPTY_FORM: FormState = {
   address: "",
+  cfdiUse: "",
   clientLogoId: "",
   company: "",
   contactEmail: "",
@@ -41,9 +45,11 @@ const EMPTY_FORM: FormState = {
   contactLastName: "",
   contactPhone: "",
   contactTitle: "",
+  fiscalRegime: "",
   industry: "",
   notes: "",
   rfc: "",
+  zipCode: "",
 };
 
 // Adivina nombre/apellido a partir del contacto combinado legado, solo como
@@ -245,6 +251,7 @@ export function ClientShell({ clientLogos, initialClients }: ClientShellProps) {
       : splitLegacyContactName(client.contactName);
     setForm({
       address: client.address ?? "",
+      cfdiUse: client.cfdiUse ?? "",
       clientLogoId: client.clientLogoId ?? "",
       company: client.company,
       contactEmail: client.contactEmail ?? "",
@@ -252,9 +259,11 @@ export function ClientShell({ clientLogos, initialClients }: ClientShellProps) {
       contactLastName: guessedName.lastName,
       contactPhone: client.contactPhone ?? "",
       contactTitle: client.contactTitle ?? "",
+      fiscalRegime: client.fiscalRegime ?? "",
       industry: client.industry ?? "",
       notes: client.notes ?? "",
       rfc: client.rfc ?? "",
+      zipCode: client.zipCode ?? "",
     });
     setLogoFile(null);
     setLogoName("");
@@ -583,6 +592,7 @@ export function ClientShell({ clientLogos, initialClients }: ClientShellProps) {
 
     const payload = {
       address: form.address.trim() || null,
+      cfdiUse: form.cfdiUse.trim() || null,
       clientLogoId: form.clientLogoId || null,
       company: form.company.trim(),
       contactEmail: form.contactEmail.trim() || null,
@@ -590,9 +600,11 @@ export function ClientShell({ clientLogos, initialClients }: ClientShellProps) {
       contactLastName: form.contactLastName.trim() || null,
       contactPhone: form.contactPhone.trim() || null,
       contactTitle: form.contactTitle.trim() || null,
+      fiscalRegime: form.fiscalRegime.trim() || null,
       industry: form.industry.trim() || null,
       notes: form.notes.trim() || null,
       rfc: form.rfc.trim() || null,
+      zipCode: form.zipCode.trim() || null,
     };
 
     try {
@@ -917,6 +929,33 @@ export function ClientShell({ clientLogos, initialClients }: ClientShellProps) {
                   onChange={(e) => setField("rfc", e.target.value)}
                   placeholder="RFC"
                   value={form.rfc}
+                />
+              </div>
+              <div>
+                <label className="mb-1 block text-xs font-medium text-zinc-700">Régimen fiscal (SAT)</label>
+                <input
+                  className="w-full rounded-lg border border-zinc-300 bg-white px-3 py-2 text-sm text-zinc-900"
+                  onChange={(e) => setField("fiscalRegime", e.target.value)}
+                  placeholder="Ej. 601"
+                  value={form.fiscalRegime}
+                />
+              </div>
+              <div>
+                <label className="mb-1 block text-xs font-medium text-zinc-700">Código postal fiscal</label>
+                <input
+                  className="w-full rounded-lg border border-zinc-300 bg-white px-3 py-2 text-sm text-zinc-900"
+                  onChange={(e) => setField("zipCode", e.target.value)}
+                  placeholder="Ej. 32690"
+                  value={form.zipCode}
+                />
+              </div>
+              <div>
+                <label className="mb-1 block text-xs font-medium text-zinc-700">Uso CFDI</label>
+                <input
+                  className="w-full rounded-lg border border-zinc-300 bg-white px-3 py-2 text-sm text-zinc-900"
+                  onChange={(e) => setField("cfdiUse", e.target.value)}
+                  placeholder="Ej. G03"
+                  value={form.cfdiUse}
                 />
               </div>
               <div>

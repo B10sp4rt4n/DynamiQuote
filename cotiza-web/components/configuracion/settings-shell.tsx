@@ -1538,6 +1538,8 @@ function IssuerProfilesTab({
   const [error, setError] = useState<string | null>(null);
   const [rfc, setRfc] = useState(tenantProfile?.rfc ?? "");
   const [razonSocial, setRazonSocial] = useState(tenantProfile?.razonSocial ?? "");
+  const [fiscalRegime, setFiscalRegime] = useState(tenantProfile?.fiscalRegime ?? "");
+  const [fiscalZipCode, setFiscalZipCode] = useState(tenantProfile?.fiscalZipCode ?? "");
   const [address, setAddress] = useState(tenantProfile?.address ?? "");
   const [website, setWebsite] = useState(tenantProfile?.website ?? "");
   const [closingContactLabel, setClosingContactLabel] = useState(tenantProfile?.closingContactLabel ?? "");
@@ -1568,6 +1570,8 @@ function IssuerProfilesTab({
       const res = await fetch("/api/settings/tenant-profile", {
         body: JSON.stringify({
           address: address.trim() || null,
+          fiscalRegime: fiscalRegime.trim() || null,
+          fiscalZipCode: fiscalZipCode.trim() || null,
           razonSocial: razonSocial.trim() || null,
           rfc: rfc.trim() || null,
           website: website.trim() || null,
@@ -1583,6 +1587,8 @@ function IssuerProfilesTab({
 
       setRfc(data.profile.rfc ?? "");
       setRazonSocial(data.profile.razonSocial ?? "");
+      setFiscalRegime(data.profile.fiscalRegime ?? "");
+      setFiscalZipCode(data.profile.fiscalZipCode ?? "");
       setAddress(data.profile.address ?? "");
       setWebsite(data.profile.website ?? "");
       setProfileMessage("Datos fiscales guardados.");
@@ -1846,6 +1852,32 @@ function IssuerProfilesTab({
             placeholder="RFC de la empresa"
             value={rfc}
           />
+        </label>
+        <label className="text-sm text-zinc-700">
+          Régimen fiscal (SAT)
+          <input
+            className="mt-1 w-full rounded-lg border border-zinc-300 bg-white px-3 py-2 text-sm text-zinc-900 disabled:cursor-not-allowed disabled:bg-zinc-100"
+            disabled={!canEditProfile}
+            onChange={(event) => setFiscalRegime(event.target.value)}
+            placeholder="Ej. 601"
+            value={fiscalRegime}
+          />
+          <span className="mt-1 block text-xs font-normal text-zinc-500">
+            Necesario para facturar (CFDI).
+          </span>
+        </label>
+        <label className="text-sm text-zinc-700">
+          Código postal de expedición
+          <input
+            className="mt-1 w-full rounded-lg border border-zinc-300 bg-white px-3 py-2 text-sm text-zinc-900 disabled:cursor-not-allowed disabled:bg-zinc-100"
+            disabled={!canEditProfile}
+            onChange={(event) => setFiscalZipCode(event.target.value)}
+            placeholder="Ej. 32690"
+            value={fiscalZipCode}
+          />
+          <span className="mt-1 block text-xs font-normal text-zinc-500">
+            Necesario para facturar (CFDI). Puede ser distinto del domicilio de abajo.
+          </span>
         </label>
         <label className="text-sm text-zinc-700">
           Domicilio fiscal

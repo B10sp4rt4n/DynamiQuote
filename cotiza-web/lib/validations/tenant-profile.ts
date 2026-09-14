@@ -6,6 +6,8 @@ export const updateTenantProfileSchema = z
     closingContactLabel: z.string().trim().max(200).optional().nullable(),
     closingContactLevel: z.enum(["contacto", "contacto_correo", "contacto_correo_telefono"]).optional(),
     expiryAlertDaysBefore: z.number().int().min(1).max(90).optional(),
+    fiscalRegime: z.string().trim().max(10).optional().nullable(),
+    fiscalZipCode: z.string().trim().max(10).optional().nullable(),
     razonSocial: z.string().trim().max(300).optional().nullable(),
     rfc: z.string().trim().max(20).optional().nullable(),
     website: z.string().trim().max(200).optional().nullable(),
@@ -16,6 +18,8 @@ export const updateTenantProfileSchema = z
       payload.closingContactLabel !== undefined ||
       payload.closingContactLevel !== undefined ||
       payload.expiryAlertDaysBefore !== undefined ||
+      payload.fiscalRegime !== undefined ||
+      payload.fiscalZipCode !== undefined ||
       payload.razonSocial !== undefined ||
       payload.rfc !== undefined ||
       payload.website !== undefined,

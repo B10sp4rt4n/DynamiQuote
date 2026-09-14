@@ -1,5 +1,6 @@
 import Link from "next/link";
 
+import { ProposalInvoicePanel } from "@/components/propuestas/proposal-invoice-panel";
 import { ProposalOutcomeActions } from "@/components/propuestas/proposal-outcome-actions";
 import type { ProposalDerivationInfo, ProposalWorkflowDetail } from "@/lib/db/proposals";
 import type { ProposalStatus } from "@/lib/validations/proposals";
@@ -39,6 +40,7 @@ function formatDate(value: string | null): string {
 
 type ProposalDetailViewProps = {
   derivationInfo: ProposalDerivationInfo;
+  digestorFiscalEnabled?: boolean;
   proposal: ProposalWorkflowDetail;
   tenantAddress: string | null;
   tenantName: string;
@@ -48,6 +50,7 @@ type ProposalDetailViewProps = {
 
 export function ProposalDetailView({
   derivationInfo,
+  digestorFiscalEnabled = false,
   proposal,
   tenantAddress,
   tenantName,
@@ -138,6 +141,13 @@ export function ProposalDetailView({
       </div>
 
       <ProposalOutcomeActions initialOutcome={proposal.outcome} proposalId={proposal.proposalId} status={status} />
+
+      {digestorFiscalEnabled && proposal.outcome === "won" ? (
+        <ProposalInvoicePanel
+          proposalId={proposal.proposalId}
+          recipientCompany={formal?.recipientCompany ?? null}
+        />
+      ) : null}
 
       <div className="grid gap-4 md:grid-cols-2">
         <div className="rounded-lg border border-zinc-200 p-4">

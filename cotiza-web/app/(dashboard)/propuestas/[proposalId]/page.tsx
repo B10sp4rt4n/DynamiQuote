@@ -8,6 +8,7 @@ import {
   isProposalVisibleToViewer,
 } from "@/lib/db/proposals";
 import { getTenantProfileByTenant } from "@/lib/db/tenants";
+import { isDigestorFiscalEnabledForTenant } from "@/lib/integrations/digestor-fiscal";
 
 export const dynamic = "force-dynamic";
 
@@ -102,6 +103,7 @@ export default async function ProposalDetailPage({ params }: ProposalDetailPageP
 
       <ProposalDetailView
         derivationInfo={derivationInfo}
+        digestorFiscalEnabled={isDigestorFiscalEnabledForTenant(tenant.id)}
         proposal={normalizedProposal}
         tenantAddress={tenantProfile?.address ?? null}
         tenantName={tenant.name}

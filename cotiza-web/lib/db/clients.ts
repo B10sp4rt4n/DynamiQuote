@@ -5,6 +5,7 @@ import { prisma } from "@/lib/db/prisma";
 export type ClientSummary = {
   active: boolean;
   address: string | null;
+  cfdiUse: string | null;
   clientId: string;
   clientLogoId: string | null;
   company: string;
@@ -15,15 +16,18 @@ export type ClientSummary = {
   contactPhone: string | null;
   contactTitle: string | null;
   createdAt: string;
+  fiscalRegime: string | null;
   industry: string | null;
   notes: string | null;
   rfc: string | null;
   tenantId: string;
   updatedAt: string | null;
+  zipCode: string | null;
 };
 
 export type CreateClientInput = {
   address?: string | null;
+  cfdiUse?: string | null;
   clientLogoId?: string | null;
   company: string;
   contactEmail?: string | null;
@@ -31,9 +35,11 @@ export type CreateClientInput = {
   contactLastName?: string | null;
   contactPhone?: string | null;
   contactTitle?: string | null;
+  fiscalRegime?: string | null;
   industry?: string | null;
   notes?: string | null;
   rfc?: string | null;
+  zipCode?: string | null;
 };
 
 export type UpdateClientInput = Partial<CreateClientInput> & {
@@ -43,6 +49,7 @@ export type UpdateClientInput = Partial<CreateClientInput> & {
 function mapToSummary(row: {
   active: boolean;
   address: string | null;
+  cfdi_use: string | null;
   client_id: string;
   client_logo_id: string | null;
   company: string;
@@ -53,15 +60,18 @@ function mapToSummary(row: {
   contact_phone: string | null;
   contact_title: string | null;
   created_at: Date;
+  fiscal_regime: string | null;
   industry: string | null;
   notes: string | null;
   rfc: string | null;
   tenant_id: string;
   updated_at: Date | null;
+  zip_code: string | null;
 }): ClientSummary {
   return {
     active: row.active,
     address: row.address,
+    cfdiUse: row.cfdi_use,
     clientId: row.client_id,
     clientLogoId: row.client_logo_id,
     company: row.company,
@@ -72,11 +82,13 @@ function mapToSummary(row: {
     contactPhone: row.contact_phone,
     contactTitle: row.contact_title,
     createdAt: row.created_at.toISOString(),
+    fiscalRegime: row.fiscal_regime,
     industry: row.industry,
     notes: row.notes,
     rfc: row.rfc,
     tenantId: row.tenant_id,
     updatedAt: row.updated_at ? row.updated_at.toISOString() : null,
+    zipCode: row.zip_code,
   };
 }
 
@@ -151,6 +163,7 @@ export async function createClientForTenant(
   const row = await prisma.client.create({
     data: {
       address: input.address?.trim() || null,
+      cfdi_use: input.cfdiUse?.trim() || null,
       client_logo_id: clientLogoId,
       company: input.company.trim(),
       contact_email: input.contactEmail?.trim() || null,
@@ -159,10 +172,12 @@ export async function createClientForTenant(
       contact_name: contactName,
       contact_phone: input.contactPhone?.trim() || null,
       contact_title: input.contactTitle?.trim() || null,
+      fiscal_regime: input.fiscalRegime?.trim() || null,
       industry: input.industry?.trim() || null,
       notes: input.notes?.trim() || null,
       rfc: input.rfc?.trim() || null,
       tenant_id: tenantId,
+      zip_code: input.zipCode?.trim() || null,
     },
   });
 
@@ -206,6 +221,7 @@ export async function updateClientForTenant(
     data: {
       ...(input.active !== undefined ? { active: input.active } : {}),
       ...(input.address !== undefined ? { address: input.address?.trim() || null } : {}),
+      ...(input.cfdiUse !== undefined ? { cfdi_use: input.cfdiUse?.trim() || null } : {}),
       ...(input.clientLogoId !== undefined ? { client_logo_id: clientLogoId ?? null } : {}),
       ...(input.company !== undefined ? { company: input.company.trim() } : {}),
       ...(input.contactEmail !== undefined ? { contact_email: input.contactEmail?.trim() || null } : {}),
@@ -214,9 +230,11 @@ export async function updateClientForTenant(
       ...(nextContactName !== undefined ? { contact_name: nextContactName } : {}),
       ...(input.contactPhone !== undefined ? { contact_phone: input.contactPhone?.trim() || null } : {}),
       ...(input.contactTitle !== undefined ? { contact_title: input.contactTitle?.trim() || null } : {}),
+      ...(input.fiscalRegime !== undefined ? { fiscal_regime: input.fiscalRegime?.trim() || null } : {}),
       ...(input.industry !== undefined ? { industry: input.industry?.trim() || null } : {}),
       ...(input.notes !== undefined ? { notes: input.notes?.trim() || null } : {}),
       ...(input.rfc !== undefined ? { rfc: input.rfc?.trim() || null } : {}),
+      ...(input.zipCode !== undefined ? { zip_code: input.zipCode?.trim() || null } : {}),
     },
     where: { client_id: clientId },
   });
