@@ -128,7 +128,10 @@ export function ProposalInvoicePanel({ proposalId, recipientCompany }: ProposalI
         method: "POST",
       });
 
-      const data = (await res.json()) as { draft?: InvoiceStatus & { missingFields?: string[] }; error?: string };
+      const data = (await res.json()) as {
+        draft?: { id: string; missingFields: string[] };
+        error?: string;
+      };
 
       if (!res.ok) {
         throw new Error(data.error ?? "No se pudo generar la prefactura");
@@ -136,7 +139,7 @@ export function ProposalInvoicePanel({ proposalId, recipientCompany }: ProposalI
 
       if (data.draft) {
         setInvoice({
-          draftId: data.draft.draftId ?? null,
+          draftId: data.draft.id,
           stampedAt: null,
           status: "draft",
           uuid: null,
