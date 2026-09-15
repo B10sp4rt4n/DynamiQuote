@@ -38,7 +38,12 @@ export async function POST(_: Request, context: RouteContext) {
 
   try {
     const result = await stampBillingDraft(invoice.draftId);
-    await markProposalInvoiceStampedByTenant(tenant.id, proposalId, result.ok ? result.uuid : null);
+    await markProposalInvoiceStampedByTenant(
+      tenant.id,
+      proposalId,
+      result.ok ? result.uuid : null,
+      result.ok ? result.xmlBase64 : null,
+    );
 
     if (!result.ok) {
       const detail = result.rejectionMessage ? ` Detalle del PAC: ${result.rejectionMessage}` : "";

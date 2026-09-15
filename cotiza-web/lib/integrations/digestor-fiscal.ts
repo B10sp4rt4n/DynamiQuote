@@ -200,6 +200,7 @@ export type StampBillingDraftResult = {
   // accesible por la app.
   rejectionMessage: string | null;
   uuid: string | null;
+  xmlBase64: string | null;
 };
 
 type ProviderErrorResponse = {
@@ -236,7 +237,13 @@ export async function stampBillingDraft(draftId: string): Promise<StampBillingDr
     }
   }
 
-  return { draft: mapDraft(raw.draft), ok: raw.ok, rejectionMessage, uuid };
+  return {
+    draft: mapDraft(raw.draft),
+    ok: raw.ok,
+    rejectionMessage,
+    uuid,
+    xmlBase64: raw.ok ? raw.xml_base64 ?? null : null,
+  };
 }
 
 // Los endpoints de preview/pdf de Digestor Fiscal tambien exigen Bearer --

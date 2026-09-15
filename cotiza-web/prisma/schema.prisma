@@ -406,6 +406,7 @@ model proposals {
   invoice_uuid                                                            String?
   invoice_status                                                          String?
   invoice_stamped_at                                                      DateTime?                    @db.Timestamp(6)
+  invoice_xml_base64                                                      String?
   formal_proposals                                                         formal_proposals[]
   project_expenses                                                         project_expenses[]
   proposal_approvals                                                       proposal_approvals[]

@@ -9,6 +9,7 @@ export type ProposalInvoiceInfo = {
   stampedAt: string | null;
   status: ProposalInvoiceStatus;
   uuid: string | null;
+  xmlBase64: string | null;
 };
 
 function normalizeInvoiceStatus(value: string | null): ProposalInvoiceStatus {
@@ -25,6 +26,7 @@ export async function getProposalInvoiceStatusByTenant(
       invoice_stamped_at: true,
       invoice_status: true,
       invoice_uuid: true,
+      invoice_xml_base64: true,
     },
     where: { proposal_id: proposalId, tenant_id: tenantId },
   });
@@ -38,6 +40,7 @@ export async function getProposalInvoiceStatusByTenant(
     stampedAt: row.invoice_stamped_at ? row.invoice_stamped_at.toISOString() : null,
     status: normalizeInvoiceStatus(row.invoice_status),
     uuid: row.invoice_uuid,
+    xmlBase64: row.invoice_xml_base64,
   };
 }
 
@@ -56,12 +59,14 @@ export async function markProposalInvoiceStampedByTenant(
   tenantId: string,
   proposalId: string,
   uuid: string | null,
+  xmlBase64: string | null,
 ): Promise<void> {
   await prisma.proposals.updateMany({
     data: {
       invoice_stamped_at: new Date(),
       invoice_status: uuid ? "stamped" : "rejected",
       invoice_uuid: uuid,
+      invoice_xml_base64: xmlBase64,
     },
     where: { proposal_id: proposalId, tenant_id: tenantId },
   });
