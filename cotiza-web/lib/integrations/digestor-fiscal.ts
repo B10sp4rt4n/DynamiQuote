@@ -107,6 +107,7 @@ export type DigestorFiscalDraftItem = {
 };
 
 export type CreateBillingDraftInput = {
+  currency: string;
   customerName: string;
   customerRegimen: string;
   customerRfc: string;
@@ -160,7 +161,7 @@ function mapDraft(raw: RawDraft): DigestorFiscalDraft {
 export async function createBillingDraft(input: CreateBillingDraftInput): Promise<DigestorFiscalDraft> {
   const raw = await request<RawDraft>("/v1/billing/drafts", {
     body: JSON.stringify({
-      currency: "MXN",
+      currency: input.currency,
       customer_name: input.customerName,
       customer_regimen: input.customerRegimen,
       customer_rfc: input.customerRfc,

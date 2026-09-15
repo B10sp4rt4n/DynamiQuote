@@ -90,10 +90,19 @@ export async function POST(request: Request, context: RouteContext) {
     return NextResponse.json({ error: "La propuesta no tiene partidas para facturar" }, { status: 422 });
   }
 
+  const currency = proposal.formal?.currency;
+  if (!currency) {
+    return NextResponse.json(
+      { error: "La propuesta no tiene moneda definida. Elígela en el editor de la propuesta antes de facturar." },
+      { status: 422 },
+    );
+  }
+
   const input = parsed.data;
 
   try {
     const draft = await createBillingDraft({
+      currency,
       customerName: input.customerName,
       customerRegimen: input.customerRegimen,
       customerRfc: input.customerRfc,
