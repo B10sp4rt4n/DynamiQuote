@@ -1,11 +1,34 @@
 import "server-only";
 
 import { randomUUID } from "crypto";
-import type { Prisma } from "@prisma/client";
+import { Prisma } from "@prisma/client";
 
 import { prisma } from "@/lib/db/prisma";
 
 type PrismaClientOrTx = Prisma.TransactionClient | typeof prisma;
+
+// Convierte de forma segura cualquier tipo numerico que pueda regresar una
+// consulta $queryRaw (Decimal, bigint por COUNT/SUM, string, number) a number.
+function toNumber(value: unknown): number {
+  if (value === null || value === undefined) {
+    return 0;
+  }
+
+  if (typeof value === "number") {
+    return value;
+  }
+
+  if (typeof value === "bigint") {
+    return Number(value);
+  }
+
+  if (typeof value === "object" && "toNumber" in value && typeof value.toNumber === "function") {
+    return (value as { toNumber: () => number }).toNumber();
+  }
+
+  const parsed = Number(value);
+  return Number.isFinite(parsed) ? parsed : 0;
+}
 
 // Folio atomico/consecutivo por tenant, igual que COT-XXXX y PKG-XXXX (ver
 // CLAUDE.md "Convenciones de codigo").
@@ -166,4 +189,78 @@ export async function getOpportunityPipelineByTenant(
   });
 
   return attachDerivedStage(tenantId, opportunities);
+}
+
+export type OpportunityPipelineStageSummary = {
+  amount: number;
+  count: number;
+};
+
+export type OpportunityPipelineSummary = {
+  lost: OpportunityPipelineStageSummary;
+  open: OpportunityPipelineStageSummary;
+  won: OpportunityPipelineStageSummary;
+};
+
+// Resumen de pipeline (tarjetas + barra de proporcion): cuenta y monto real
+// por stage derivado. El monto se calcula de proposal_items.subtotal_price
+// (nunca de opportunities.estimated_value -- ese campo no lo puebla ningun
+// codigo, siempre queda NULL). Ganadas/Perdidas suman solo las propuestas con
+// ese outcome; Abiertas suma todas las propuestas ligadas sin outcome
+// definitivo. Mismo criterio "ve lo tuyo vs ve todo" que
+// getOpportunityPipelineByTenant.
+export async function getOpportunityPipelineSummaryByTenant(
+  tenantId: string,
+  viewerUserId: string | null = null,
+  canSeeAll = true,
+): Promise<OpportunityPipelineSummary> {
+  const scopeFilter = canSeeAll
+    ? Prisma.empty
+    : Prisma.sql`AND (o.owner_user_id = ${viewerUserId} OR o.owner_user_id IS NULL)`;
+
+  const rows = await prisma.$queryRaw<
+    Array<{
+      has_lost: number;
+      has_won: number;
+      lost_amount: Prisma.Decimal | null;
+      open_amount: Prisma.Decimal | null;
+      opportunity_id: string;
+      won_amount: Prisma.Decimal | null;
+    }>
+  >(Prisma.sql`
+    SELECT
+      o.opportunity_id,
+      MAX(CASE WHEN p.outcome = 'won' THEN 1 ELSE 0 END) AS has_won,
+      MAX(CASE WHEN p.outcome = 'lost' THEN 1 ELSE 0 END) AS has_lost,
+      SUM(CASE WHEN p.outcome = 'won' THEN COALESCE(pi.subtotal_price, 0) ELSE 0 END) AS won_amount,
+      SUM(CASE WHEN p.outcome = 'lost' THEN COALESCE(pi.subtotal_price, 0) ELSE 0 END) AS lost_amount,
+      SUM(COALESCE(pi.subtotal_price, 0)) AS open_amount
+    FROM opportunities o
+    LEFT JOIN proposals p ON p.opportunity_id = o.opportunity_id AND p.tenant_id = o.tenant_id
+    LEFT JOIN proposal_items pi ON pi.proposal_id = p.proposal_id AND pi.status != 'deleted'
+    WHERE o.tenant_id = ${tenantId}
+      ${scopeFilter}
+    GROUP BY o.opportunity_id
+  `);
+
+  const summary: OpportunityPipelineSummary = {
+    lost: { amount: 0, count: 0 },
+    open: { amount: 0, count: 0 },
+    won: { amount: 0, count: 0 },
+  };
+
+  for (const row of rows) {
+    if (toNumber(row.has_won) > 0) {
+      summary.won.count += 1;
+      summary.won.amount += toNumber(row.won_amount);
+    } else if (toNumber(row.has_lost) > 0) {
+      summary.lost.count += 1;
+      summary.lost.amount += toNumber(row.lost_amount);
+    } else {
+      summary.open.count += 1;
+      summary.open.amount += toNumber(row.open_amount);
+    }
+  }
+
+  return summary;
 }
