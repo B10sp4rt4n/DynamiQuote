@@ -82,10 +82,10 @@ export async function createOpportunityForTenant(
 export type OpportunityStage = "open" | "won" | "lost";
 
 export type OpportunityWithStage = {
+  amount: number;
   clientCompany: string | null;
   clientId: string | null;
   createdAt: string;
-  estimatedValue: number | null;
   expectedCloseDate: string | null;
   opportunityId: string;
   opportunityNumber: string;
@@ -93,15 +93,64 @@ export type OpportunityWithStage = {
   title: string;
 };
 
+type OpportunityFinancials = {
+  hasLost: boolean;
+  hasWon: boolean;
+  lostAmount: number;
+  openAmount: number;
+  wonAmount: number;
+};
+
 // opportunities.stage nunca se actualiza en ningun lado del codigo (nace
 // "open" y se queda ahi) -- el stage real se deriva del outcome de las
 // propuestas ligadas: ganada si alguna gano, perdida si alguna perdio y
-// ninguna gano, abierta en cualquier otro caso. Calculado en tiempo real,
-// sin tocar el schema.
-function deriveOpportunityStage(outcomes: Array<string | null>): OpportunityStage {
-  if (outcomes.includes("won")) return "won";
-  if (outcomes.includes("lost")) return "lost";
-  return "open";
+// ninguna gano, abierta en cualquier otro caso. El monto tampoco sale de
+// opportunities.estimated_value (ningun codigo lo puebla, siempre NULL) --
+// se calcula de proposal_items.subtotal_price de esas mismas propuestas,
+// sumando solo las del outcome que aplica al stage resultante. Compartido
+// con getOpportunityPipelineSummaryByTenant para que ambos calculen igual.
+async function getOpportunityFinancialsByIds(
+  tenantId: string,
+  opportunityIds: string[],
+): Promise<Map<string, OpportunityFinancials>> {
+  if (opportunityIds.length === 0) {
+    return new Map();
+  }
+
+  const rows = await prisma.$queryRaw<
+    Array<{
+      has_lost: number;
+      has_won: number;
+      lost_amount: Prisma.Decimal | null;
+      open_amount: Prisma.Decimal | null;
+      opportunity_id: string;
+      won_amount: Prisma.Decimal | null;
+    }>
+  >(Prisma.sql`
+    SELECT
+      p.opportunity_id,
+      MAX(CASE WHEN p.outcome = 'won' THEN 1 ELSE 0 END) AS has_won,
+      MAX(CASE WHEN p.outcome = 'lost' THEN 1 ELSE 0 END) AS has_lost,
+      SUM(CASE WHEN p.outcome = 'won' THEN COALESCE(pi.subtotal_price, 0) ELSE 0 END) AS won_amount,
+      SUM(CASE WHEN p.outcome = 'lost' THEN COALESCE(pi.subtotal_price, 0) ELSE 0 END) AS lost_amount,
+      SUM(COALESCE(pi.subtotal_price, 0)) AS open_amount
+    FROM proposals p
+    LEFT JOIN proposal_items pi ON pi.proposal_id = p.proposal_id AND pi.status != 'deleted'
+    WHERE p.tenant_id = ${tenantId} AND p.opportunity_id IN (${Prisma.join(opportunityIds)})
+    GROUP BY p.opportunity_id
+  `);
+
+  const map = new Map<string, OpportunityFinancials>();
+  for (const row of rows) {
+    map.set(row.opportunity_id, {
+      hasLost: toNumber(row.has_lost) > 0,
+      hasWon: toNumber(row.has_won) > 0,
+      lostAmount: toNumber(row.lost_amount),
+      openAmount: toNumber(row.open_amount),
+      wonAmount: toNumber(row.won_amount),
+    });
+  }
+  return map;
 }
 
 async function attachDerivedStage(
@@ -109,7 +158,6 @@ async function attachDerivedStage(
   opportunities: Array<{
     client_id: string | null;
     created_at: Date;
-    estimated_value: Prisma.Decimal | null;
     expected_close_date: Date | null;
     opportunity_id: string;
     opportunity_number: string;
@@ -121,18 +169,7 @@ async function attachDerivedStage(
   }
 
   const opportunityIds = opportunities.map((o) => o.opportunity_id);
-  const proposals = await prisma.proposals.findMany({
-    select: { opportunity_id: true, outcome: true },
-    where: { opportunity_id: { in: opportunityIds }, tenant_id: tenantId },
-  });
-
-  const outcomesByOpportunity = new Map<string, Array<string | null>>();
-  for (const proposal of proposals) {
-    if (!proposal.opportunity_id) continue;
-    const list = outcomesByOpportunity.get(proposal.opportunity_id) ?? [];
-    list.push(proposal.outcome);
-    outcomesByOpportunity.set(proposal.opportunity_id, list);
-  }
+  const financials = await getOpportunityFinancialsByIds(tenantId, opportunityIds);
 
   const clientIds = [...new Set(opportunities.map((o) => o.client_id).filter((id): id is string => Boolean(id)))];
   const clients =
@@ -144,17 +181,23 @@ async function attachDerivedStage(
       : [];
   const clientCompanyById = new Map(clients.map((c) => [c.client_id, c.company]));
 
-  return opportunities.map((o) => ({
-    clientCompany: o.client_id ? (clientCompanyById.get(o.client_id) ?? null) : null,
-    clientId: o.client_id,
-    createdAt: o.created_at.toISOString(),
-    estimatedValue: o.estimated_value !== null ? Number(o.estimated_value) : null,
-    expectedCloseDate: o.expected_close_date ? o.expected_close_date.toISOString() : null,
-    opportunityId: o.opportunity_id,
-    opportunityNumber: o.opportunity_number,
-    stage: deriveOpportunityStage(outcomesByOpportunity.get(o.opportunity_id) ?? []),
-    title: o.title,
-  }));
+  return opportunities.map((o) => {
+    const fin = financials.get(o.opportunity_id);
+    const stage: OpportunityStage = fin?.hasWon ? "won" : fin?.hasLost ? "lost" : "open";
+    const amount = fin ? (stage === "won" ? fin.wonAmount : stage === "lost" ? fin.lostAmount : fin.openAmount) : 0;
+
+    return {
+      amount,
+      clientCompany: o.client_id ? (clientCompanyById.get(o.client_id) ?? null) : null,
+      clientId: o.client_id,
+      createdAt: o.created_at.toISOString(),
+      expectedCloseDate: o.expected_close_date ? o.expected_close_date.toISOString() : null,
+      opportunityId: o.opportunity_id,
+      opportunityNumber: o.opportunity_number,
+      stage,
+      title: o.title,
+    };
+  });
 }
 
 // Todas las oportunidades de un cliente (para la Vista 360) -- a
@@ -203,45 +246,25 @@ export type OpportunityPipelineSummary = {
 };
 
 // Resumen de pipeline (tarjetas + barra de proporcion): cuenta y monto real
-// por stage derivado. El monto se calcula de proposal_items.subtotal_price
-// (nunca de opportunities.estimated_value -- ese campo no lo puebla ningun
-// codigo, siempre queda NULL). Ganadas/Perdidas suman solo las propuestas con
-// ese outcome; Abiertas suma todas las propuestas ligadas sin outcome
-// definitivo. Mismo criterio "ve lo tuyo vs ve todo" que
+// por stage derivado, usando el mismo calculo que attachDerivedStage
+// (getOpportunityFinancialsByIds) para que tarjetas, barra y tabla nunca
+// difieran entre si. Mismo criterio "ve lo tuyo vs ve todo" que
 // getOpportunityPipelineByTenant.
 export async function getOpportunityPipelineSummaryByTenant(
   tenantId: string,
   viewerUserId: string | null = null,
   canSeeAll = true,
 ): Promise<OpportunityPipelineSummary> {
-  const scopeFilter = canSeeAll
-    ? Prisma.empty
-    : Prisma.sql`AND (o.owner_user_id = ${viewerUserId} OR o.owner_user_id IS NULL)`;
+  const opportunities = await prisma.opportunities.findMany({
+    select: { opportunity_id: true },
+    where: {
+      tenant_id: tenantId,
+      ...(canSeeAll ? {} : { OR: [{ owner_user_id: viewerUserId }, { owner_user_id: null }] }),
+    },
+  });
 
-  const rows = await prisma.$queryRaw<
-    Array<{
-      has_lost: number;
-      has_won: number;
-      lost_amount: Prisma.Decimal | null;
-      open_amount: Prisma.Decimal | null;
-      opportunity_id: string;
-      won_amount: Prisma.Decimal | null;
-    }>
-  >(Prisma.sql`
-    SELECT
-      o.opportunity_id,
-      MAX(CASE WHEN p.outcome = 'won' THEN 1 ELSE 0 END) AS has_won,
-      MAX(CASE WHEN p.outcome = 'lost' THEN 1 ELSE 0 END) AS has_lost,
-      SUM(CASE WHEN p.outcome = 'won' THEN COALESCE(pi.subtotal_price, 0) ELSE 0 END) AS won_amount,
-      SUM(CASE WHEN p.outcome = 'lost' THEN COALESCE(pi.subtotal_price, 0) ELSE 0 END) AS lost_amount,
-      SUM(COALESCE(pi.subtotal_price, 0)) AS open_amount
-    FROM opportunities o
-    LEFT JOIN proposals p ON p.opportunity_id = o.opportunity_id AND p.tenant_id = o.tenant_id
-    LEFT JOIN proposal_items pi ON pi.proposal_id = p.proposal_id AND pi.status != 'deleted'
-    WHERE o.tenant_id = ${tenantId}
-      ${scopeFilter}
-    GROUP BY o.opportunity_id
-  `);
+  const opportunityIds = opportunities.map((o) => o.opportunity_id);
+  const financials = await getOpportunityFinancialsByIds(tenantId, opportunityIds);
 
   const summary: OpportunityPipelineSummary = {
     lost: { amount: 0, count: 0 },
@@ -249,16 +272,17 @@ export async function getOpportunityPipelineSummaryByTenant(
     won: { amount: 0, count: 0 },
   };
 
-  for (const row of rows) {
-    if (toNumber(row.has_won) > 0) {
+  for (const opportunityId of opportunityIds) {
+    const fin = financials.get(opportunityId);
+    if (fin?.hasWon) {
       summary.won.count += 1;
-      summary.won.amount += toNumber(row.won_amount);
-    } else if (toNumber(row.has_lost) > 0) {
+      summary.won.amount += fin.wonAmount;
+    } else if (fin?.hasLost) {
       summary.lost.count += 1;
-      summary.lost.amount += toNumber(row.lost_amount);
+      summary.lost.amount += fin.lostAmount;
     } else {
       summary.open.count += 1;
-      summary.open.amount += toNumber(row.open_amount);
+      summary.open.amount += fin?.openAmount ?? 0;
     }
   }
 

@@ -170,7 +170,7 @@ export default async function ClientDetailPage({ params }: ClientDetailPageProps
                     {opp.opportunityNumber} — {opp.title}
                   </p>
                   <p className="text-xs text-zinc-500">
-                    {formatCurrency(opp.estimatedValue)}
+                    {formatCurrency(opp.amount)}
                     {opp.expectedCloseDate ? ` · cierre esperado ${formatDate(opp.expectedCloseDate)}` : ""}
                   </p>
                 </div>
