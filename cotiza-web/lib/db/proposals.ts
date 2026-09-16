@@ -1999,6 +1999,54 @@ export async function executeMarginOverride(input: {
   return getProposalWorkflowByTenant(input.tenantId, input.proposalId);
 }
 
+// Si el margen ya calificaba para autorizacion final, resolveProposalIssuanceGate
+// permite enviarse la propuesta por correo sin pasar por "Solicitud de
+// aprobacion" -- pero eso dejaba la propuesta en "sent" sin ningun registro
+// de que quedo aprobada por politica de margen (a diferencia del atajo
+// equivalente al someter un borrador, que si registra la auto-aprobacion --
+// ver updateProposalWorkflowByTenant, "isDraftMarginAutoApproval"). Este
+// helper cierra ese hueco para la via de envio por correo: si el margen
+// califica (no es un forzamiento de Owner/Superadmin -- ese caso ya tiene su
+// propio registro via executeMarginOverride/consumeProposalIssuanceForce),
+// promueve directo a "approved" y deja el mismo rastro en proposal_approvals
+// que el atajo de borrador, con quien disparo el envio como aprobador
+// (la decision la toma la politica, no la persona).
+export async function autoApproveProposalByMarginPolicy(input: {
+  actor: { isSuperAdmin: boolean; userId: string | null; userRole: "superadmin" | "owner" | "admin" | "user" };
+  proposalId: string;
+  reason: string;
+  tenantId: string;
+}): Promise<ProposalWorkflowDetail | null> {
+  const current = await getProposalWorkflowByTenant(input.tenantId, input.proposalId);
+
+  const approverUserId = input.actor.userId;
+  if (!current || current.status === "approved" || !approverUserId) {
+    return current;
+  }
+
+  await prisma.$transaction(async (tx) => {
+    await applyProposalStatusOnly(tx, {
+      currentOutcome: current.outcome,
+      nextStatus: "approved",
+      proposalId: input.proposalId,
+    });
+
+    await registerProposalApprovalDecisionByTenant(
+      {
+        approverRole: resolveApproverRole(input.actor),
+        approverUserId,
+        decision: "approved",
+        proposalId: input.proposalId,
+        reason: input.reason,
+        tenantId: input.tenantId,
+      },
+      tx,
+    );
+  });
+
+  return getProposalWorkflowByTenant(input.tenantId, input.proposalId);
+}
+
 export async function updateProposalWorkflowByTenant(
   tenantId: string,
   proposalId: string,

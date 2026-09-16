@@ -5,6 +5,7 @@ import { auth, clerkClient } from "@clerk/nextjs/server";
 import { getCurrentTenantContext } from "@/lib/auth/tenant-context";
 import { prisma } from "@/lib/db/prisma";
 import {
+  autoApproveProposalByMarginPolicy,
   consumeProposalIssuanceForce,
   getProposalWorkflowByTenant,
   updateProposalWorkflowByTenant,
@@ -330,8 +331,23 @@ export async function POST(request: Request, context: RouteContext) {
     tenantId: tenant.id,
   });
 
-  // Transicionar a "sent" para registrar que la propuesta fue despachada.
-  await updateProposalWorkflowByTenant(tenant.id, proposalId, { status: "sent" }).catch(() => null);
+  // Si el margen ya calificaba para autorizacion final, el envio equivale a
+  // una aprobacion de facto -- se deja ese rastro en proposal_approvals en
+  // vez de solo marcar "sent" sin aprobacion registrada (ver
+  // autoApproveProposalByMarginPolicy). Cuando el margen NO califica
+  // (borrador enviado como vista previa sin validar, o un forzamiento de
+  // Owner/Superadmin -- ese ya tiene su propio registro aparte via
+  // consumeProposalIssuanceForce), se conserva el comportamiento previo.
+  if (proposal.marginEvaluation.canAuthorizeFinal) {
+    await autoApproveProposalByMarginPolicy({
+      actor: { isSuperAdmin: tenant.isSuperAdmin, userId: tenant.userId, userRole: tenant.userRole },
+      proposalId,
+      reason: "Auto-aprobado: margen dentro de politica al enviarse la propuesta por correo.",
+      tenantId: tenant.id,
+    }).catch(() => null);
+  } else {
+    await updateProposalWorkflowByTenant(tenant.id, proposalId, { status: "sent" }).catch(() => null);
+  }
 
   return NextResponse.json({ ok: true, success: true }, { status: 200 });
 }
