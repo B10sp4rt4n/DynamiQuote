@@ -2,7 +2,7 @@
 
 import { useMemo, useState } from "react";
 
-import { PipelineTable } from "@/components/pipeline/pipeline-table";
+import { PIPELINE_TABLE_ANCHOR_ID, PipelineTable, type PipelineStageFilter } from "@/components/pipeline/pipeline-table";
 import type { OpportunityStage, OpportunityWithStage } from "@/lib/db/opportunities";
 
 // Paleta de estado fija (nunca tematizada) -- ver skill dataviz. good=ganado,
@@ -72,23 +72,33 @@ function computeSummary(opportunities: OpportunityWithStage[]): PipelineSummary 
   return summary;
 }
 
+// Cada tarjeta es un atajo a su seccion en la tabla de abajo: al hacer
+// click fija el filtro "Estado" a ese stage y hace scroll hasta la tabla --
+// evita duplicar el control de filtro, solo lo dispara desde otro lugar.
+// Salvador, 2026-09-18.
 function StatTile({
   accentClassName,
   amount,
   count,
   label,
+  onSelect,
 }: {
   accentClassName: string;
   amount: number;
   count: number;
   label: string;
+  onSelect: () => void;
 }) {
   return (
-    <div className={`rounded-xl border p-4 ${accentClassName}`}>
+    <button
+      className={`rounded-xl border p-4 text-left transition hover:brightness-95 ${accentClassName}`}
+      onClick={onSelect}
+      type="button"
+    >
       <p className="text-xs font-medium text-zinc-600">{label}</p>
       <p className="mt-1 text-2xl font-semibold text-zinc-900">{count}</p>
       <p className="mt-0.5 text-sm text-zinc-600">{formatCurrency(amount)}</p>
-    </div>
+    </button>
   );
 }
 
@@ -250,6 +260,7 @@ export function PipelineDashboard({
   const [selectedVendorIds, setSelectedVendorIds] = useState<Set<string>>(
     () => new Set([UNASSIGNED_KEY, ...effectiveVendors.map((v) => v.userId)]),
   );
+  const [stageFilter, setStageFilter] = useState<PipelineStageFilter>("all");
 
   const filteredOpportunities = useMemo(() => {
     if (!showVendorFilter) return opportunities;
@@ -258,6 +269,11 @@ export function PipelineDashboard({
 
   const summary = useMemo(() => computeSummary(filteredOpportunities), [filteredOpportunities]);
 
+  function goToStage(stage: PipelineStageFilter) {
+    setStageFilter(stage);
+    document.getElementById(PIPELINE_TABLE_ANCHOR_ID)?.scrollIntoView({ behavior: "smooth", block: "start" });
+  }
+
   return (
     <div className="space-y-6">
       {showVendorFilter ? (
@@ -265,9 +281,27 @@ export function PipelineDashboard({
       ) : null}
 
       <div className="grid gap-4 sm:grid-cols-3">
-        <StatTile accentClassName="border-blue-200 bg-blue-50" amount={summary.open.amount} count={summary.open.count} label="Abiertas" />
-        <StatTile accentClassName="border-emerald-200 bg-emerald-50" amount={summary.won.amount} count={summary.won.count} label="Ganadas" />
-        <StatTile accentClassName="border-rose-200 bg-rose-50" amount={summary.lost.amount} count={summary.lost.count} label="Perdidas" />
+        <StatTile
+          accentClassName="border-blue-200 bg-blue-50"
+          amount={summary.open.amount}
+          count={summary.open.count}
+          label="Abiertas"
+          onSelect={() => goToStage("open")}
+        />
+        <StatTile
+          accentClassName="border-emerald-200 bg-emerald-50"
+          amount={summary.won.amount}
+          count={summary.won.count}
+          label="Ganadas"
+          onSelect={() => goToStage("won")}
+        />
+        <StatTile
+          accentClassName="border-rose-200 bg-rose-50"
+          amount={summary.lost.amount}
+          count={summary.lost.count}
+          label="Perdidas"
+          onSelect={() => goToStage("lost")}
+        />
       </div>
 
       <ClosingRateMeter summary={summary} />
@@ -279,7 +313,7 @@ export function PipelineDashboard({
           </p>
         </div>
       ) : (
-        <PipelineTable opportunities={filteredOpportunities} />
+        <PipelineTable onStageFilterChange={setStageFilter} opportunities={filteredOpportunities} stageFilter={stageFilter} />
       )}
     </div>
   );

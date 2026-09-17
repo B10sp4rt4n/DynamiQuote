@@ -1,7 +1,7 @@
 "use client";
 
 import Link from "next/link";
-import { useMemo, useState } from "react";
+import { useMemo } from "react";
 
 import type { OpportunityStage, OpportunityWithStage } from "@/lib/db/opportunities";
 
@@ -17,14 +17,19 @@ const STAGE_BADGE_CLASSES: Record<OpportunityStage, string> = {
   won: "bg-emerald-50 text-emerald-700",
 };
 
-type StageFilter = OpportunityStage | "all";
+export type PipelineStageFilter = OpportunityStage | "all";
 
-const FILTER_OPTIONS: Array<{ value: StageFilter; label: string }> = [
+const FILTER_OPTIONS: Array<{ value: PipelineStageFilter; label: string }> = [
   { label: "Todas", value: "all" },
   { label: "Abiertas", value: "open" },
   { label: "Ganadas", value: "won" },
   { label: "Perdidas", value: "lost" },
 ];
+
+// Id de anclaje para que las tarjetas de arriba (StatTile en
+// pipeline-dashboard.tsx) puedan hacer scroll directo a la tabla al hacer
+// click, ademas de fijar el filtro.
+export const PIPELINE_TABLE_ANCHOR_ID = "pipeline-table";
 
 function formatDate(iso: string | null): string {
   if (!iso) return "—";
@@ -37,22 +42,28 @@ function formatCurrency(value: number): string {
   return new Intl.NumberFormat("es-MX", { style: "currency", currency: "MXN" }).format(value);
 }
 
-export function PipelineTable({ opportunities }: { opportunities: OpportunityWithStage[] }) {
-  const [stageFilter, setStageFilter] = useState<StageFilter>("all");
-
+export function PipelineTable({
+  onStageFilterChange,
+  opportunities,
+  stageFilter,
+}: {
+  onStageFilterChange: (next: PipelineStageFilter) => void;
+  opportunities: OpportunityWithStage[];
+  stageFilter: PipelineStageFilter;
+}) {
   const filtered = useMemo(
     () => (stageFilter === "all" ? opportunities : opportunities.filter((opp) => opp.stage === stageFilter)),
     [opportunities, stageFilter],
   );
 
   return (
-    <div className="rounded-xl border border-zinc-200 bg-white">
+    <div className="rounded-xl border border-zinc-200 bg-white" id={PIPELINE_TABLE_ANCHOR_ID}>
       <div className="flex items-center justify-between gap-3 border-b border-zinc-100 px-4 py-3">
         <label className="flex items-center gap-2 text-sm text-zinc-600">
           Estado:
           <select
             className="rounded-md border border-zinc-300 bg-white px-2 py-1 text-sm text-zinc-900"
-            onChange={(event) => setStageFilter(event.target.value as StageFilter)}
+            onChange={(event) => onStageFilterChange(event.target.value as PipelineStageFilter)}
             value={stageFilter}
           >
             {FILTER_OPTIONS.map((option) => (
