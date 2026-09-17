@@ -1128,12 +1128,22 @@ function mapProposalSummaryRows(
   });
 }
 
+// Descartar una propuesta es una accion consciente del usuario, no un
+// accidente ni un default -- por eso no se borra ni se oculta del todo:
+// sigue siendo consultable de forma explicita en su propio tab
+// "Descartadas" (ver getProposalListPageByTenant, que sobreescribe outcome
+// ahi mismo). Pero tampoco debe conservar prioridad de visibilidad en las
+// listas generales (Todas, cada tab de estatus, el widget de recientes) --
+// una vez marcada, deja de estorbar entre las propuestas activas. Salvador,
+// 2026-09-17: "las descartadas no deben tener prioridad de visibilidad...
+// no desaparece pero ya no me estorba".
 function buildProposalScopeWhere(
   tenantId: string,
   viewerUserId: string | null,
   canSeeAll: boolean,
 ): Prisma.proposalsWhereInput {
   return {
+    outcome: { not: "discarded" },
     tenant_id: tenantId,
     ...(canSeeAll ? {} : { OR: [{ created_by_user_id: viewerUserId }, { created_by_user_id: null }] }),
   };
@@ -2670,6 +2680,7 @@ export async function getProposalStatusCountsByTenant(
     by: ["status"],
     _count: { proposal_id: true },
     where: {
+      outcome: { not: "discarded" },
       tenant_id: tenantId,
       ...(canSeeAll
         ? {}
@@ -2720,8 +2731,9 @@ export async function getProposalMarginBlockedCountByTenant(
       },
     },
     where: {
-      tenant_id: tenantId,
+      outcome: { not: "discarded" },
       status: { in: activeStatuses },
+      tenant_id: tenantId,
       ...(canSeeAll
         ? {}
         : { OR: [{ created_by_user_id: viewerUserId }, { created_by_user_id: null }] }),

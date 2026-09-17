@@ -96,6 +96,11 @@ export type OpportunityWithStage = {
 type OpportunityFinancials = {
   hasLost: boolean;
   hasWon: boolean;
+  // true cuando la oportunidad tiene al menos una propuesta ligada y NINGUNA
+  // sigue viva (todas descartadas, ninguna ganada/perdida) -- ver comentario
+  // abajo sobre por que estas se excluyen por completo en vez de caer a
+  // "open".
+  isFullyDiscarded: boolean;
   lostAmount: number;
   openAmount: number;
   wonAmount: number;
@@ -107,8 +112,24 @@ type OpportunityFinancials = {
 // ninguna gano, abierta en cualquier otro caso. El monto tampoco sale de
 // opportunities.estimated_value (ningun codigo lo puebla, siempre NULL) --
 // se calcula de proposal_items.subtotal_price de esas mismas propuestas,
-// sumando solo las del outcome que aplica al stage resultante. Compartido
-// con getOpportunityPipelineSummaryByTenant para que ambos calculen igual.
+// sumando solo las del outcome que aplica al stage resultante -- las
+// descartadas nunca aportan a "openAmount": una propuesta descartada no es
+// un trato abierto, es ruido de una version superada.
+//
+// Descartar es una accion consciente del usuario (alguien la marco asi a
+// proposito), no un default ni un accidente -- por eso no se borra ni se
+// oculta del todo (sigue existiendo, sigue siendo consultable). Pero
+// tampoco debe conservar prioridad de visibilidad: ya no debe "estorbar"
+// entre los tratos activos (Salvador, 2026-09-17: "las descartadas no
+// deben tener prioridad de visibilidad... no deben permanecer visibles
+// despues de seleccionadas como descartadas... no desaparece pero ya no
+// me estorba"). Cuando TODAS las propuestas de una oportunidad estan
+// descartadas y ninguna gano o perdio, la oportunidad completa se marca
+// isFullyDiscarded para que attachDerivedStage la excluya del resultado
+// en vez de mostrarla como "Abierta" vacia -- la propuesta y la
+// oportunidad siguen intactas en BD, solo dejan de ocupar un lugar en el
+// Pipeline. Compartido con getOpportunityPipelineSummaryByTenant para
+// que ambos calculen igual.
 async function getOpportunityFinancialsByIds(
   tenantId: string,
   opportunityIds: string[],
@@ -121,9 +142,11 @@ async function getOpportunityFinancialsByIds(
     Array<{
       has_lost: number;
       has_won: number;
+      live_count: number;
       lost_amount: Prisma.Decimal | null;
       open_amount: Prisma.Decimal | null;
       opportunity_id: string;
+      proposal_count: number;
       won_amount: Prisma.Decimal | null;
     }>
   >(Prisma.sql`
@@ -131,9 +154,11 @@ async function getOpportunityFinancialsByIds(
       p.opportunity_id,
       MAX(CASE WHEN p.outcome = 'won' THEN 1 ELSE 0 END) AS has_won,
       MAX(CASE WHEN p.outcome = 'lost' THEN 1 ELSE 0 END) AS has_lost,
+      COUNT(DISTINCT p.proposal_id) AS proposal_count,
+      COUNT(DISTINCT p.proposal_id) FILTER (WHERE p.outcome IS NULL) AS live_count,
       SUM(CASE WHEN p.outcome = 'won' THEN COALESCE(pi.subtotal_price, 0) ELSE 0 END) AS won_amount,
       SUM(CASE WHEN p.outcome = 'lost' THEN COALESCE(pi.subtotal_price, 0) ELSE 0 END) AS lost_amount,
-      SUM(COALESCE(pi.subtotal_price, 0)) AS open_amount
+      SUM(CASE WHEN p.outcome IS NULL THEN COALESCE(pi.subtotal_price, 0) ELSE 0 END) AS open_amount
     FROM proposals p
     LEFT JOIN proposal_items pi ON pi.proposal_id = p.proposal_id AND pi.status != 'deleted'
     WHERE p.tenant_id = ${tenantId} AND p.opportunity_id IN (${Prisma.join(opportunityIds)})
@@ -142,9 +167,15 @@ async function getOpportunityFinancialsByIds(
 
   const map = new Map<string, OpportunityFinancials>();
   for (const row of rows) {
+    const hasWon = toNumber(row.has_won) > 0;
+    const hasLost = toNumber(row.has_lost) > 0;
+    const proposalCount = toNumber(row.proposal_count);
+    const liveCount = toNumber(row.live_count);
+
     map.set(row.opportunity_id, {
-      hasLost: toNumber(row.has_lost) > 0,
-      hasWon: toNumber(row.has_won) > 0,
+      hasLost,
+      hasWon,
+      isFullyDiscarded: !hasWon && !hasLost && proposalCount > 0 && liveCount === 0,
       lostAmount: toNumber(row.lost_amount),
       openAmount: toNumber(row.open_amount),
       wonAmount: toNumber(row.won_amount),
@@ -181,23 +212,25 @@ async function attachDerivedStage(
       : [];
   const clientCompanyById = new Map(clients.map((c) => [c.client_id, c.company]));
 
-  return opportunities.map((o) => {
-    const fin = financials.get(o.opportunity_id);
-    const stage: OpportunityStage = fin?.hasWon ? "won" : fin?.hasLost ? "lost" : "open";
-    const amount = fin ? (stage === "won" ? fin.wonAmount : stage === "lost" ? fin.lostAmount : fin.openAmount) : 0;
+  return opportunities
+    .filter((o) => !financials.get(o.opportunity_id)?.isFullyDiscarded)
+    .map((o) => {
+      const fin = financials.get(o.opportunity_id);
+      const stage: OpportunityStage = fin?.hasWon ? "won" : fin?.hasLost ? "lost" : "open";
+      const amount = fin ? (stage === "won" ? fin.wonAmount : stage === "lost" ? fin.lostAmount : fin.openAmount) : 0;
 
-    return {
-      amount,
-      clientCompany: o.client_id ? (clientCompanyById.get(o.client_id) ?? null) : null,
-      clientId: o.client_id,
-      createdAt: o.created_at.toISOString(),
-      expectedCloseDate: o.expected_close_date ? o.expected_close_date.toISOString() : null,
-      opportunityId: o.opportunity_id,
-      opportunityNumber: o.opportunity_number,
-      stage,
-      title: o.title,
-    };
-  });
+      return {
+        amount,
+        clientCompany: o.client_id ? (clientCompanyById.get(o.client_id) ?? null) : null,
+        clientId: o.client_id,
+        createdAt: o.created_at.toISOString(),
+        expectedCloseDate: o.expected_close_date ? o.expected_close_date.toISOString() : null,
+        opportunityId: o.opportunity_id,
+        opportunityNumber: o.opportunity_number,
+        stage,
+        title: o.title,
+      };
+    });
 }
 
 // Todas las oportunidades de un cliente (para la Vista 360) -- a
@@ -274,6 +307,9 @@ export async function getOpportunityPipelineSummaryByTenant(
 
   for (const opportunityId of opportunityIds) {
     const fin = financials.get(opportunityId);
+    if (fin?.isFullyDiscarded) {
+      continue;
+    }
     if (fin?.hasWon) {
       summary.won.count += 1;
       summary.won.amount += fin.wonAmount;
