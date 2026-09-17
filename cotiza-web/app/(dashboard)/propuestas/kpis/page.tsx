@@ -3,6 +3,7 @@ import { getCurrentTenantContext } from "@/lib/auth/tenant-context";
 import {
   getProposalAmountTimelineByTenant,
   getProposalKpiSummaryByTenant,
+  getProposalOutcomeTimelineByTenant,
   getProposalStatusTimelineByTenant,
   getSalesRepRankingByTenant,
 } from "@/lib/db/proposal-kpis";
@@ -22,10 +23,11 @@ export default async function ProposalKpisPage() {
 
   const canSeeAll = tenant.isSuperAdmin || tenant.userRole === "owner" || tenant.userRole === "admin";
 
-  const [summary, statusTimeline, amountTimeline, ranking] = await Promise.all([
+  const [summary, statusTimeline, amountTimeline, outcomeTimeline, ranking] = await Promise.all([
     getProposalKpiSummaryByTenant(tenant.id, tenant.userId, canSeeAll),
     getProposalStatusTimelineByTenant(tenant.id, tenant.userId, canSeeAll),
     getProposalAmountTimelineByTenant(tenant.id, tenant.userId, canSeeAll),
+    getProposalOutcomeTimelineByTenant(tenant.id, tenant.userId, canSeeAll),
     canSeeAll ? getSalesRepRankingByTenant(tenant.id) : Promise.resolve([]),
   ]);
 
@@ -33,6 +35,7 @@ export default async function ProposalKpisPage() {
     <ProposalKpisShell
       amountTimeline={amountTimeline}
       canSeeAll={canSeeAll}
+      outcomeTimeline={outcomeTimeline}
       ranking={ranking}
       statusTimeline={statusTimeline}
       summary={summary}

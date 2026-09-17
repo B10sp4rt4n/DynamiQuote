@@ -16,6 +16,7 @@ import {
 import type {
   ProposalAmountTimelinePoint,
   ProposalKpiSummary,
+  ProposalOutcomeTimelinePoint,
   ProposalStatusTimelinePoint,
   SalesRepRankingRow,
 } from "@/lib/db/proposal-kpis";
@@ -23,6 +24,7 @@ import type {
 type ProposalKpisShellProps = {
   amountTimeline: ProposalAmountTimelinePoint[];
   canSeeAll: boolean;
+  outcomeTimeline: ProposalOutcomeTimelinePoint[];
   ranking: SalesRepRankingRow[];
   statusTimeline: ProposalStatusTimelinePoint[];
   summary: ProposalKpiSummary;
@@ -53,6 +55,15 @@ const STATUS_LABELS: Record<keyof typeof STATUS_COLORS, string> = {
 const AMOUNT_COLORS = {
   proposed: "#2a78d6",
   approved: "#008300",
+} as const;
+
+// Paleta de estado fija (nunca tematizada, ver skill dataviz) -- ganado y
+// perdido son desenlaces de estado, no categorias arbitrarias, por eso usan
+// good/critical en vez de la paleta categorica de arriba. Mismos hex que la
+// barra de tasa de cierre del Pipeline (components/pipeline/pipeline-dashboard.tsx).
+const OUTCOME_COLORS = {
+  won: "#0ca30c",
+  lost: "#d03b3b",
 } as const;
 
 function formatCurrency(value: number): string {
@@ -171,6 +182,53 @@ function AmountTimelineChart({ data }: { data: ProposalAmountTimelinePoint[] }) 
   );
 }
 
+function OutcomeTimelineChart({ data }: { data: ProposalOutcomeTimelinePoint[] }) {
+  if (data.length === 0) {
+    return <EmptyChartState />;
+  }
+
+  const chartData = data.map((point) => ({
+    ...point,
+    periodLabel: formatPeriodLabel(point.period),
+  }));
+
+  return (
+    <ResponsiveContainer height={280} width="100%">
+      <LineChart data={chartData}>
+        <CartesianGrid stroke="#e4e4e7" vertical={false} />
+        <XAxis axisLine={{ stroke: "#e4e4e7" }} dataKey="periodLabel" tick={{ fill: "#71717a", fontSize: 11 }} tickLine={false} />
+        <YAxis
+          axisLine={false}
+          tick={{ fill: "#71717a", fontSize: 11 }}
+          tickFormatter={(value: number) => formatCompactCurrency(value)}
+          tickLine={false}
+        />
+        <Tooltip formatter={(value, _name, _item, _index, _payload) => formatCurrency(Number(value))} />
+        <Legend
+          formatter={(value: string) => (value === "wonAmount" ? "Ganado" : "Perdido")}
+          wrapperStyle={{ fontSize: 12 }}
+        />
+        <Line
+          dataKey="wonAmount"
+          dot={{ r: 4, strokeWidth: 2, stroke: "#ffffff" }}
+          name="wonAmount"
+          stroke={OUTCOME_COLORS.won}
+          strokeWidth={2}
+          type="monotone"
+        />
+        <Line
+          dataKey="lostAmount"
+          dot={{ r: 4, strokeWidth: 2, stroke: "#ffffff" }}
+          name="lostAmount"
+          stroke={OUTCOME_COLORS.lost}
+          strokeWidth={2}
+          type="monotone"
+        />
+      </LineChart>
+    </ResponsiveContainer>
+  );
+}
+
 function RankingChart({ data }: { data: SalesRepRankingRow[] }) {
   if (data.length === 0) {
     return <EmptyChartState />;
@@ -220,6 +278,7 @@ function EmptyChartState() {
 export function ProposalKpisShell({
   amountTimeline,
   canSeeAll,
+  outcomeTimeline,
   ranking,
   statusTimeline,
   summary,
@@ -261,6 +320,15 @@ export function ProposalKpisShell({
           <p className="text-sm font-semibold text-zinc-900">Monto propuesto vs. aprobado (por mes)</p>
           <div className="mt-3">
             <AmountTimelineChart data={amountTimeline} />
+          </div>
+        </div>
+        <div className="rounded-xl border border-zinc-200 p-4">
+          <p className="text-sm font-semibold text-zinc-900">Ganado vs. perdido (por mes)</p>
+          <p className="mt-1 text-xs text-zinc-500">
+            Por fecha de creación de la propuesta. Excluye descartadas — no son un desenlace comercial real.
+          </p>
+          <div className="mt-3">
+            <OutcomeTimelineChart data={outcomeTimeline} />
           </div>
         </div>
       </div>

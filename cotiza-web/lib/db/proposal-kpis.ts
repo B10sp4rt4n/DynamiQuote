@@ -287,3 +287,61 @@ export async function getSalesRepRankingByTenant(tenantId: string): Promise<Sale
     };
   });
 }
+
+export type ProposalOutcomeTimelinePoint = {
+  lostAmount: number;
+  lostCount: number;
+  period: string;
+  wonAmount: number;
+  wonCount: number;
+};
+
+// Serie de tiempo (por mes) de monto ganado vs perdido -- agrupado por
+// fecha de creacion de la propuesta (no existe un timestamp de "cuando se
+// decidio" el outcome), mismo criterio que las demas series de este
+// archivo. Excluye deliberadamente 'discarded': no es un desenlace
+// comercial real, es ruido de una version superada (ver CLAUDE.md,
+// 2026-09-17, "las descartadas no deben tener prioridad de visibilidad").
+export async function getProposalOutcomeTimelineByTenant(
+  tenantId: string,
+  viewerUserId: string | null = null,
+  canSeeAll = true,
+  months = 6,
+): Promise<ProposalOutcomeTimelinePoint[]> {
+  const scopeFilter = canSeeAll
+    ? Prisma.empty
+    : Prisma.sql`AND (p.created_by_user_id = ${viewerUserId} OR p.created_by_user_id IS NULL)`;
+
+  const rows = await prisma.$queryRaw<
+    Array<{
+      lost_amount: Prisma.Decimal | null;
+      lost_count: bigint;
+      period: Date;
+      won_amount: Prisma.Decimal | null;
+      won_count: bigint;
+    }>
+  >(Prisma.sql`
+    SELECT
+      date_trunc('month', p.created_at) AS period,
+      COUNT(DISTINCT p.proposal_id) FILTER (WHERE p.outcome = 'won') AS won_count,
+      COUNT(DISTINCT p.proposal_id) FILTER (WHERE p.outcome = 'lost') AS lost_count,
+      SUM(CASE WHEN p.outcome = 'won' THEN COALESCE(pi.subtotal_price, 0) ELSE 0 END) AS won_amount,
+      SUM(CASE WHEN p.outcome = 'lost' THEN COALESCE(pi.subtotal_price, 0) ELSE 0 END) AS lost_amount
+    FROM proposals p
+    LEFT JOIN proposal_items pi ON pi.proposal_id = p.proposal_id AND pi.status != 'deleted'
+    WHERE p.tenant_id = ${tenantId}
+      AND p.created_at >= ${monthsAgo(months)}
+      AND p.outcome IN ('won', 'lost')
+      ${scopeFilter}
+    GROUP BY period
+    ORDER BY period ASC
+  `);
+
+  return rows.map((row) => ({
+    lostAmount: toNumber(row.lost_amount),
+    lostCount: toNumber(row.lost_count),
+    period: row.period.toISOString(),
+    wonAmount: toNumber(row.won_amount),
+    wonCount: toNumber(row.won_count),
+  }));
+}
