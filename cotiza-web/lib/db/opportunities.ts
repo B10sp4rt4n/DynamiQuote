@@ -89,6 +89,12 @@ export type OpportunityWithStage = {
   expectedCloseDate: string | null;
   opportunityId: string;
   opportunityNumber: string;
+  // Quien creo la oportunidad -- expuesto para que el Pipeline pueda ofrecer
+  // un selector de vendedor (admin/owner viendo a si mismos como vendedor,
+  // a otro vendedor, o a varios juntos) sin volver a consultar Neon: la
+  // lista ya viene completa cuando canSeeAll=true, el selector solo filtra
+  // en el cliente sobre datos que el servidor ya autorizo mostrar.
+  ownerUserId: string | null;
   stage: OpportunityStage;
   title: string;
 };
@@ -128,8 +134,7 @@ type OpportunityFinancials = {
 // isFullyDiscarded para que attachDerivedStage la excluya del resultado
 // en vez de mostrarla como "Abierta" vacia -- la propuesta y la
 // oportunidad siguen intactas en BD, solo dejan de ocupar un lugar en el
-// Pipeline. Compartido con getOpportunityPipelineSummaryByTenant para
-// que ambos calculen igual.
+// Pipeline.
 async function getOpportunityFinancialsByIds(
   tenantId: string,
   opportunityIds: string[],
@@ -192,6 +197,7 @@ async function attachDerivedStage(
     expected_close_date: Date | null;
     opportunity_id: string;
     opportunity_number: string;
+    owner_user_id: string | null;
     title: string;
   }>,
 ): Promise<OpportunityWithStage[]> {
@@ -227,6 +233,7 @@ async function attachDerivedStage(
         expectedCloseDate: o.expected_close_date ? o.expected_close_date.toISOString() : null,
         opportunityId: o.opportunity_id,
         opportunityNumber: o.opportunity_number,
+        ownerUserId: o.owner_user_id,
         stage,
         title: o.title,
       };
@@ -267,60 +274,3 @@ export async function getOpportunityPipelineByTenant(
   return attachDerivedStage(tenantId, opportunities);
 }
 
-export type OpportunityPipelineStageSummary = {
-  amount: number;
-  count: number;
-};
-
-export type OpportunityPipelineSummary = {
-  lost: OpportunityPipelineStageSummary;
-  open: OpportunityPipelineStageSummary;
-  won: OpportunityPipelineStageSummary;
-};
-
-// Resumen de pipeline (tarjetas + barra de proporcion): cuenta y monto real
-// por stage derivado, usando el mismo calculo que attachDerivedStage
-// (getOpportunityFinancialsByIds) para que tarjetas, barra y tabla nunca
-// difieran entre si. Mismo criterio "ve lo tuyo vs ve todo" que
-// getOpportunityPipelineByTenant.
-export async function getOpportunityPipelineSummaryByTenant(
-  tenantId: string,
-  viewerUserId: string | null = null,
-  canSeeAll = true,
-): Promise<OpportunityPipelineSummary> {
-  const opportunities = await prisma.opportunities.findMany({
-    select: { opportunity_id: true },
-    where: {
-      tenant_id: tenantId,
-      ...(canSeeAll ? {} : { OR: [{ owner_user_id: viewerUserId }, { owner_user_id: null }] }),
-    },
-  });
-
-  const opportunityIds = opportunities.map((o) => o.opportunity_id);
-  const financials = await getOpportunityFinancialsByIds(tenantId, opportunityIds);
-
-  const summary: OpportunityPipelineSummary = {
-    lost: { amount: 0, count: 0 },
-    open: { amount: 0, count: 0 },
-    won: { amount: 0, count: 0 },
-  };
-
-  for (const opportunityId of opportunityIds) {
-    const fin = financials.get(opportunityId);
-    if (fin?.isFullyDiscarded) {
-      continue;
-    }
-    if (fin?.hasWon) {
-      summary.won.count += 1;
-      summary.won.amount += fin.wonAmount;
-    } else if (fin?.hasLost) {
-      summary.lost.count += 1;
-      summary.lost.amount += fin.lostAmount;
-    } else {
-      summary.open.count += 1;
-      summary.open.amount += fin?.openAmount ?? 0;
-    }
-  }
-
-  return summary;
-}
