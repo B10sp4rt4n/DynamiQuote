@@ -30,6 +30,33 @@ function formatCurrency(value: number): string {
   return new Intl.NumberFormat("es-MX", { style: "currency", currency: "MXN" }).format(value);
 }
 
+// El roster de vendedores (getAppUsersByTenant) solo trae usuarios ACTUALES
+// -- pero owner_user_id de una oportunidad vieja puede apuntar a un user_id
+// que ya no existe en app_users (ej. un relink de Clerk, mismo tipo de
+// deuda ya documentada en CLAUDE.md para created_by_user_id). Si "Todos"
+// solo marcara los IDs del roster, esas oportunidades desaparecerian del
+// Pipeline sin ningun checkbox que las represente -- silenciosamente, sin
+// que nadie pueda volver a mostrarlas. Por eso el default y el boton
+// "Todos" se calculan sobre TODOS los owner_user_id que de verdad aparecen
+// en los datos, no solo sobre el roster conocido.
+function buildEffectiveVendors(opportunities: OpportunityWithStage[], vendors: PipelineVendor[]): PipelineVendor[] {
+  const knownIds = new Set(vendors.map((v) => v.userId));
+  const orphanedIds = new Set<string>();
+
+  for (const opp of opportunities) {
+    if (opp.ownerUserId && !knownIds.has(opp.ownerUserId)) {
+      orphanedIds.add(opp.ownerUserId);
+    }
+  }
+
+  const orphanedVendors: PipelineVendor[] = [...orphanedIds].map((id) => ({
+    label: `Vendedor sin cuenta activa (…${id.slice(-6)})`,
+    userId: id,
+  }));
+
+  return [...vendors, ...orphanedVendors];
+}
+
 function computeSummary(opportunities: OpportunityWithStage[]): PipelineSummary {
   const summary: PipelineSummary = {
     lost: { amount: 0, count: 0 },
@@ -217,10 +244,11 @@ export function PipelineDashboard({
   vendors: PipelineVendor[];
   viewerUserId: string | null;
 }) {
-  const showVendorFilter = canSeeAll && vendors.length > 0;
+  const effectiveVendors = useMemo(() => buildEffectiveVendors(opportunities, vendors), [opportunities, vendors]);
+  const showVendorFilter = canSeeAll && effectiveVendors.length > 0;
 
   const [selectedVendorIds, setSelectedVendorIds] = useState<Set<string>>(
-    () => new Set([UNASSIGNED_KEY, ...vendors.map((v) => v.userId)]),
+    () => new Set([UNASSIGNED_KEY, ...effectiveVendors.map((v) => v.userId)]),
   );
 
   const filteredOpportunities = useMemo(() => {
@@ -233,7 +261,7 @@ export function PipelineDashboard({
   return (
     <div className="space-y-6">
       {showVendorFilter ? (
-        <VendorFilter onChange={setSelectedVendorIds} selectedIds={selectedVendorIds} vendors={vendors} viewerUserId={viewerUserId} />
+        <VendorFilter onChange={setSelectedVendorIds} selectedIds={selectedVendorIds} vendors={effectiveVendors} viewerUserId={viewerUserId} />
       ) : null}
 
       <div className="grid gap-4 sm:grid-cols-3">
