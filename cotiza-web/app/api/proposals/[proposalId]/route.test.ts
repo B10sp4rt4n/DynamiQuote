@@ -7,6 +7,8 @@ const {
   updateProposalWorkflowByTenantMock,
   enforceRateLimitMock,
   getRequestIdentityMock,
+  getProposalStatusForAuditMock,
+  recordProposalAuditEventMock,
 } = vi.hoisted(() => ({
   getCurrentTenantContextMock: vi.fn(),
   getProposalWorkflowByTenantMock: vi.fn(),
@@ -14,6 +16,8 @@ const {
   updateProposalWorkflowByTenantMock: vi.fn(),
   enforceRateLimitMock: vi.fn(),
   getRequestIdentityMock: vi.fn(),
+  getProposalStatusForAuditMock: vi.fn(),
+  recordProposalAuditEventMock: vi.fn(),
 }));
 
 vi.mock("@/lib/auth/tenant-context", () => ({
@@ -24,6 +28,11 @@ vi.mock("@/lib/db/proposals", () => ({
   getProposalWorkflowByTenant: getProposalWorkflowByTenantMock,
   isProposalVisibleToViewer: isProposalVisibleToViewerMock,
   updateProposalWorkflowByTenant: updateProposalWorkflowByTenantMock,
+}));
+
+vi.mock("@/lib/db/proposal-audit", () => ({
+  getProposalStatusForAudit: getProposalStatusForAuditMock,
+  recordProposalAuditEvent: recordProposalAuditEventMock,
 }));
 
 vi.mock("@/lib/utils/rate-limit", () => ({
@@ -41,6 +50,8 @@ describe("PUT /api/proposals/[proposalId]", () => {
     enforceRateLimitMock.mockReturnValue({ allowed: true, remaining: 10, resetAt: Date.now() + 10_000 });
     getRequestIdentityMock.mockReturnValue("ip-1");
     isProposalVisibleToViewerMock.mockResolvedValue(true);
+    getProposalStatusForAuditMock.mockResolvedValue("draft");
+    recordProposalAuditEventMock.mockResolvedValue(undefined);
   });
 
   it("devuelve 401 sin tenant", async () => {
@@ -186,5 +197,72 @@ describe("PUT /api/proposals/[proposalId]", () => {
         userRole: "superadmin",
       },
     );
+  });
+
+  it("audita la solicitud de aprobacion (borrador -> aprobada) con actor, origen y resultado", async () => {
+    getCurrentTenantContextMock.mockResolvedValue({ id: "t1", isSuperAdmin: false, userId: "u1", userRole: "user" });
+    updateProposalWorkflowByTenantMock.mockResolvedValue({
+      marginEvaluation: { averageMarginPct: 30.86 },
+      proposalId: "p1",
+      status: "approved",
+    });
+
+    const res = await PUT(
+      new Request("http://localhost/api/proposals/p1", {
+        method: "PUT",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ status: "approved" }),
+      }),
+      ctx("p1"),
+    );
+
+    expect(res.status).toBe(200);
+    expect(recordProposalAuditEventMock).toHaveBeenCalledWith({
+      actorUserId: "u1",
+      eventType: "status_change_requested",
+      payload: { fromStatus: "draft", marginPct: 30.86, ok: true, requestedStatus: "approved", resultStatus: "approved" },
+      proposalId: "p1",
+      tenantId: "t1",
+    });
+  });
+
+  it("audita tambien el intento fallido con el motivo", async () => {
+    getCurrentTenantContextMock.mockResolvedValue({ id: "t1", isSuperAdmin: false, userId: "u1", userRole: "user" });
+    updateProposalWorkflowByTenantMock.mockRejectedValue(new Error("Transicion invalida"));
+
+    const res = await PUT(
+      new Request("http://localhost/api/proposals/p1", {
+        method: "PUT",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ status: "approved" }),
+      }),
+      ctx("p1"),
+    );
+
+    expect(res.status).toBe(400);
+    expect(recordProposalAuditEventMock).toHaveBeenCalledWith({
+      actorUserId: "u1",
+      eventType: "status_change_requested",
+      payload: { error: "Transicion invalida", fromStatus: "draft", ok: false, requestedStatus: "approved" },
+      proposalId: "p1",
+      tenantId: "t1",
+    });
+  });
+
+  it("no audita ediciones de contenido que no piden cambio de estatus", async () => {
+    getCurrentTenantContextMock.mockResolvedValue({ id: "t1", isSuperAdmin: false, userId: "u1", userRole: "user" });
+    updateProposalWorkflowByTenantMock.mockResolvedValue({ proposalId: "p1", status: "draft" });
+
+    const res = await PUT(
+      new Request("http://localhost/api/proposals/p1", {
+        method: "PUT",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ subject: "Nuevo asunto" }),
+      }),
+      ctx("p1"),
+    );
+
+    expect(res.status).toBe(200);
+    expect(recordProposalAuditEventMock).not.toHaveBeenCalled();
   });
 });

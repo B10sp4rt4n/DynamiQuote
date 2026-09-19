@@ -2,6 +2,7 @@ import { renderToBuffer } from "@react-pdf/renderer";
 import { NextResponse } from "next/server";
 
 import { getCurrentTenantContext } from "@/lib/auth/tenant-context";
+import { recordProposalAuditEvent } from "@/lib/db/proposal-audit";
 import { consumeProposalIssuanceForce, getProposalWorkflowByTenant } from "@/lib/db/proposals";
 import { getTenantProfileByTenant } from "@/lib/db/tenants";
 import { resolveProposalIssuanceGate } from "@/lib/domain/proposal-issuance-gate";
@@ -61,6 +62,13 @@ export async function GET(_: Request, context: RouteContext) {
   });
 
   if (issuanceGate.kind === "blocked") {
+    await recordProposalAuditEvent({
+      actorUserId: tenant.userId,
+      eventType: "document_blocked",
+      payload: { reason: issuanceGate.reason, status: proposal.status, via: "pdf" },
+      proposalId,
+      tenantId: tenant.id,
+    });
     return NextResponse.json({ error: issuanceGate.reason }, { status: 403 });
   }
 
@@ -107,6 +115,19 @@ export async function GET(_: Request, context: RouteContext) {
 
   const pdfBuffer = await renderToBuffer(document);
   const filename = sanitizeFilename(proposal.formal?.proposalNumber ?? proposal.proposalId);
+
+  await recordProposalAuditEvent({
+    actorUserId: tenant.userId,
+    eventType: "document_issued",
+    payload: {
+      forced: issuanceGate.forced,
+      status: proposal.status,
+      via: "pdf",
+      watermark: issuanceGate.watermark,
+    },
+    proposalId,
+    tenantId: tenant.id,
+  });
 
   return new NextResponse(new Uint8Array(pdfBuffer), {
     headers: {

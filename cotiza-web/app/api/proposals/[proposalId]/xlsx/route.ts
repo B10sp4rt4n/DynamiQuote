@@ -7,6 +7,7 @@ import {
   getProposalExcelPayloadByTenant,
   importProposalItemsByTenant,
 } from "@/lib/db/proposals";
+import { recordProposalAuditEvent } from "@/lib/db/proposal-audit";
 import { resolveProposalIssuanceGate } from "@/lib/domain/proposal-issuance-gate";
 import { enforceRateLimit, getRequestIdentity } from "@/lib/utils/rate-limit";
 import { proposalImportPayloadSchema } from "@/lib/validations/proposals";
@@ -122,6 +123,13 @@ export async function GET(_: Request, context: RouteContext) {
   });
 
   if (issuanceGate.kind === "blocked") {
+    await recordProposalAuditEvent({
+      actorUserId: tenant.userId,
+      eventType: "document_blocked",
+      payload: { reason: issuanceGate.reason, status: payload.status, via: "xlsx" },
+      proposalId,
+      tenantId: tenant.id,
+    });
     return NextResponse.json({ error: issuanceGate.reason }, { status: 403 });
   }
 
@@ -141,6 +149,19 @@ export async function GET(_: Request, context: RouteContext) {
   }) as ArrayBuffer;
 
   const filename = sanitizeFilename(payload.formal?.proposalNumber ?? payload.proposalId);
+
+  await recordProposalAuditEvent({
+    actorUserId: tenant.userId,
+    eventType: "document_issued",
+    payload: {
+      forced: issuanceGate.forced,
+      status: payload.status,
+      via: "xlsx",
+      watermark: issuanceGate.watermark,
+    },
+    proposalId,
+    tenantId: tenant.id,
+  });
 
   return new NextResponse(new Uint8Array(arrayBuffer), {
     headers: {

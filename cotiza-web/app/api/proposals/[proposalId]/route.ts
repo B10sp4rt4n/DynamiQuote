@@ -1,6 +1,7 @@
 import { NextResponse } from "next/server";
 
 import { getCurrentTenantContext } from "@/lib/auth/tenant-context";
+import { getProposalStatusForAudit, recordProposalAuditEvent } from "@/lib/db/proposal-audit";
 import {
   getProposalWorkflowByTenant,
   isProposalVisibleToViewer,
@@ -120,6 +121,11 @@ export async function PUT(request: Request, context: RouteContext) {
   // tenant y el usuario autenticado, no el formulario de la propuesta.
   const sanitizedInput = { ...parsed.data, issuerCompany: undefined, issuerEmail: undefined };
 
+  // Solo las solicitudes que piden un estatus (ej. "Solicitud de aprobacion",
+  // "Cliente acepto") se auditan -- las ediciones de contenido no.
+  const requestedStatus = sanitizedInput.status ?? null;
+  const fromStatus = requestedStatus ? await getProposalStatusForAudit(tenant.id, proposalId) : null;
+
   try {
     const updated = await updateProposalWorkflowByTenant(tenant.id, proposalId, sanitizedInput, {
       isSuperAdmin: tenant.isSuperAdmin,
@@ -131,9 +137,36 @@ export async function PUT(request: Request, context: RouteContext) {
       return NextResponse.json({ error: "Propuesta no encontrada" }, { status: 404 });
     }
 
+    if (requestedStatus) {
+      await recordProposalAuditEvent({
+        actorUserId: tenant.userId,
+        eventType: "status_change_requested",
+        payload: {
+          fromStatus,
+          marginPct: updated.marginEvaluation?.averageMarginPct ?? null,
+          ok: true,
+          requestedStatus,
+          resultStatus: updated.status,
+        },
+        proposalId,
+        tenantId: tenant.id,
+      });
+    }
+
     return NextResponse.json({ proposal: updated });
   } catch (error) {
     const message = error instanceof Error ? error.message : "Error interno";
+
+    if (requestedStatus) {
+      await recordProposalAuditEvent({
+        actorUserId: tenant.userId,
+        eventType: "status_change_requested",
+        payload: { error: message, fromStatus, ok: false, requestedStatus },
+        proposalId,
+        tenantId: tenant.id,
+      });
+    }
+
     return NextResponse.json({ error: message }, { status: 400 });
   }
 }

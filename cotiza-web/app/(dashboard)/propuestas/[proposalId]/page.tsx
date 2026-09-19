@@ -1,7 +1,9 @@
 import Link from "next/link";
 
+import { ProposalAuditPanel } from "@/components/propuestas/proposal-audit-panel";
 import { ProposalDetailView } from "@/components/propuestas/proposal-detail-view";
 import { getCurrentTenantContext } from "@/lib/auth/tenant-context";
+import { getProposalAuditTimelineByTenant } from "@/lib/db/proposal-audit";
 import {
   getProposalDerivationInfoByTenant,
   getProposalWorkflowByTenant,
@@ -47,10 +49,12 @@ export default async function ProposalDetailPage({ params }: ProposalDetailPageP
     );
   }
 
-  const [proposal, tenantProfile, derivationInfo] = await Promise.all([
+  const [proposal, tenantProfile, derivationInfo, auditTimeline] = await Promise.all([
     getProposalWorkflowByTenant(tenant.id, proposalId, { viewerUserId: tenant.userId }),
     getTenantProfileByTenant(tenant.id),
     getProposalDerivationInfoByTenant(tenant.id, proposalId),
+    // Historial solo para quien ya puede ver todo el tenant (owner/admin/superadmin).
+    canSeeAll ? getProposalAuditTimelineByTenant(tenant.id, proposalId) : Promise.resolve(null),
   ]);
 
   if (!proposal) {
@@ -110,6 +114,8 @@ export default async function ProposalDetailPage({ params }: ProposalDetailPageP
         tenantRfc={tenantProfile?.rfc ?? null}
         tenantWebsite={tenantProfile?.website ?? null}
       />
+
+      {auditTimeline ? <ProposalAuditPanel items={auditTimeline} /> : null}
     </div>
   );
 }

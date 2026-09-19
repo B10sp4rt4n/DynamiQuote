@@ -10,6 +10,7 @@ import {
   getProposalWorkflowByTenant,
   updateProposalWorkflowByTenant,
 } from "@/lib/db/proposals";
+import { recordProposalAuditEvent } from "@/lib/db/proposal-audit";
 import { getTenantProfileByTenant } from "@/lib/db/tenants";
 import { resolveProposalIssuanceGate } from "@/lib/domain/proposal-issuance-gate";
 import { resolveResendConfig } from "@/lib/email/resend";
@@ -196,6 +197,13 @@ export async function POST(request: Request, context: RouteContext) {
   });
 
   if (issuanceGate.kind === "blocked") {
+    await recordProposalAuditEvent({
+      actorUserId: tenant.userId,
+      eventType: "document_blocked",
+      payload: { reason: issuanceGate.reason, status: proposal.status, via: "email" },
+      proposalId,
+      tenantId: tenant.id,
+    });
     return NextResponse.json({ error: issuanceGate.reason }, { status: 403 });
   }
 
@@ -328,6 +336,19 @@ export async function POST(request: Request, context: RouteContext) {
     proposalId,
     resendEmailId: result.data?.id ?? null,
     sellerEmail,
+    tenantId: tenant.id,
+  });
+
+  await recordProposalAuditEvent({
+    actorUserId: tenant.userId,
+    eventType: "document_issued",
+    payload: {
+      forced: issuanceGate.forced,
+      status: proposal.status,
+      via: "email",
+      watermark: issuanceGate.watermark,
+    },
+    proposalId,
     tenantId: tenant.id,
   });
 
