@@ -14,6 +14,7 @@ import {
   type ProposalApproverRole,
 } from "@/lib/db/proposal-approvals";
 import { prisma } from "@/lib/db/prisma";
+import { NOT_DISCARDED_WHERE } from "@/lib/db/proposal-filters";
 import {
   evaluateProposalLiberation,
   type ProposalLiberationEvaluation,
@@ -1128,22 +1129,18 @@ function mapProposalSummaryRows(
   });
 }
 
-// Descartar una propuesta es una accion consciente del usuario, no un
-// accidente ni un default -- por eso no se borra ni se oculta del todo:
-// sigue siendo consultable de forma explicita en su propio tab
-// "Descartadas" (ver getProposalListPageByTenant, que sobreescribe outcome
-// ahi mismo). Pero tampoco debe conservar prioridad de visibilidad en las
-// listas generales (Todas, cada tab de estatus, el widget de recientes) --
-// una vez marcada, deja de estorbar entre las propuestas activas. Salvador,
-// 2026-09-17: "las descartadas no deben tener prioridad de visibilidad...
-// no desaparece pero ya no me estorba".
+// El scope NO excluye descartadas por si mismo: el tab "Descartadas" necesita
+// verlas. Las listas generales piden la exclusion explicita con
+// AND: [NOT_DISCARDED_WHERE] -- descartar es una accion consciente del
+// usuario, no se borra ni se oculta del todo (sigue en su propio tab), pero ya
+// no debe estorbar entre las propuestas activas. Salvador, 2026-09-17: "no
+// desaparece pero ya no me estorba".
 function buildProposalScopeWhere(
   tenantId: string,
   viewerUserId: string | null,
   canSeeAll: boolean,
 ): Prisma.proposalsWhereInput {
   return {
-    outcome: { not: "discarded" },
     tenant_id: tenantId,
     ...(canSeeAll ? {} : { OR: [{ created_by_user_id: viewerUserId }, { created_by_user_id: null }] }),
   };
@@ -1155,7 +1152,10 @@ export async function getProposalSummariesByTenant(
   viewerUserId: string | null = null,
   canSeeAll = true,
 ): Promise<ProposalSummary[]> {
-  const rows = await fetchProposalSummaryRows(buildProposalScopeWhere(tenantId, viewerUserId, canSeeAll), limit);
+  const rows = await fetchProposalSummaryRows(
+    { ...buildProposalScopeWhere(tenantId, viewerUserId, canSeeAll), AND: [NOT_DISCARDED_WHERE] },
+    limit,
+  );
   const marginPolicy = rows.length > 0 ? await getMarginPolicyByTenant(tenantId) : null;
   return mapProposalSummaryRows(rows, marginPolicy);
 }
@@ -1246,6 +1246,7 @@ export async function getProposalListPageByTenant(
     // getProposalMarginBlockedCountByTenant, ahora tambien slice-ado).
     const rows = await fetchProposalSummaryRows({
       ...scopeWhere,
+      AND: [NOT_DISCARDED_WHERE],
       status: { in: Array.from(PROPOSAL_SUMMARY_ACTIVE_STATUSES) },
     });
     const marginPolicy = rows.length > 0 ? await getMarginPolicyByTenant(tenantId) : null;
@@ -1270,7 +1271,11 @@ export async function getProposalListPageByTenant(
   }
 
   const statusWhere: Prisma.proposalsWhereInput = filter === "all" ? {} : { status: filter };
-  const rows = await fetchProposalSummaryRows({ ...scopeWhere, ...statusWhere }, limit + 1, offset);
+  const rows = await fetchProposalSummaryRows(
+    { ...scopeWhere, AND: [NOT_DISCARDED_WHERE], ...statusWhere },
+    limit + 1,
+    offset,
+  );
   const marginPolicy = rows.length > 0 ? await getMarginPolicyByTenant(tenantId) : null;
 
   return {
@@ -2680,7 +2685,7 @@ export async function getProposalStatusCountsByTenant(
     by: ["status"],
     _count: { proposal_id: true },
     where: {
-      outcome: { not: "discarded" },
+      AND: [NOT_DISCARDED_WHERE],
       tenant_id: tenantId,
       ...(canSeeAll
         ? {}
@@ -2731,7 +2736,7 @@ export async function getProposalMarginBlockedCountByTenant(
       },
     },
     where: {
-      outcome: { not: "discarded" },
+      AND: [NOT_DISCARDED_WHERE],
       status: { in: activeStatuses },
       tenant_id: tenantId,
       ...(canSeeAll
