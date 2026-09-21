@@ -8,6 +8,7 @@ import {
 } from "@react-pdf/renderer";
 
 import type { ProposalWorkflowDetail } from "@/lib/db/proposals";
+import { buildTermsList } from "@/lib/pdf/proposal-terms";
 
 const styles = StyleSheet.create({
   // No lineHeight aca: @react-pdf/renderer deja de incluir el texto de los
@@ -375,22 +376,6 @@ function formatQuantity(value: number): string {
   return Number.isInteger(value) ? String(value) : value.toFixed(2);
 }
 
-function buildTermsList(terms: string): string[] {
-  const lines = terms
-    .split(/\r?\n/)
-    .map((line) => line.trim())
-    .filter((line) => line.length > 0);
-
-  return lines.length > 0
-    ? lines
-    : [
-        "Validez de propuesta: 15 dias naturales.",
-        "Tiempo de entrega sujeto a disponibilidad y confirmacion de pedido.",
-        "Precios en moneda nacional, no incluyen IVA salvo indicacion expresa.",
-        "El inicio de servicios queda sujeto a aprobacion formal del cliente.",
-      ];
-}
-
 function normalizeTextValue(value: string | null | undefined): string {
   return value?.trim() ?? "";
 }
@@ -481,7 +466,10 @@ export function ProposalPdfDocument({
   const grossProfit = totalRevenue - totalCost;
   const iva = totalRevenue * 0.16;
   const grandTotal = totalRevenue + iva;
-  const terms = buildTermsList(formal?.termsAndConditions?.trim() ?? "");
+  const terms = buildTermsList(formal?.termsAndConditions?.trim() ?? "", {
+    currency: formal?.currency,
+    validUntilLabel: formal?.validUntil ? formatDate(formal.validUntil) : null,
+  });
 
   return (
     <Document>
