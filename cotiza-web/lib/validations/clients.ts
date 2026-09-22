@@ -23,3 +23,17 @@ export const updateClientSchema = createClientSchema.partial().extend({
 
 export type CreateClientInput = z.infer<typeof createClientSchema>;
 export type UpdateClientInput = z.infer<typeof updateClientSchema>;
+
+// Validacion en vivo contra catalogos SAT (Digestor Fiscal, /v1/receptor/validate)
+// -- no persiste nada, solo valida lo que el usuario ya tecleo en el
+// formulario de cliente, antes o despues de guardar.
+export const validateClientFiscalDataSchema = z.object({
+  cp: z.string().trim().min(1, "El código postal es requerido").max(10),
+  nombre: z.string().trim().max(200).optional(),
+  pacCheck: z.boolean().optional(),
+  regimen: z.string().trim().min(1, "El régimen fiscal es requerido").max(10),
+  rfc: z.string().trim().min(1, "El RFC es requerido").max(20),
+  usoCfdi: z.string().trim().max(10).optional(),
+});
+
+export type ValidateClientFiscalDataInput = z.infer<typeof validateClientFiscalDataSchema>;

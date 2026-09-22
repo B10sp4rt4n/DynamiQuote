@@ -35,6 +35,18 @@ type FormState = {
   zipCode: string;
 };
 
+// Espejo del JSON que regresa POST /api/clients/fiscal-validation
+// (ReceptorValidationResult en lib/integrations/digestor-fiscal.ts) -- se
+// declara aparte porque ese modulo es server-only y no puede importarse
+// desde un client component, ni siquiera solo el tipo.
+type FiscalValidationResult = {
+  fields: Record<string, { message: string; valid: boolean }>;
+  pac: { available: boolean; errorCode: string | null; message: string; rfcActive: boolean | null } | null;
+  summary: string;
+  tipoPersona: string | null;
+  valid: boolean;
+};
+
 const EMPTY_FORM: FormState = {
   address: "",
   cfdiUse: "",
@@ -173,6 +185,9 @@ export function ClientShell({ clientLogos, initialClients }: ClientShellProps) {
   const [form, setForm] = useState<FormState>(EMPTY_FORM);
   const [saving, setSaving] = useState(false);
   const [message, setMessage] = useState<{ text: string; type: "success" | "error" } | null>(null);
+  const [fiscalValidationStatus, setFiscalValidationStatus] = useState<"idle" | "pending" | "done" | "error">("idle");
+  const [fiscalValidationResult, setFiscalValidationResult] = useState<FiscalValidationResult | null>(null);
+  const [fiscalValidationError, setFiscalValidationError] = useState<string | null>(null);
   const searchTimeout = useRef<ReturnType<typeof setTimeout> | null>(null);
   const clientLogoFileInputRef = useRef<HTMLInputElement | null>(null);
 
@@ -234,12 +249,50 @@ export function ClientShell({ clientLogos, initialClients }: ClientShellProps) {
     setAvailableClientLogos(clientLogos);
   }, [clientLogos]);
 
+  function resetFiscalValidation() {
+    setFiscalValidationStatus("idle");
+    setFiscalValidationResult(null);
+    setFiscalValidationError(null);
+  }
+
+  async function handleValidateFiscalData() {
+    setFiscalValidationStatus("pending");
+    setFiscalValidationError(null);
+
+    try {
+      const response = await fetch("/api/clients/fiscal-validation", {
+        body: JSON.stringify({
+          cp: form.zipCode.trim(),
+          nombre: form.company.trim() || undefined,
+          regimen: form.fiscalRegime.trim(),
+          rfc: form.rfc.trim(),
+          usoCfdi: form.cfdiUse.trim() || undefined,
+        }),
+        headers: { "Content-Type": "application/json" },
+        method: "POST",
+      });
+
+      const data = (await response.json()) as FiscalValidationResult | { error: string };
+
+      if (!response.ok || "error" in data) {
+        throw new Error("error" in data ? data.error : "No fue posible validar los datos fiscales");
+      }
+
+      setFiscalValidationResult(data);
+      setFiscalValidationStatus("done");
+    } catch (error) {
+      setFiscalValidationError(error instanceof Error ? error.message : "Error interno");
+      setFiscalValidationStatus("error");
+    }
+  }
+
   function openNew() {
     setEditingClient(null);
     setForm(EMPTY_FORM);
     setLogoFile(null);
     setLogoName("");
     setMessage(null);
+    resetFiscalValidation();
     setShowModal(true);
   }
 
@@ -268,6 +321,7 @@ export function ClientShell({ clientLogos, initialClients }: ClientShellProps) {
     setLogoFile(null);
     setLogoName("");
     setMessage(null);
+    resetFiscalValidation();
     setShowModal(true);
 
     setOtherContacts([]);
@@ -957,6 +1011,50 @@ export function ClientShell({ clientLogos, initialClients }: ClientShellProps) {
                   placeholder="Ej. G03"
                   value={form.cfdiUse}
                 />
+              </div>
+              <div className="rounded-lg border border-zinc-200 bg-zinc-50 p-3 sm:col-span-2">
+                <div className="flex items-center justify-between gap-3">
+                  <p className="text-xs text-zinc-600">Valida RFC, CP y régimen contra los catálogos del SAT antes de guardar.</p>
+                  <button
+                    className="shrink-0 rounded-lg border border-zinc-300 bg-white px-3 py-1.5 text-xs font-medium text-zinc-700 transition hover:bg-zinc-50 disabled:cursor-not-allowed disabled:opacity-60"
+                    disabled={
+                      fiscalValidationStatus === "pending" ||
+                      !form.rfc.trim() ||
+                      !form.zipCode.trim() ||
+                      !form.fiscalRegime.trim()
+                    }
+                    onClick={handleValidateFiscalData}
+                    type="button"
+                  >
+                    {fiscalValidationStatus === "pending" ? "Validando..." : "Validar con SAT"}
+                  </button>
+                </div>
+
+                {fiscalValidationStatus === "error" && fiscalValidationError ? (
+                  <p className="mt-2 text-xs text-rose-700">{fiscalValidationError}</p>
+                ) : null}
+
+                {fiscalValidationStatus === "done" && fiscalValidationResult ? (
+                  <div className="mt-2 space-y-1">
+                    <p
+                      className={`text-xs font-medium ${
+                        fiscalValidationResult.valid ? "text-emerald-700" : "text-amber-700"
+                      }`}
+                    >
+                      {fiscalValidationResult.summary}
+                    </p>
+                    <ul className="space-y-0.5">
+                      {Object.entries(fiscalValidationResult.fields).map(([field, fieldResult]) => (
+                        <li
+                          className={`text-xs ${fieldResult.valid ? "text-zinc-600" : "text-amber-700"}`}
+                          key={field}
+                        >
+                          {fieldResult.valid ? "✓" : "⚠"} {field}: {fieldResult.message}
+                        </li>
+                      ))}
+                    </ul>
+                  </div>
+                ) : null}
               </div>
               <div>
                 <label className="mb-1 block text-xs font-medium text-zinc-700">Industria</label>
