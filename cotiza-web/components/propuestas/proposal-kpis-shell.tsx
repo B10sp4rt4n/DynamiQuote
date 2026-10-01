@@ -83,8 +83,15 @@ function formatCompactCurrency(value: number): string {
   }).format(value);
 }
 
+// date_trunc('month', ...) en Postgres entrega el 1 del mes a medianoche UTC
+// -- sin fijar timeZone: "UTC" aqui, cualquier visitante en un huso detras de
+// UTC (México entero, UTC-6) lo ve como las 6pm del ULTIMO DIA DEL MES
+// ANTERIOR y la etiqueta sale corrida un mes hacia atras (sep -> "ago").
+// Afectaba a las tres graficas de esta pagina por igual. Detectado
+// 2026-10-01: "llega a agosto, y septiembre ya se termino" -- septiembre si
+// tenia datos, solo salia etiquetado como agosto.
 function formatPeriodLabel(iso: string): string {
-  return new Intl.DateTimeFormat("es-MX", { month: "short", year: "2-digit" }).format(new Date(iso));
+  return new Intl.DateTimeFormat("es-MX", { month: "short", timeZone: "UTC", year: "2-digit" }).format(new Date(iso));
 }
 
 function StatTile({ label, value }: { label: string; value: string }) {
