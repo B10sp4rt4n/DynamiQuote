@@ -299,9 +299,18 @@ export type ProposalOutcomeTimelinePoint = {
 // Serie de tiempo (por mes) de monto ganado vs perdido -- agrupado por
 // fecha de creacion de la propuesta (no existe un timestamp de "cuando se
 // decidio" el outcome), mismo criterio que las demas series de este
-// archivo. Excluye deliberadamente 'discarded': no es un desenlace
+// archivo. Excluye deliberadamente 'discarded' de los montos/conteos
+// (SUM/COUNT con FILTER solo por 'won'/'lost'): no es un desenlace
 // comercial real, es ruido de una version superada (ver CLAUDE.md,
 // 2026-09-17, "las descartadas no deben tener prioridad de visibilidad").
+// OJO: el filtro por outcome NO va en el WHERE -- un WHERE outcome IN
+// ('won','lost') hacia que un mes sin NINGUNA decision (todo en
+// borrador/enviada sin tagear) desapareciera del todo de la serie,
+// mientras que las otras dos series de este archivo si mostraban ese mes
+// (con sus propios conteos en cero). Detectado 2026-10-01: SynAppsSys
+// tenia actividad real en septiembre pero la grafica "Ganado vs perdido"
+// no mostraba ese mes, a diferencia de las otras dos graficas de la misma
+// pagina -- "los resultados de septiembre en kpis no se ven".
 export async function getProposalOutcomeTimelineByTenant(
   tenantId: string,
   viewerUserId: string | null = null,
@@ -331,7 +340,6 @@ export async function getProposalOutcomeTimelineByTenant(
     LEFT JOIN proposal_items pi ON pi.proposal_id = p.proposal_id AND pi.status != 'deleted'
     WHERE p.tenant_id = ${tenantId}
       AND p.created_at >= ${monthsAgo(months)}
-      AND p.outcome IN ('won', 'lost')
       ${scopeFilter}
     GROUP BY period
     ORDER BY period ASC
