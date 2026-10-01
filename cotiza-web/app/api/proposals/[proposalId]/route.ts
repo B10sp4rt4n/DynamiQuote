@@ -203,7 +203,7 @@ export async function PATCH(request: Request, context: RouteContext) {
     tenant.id,
     proposalId,
     parsed.data.outcome,
-    tenant.userId,
+    { isSuperAdmin: tenant.isSuperAdmin, userId: tenant.userId, userRole: tenant.userRole },
     canSeeAll,
   );
 

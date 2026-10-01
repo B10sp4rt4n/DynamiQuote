@@ -4,6 +4,7 @@ import { randomUUID } from "crypto";
 import { Prisma } from "@prisma/client";
 
 import { getMarginPolicyByTenant } from "@/lib/db/margin-policies";
+import { recordProposalAuditEvent } from "@/lib/db/proposal-audit";
 import {
   clearProposalApprovalsByTenant,
   evaluateApprovalGate,
@@ -1725,7 +1726,7 @@ export async function setProposalOutcomeByTenant(
   tenantId: string,
   proposalId: string,
   outcome: ProposalOutcome,
-  viewerUserId: string | null,
+  actor: { isSuperAdmin: boolean; userId: string | null; userRole: "superadmin" | "owner" | "admin" | "user" },
   canSeeAll: boolean,
 ): Promise<SetProposalOutcomeResult> {
   const row = await prisma.proposals.findFirst({
@@ -1737,7 +1738,7 @@ export async function setProposalOutcomeByTenant(
     return "not_found";
   }
 
-  if (!canSeeAll && row.created_by_user_id !== null && row.created_by_user_id !== viewerUserId) {
+  if (!canSeeAll && row.created_by_user_id !== null && row.created_by_user_id !== actor.userId) {
     return "forbidden";
   }
 
@@ -1750,10 +1751,46 @@ export async function setProposalOutcomeByTenant(
     return "invalid_status";
   }
 
-  await prisma.proposals.update({
-    data: { outcome },
-    where: { proposal_id: proposalId },
+  // Si el cliente acepto (ganada) mientras la propuesta seguia en "Enviada"
+  // sin haber pasado por el gate de margen, de facto ya esta aprobada --
+  // promoverla evita que quede huerfana de "Aprobada" en KPIs/reportes que
+  // solo cuentan status='approved' (Salvador, 2026-10-01: "si es enviada
+  // [y ganada] es que esta aprobada y no aparece"). Mismo patron que
+  // autoApproveProposalByMarginPolicy: la decide el desenlace comercial, no
+  // una persona, asi que cualquier rol puede completarla.
+  const shouldAutoApprove = outcome === "won" && row.status === "sent" && Boolean(actor.userId);
+
+  await prisma.$transaction(async (tx) => {
+    await tx.proposals.update({
+      data: { outcome },
+      where: { proposal_id: proposalId },
+    });
+
+    if (shouldAutoApprove && actor.userId) {
+      await applyProposalStatusOnly(tx, { currentOutcome: outcome, nextStatus: "approved", proposalId });
+      await registerProposalApprovalDecisionByTenant(
+        {
+          approverRole: resolveApproverRole(actor),
+          approverUserId: actor.userId,
+          decision: "approved",
+          proposalId,
+          reason: "Auto-aprobado: la propuesta fue marcada como ganada por el cliente.",
+          tenantId,
+        },
+        tx,
+      );
+    }
   });
+
+  if (shouldAutoApprove) {
+    await recordProposalAuditEvent({
+      actorUserId: actor.userId,
+      eventType: "status_change_requested",
+      payload: { fromStatus: "sent", ok: true, requestedStatus: "approved", resultStatus: "approved", trigger: "outcome_won" },
+      proposalId,
+      tenantId,
+    });
+  }
 
   return "updated";
 }
