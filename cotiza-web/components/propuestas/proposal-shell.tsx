@@ -14,6 +14,7 @@ import {
 } from "@/lib/domain/proposal-list-state";
 import type { ProposalLiberationEvaluation } from "@/lib/domain/proposal-liberation";
 import {
+  resolveProposalEmailReleaseGate,
   resolveProposalIssuanceGate,
   type ProposalIssuanceStatus,
 } from "@/lib/domain/proposal-issuance-gate";
@@ -363,6 +364,20 @@ export function ProposalShell({
   const issuanceGate = useMemo(
     () =>
       resolveProposalIssuanceGate({
+        issuanceStatus: selectedIssuanceStatus,
+        marginCanAuthorizeFinal: marginAllowsFinalAuthorization,
+        status: selectedStatus,
+      }),
+    [selectedIssuanceStatus, marginAllowsFinalAuthorization, selectedStatus],
+  );
+  // Gate del boton "Enviarme el PDF" -- a diferencia de issuanceGate (PDF/
+  // Excel, vista previa interna), el correo libera la propuesta de verdad y
+  // por eso exige que ya este aprobada. Salvador, 2026-10-01: "no puedes
+  // enviar algo que no se aprobo, si puedes emitir un borrador pero no
+  // puedes liberarlo por correo".
+  const emailReleaseGate = useMemo(
+    () =>
+      resolveProposalEmailReleaseGate({
         issuanceStatus: selectedIssuanceStatus,
         marginCanAuthorizeFinal: marginAllowsFinalAuthorization,
         status: selectedStatus,
@@ -2173,9 +2188,9 @@ export function ProposalShell({
                 <div className="flex flex-col gap-1">
                   <button
                     className="w-fit rounded-lg border border-blue-300 bg-blue-50 px-4 py-2 text-sm font-medium text-blue-700 transition hover:bg-blue-100 disabled:cursor-not-allowed disabled:opacity-60"
-                    disabled={emailStatus === "sending" || issuanceGate.kind === "blocked"}
+                    disabled={emailStatus === "sending" || emailReleaseGate.kind === "blocked"}
                     onClick={() => { ensureCurrencyThenRun(() => { void handleSendEmailProposal(); }); }}
-                    title={issuanceGate.kind === "blocked" ? issuanceGate.reason : undefined}
+                    title={emailReleaseGate.kind === "blocked" ? emailReleaseGate.reason : undefined}
                     type="button"
                   >
                     {emailStatus === "sending"

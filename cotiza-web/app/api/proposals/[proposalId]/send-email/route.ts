@@ -12,7 +12,7 @@ import {
 } from "@/lib/db/proposals";
 import { recordProposalAuditEvent } from "@/lib/db/proposal-audit";
 import { getTenantProfileByTenant } from "@/lib/db/tenants";
-import { resolveProposalIssuanceGate } from "@/lib/domain/proposal-issuance-gate";
+import { resolveProposalEmailReleaseGate } from "@/lib/domain/proposal-issuance-gate";
 import { resolveResendConfig } from "@/lib/email/resend";
 import { ProposalPdfDocument } from "@/lib/pdf/proposal-document";
 import { enforceRateLimit, getRequestIdentity } from "@/lib/utils/rate-limit";
@@ -190,7 +190,13 @@ export async function POST(request: Request, context: RouteContext) {
     return NextResponse.json({ error: "Propuesta no encontrada" }, { status: 404 });
   }
 
-  const issuanceGate = resolveProposalIssuanceGate({
+  // A diferencia de PDF/Excel (vista previa interna, un borrador se puede
+  // descargar con marca de agua para revision), el correo libera la
+  // propuesta de verdad -- exige que ya este aprobada (o que el margen
+  // califique, que se autoaprueba antes de enviar). Salvador, 2026-10-01:
+  // "no puedes enviar algo que no se aprobo, si puedes emitir un borrador
+  // pero no puedes liberarlo por correo".
+  const issuanceGate = resolveProposalEmailReleaseGate({
     issuanceStatus: proposal.issuanceStatus,
     marginCanAuthorizeFinal: proposal.marginEvaluation.canAuthorizeFinal,
     status: proposal.status,

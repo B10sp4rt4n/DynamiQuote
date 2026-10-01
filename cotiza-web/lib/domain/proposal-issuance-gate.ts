@@ -66,3 +66,47 @@ export function resolveProposalIssuanceGate(input: {
 export function isForceIssuanceEligibleRole(role: "superadmin" | "owner" | "admin" | "user"): boolean {
   return role === "superadmin" || role === "owner";
 }
+
+// Gate del CORREO (liberar la propuesta), distinto del gate de PDF/Excel de
+// arriba -- esos son vista previa interna (un borrador sin aprobar se puede
+// seguir descargando en PDF con marca de agua, para revision). El correo en
+// cambio libera la propuesta de verdad, asi que exige que ya este aprobada:
+// - approved: permitido.
+// - margen ya calificaba (marginCanAuthorizeFinal): permitido -- se
+//   autoaprueba justo antes de enviar (ver autoApproveProposalByMarginPolicy
+//   en lib/db/proposals.ts), asi que para cuando el correo sale, ya quedo
+//   aprobada formalmente, no solo "de facto".
+// - forzamiento activo (issuance_status === "force_pending") por Owner/
+//   Superadmin: permitido, es una autorizacion explicita equivalente.
+// - rechazada o vencida: bloqueado siempre, sin excepcion -- no tiene
+//   sentido liberar por correo algo que ya se cerro en negativo, aunque el
+//   margen calificara.
+// - cualquier otro caso (borrador o en revision sin margen calificado, sin
+//   forzamiento): bloqueado -- "no puedes enviar algo que no se aprobo"
+//   (Salvador, 2026-10-01).
+export function resolveProposalEmailReleaseGate(input: {
+  status: ProposalStatus;
+  issuanceStatus: ProposalIssuanceStatus;
+  marginCanAuthorizeFinal: boolean;
+}): ProposalIssuanceDecision {
+  if (input.status === "rejected" || input.status === "expired") {
+    return {
+      kind: "blocked",
+      reason: "No se puede enviar por correo una propuesta rechazada o vencida.",
+    };
+  }
+
+  if (input.status === "approved" || input.marginCanAuthorizeFinal) {
+    return { kind: "allowed", watermark: false, forced: false };
+  }
+
+  if (input.issuanceStatus === "force_pending") {
+    return { kind: "allowed", watermark: false, forced: true };
+  }
+
+  return {
+    kind: "blocked",
+    reason:
+      "La propuesta debe estar aprobada para enviarse por correo. Solicita la aprobación o pide a un Owner/Superadmin que fuerce la emisión.",
+  };
+}
