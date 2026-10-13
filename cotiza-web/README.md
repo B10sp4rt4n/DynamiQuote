@@ -20,10 +20,21 @@ npm run dev
 - `CLERK_SECRET_KEY`
 - `DEFAULT_TENANT_SLUG` solo como fallback cuando Clerk aun no esta configurado
 
-## Multi-tenant con Clerk
-- Cuando Clerk esta activo, el tenant se resuelve desde `tenantId` o `tenantSlug` en metadata.
-- Como fallback temporal tambien se acepta `org_slug` para mapear una organizacion de Clerk al `slug` del tenant.
-- Si no hay metadata de tenant, las rutas protegidas no cargan datos.
+## Identidad y acceso con Clerk
+- Cada sesión se vincula exclusivamente por `Clerk userId = app_users.user_id`.
+- El usuario local debe existir y estar activo. Su rol y tenant se leen de `app_users`.
+- No se reconcilian cuentas por nombre, alias ni metadata durante una petición.
+- El alta administrativa y el webhook firmado de Clerk establecen la vinculación por ID.
+- Usuarios desconocidos, desactivados o con tenant inactivo no reciben contexto autorizado.
+- Solo un superadmin activo y vinculado puede seleccionar otro tenant con `tenant_override_slug`.
+- Si falta cualquiera de las credenciales de Clerk, se deniega acceso fuera de `NODE_ENV=development`.
+- El modo bootstrap anónimo y las cookies de sesión sintética son exclusivos del desarrollo local.
+
+### Preparación antes de desplegar este cambio
+Verificar que las cuentas existentes, especialmente Owner y Superadmin, tengan en `app_users.user_id`
+su ID real de Clerk, estén activas y tengan la membresía correcta. Las cuentas heredadas que dependían
+de coincidencias por nombre/alias requieren vinculación administrativa explícita antes del despliegue.
+No se actualizan IDs ni roles automáticamente durante el inicio de sesión.
 
 ## Rutas iniciales
 - `/`

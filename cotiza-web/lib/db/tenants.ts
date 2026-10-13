@@ -19,7 +19,7 @@ export async function getBootstrapTenant(): Promise<BootstrapTenant | null> {
 
   const tenant = slug
     ? await prisma.tenant.findUnique({
-        where: { slug },
+        where: { slug, active: true },
         select: {
           tenant_id: true,
           name: true,
