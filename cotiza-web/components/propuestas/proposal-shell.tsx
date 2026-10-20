@@ -1479,58 +1479,78 @@ export function ProposalShell({
 
       <div className="mt-6 grid gap-6 lg:grid-cols-[minmax(0,1.1fr)_minmax(0,1fr)]">
         <div className="overflow-hidden rounded-xl border border-zinc-200">
-          <div className="flex flex-col gap-2 border-b border-zinc-200 bg-zinc-50 px-4 py-3">
-            {STATUS_FILTER_GROUPS.map((group) => (
-              <div className="flex flex-wrap items-center gap-2" key={group.group}>
-                <p className="w-24 shrink-0 whitespace-nowrap text-[11px] uppercase tracking-[0.14em] text-zinc-400">
-                  {group.label}
-                </p>
-                {STATUS_FILTERS.filter((sf) => sf.group === group.group).map((sf) => {
-                  const count = counts[sf.countKey];
-                  const isActive =
-                    sf.kind === "risk"
-                      ? blockedMarginFilter
-                      : sf.kind === "status"
-                        ? statusFilter === sf.value
-                        : outcomeFilter === sf.value;
-                  const key = sf.kind === "risk" ? "blocked_margin" : sf.value;
+          {/* Un cuadro por grupo (Estatus/Riesgo/Desenlace) -- son ejes
+              independientes que se combinan con AND, asi que se ven como
+              paneles separados en vez de filas de una sola barra (Salvador,
+              2026-10-20: "ver si se puede ordenar en cuadros por nivel"). */}
+          <div className="grid gap-3 border-b border-zinc-200 bg-zinc-50 p-4 sm:grid-cols-3">
+            {STATUS_FILTER_GROUPS.map((group) => {
+              const groupIsActive =
+                group.group === "estatus"
+                  ? statusFilter !== "all"
+                  : group.group === "riesgo"
+                    ? blockedMarginFilter
+                    : outcomeFilter !== "all";
 
-                  return (
-                    <button
-                      className={`rounded-full border px-3 py-1 text-xs font-medium transition ${
-                        isActive
-                          ? sf.kind === "status" && sf.value === "all"
-                            ? "border-zinc-900 bg-zinc-900 text-white"
-                            : sf.kind === "risk"
-                              ? "border-rose-700 bg-rose-700 text-white"
-                              : (sf.kind === "status" && sf.value === "approved") ||
-                                  (sf.kind === "outcome" && sf.value === "won")
-                                ? "border-emerald-700 bg-emerald-700 text-white"
-                                : sf.kind === "status" && sf.value === "in_review"
-                                  ? "border-amber-600 bg-amber-600 text-white"
-                                  : sf.kind === "status" && sf.value === "sent"
-                                    ? "border-blue-600 bg-blue-600 text-white"
-                                    : "border-zinc-600 bg-zinc-600 text-white"
-                          : sf.className
-                      }`}
-                      key={key}
-                      onClick={() => {
-                        if (sf.kind === "risk") {
-                          handleBlockedMarginToggle();
-                        } else if (sf.kind === "status") {
-                          handleStatusFilterChange(sf.value);
-                        } else {
-                          handleOutcomeFilterChange(sf.value);
-                        }
-                      }}
-                      type="button"
-                    >
-                      {sf.label} ({count})
-                    </button>
-                  );
-                })}
-              </div>
-            ))}
+              return (
+                <div
+                  className={`rounded-lg border bg-white p-3 ${
+                    groupIsActive ? "border-zinc-300 shadow-sm" : "border-zinc-200"
+                  }`}
+                  key={group.group}
+                >
+                  <p className="mb-2 text-[11px] font-semibold uppercase tracking-[0.14em] text-zinc-400">
+                    {group.label}
+                  </p>
+                  <div className="flex flex-wrap gap-2">
+                    {STATUS_FILTERS.filter((sf) => sf.group === group.group).map((sf) => {
+                      const count = counts[sf.countKey];
+                      const isActive =
+                        sf.kind === "risk"
+                          ? blockedMarginFilter
+                          : sf.kind === "status"
+                            ? statusFilter === sf.value
+                            : outcomeFilter === sf.value;
+                      const key = sf.kind === "risk" ? "blocked_margin" : sf.value;
+
+                      return (
+                        <button
+                          className={`rounded-full border px-3 py-1 text-xs font-medium transition ${
+                            isActive
+                              ? sf.kind === "status" && sf.value === "all"
+                                ? "border-zinc-900 bg-zinc-900 text-white"
+                                : sf.kind === "risk"
+                                  ? "border-rose-700 bg-rose-700 text-white"
+                                  : (sf.kind === "status" && sf.value === "approved") ||
+                                      (sf.kind === "outcome" && sf.value === "won")
+                                    ? "border-emerald-700 bg-emerald-700 text-white"
+                                    : sf.kind === "status" && sf.value === "in_review"
+                                      ? "border-amber-600 bg-amber-600 text-white"
+                                      : sf.kind === "status" && sf.value === "sent"
+                                        ? "border-blue-600 bg-blue-600 text-white"
+                                        : "border-zinc-600 bg-zinc-600 text-white"
+                              : sf.className
+                          }`}
+                          key={key}
+                          onClick={() => {
+                            if (sf.kind === "risk") {
+                              handleBlockedMarginToggle();
+                            } else if (sf.kind === "status") {
+                              handleStatusFilterChange(sf.value);
+                            } else {
+                              handleOutcomeFilterChange(sf.value);
+                            }
+                          }}
+                          type="button"
+                        >
+                          {sf.label} ({count})
+                        </button>
+                      );
+                    })}
+                  </div>
+                </div>
+              );
+            })}
           </div>
           <div className="border-b border-zinc-200 bg-white px-4 py-2">
             <div className="flex flex-col gap-2 md:flex-row md:items-center">
