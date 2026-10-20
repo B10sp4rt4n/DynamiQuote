@@ -16,6 +16,7 @@ import {
 import type {
   ProposalAmountTimelinePoint,
   ProposalKpiSummary,
+  ProposalMarginTimelinePoint,
   ProposalOutcomeTimelinePoint,
   ProposalStatusTimelinePoint,
   SalesRepRankingRow,
@@ -24,6 +25,7 @@ import type {
 type ProposalKpisShellProps = {
   amountTimeline: ProposalAmountTimelinePoint[];
   canSeeAll: boolean;
+  marginTimeline: ProposalMarginTimelinePoint[];
   outcomeTimeline: ProposalOutcomeTimelinePoint[];
   ranking: SalesRepRankingRow[];
   statusTimeline: ProposalStatusTimelinePoint[];
@@ -189,6 +191,110 @@ function AmountTimelineChart({ data }: { data: ProposalAmountTimelinePoint[] }) 
   );
 }
 
+function formatPercent(value: number): string {
+  return `${value.toFixed(1)}%`;
+}
+
+// Margen (%) por mes -- version por periodo de la tarjeta "Margen promedio"
+// (summary.avgMarginPct), que solo da un numero tenant-wide. Eje de
+// porcentaje, no de moneda: nunca combinar con Utilidad ($) en la misma
+// grafica (dos escalas distintas -- ver skill dataviz, "nunca dual-axis").
+function MarginTimelineChart({ data }: { data: ProposalMarginTimelinePoint[] }) {
+  if (data.length === 0) {
+    return <EmptyChartState />;
+  }
+
+  const chartData = data.map((point) => ({
+    ...point,
+    periodLabel: formatPeriodLabel(point.period),
+  }));
+
+  return (
+    <ResponsiveContainer height={280} width="100%">
+      <LineChart data={chartData}>
+        <CartesianGrid stroke="#e4e4e7" vertical={false} />
+        <XAxis axisLine={{ stroke: "#e4e4e7" }} dataKey="periodLabel" tick={{ fill: "#71717a", fontSize: 11 }} tickLine={false} />
+        <YAxis
+          axisLine={false}
+          tick={{ fill: "#71717a", fontSize: 11 }}
+          tickFormatter={(value: number) => formatPercent(value)}
+          tickLine={false}
+        />
+        <Tooltip formatter={(value, _name, _item, _index, _payload) => formatPercent(Number(value))} />
+        <Legend
+          formatter={(value: string) => (value === "proposedMarginPct" ? "Propuesto" : "Aprobado")}
+          wrapperStyle={{ fontSize: 12 }}
+        />
+        <Line
+          dataKey="proposedMarginPct"
+          dot={{ r: 4, strokeWidth: 2, stroke: "#ffffff" }}
+          name="proposedMarginPct"
+          stroke={AMOUNT_COLORS.proposed}
+          strokeWidth={2}
+          type="monotone"
+        />
+        <Line
+          dataKey="approvedMarginPct"
+          dot={{ r: 4, strokeWidth: 2, stroke: "#ffffff" }}
+          name="approvedMarginPct"
+          stroke={AMOUNT_COLORS.approved}
+          strokeWidth={2}
+          type="monotone"
+        />
+      </LineChart>
+    </ResponsiveContainer>
+  );
+}
+
+// Utilidad ($) por mes -- precio menos costo, mismo corte proposed/approved
+// que las demas graficas de monto de esta pagina.
+function ProfitTimelineChart({ data }: { data: ProposalMarginTimelinePoint[] }) {
+  if (data.length === 0) {
+    return <EmptyChartState />;
+  }
+
+  const chartData = data.map((point) => ({
+    ...point,
+    periodLabel: formatPeriodLabel(point.period),
+  }));
+
+  return (
+    <ResponsiveContainer height={280} width="100%">
+      <LineChart data={chartData}>
+        <CartesianGrid stroke="#e4e4e7" vertical={false} />
+        <XAxis axisLine={{ stroke: "#e4e4e7" }} dataKey="periodLabel" tick={{ fill: "#71717a", fontSize: 11 }} tickLine={false} />
+        <YAxis
+          axisLine={false}
+          tick={{ fill: "#71717a", fontSize: 11 }}
+          tickFormatter={(value: number) => formatCompactCurrency(value)}
+          tickLine={false}
+        />
+        <Tooltip formatter={(value, _name, _item, _index, _payload) => formatCurrency(Number(value))} />
+        <Legend
+          formatter={(value: string) => (value === "proposedProfit" ? "Propuesto" : "Aprobado")}
+          wrapperStyle={{ fontSize: 12 }}
+        />
+        <Line
+          dataKey="proposedProfit"
+          dot={{ r: 4, strokeWidth: 2, stroke: "#ffffff" }}
+          name="proposedProfit"
+          stroke={AMOUNT_COLORS.proposed}
+          strokeWidth={2}
+          type="monotone"
+        />
+        <Line
+          dataKey="approvedProfit"
+          dot={{ r: 4, strokeWidth: 2, stroke: "#ffffff" }}
+          name="approvedProfit"
+          stroke={AMOUNT_COLORS.approved}
+          strokeWidth={2}
+          type="monotone"
+        />
+      </LineChart>
+    </ResponsiveContainer>
+  );
+}
+
 function OutcomeTimelineChart({ data }: { data: ProposalOutcomeTimelinePoint[] }) {
   if (data.length === 0) {
     return <EmptyChartState />;
@@ -285,6 +391,7 @@ function EmptyChartState() {
 export function ProposalKpisShell({
   amountTimeline,
   canSeeAll,
+  marginTimeline,
   outcomeTimeline,
   ranking,
   statusTimeline,
@@ -336,6 +443,18 @@ export function ProposalKpisShell({
           </p>
           <div className="mt-3">
             <OutcomeTimelineChart data={outcomeTimeline} />
+          </div>
+        </div>
+        <div className="rounded-xl border border-zinc-200 p-4">
+          <p className="text-sm font-semibold text-zinc-900">Margen por mes (%)</p>
+          <div className="mt-3">
+            <MarginTimelineChart data={marginTimeline} />
+          </div>
+        </div>
+        <div className="rounded-xl border border-zinc-200 p-4">
+          <p className="text-sm font-semibold text-zinc-900">Utilidad por mes</p>
+          <div className="mt-3">
+            <ProfitTimelineChart data={marginTimeline} />
           </div>
         </div>
       </div>

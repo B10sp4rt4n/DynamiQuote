@@ -288,6 +288,76 @@ export async function getSalesRepRankingByTenant(tenantId: string): Promise<Sale
   });
 }
 
+export type ProposalMarginTimelinePoint = {
+  approvedAmount: number;
+  approvedMarginPct: number;
+  approvedProfit: number;
+  period: string;
+  proposedAmount: number;
+  proposedMarginPct: number;
+  proposedProfit: number;
+};
+
+// Serie de tiempo (por mes) de margen (%) y utilidad ($) -- version por
+// periodo de la tarjeta "Margen promedio" que ya existia como un solo valor
+// tenant-wide. Mismo criterio proposed vs approved que
+// getProposalAmountTimelineByTenant (misma fecha de corte: created_at de la
+// propuesta). Salvador, 2026-10-20: "kpis com margren utilidad, agregado a
+// lo que ya hay por periodo, por mes".
+export async function getProposalMarginTimelineByTenant(
+  tenantId: string,
+  viewerUserId: string | null = null,
+  canSeeAll = true,
+  months = 6,
+): Promise<ProposalMarginTimelinePoint[]> {
+  const scopeFilter = canSeeAll
+    ? Prisma.empty
+    : Prisma.sql`AND (p.created_by_user_id = ${viewerUserId} OR p.created_by_user_id IS NULL)`;
+
+  const rows = await prisma.$queryRaw<
+    Array<{
+      approved_amount: Prisma.Decimal | null;
+      approved_cost: Prisma.Decimal | null;
+      period: Date;
+      proposed_amount: Prisma.Decimal | null;
+      proposed_cost: Prisma.Decimal | null;
+    }>
+  >(Prisma.sql`
+    SELECT
+      date_trunc('month', p.created_at) AS period,
+      SUM(COALESCE(pi.subtotal_price, 0)) AS proposed_amount,
+      SUM(COALESCE(pi.subtotal_cost, 0)) AS proposed_cost,
+      SUM(CASE WHEN p.status = 'approved' THEN COALESCE(pi.subtotal_price, 0) ELSE 0 END) AS approved_amount,
+      SUM(CASE WHEN p.status = 'approved' THEN COALESCE(pi.subtotal_cost, 0) ELSE 0 END) AS approved_cost
+    FROM proposals p
+    LEFT JOIN proposal_items pi ON pi.proposal_id = p.proposal_id AND pi.status != 'deleted'
+    WHERE p.tenant_id = ${tenantId}
+      AND p.created_at >= ${monthsAgo(months)}
+      ${scopeFilter}
+    GROUP BY period
+    ORDER BY period ASC
+  `);
+
+  return rows.map((row) => {
+    const proposedAmount = toNumber(row.proposed_amount);
+    const proposedCost = toNumber(row.proposed_cost);
+    const approvedAmount = toNumber(row.approved_amount);
+    const approvedCost = toNumber(row.approved_cost);
+    const proposedProfit = proposedAmount - proposedCost;
+    const approvedProfit = approvedAmount - approvedCost;
+
+    return {
+      approvedAmount,
+      approvedMarginPct: approvedAmount > 0 ? (approvedProfit / approvedAmount) * 100 : 0,
+      approvedProfit,
+      period: row.period.toISOString(),
+      proposedAmount,
+      proposedMarginPct: proposedAmount > 0 ? (proposedProfit / proposedAmount) * 100 : 0,
+      proposedProfit,
+    };
+  });
+}
+
 export type ProposalOutcomeTimelinePoint = {
   lostAmount: number;
   lostCount: number;
