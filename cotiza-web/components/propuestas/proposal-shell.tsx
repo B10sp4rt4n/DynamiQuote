@@ -4,13 +4,16 @@ import Link from "next/link";
 import { useEffect, useMemo, useRef, useState, type MouseEvent } from "react";
 import { usePathname, useRouter, useSearchParams } from "next/navigation";
 
-import type { ProposalListCounts, ProposalSummary } from "@/lib/db/proposals";
+import type { ProposalListCounts, ProposalListFilters, ProposalSummary } from "@/lib/db/proposals";
 import {
-  normalizeProposalListFilter,
+  normalizeBlockedMarginFilter,
+  normalizeProposalOutcomeFilter,
   normalizeProposalSort,
+  normalizeProposalStatusFilter,
   resolveSelectedProposalId,
-  type ProposalListFilter,
+  type ProposalOutcomeFilter,
   type ProposalSort,
+  type ProposalStatusFilter,
 } from "@/lib/domain/proposal-list-state";
 import type { ProposalLiberationEvaluation } from "@/lib/domain/proposal-liberation";
 import {
@@ -53,7 +56,9 @@ type ProposalShellProps = {
   canForceIssuance: boolean;
   counts: ProposalListCounts;
   hasMore: boolean;
-  initialFilter: ProposalListFilter;
+  initialBlockedMarginFilter: boolean;
+  initialOutcomeFilter: ProposalOutcomeFilter;
+  initialStatusFilter: ProposalStatusFilter;
   proposals: ProposalSummary[];
   tenantName: string;
 };
@@ -66,24 +71,43 @@ const STATUS_FILTER_GROUPS: Array<{ group: StatusFilterGroup; label: string }> =
   { group: "desenlace", label: "Desenlace" },
 ];
 
-const STATUS_FILTERS: Array<{
-  className: string;
-  group: StatusFilterGroup;
-  label: string;
-  value: ProposalListFilter;
-}> = [
-  { className: "border-zinc-900 bg-zinc-900 text-white", group: "estatus", label: "Todas", value: "all" },
-  { className: "border-zinc-300 bg-white text-zinc-600 hover:bg-zinc-50", group: "estatus", label: "Borrador", value: "draft" },
-  { className: "border-blue-300 bg-white text-blue-700 hover:bg-blue-50", group: "estatus", label: "Enviadas", value: "sent" },
-  { className: "border-amber-300 bg-white text-amber-700 hover:bg-amber-50", group: "estatus", label: "En revision", value: "in_review" },
-  { className: "border-emerald-300 bg-white text-emerald-700 hover:bg-emerald-50", group: "estatus", label: "Aprobadas", value: "approved" },
-  { className: "border-rose-300 bg-white text-rose-700 hover:bg-rose-50", group: "estatus", label: "Rechazadas", value: "rejected" },
-  { className: "border-zinc-300 bg-white text-zinc-500 hover:bg-zinc-50", group: "estatus", label: "Vencidas", value: "expired" },
-  { className: "border-rose-300 bg-white text-rose-700 hover:bg-rose-50", group: "riesgo", label: "Bloqueadas margen", value: "blocked_margin" },
-  { className: "border-emerald-300 bg-white text-emerald-700 hover:bg-emerald-50", group: "desenlace", label: "Ganadas", value: "won" },
-  { className: "border-zinc-400 bg-white text-zinc-600 hover:bg-zinc-50", group: "desenlace", label: "Perdidas", value: "lost" },
-  { className: "border-amber-300 bg-white text-amber-700 hover:bg-amber-50", group: "desenlace", label: "Descartadas", value: "discarded" },
+// Estatus, Riesgo y Desenlace son grupos de seleccion INDEPENDIENTES (se
+// combinan con AND) -- a diferencia del modelo anterior de un solo valor
+// mutuamente excluyente. "countKey" indexa directamente a ProposalListCounts
+// (los nombres ya coinciden 1 a 1 con cada chip).
+type StatusFilterChip =
+  | { className: string; countKey: keyof ProposalListCounts; group: "estatus"; kind: "status"; label: string; value: ProposalStatusFilter }
+  | { className: string; countKey: "blocked_margin"; group: "riesgo"; kind: "risk"; label: string }
+  | { className: string; countKey: keyof ProposalListCounts; group: "desenlace"; kind: "outcome"; label: string; value: ProposalOutcomeFilter };
+
+const STATUS_FILTERS: StatusFilterChip[] = [
+  { className: "border-zinc-900 bg-zinc-900 text-white", countKey: "all", group: "estatus", kind: "status", label: "Todas", value: "all" },
+  { className: "border-zinc-300 bg-white text-zinc-600 hover:bg-zinc-50", countKey: "draft", group: "estatus", kind: "status", label: "Borrador", value: "draft" },
+  { className: "border-blue-300 bg-white text-blue-700 hover:bg-blue-50", countKey: "sent", group: "estatus", kind: "status", label: "Enviadas", value: "sent" },
+  { className: "border-amber-300 bg-white text-amber-700 hover:bg-amber-50", countKey: "in_review", group: "estatus", kind: "status", label: "En revision", value: "in_review" },
+  { className: "border-emerald-300 bg-white text-emerald-700 hover:bg-emerald-50", countKey: "approved", group: "estatus", kind: "status", label: "Aprobadas", value: "approved" },
+  { className: "border-rose-300 bg-white text-rose-700 hover:bg-rose-50", countKey: "rejected", group: "estatus", kind: "status", label: "Rechazadas", value: "rejected" },
+  { className: "border-zinc-300 bg-white text-zinc-500 hover:bg-zinc-50", countKey: "expired", group: "estatus", kind: "status", label: "Vencidas", value: "expired" },
+  { className: "border-rose-300 bg-white text-rose-700 hover:bg-rose-50", countKey: "blocked_margin", group: "riesgo", kind: "risk", label: "Bloqueadas margen" },
+  { className: "border-emerald-300 bg-white text-emerald-700 hover:bg-emerald-50", countKey: "won", group: "desenlace", kind: "outcome", label: "Ganadas", value: "won" },
+  { className: "border-zinc-400 bg-white text-zinc-600 hover:bg-zinc-50", countKey: "lost", group: "desenlace", kind: "outcome", label: "Perdidas", value: "lost" },
+  { className: "border-amber-300 bg-white text-amber-700 hover:bg-amber-50", countKey: "discarded", group: "desenlace", kind: "outcome", label: "Descartadas", value: "discarded" },
 ];
+
+// Clave que resume "que trajo el servidor por ultima vez" -- compara esto
+// contra el estado actual para decidir si hay que volver a pedir la pagina.
+// La busqueda ignora los filtros de chip a proposito (ver
+// getProposalListPageByTenant), asi que mientras haya texto, la clave solo
+// depende de el.
+function buildListFetchKey(filters: ProposalListFilters, search: string): string {
+  const trimmed = search.trim();
+
+  if (trimmed.length > 0) {
+    return `search:${trimmed.toLowerCase()}`;
+  }
+
+  return `filter:${filters.status}:${filters.outcome}:${filters.blockedMargin ? 1 : 0}`;
+}
 
 type ProposalStatusOption = {
   label: string;
@@ -209,7 +233,9 @@ export function ProposalShell({
   canForceIssuance,
   counts,
   hasMore,
-  initialFilter,
+  initialBlockedMarginFilter,
+  initialOutcomeFilter,
+  initialStatusFilter,
   proposals,
   tenantName,
 }: ProposalShellProps) {
@@ -220,7 +246,12 @@ export function ProposalShell({
   const [hasMoreState, setHasMoreState] = useState(hasMore);
   const [loadingMore, setLoadingMore] = useState(false);
   const [listError, setListError] = useState<string | null>(null);
-  const previousListFilterRef = useRef<ProposalListFilter>(initialFilter);
+  const previousListKeyRef = useRef<string>(
+    buildListFetchKey(
+      { blockedMargin: initialBlockedMarginFilter, outcome: initialOutcomeFilter, status: initialStatusFilter },
+      "",
+    ),
+  );
   const [selectedProposalId, setSelectedProposalId] = useState<string | null>(() => {
     const fromQuery = typeof window !== "undefined"
       ? new URLSearchParams(window.location.search).get("proposalId")
@@ -315,28 +346,30 @@ export function ProposalShell({
   const [emailStatus, setEmailStatus] = useState<"idle" | "sending" | "success" | "error">("idle");
   const [emailMessage, setEmailMessage] = useState<string | null>(null);
   const [searchQuery, setSearchQuery] = useState("");
+  const [debouncedSearch, setDebouncedSearch] = useState("");
   const [sortBy, setSortBy] = useState<ProposalSort>("date_desc");
-  const listFilter = normalizeProposalListFilter(searchParams.get("filter"));
+  const statusFilter = normalizeProposalStatusFilter(searchParams.get("status"));
+  const outcomeFilter = normalizeProposalOutcomeFilter(searchParams.get("outcome"));
+  const blockedMarginFilter = normalizeBlockedMarginFilter(searchParams.get("blockedMargin"));
+
+  // Debounce de 300ms antes de pegarle al servidor -- a diferencia del
+  // filtrado anterior (puramente en cliente, sobre lo ya cargado), ahora
+  // cada busqueda real es un fetch nuevo (ver CLAUDE.md 2026-10-20: el
+  // buscador anterior nunca alcanzaba una propuesta fuera de la pagina ya
+  // cargada).
+  useEffect(() => {
+    const handle = setTimeout(() => {
+      setDebouncedSearch(searchQuery.trim());
+    }, 300);
+
+    return () => clearTimeout(handle);
+  }, [searchQuery]);
 
   const filteredItems = useMemo(() => {
-    // El filtro de estatus (incluido blocked_margin) ya se aplico en
-    // servidor -- items siempre corresponde al filtro activo. Aqui solo se
-    // aplican busqueda y orden sobre lo ya cargado.
-    const q = searchQuery.trim().toLowerCase();
-    const searchedItems =
-      q.length === 0
-        ? items
-        : items.filter((item) =>
-            [
-              item.formal?.proposalNumber,
-              item.formal?.recipientCompany,
-              item.formal?.subject,
-              item.formal?.issuerContactName,
-              item.proposalId,
-            ].some((field) => field?.toLowerCase().includes(q)),
-          );
-
-    return [...searchedItems].sort((left, right) => {
+    // La busqueda y los filtros de chip ya se aplicaron en servidor -- items
+    // siempre corresponde a lo que el servidor ya filtro/busco. Aqui solo se
+    // ordena lo ya cargado.
+    return [...items].sort((left, right) => {
       if (sortBy === "date_asc" || sortBy === "date_desc") {
         const leftTime = Date.parse(left.formal?.issuedDate ?? left.createdAt ?? "") || 0;
         const rightTime = Date.parse(right.formal?.issuedDate ?? right.createdAt ?? "") || 0;
@@ -350,7 +383,7 @@ export function ProposalShell({
 
       return formatStatus(left.status).localeCompare(formatStatus(right.status), "es");
     });
-  }, [items, searchQuery, sortBy]);
+  }, [items, sortBy]);
 
   const selectedProposal = useMemo(
     () => items.find((item) => item.proposalId === selectedProposalId) ?? null,
@@ -518,22 +551,55 @@ export function ProposalShell({
     setEmailMessage(null);
   }
 
-  function handleListFilterChange(nextFilter: ProposalListFilter) {
+  function setListUrlParam(key: string, value: string | null) {
     const nextParams = new URLSearchParams(searchParams.toString());
 
-    if (nextFilter === "all") {
-      nextParams.delete("filter");
+    if (value === null) {
+      nextParams.delete(key);
     } else {
-      nextParams.set("filter", nextFilter);
+      nextParams.set(key, value);
     }
 
     const nextQuery = nextParams.toString();
     router.replace(nextQuery.length > 0 ? `${pathname}?${nextQuery}` : pathname, { scroll: false });
   }
 
-  async function fetchProposalListPage(filter: ProposalListFilter, offset: number) {
-    const url = `/api/proposals?filter=${encodeURIComponent(filter)}&offset=${offset}`;
-    const response = await fetch(url);
+  // Cada grupo (Estatus/Riesgo/Desenlace) se selecciona de forma
+  // independiente -- clickear el chip ya activo lo desactiva (vuelve a
+  // "Todas"/apagado) en vez de quedar fijo, para poder combinar dos grupos
+  // sin pasar primero por "Todas" en cada uno.
+  function handleStatusFilterChange(nextValue: ProposalStatusFilter) {
+    const resolved = nextValue === "all" ? "all" : statusFilter === nextValue ? "all" : nextValue;
+    setListUrlParam("status", resolved === "all" ? null : resolved);
+  }
+
+  function handleOutcomeFilterChange(nextValue: ProposalOutcomeFilter) {
+    const resolved = nextValue === "all" ? "all" : outcomeFilter === nextValue ? "all" : nextValue;
+    setListUrlParam("outcome", resolved === "all" ? null : resolved);
+  }
+
+  function handleBlockedMarginToggle() {
+    setListUrlParam("blockedMargin", blockedMarginFilter ? null : "1");
+  }
+
+  async function fetchProposalListPage(filters: ProposalListFilters, offset: number, search: string) {
+    const params = new URLSearchParams();
+    params.set("status", filters.status);
+    params.set("outcome", filters.outcome);
+
+    if (filters.blockedMargin) {
+      params.set("blockedMargin", "1");
+    }
+
+    params.set("offset", String(offset));
+
+    const trimmedSearch = search.trim();
+
+    if (trimmedSearch.length > 0) {
+      params.set("q", trimmedSearch);
+    }
+
+    const response = await fetch(`/api/proposals?${params.toString()}`);
     const data = (await response.json()) as {
       error?: string;
       hasMore?: boolean;
@@ -547,18 +613,33 @@ export function ProposalShell({
     return { hasMore: data.hasMore ?? false, items: data.items };
   }
 
-  // El filtro activo (chip) determina que trae el servidor -- cuando cambia,
-  // se reemplaza items por completo (no se re-filtra en cliente lo que ya
-  // estaba cargado, porque ya no representa el universo real del filtro).
+  const activeFilters: ProposalListFilters = {
+    blockedMargin: blockedMarginFilter,
+    outcome: outcomeFilter,
+    status: statusFilter,
+  };
+
+  // Los chips activos y la busqueda (debounced) determinan que trae el
+  // servidor -- cuando cualquiera cambia, se reemplaza items por completo
+  // (no se re-filtra en cliente lo ya cargado, porque ya no representa el
+  // universo real del filtro/busqueda activos). Mientras haya texto de
+  // busqueda, esta ignora los chips a proposito (ver buildListFetchKey).
   useEffect(() => {
-    if (previousListFilterRef.current === listFilter) {
+    const filters: ProposalListFilters = {
+      blockedMargin: blockedMarginFilter,
+      outcome: outcomeFilter,
+      status: statusFilter,
+    };
+    const key = buildListFetchKey(filters, debouncedSearch);
+
+    if (previousListKeyRef.current === key) {
       return;
     }
 
-    previousListFilterRef.current = listFilter;
+    previousListKeyRef.current = key;
     setListError(null);
 
-    fetchProposalListPage(listFilter, 0)
+    fetchProposalListPage(filters, 0, debouncedSearch)
       .then((page) => {
         setItems(page.items);
         setHasMoreState(page.hasMore);
@@ -566,14 +647,14 @@ export function ProposalShell({
       .catch((err) => {
         setListError(err instanceof Error ? err.message : "Error desconocido");
       });
-  }, [listFilter]);
+  }, [statusFilter, outcomeFilter, blockedMarginFilter, debouncedSearch]);
 
   async function handleLoadMore() {
     setLoadingMore(true);
     setListError(null);
 
     try {
-      const page = await fetchProposalListPage(listFilter, items.length);
+      const page = await fetchProposalListPage(activeFilters, items.length, debouncedSearch);
       setItems((prev) => [...prev, ...page.items]);
       setHasMoreState(page.hasMore);
     } catch (err) {
@@ -1405,28 +1486,43 @@ export function ProposalShell({
                   {group.label}
                 </p>
                 {STATUS_FILTERS.filter((sf) => sf.group === group.group).map((sf) => {
-                  const count = counts[sf.value];
-                  const isActive = listFilter === sf.value;
+                  const count = counts[sf.countKey];
+                  const isActive =
+                    sf.kind === "risk"
+                      ? blockedMarginFilter
+                      : sf.kind === "status"
+                        ? statusFilter === sf.value
+                        : outcomeFilter === sf.value;
+                  const key = sf.kind === "risk" ? "blocked_margin" : sf.value;
 
                   return (
                     <button
                       className={`rounded-full border px-3 py-1 text-xs font-medium transition ${
                         isActive
-                          ? sf.value === "all"
+                          ? sf.kind === "status" && sf.value === "all"
                             ? "border-zinc-900 bg-zinc-900 text-white"
-                            : sf.value === "blocked_margin"
+                            : sf.kind === "risk"
                               ? "border-rose-700 bg-rose-700 text-white"
-                              : sf.value === "approved" || sf.value === "won"
+                              : (sf.kind === "status" && sf.value === "approved") ||
+                                  (sf.kind === "outcome" && sf.value === "won")
                                 ? "border-emerald-700 bg-emerald-700 text-white"
-                                : sf.value === "in_review"
+                                : sf.kind === "status" && sf.value === "in_review"
                                   ? "border-amber-600 bg-amber-600 text-white"
-                                  : sf.value === "sent"
+                                  : sf.kind === "status" && sf.value === "sent"
                                     ? "border-blue-600 bg-blue-600 text-white"
                                     : "border-zinc-600 bg-zinc-600 text-white"
                           : sf.className
                       }`}
-                      key={sf.value}
-                      onClick={() => handleListFilterChange(sf.value)}
+                      key={key}
+                      onClick={() => {
+                        if (sf.kind === "risk") {
+                          handleBlockedMarginToggle();
+                        } else if (sf.kind === "status") {
+                          handleStatusFilterChange(sf.value);
+                        } else {
+                          handleOutcomeFilterChange(sf.value);
+                        }
+                      }}
                       type="button"
                     >
                       {sf.label} ({count})
@@ -1521,7 +1617,9 @@ export function ProposalShell({
               {filteredItems.length === 0 ? (
                 <tr>
                   <td className="px-4 py-4 text-sm text-zinc-500" colSpan={4}>
-                    No hay propuestas para el filtro seleccionado.
+                    {searchQuery.trim().length > 0
+                      ? "Ningun folio, cliente, asunto o vendedor coincide con la busqueda."
+                      : "No hay propuestas para el filtro seleccionado."}
                   </td>
                 </tr>
               ) : null}

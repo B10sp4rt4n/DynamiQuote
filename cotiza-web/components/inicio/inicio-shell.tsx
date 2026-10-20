@@ -153,7 +153,7 @@ export function InicioShell({
           ? {
               action: `Hay ${proposalMarginBlockedCount} propuesta(s) activas bloqueadas por márgenes fuera de política.`,
               cta: "Ver propuestas bloqueadas",
-              href: "/propuestas?filter=blocked_margin",
+              href: "/propuestas?blockedMargin=1",
               tone: "rose" as const,
             }
           : null,

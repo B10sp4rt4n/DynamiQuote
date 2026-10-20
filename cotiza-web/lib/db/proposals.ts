@@ -21,7 +21,7 @@ import {
   type ProposalLiberationEvaluation,
 } from "@/lib/domain/proposal-liberation";
 import type { ProposalIssuanceStatus } from "@/lib/domain/proposal-issuance-gate";
-import type { ProposalListFilter } from "@/lib/domain/proposal-list-state";
+import type { ProposalOutcomeFilter, ProposalStatusFilter } from "@/lib/domain/proposal-list-state";
 import {
   assertApprovalActorEligibility,
   assertProposalWorkflowGuard,
@@ -1225,30 +1225,84 @@ export type ProposalListPage = {
   items: ProposalSummary[];
 };
 
+export type ProposalListFilters = {
+  blockedMargin: boolean;
+  outcome: ProposalOutcomeFilter;
+  status: ProposalStatusFilter;
+};
+
 // Version paginada + filtrada en servidor de getProposalSummariesByTenant,
-// para la lista de /propuestas -- a diferencia de esa, aqui el filtro de
-// estatus (incluyendo "blocked_margin") se aplica ANTES de paginar, para que
-// "Cargar mas" siempre traiga mas resultados reales del filtro activo, no
-// solo mas del total sin filtrar.
+// para la lista de /propuestas. Estatus, Desenlace y Riesgo (margen) son ejes
+// INDEPENDIENTES que se combinan con AND -- ver CLAUDE.md 2026-10-20 ("adentro
+// poder seleccionar cada status"): antes eran un solo valor mutuamente
+// excluyente, asi que no se podia ver "Aprobadas + Ganadas" a la vez. La
+// paginacion se aplica ANTES del limit (o despues del filtro JS de margen),
+// para que "Cargar mas" siempre traiga mas resultados reales, no solo mas del
+// total sin filtrar.
+//
+// Si search tiene texto, IGNORA los tres filtros y busca en el universo
+// completo del tenant visible (sin excluir descartadas) -- Salvador,
+// 2026-10-20: "busco una propuesta antigua no aparece", porque antes la
+// busqueda solo filtraba lo ya cargado en pantalla del filtro activo. Buscar
+// no deberia depender de adivinar en que categoria esta la propuesta.
 export async function getProposalListPageByTenant(
   tenantId: string,
   viewerUserId: string | null,
   canSeeAll: boolean,
-  filter: ProposalListFilter,
+  filters: ProposalListFilters,
   offset = 0,
   limit = PROPOSAL_LIST_PAGE_SIZE,
+  search = "",
 ): Promise<ProposalListPage> {
   const scopeWhere = buildProposalScopeWhere(tenantId, viewerUserId, canSeeAll);
+  const trimmedSearch = search.trim();
 
-  if (filter === "blocked_margin") {
+  if (trimmedSearch.length > 0) {
+    // scopeWhere ya puede traer su propio OR (visibilidad por dueno cuando
+    // !canSeeAll) -- el OR de busqueda va dentro de AND para no pisarlo.
+    const rows = await fetchProposalSummaryRows(
+      {
+        ...scopeWhere,
+        AND: [
+          {
+            OR: [
+              { proposal_id: { contains: trimmedSearch, mode: "insensitive" } },
+              { formal_proposals: { some: { proposal_number: { contains: trimmedSearch, mode: "insensitive" } } } },
+              { formal_proposals: { some: { recipient_company: { contains: trimmedSearch, mode: "insensitive" } } } },
+              { formal_proposals: { some: { subject: { contains: trimmedSearch, mode: "insensitive" } } } },
+              { formal_proposals: { some: { issuer_contact_name: { contains: trimmedSearch, mode: "insensitive" } } } },
+            ],
+          },
+        ],
+      },
+      limit + 1,
+      offset,
+    );
+    const marginPolicy = rows.length > 0 ? await getMarginPolicyByTenant(tenantId) : null;
+
+    return {
+      hasMore: rows.length > limit,
+      items: mapProposalSummaryRows(rows.slice(0, limit), marginPolicy),
+    };
+  }
+
+  const outcomeWhere: Prisma.proposalsWhereInput =
+    filters.outcome === "all" ? NOT_DISCARDED_WHERE : { outcome: filters.outcome };
+  const statusWhere: Prisma.proposalsWhereInput | null =
+    filters.status === "all" ? null : { status: filters.status };
+
+  if (filters.blockedMargin) {
     // El margen se evalua en JS (no es un campo de BD) -- se traen TODAS las
-    // activas sin paginar en SQL, se evaluan, y la paginacion se aplica
-    // despues sobre el resultado ya filtrado (mismo enfoque que
-    // getProposalMarginBlockedCountByTenant, ahora tambien slice-ado).
+    // que cumplen estatus/desenlace sin paginar en SQL, se evaluan, y la
+    // paginacion se aplica despues sobre el resultado ya filtrado (mismo
+    // enfoque que getProposalMarginBlockedCountByTenant, ahora slice-ado).
+    // Solo aplica a estatus activos (draft/sent/in_review) -- si se combina
+    // con un estatus explicito fuera de ese conjunto (ej. "Aprobadas"), el
+    // resultado es correctamente vacio (una aprobada ya no es "bloqueable").
     const rows = await fetchProposalSummaryRows({
       ...scopeWhere,
-      AND: [NOT_DISCARDED_WHERE],
-      status: { in: Array.from(PROPOSAL_SUMMARY_ACTIVE_STATUSES) },
+      AND: [outcomeWhere],
+      status: filters.status !== "all" ? filters.status : { in: Array.from(PROPOSAL_SUMMARY_ACTIVE_STATUSES) },
     });
     const marginPolicy = rows.length > 0 ? await getMarginPolicyByTenant(tenantId) : null;
     const blocked = mapProposalSummaryRows(rows, marginPolicy).filter(
@@ -1261,19 +1315,8 @@ export async function getProposalListPageByTenant(
     };
   }
 
-  if (filter === "won" || filter === "lost" || filter === "discarded") {
-    const rows = await fetchProposalSummaryRows({ ...scopeWhere, outcome: filter }, limit + 1, offset);
-    const marginPolicy = rows.length > 0 ? await getMarginPolicyByTenant(tenantId) : null;
-
-    return {
-      hasMore: rows.length > limit,
-      items: mapProposalSummaryRows(rows.slice(0, limit), marginPolicy),
-    };
-  }
-
-  const statusWhere: Prisma.proposalsWhereInput = filter === "all" ? {} : { status: filter };
   const rows = await fetchProposalSummaryRows(
-    { ...scopeWhere, AND: [NOT_DISCARDED_WHERE], ...statusWhere },
+    { ...scopeWhere, AND: [outcomeWhere], ...(statusWhere ?? {}) },
     limit + 1,
     offset,
   );

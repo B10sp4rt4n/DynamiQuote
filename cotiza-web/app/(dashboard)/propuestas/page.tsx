@@ -2,12 +2,16 @@ import { ProposalShell } from "@/components/propuestas/proposal-shell";
 import { getCurrentTenantContext } from "@/lib/auth/tenant-context";
 import { getProposalListCountsByTenant, getProposalListPageByTenant } from "@/lib/db/proposals";
 import { isForceIssuanceEligibleRole } from "@/lib/domain/proposal-issuance-gate";
-import { normalizeProposalListFilter } from "@/lib/domain/proposal-list-state";
+import {
+  normalizeBlockedMarginFilter,
+  normalizeProposalOutcomeFilter,
+  normalizeProposalStatusFilter,
+} from "@/lib/domain/proposal-list-state";
 
 export const dynamic = "force-dynamic";
 
 type ProposalsPageProps = {
-  searchParams: Promise<{ filter?: string }>;
+  searchParams: Promise<{ blockedMargin?: string; outcome?: string; status?: string }>;
 };
 
 export default async function ProposalsPage({ searchParams }: ProposalsPageProps) {
@@ -23,10 +27,16 @@ export default async function ProposalsPage({ searchParams }: ProposalsPageProps
 
   const canSeeAll = tenant.isSuperAdmin || tenant.userRole === "owner" || tenant.userRole === "admin";
   const params = await searchParams;
-  const initialFilter = normalizeProposalListFilter(params.filter);
+  const initialStatusFilter = normalizeProposalStatusFilter(params.status);
+  const initialOutcomeFilter = normalizeProposalOutcomeFilter(params.outcome);
+  const initialBlockedMarginFilter = normalizeBlockedMarginFilter(params.blockedMargin);
 
   const [page, counts] = await Promise.all([
-    getProposalListPageByTenant(tenant.id, tenant.userId, canSeeAll, initialFilter),
+    getProposalListPageByTenant(tenant.id, tenant.userId, canSeeAll, {
+      blockedMargin: initialBlockedMarginFilter,
+      outcome: initialOutcomeFilter,
+      status: initialStatusFilter,
+    }),
     getProposalListCountsByTenant(tenant.id, tenant.userId, canSeeAll),
   ]);
 
@@ -37,7 +47,9 @@ export default async function ProposalsPage({ searchParams }: ProposalsPageProps
       canForceIssuance={canForceIssuance}
       counts={counts}
       hasMore={page.hasMore}
-      initialFilter={initialFilter}
+      initialBlockedMarginFilter={initialBlockedMarginFilter}
+      initialOutcomeFilter={initialOutcomeFilter}
+      initialStatusFilter={initialStatusFilter}
       proposals={page.items}
       tenantName={tenant.name}
     />

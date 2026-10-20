@@ -3,7 +3,11 @@ import { NextResponse } from "next/server";
 import { getCurrentTenantContext } from "@/lib/auth/tenant-context";
 import { prisma } from "@/lib/db/prisma";
 import { createProposalFromQuoteByTenant, getProposalListPageByTenant } from "@/lib/db/proposals";
-import { normalizeProposalListFilter } from "@/lib/domain/proposal-list-state";
+import {
+  normalizeBlockedMarginFilter,
+  normalizeProposalOutcomeFilter,
+  normalizeProposalStatusFilter,
+} from "@/lib/domain/proposal-list-state";
 import { enforceRateLimit, getRequestIdentity } from "@/lib/utils/rate-limit";
 import { createProposalFromQuoteSchema } from "@/lib/validations/proposals";
 
@@ -16,10 +20,21 @@ export async function GET(request: Request) {
 
   const canSeeAll = tenant.isSuperAdmin || tenant.userRole === "owner" || tenant.userRole === "admin";
   const url = new URL(request.url);
-  const filter = normalizeProposalListFilter(url.searchParams.get("filter"));
+  const status = normalizeProposalStatusFilter(url.searchParams.get("status"));
+  const outcome = normalizeProposalOutcomeFilter(url.searchParams.get("outcome"));
+  const blockedMargin = normalizeBlockedMarginFilter(url.searchParams.get("blockedMargin"));
+  const search = url.searchParams.get("q") ?? "";
   const offset = Math.max(0, Number.parseInt(url.searchParams.get("offset") ?? "0", 10) || 0);
 
-  const page = await getProposalListPageByTenant(tenant.id, tenant.userId, canSeeAll, filter, offset);
+  const page = await getProposalListPageByTenant(
+    tenant.id,
+    tenant.userId,
+    canSeeAll,
+    { blockedMargin, outcome, status },
+    offset,
+    undefined,
+    search,
+  );
 
   return NextResponse.json(page, { status: 200 });
 }
