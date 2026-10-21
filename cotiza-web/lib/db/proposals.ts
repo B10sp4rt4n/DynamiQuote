@@ -4,7 +4,6 @@ import { randomUUID } from "crypto";
 import { Prisma } from "@prisma/client";
 
 import { getMarginPolicyByTenant } from "@/lib/db/margin-policies";
-import { recordProposalAuditEvent } from "@/lib/db/proposal-audit";
 import {
   clearProposalApprovalsByTenant,
   evaluateApprovalGate,
@@ -46,10 +45,6 @@ const terminalStatuses: ProposalStatus[] = ["approved", "rejected", "expired"];
 // etiqueta queda contradiciendo al estatus y se limpia sola. "Descartada" no
 // se toca: esa sí convive con cualquier estatus por diseño.
 const OUTCOME_DECISION_STATUSES = new Set<ProposalStatus>(["sent", "approved"]);
-
-function shouldClearOutcomeOnStatusChange(nextStatus: ProposalStatus, currentOutcome: ProposalOutcome): boolean {
-  return (currentOutcome === "won" || currentOutcome === "lost") && !OUTCOME_DECISION_STATUSES.has(nextStatus);
-}
 
 const legacyStatusMap: Record<string, ProposalStatus> = {
   "aprobada": "approved",
@@ -370,6 +365,8 @@ export type ProposalSummary = {
 };
 
 export type ProposalWorkflowDetail = {
+  createdAt: string;
+  outcomeAt: string | null;
   approvalGate: ProposalApprovalGate;
   approvals: ProposalApprovalRecord[];
   formal: FormalProposalSlice | null;
@@ -385,7 +382,7 @@ export type ProposalWorkflowDetail = {
   marginEvaluation: ProposalLiberationEvaluation;
   origin: string | null;
   // Desenlace comercial real (ganada/perdida) -- separado del status de
-  // flujo interno. Puramente informativo por ahora, no alimenta KPIs.
+  // flujo interno. outcomeAt es la fecha observada de esta decision.
   outcome: ProposalOutcome;
   proposalId: string;
   salesOwner: string;
@@ -1732,6 +1729,8 @@ export async function getProposalWorkflowByTenant(
     (await getTenantDefaultIssuerName(tenantId));
 
   return {
+    createdAt: row.created_at.toISOString(),
+    outcomeAt: row.outcome_at?.toISOString() ?? null,
     approvalGate,
     approvals,
     formal: enrichedFormal
@@ -1772,70 +1771,86 @@ export async function setProposalOutcomeByTenant(
   actor: { isSuperAdmin: boolean; userId: string | null; userRole: "superadmin" | "owner" | "admin" | "user" },
   canSeeAll: boolean,
 ): Promise<SetProposalOutcomeResult> {
-  const row = await prisma.proposals.findFirst({
-    select: { created_by_user_id: true, status: true },
-    where: { proposal_id: proposalId, tenant_id: tenantId },
-  });
+  return prisma.$transaction(async (tx): Promise<SetProposalOutcomeResult> => {
+    // Serialize decisions on the same proposal; status and ownership are
+    // checked after acquiring the lock, including after a concurrent reopen.
+    await tx.$queryRaw(Prisma.sql`
+      SELECT proposal_id FROM proposals
+      WHERE proposal_id = ${proposalId} AND tenant_id = ${tenantId}
+      FOR UPDATE
+    `);
+    const row = await tx.proposals.findFirst({
+      where: { proposal_id: proposalId, tenant_id: tenantId },
+    });
+    if (!row) return "not_found";
+    if (!canSeeAll && row.created_by_user_id !== null && row.created_by_user_id !== actor.userId) {
+      return "forbidden";
+    }
+    if ((outcome === "won" || outcome === "lost") && row.status !== "sent" && row.status !== "approved") {
+      return "invalid_status";
+    }
+    // Repeating the same decision never moves its date, nor manufactures a
+    // date for a historical outcome whose original timestamp is unknown.
+    if (row.outcome === outcome) return "updated";
 
-  if (!row) {
-    return "not_found";
-  }
-
-  if (!canSeeAll && row.created_by_user_id !== null && row.created_by_user_id !== actor.userId) {
-    return "forbidden";
-  }
-
-  // "Ganada"/"perdida" solo aplican al punto real de decision del cliente
-  // (Enviada/Aprobada). "Descartada" es distinto: marca una version que
-  // quedo superada por un ajuste de configuracion/margen antes de llegar a
-  // esa decision -- aplica en cualquier estatus, incluido Borrador (ver
-  // conversacion de producto 2026-09-10).
-  if ((outcome === "won" || outcome === "lost") && row.status !== "sent" && row.status !== "approved") {
-    return "invalid_status";
-  }
-
-  // Si el cliente acepto (ganada) mientras la propuesta seguia en "Enviada"
-  // sin haber pasado por el gate de margen, de facto ya esta aprobada --
-  // promoverla evita que quede huerfana de "Aprobada" en KPIs/reportes que
-  // solo cuentan status='approved' (Salvador, 2026-10-01: "si es enviada
-  // [y ganada] es que esta aprobada y no aparece"). Mismo patron que
-  // autoApproveProposalByMarginPolicy: la decide el desenlace comercial, no
-  // una persona, asi que cualquier rol puede completarla.
-  const shouldAutoApprove = outcome === "won" && row.status === "sent" && Boolean(actor.userId);
-
-  await prisma.$transaction(async (tx) => {
+    const now = new Date();
     await tx.proposals.update({
-      data: { outcome },
+      data: { outcome, outcome_at: outcome ? now : null },
       where: { proposal_id: proposalId },
     });
-
-    if (shouldAutoApprove && actor.userId) {
-      await applyProposalStatusOnly(tx, { currentOutcome: outcome, nextStatus: "approved", proposalId });
-      await registerProposalApprovalDecisionByTenant(
-        {
-          approverRole: resolveApproverRole(actor),
-          approverUserId: actor.userId,
-          decision: "approved",
-          proposalId,
-          reason: "Auto-aprobado: la propuesta fue marcada como ganada por el cliente.",
-          tenantId,
-        },
-        tx,
-      );
-    }
-  });
-
-  if (shouldAutoApprove) {
-    await recordProposalAuditEvent({
-      actorUserId: actor.userId,
-      eventType: "status_change_requested",
-      payload: { fromStatus: "sent", ok: true, requestedStatus: "approved", resultStatus: "approved", trigger: "outcome_won" },
-      proposalId,
-      tenantId,
+    await tx.proposal_audit_events.create({
+      data: {
+        created_at: now,
+        event_hash: randomUUID(),
+        event_id: randomUUID(),
+        event_type: "outcome_changed",
+        payload: JSON.stringify({ actorUserId: actor.userId, fromOutcome: row.outcome, toOutcome: outcome,
+          previousOutcomeAt: row.outcome_at?.toISOString() ?? null, outcomeAt: outcome ? now.toISOString() : null }),
+        proposal_id: proposalId,
+        tenant_id: tenantId,
+      },
     });
-  }
+    if (outcome === "won" && row.status === "sent" && actor.userId) {
+      await applyProposalStatusOnly(tx, { currentOutcome: outcome, nextStatus: "approved", proposalId });
+      await registerProposalApprovalDecisionByTenant({
+        approverRole: resolveApproverRole(actor), approverUserId: actor.userId,
+        decision: "approved", proposalId,
+        reason: "Auto-aprobado: la propuesta fue marcada como ganada por el cliente.", tenantId,
+      }, tx);
+      await tx.proposal_audit_events.create({
+        data: {
+          created_at: now, event_hash: randomUUID(), event_id: randomUUID(),
+          event_type: "status_change_requested", proposal_id: proposalId, tenant_id: tenantId,
+          payload: JSON.stringify({ actorUserId: actor.userId, fromStatus: "sent", ok: true,
+            requestedStatus: "approved", resultStatus: "approved", trigger: "outcome_won" }),
+        },
+      });
+    }
+    return "updated";
+  });
+}
 
-  return "updated";
+// Workflow reopening must clear the commercial date as well as the outcome.
+// Read the actual row inside the transaction, after its status update has
+// acquired a row lock; an earlier read may have preceded another decision.
+async function clearCommercialOutcomeForStatus(
+  tx: Prisma.TransactionClient, proposalId: string, nextStatus: ProposalStatus, actorUserId: string | null = null,
+): Promise<void> {
+  if (OUTCOME_DECISION_STATUSES.has(nextStatus)) return;
+  const row = await tx.proposals.findUnique({ where: { proposal_id: proposalId } });
+  if (!row || (row.outcome !== "won" && row.outcome !== "lost")) return;
+  await tx.proposals.update({
+    data: { outcome: null, outcome_at: null }, where: { proposal_id: proposalId },
+  });
+  await tx.proposal_audit_events.create({
+    data: {
+      created_at: new Date(), event_hash: randomUUID(), event_id: randomUUID(),
+      event_type: "outcome_changed", proposal_id: proposalId, tenant_id: row.tenant_id,
+      payload: JSON.stringify({ actorUserId, fromOutcome: row.outcome, toOutcome: null,
+        previousOutcomeAt: row.outcome_at?.toISOString() ?? null, outcomeAt: null,
+        trigger: "workflow_status", nextStatus }),
+    },
+  });
 }
 
 // Consume un forzamiento de emision activo (issuance_status === "force_pending")
@@ -2021,21 +2036,21 @@ export async function grantMarginOverrideWindow(input: {
 // hook equivalente en updateProposalWorkflowByTenant).
 async function applyProposalStatusOnly(
   tx: Prisma.TransactionClient,
-  input: { currentOutcome: ProposalOutcome; nextStatus: ProposalStatus; proposalId: string },
+  input: { actorUserId?: string | null; currentOutcome: ProposalOutcome; nextStatus: ProposalStatus; proposalId: string },
 ): Promise<void> {
   const now = new Date();
   const shouldClose = terminalStatuses.includes(input.nextStatus);
-  const clearOutcome = shouldClearOutcomeOnStatusChange(input.nextStatus, input.currentOutcome);
 
   await tx.proposals.update({
     data: {
       closed_at: shouldClose ? now : null,
       margin_override_target_user_id: null,
-      ...(clearOutcome ? { outcome: null } : {}),
       status: input.nextStatus,
     },
     where: { proposal_id: input.proposalId },
   });
+
+  await clearCommercialOutcomeForStatus(tx, input.proposalId, input.nextStatus, input.actorUserId);
 
   await tx.formal_proposals.updateMany({
     data: { status: input.nextStatus, updated_at: now },
@@ -2380,13 +2395,14 @@ export async function updateProposalWorkflowByTenant(
         // vendedor. Distinto de executeMarginOverride, que la consume con
         // registro cuando SI se ejecuta.
         ...(hasStatusUpdate ? { margin_override_target_user_id: null } : {}),
-        ...(shouldClearOutcomeOnStatusChange(nextStatus, current.outcome) ? { outcome: null } : {}),
         status: nextStatus,
       },
       where: {
         proposal_id: proposalId,
       },
     });
+
+    await clearCommercialOutcomeForStatus(tx, proposalId, nextStatus, actor?.userId ?? null);
 
     const termsToPersist = input.termsAndConditions;
     const issuerCompanyToPersist = input.issuerCompany;
@@ -2591,7 +2607,7 @@ export async function registerProposalApprovalByTenant(
 
   if (targetStatus && targetStatus !== current.status) {
     await prisma.$transaction((tx) =>
-      applyProposalStatusOnly(tx, { currentOutcome: current.outcome, nextStatus: targetStatus, proposalId }),
+      applyProposalStatusOnly(tx, { actorUserId: actor.userId, currentOutcome: current.outcome, nextStatus: targetStatus, proposalId }),
     );
   }
 

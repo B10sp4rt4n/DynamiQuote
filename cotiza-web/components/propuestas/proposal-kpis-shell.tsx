@@ -381,9 +381,14 @@ export function ProposalKpisShell({
             ? `${formatPeriodLabel(financialTimeline[0].period)} a ${formatPeriodLabel(financialTimeline[financialTimeline.length - 1].period)} · ${financialTimeline.length} meses mostrados.`
             : "Sin propuestas en el periodo mostrado."}
           {" "}Revenue suma únicamente propuestas marcadas como ganadas. El margen resta solo sus costos.
-          Agrupado por mes de creación de la propuesta: no existe una fecha de ganado registrada.
+          Agrupado por mes en que se declaró ganada, en horario de Ciudad de México.
           Montos en MXN antes de IVA; no equivalen a cobros recibidos.
         </p>
+        {summary.undatedOutcomeCount > 0 ? <p className="mt-2 text-sm text-amber-800">
+          Hay {summary.undatedOutcomeCount} propuestas ganadas o perdidas sin fecha de decisión registrada.
+          Se conservan en los totales históricos y se excluyen de las gráficas de cierres por mes.
+          Revenue ganado sin mes asignable: {formatCurrency(summary.undatedWonAmount)}.
+        </p> : null}
         <div className="mt-4 grid gap-3 sm:grid-cols-2 xl:grid-cols-4">
           <StatTile label="Revenue ganado del periodo" value={formatCurrency(financialSummary.revenue)} />
           <StatTile label="Margen de ganadas en pesos" value={formatCurrency(financialSummary.profit)} />
@@ -423,7 +428,7 @@ export function ProposalKpisShell({
         <div className="rounded-xl border border-zinc-200 p-4">
           <p className="text-sm font-semibold text-zinc-900">Ganado vs. perdido (por mes)</p>
           <p className="mt-1 text-xs text-zinc-500">
-            Por fecha de creación de la propuesta. Excluye descartadas — no son un desenlace comercial real.
+            Por fecha de decisión registrada, en horario de Ciudad de México. Excluye descartadas y cierres sin fecha.
           </p>
           <div className="mt-3">
             <OutcomeTimelineChart data={outcomeTimeline} />
@@ -443,7 +448,7 @@ export function ProposalKpisShell({
         </div>
         <div className="rounded-xl border border-zinc-200 p-4">
           <p className="text-sm font-semibold text-zinc-900">Montos propuestos y aprobados por mes</p>
-          <p className="mt-1 text-xs text-zinc-500">Actividad comercial generada. Estos montos no son revenue ganado.</p>
+          <p className="mt-1 text-xs text-zinc-500">Por mes de creación de la propuesta. Estos montos no son revenue ganado.</p>
           <div className="mt-3"><AmountTimelineChart data={financialTimeline} /></div>
         </div>
       </div>

@@ -31,9 +31,9 @@ const FILTER_OPTIONS: Array<{ value: PipelineStageFilter; label: string }> = [
 // click, ademas de fijar el filtro.
 export const PIPELINE_TABLE_ANCHOR_ID = "pipeline-table";
 
-function formatDate(iso: string | null): string {
+function formatDate(iso: string | null, timeZone = "UTC"): string {
   if (!iso) return "—";
-  return new Intl.DateTimeFormat("es-MX", { day: "2-digit", month: "short", year: "numeric" }).format(
+  return new Intl.DateTimeFormat("es-MX", { day: "2-digit", month: "short", year: "numeric", timeZone }).format(
     new Date(iso),
   );
 }
@@ -109,6 +109,9 @@ export function PipelineTable({
                 <th className="px-4 py-2 font-medium">Folio</th>
                 <th className="px-4 py-2 font-medium">Cliente</th>
                 <th className="px-4 py-2 font-medium">Monto</th>
+                <th className="px-4 py-2 font-medium">Inicio</th>
+                <th className="px-4 py-2 font-medium">Cierre real</th>
+                <th className="px-4 py-2 font-medium">Tiempo de vida</th>
                 <th className="hidden px-4 py-2 font-medium sm:table-cell">Cierre esperado</th>
                 <th className="px-4 py-2 font-medium">Estado</th>
               </tr>
@@ -128,6 +131,13 @@ export function PipelineTable({
                     )}
                   </td>
                   <td className="px-4 py-2.5 text-zinc-700">{formatCurrency(opp.amount)}</td>
+                  <td className="whitespace-nowrap px-4 py-2.5 text-zinc-500">{formatDate(opp.createdAt, "America/Mexico_City")}</td>
+                  <td className="whitespace-nowrap px-4 py-2.5 text-zinc-500">
+                    {opp.stage === "open" ? "Pendiente" : opp.closedAt ? formatDate(opp.closedAt, "America/Mexico_City") : "Sin fecha registrada"}
+                  </td>
+                  <td className="whitespace-nowrap px-4 py-2.5 text-zinc-700">
+                    {opp.lifetimeDays === null ? "Sin duración calculable" : `${opp.lifetimeDays} días${opp.stage === "open" ? " abierta" : " al cierre"}`}
+                  </td>
                   <td className="hidden px-4 py-2.5 text-zinc-500 sm:table-cell">
                     {formatDate(opp.expectedCloseDate)}
                   </td>
@@ -144,6 +154,10 @@ export function PipelineTable({
           </table>
         </div>
       )}
+      <p className="border-t border-zinc-100 px-4 py-3 text-xs text-zinc-500">
+        Inicio de la oportunidad original; las versiones no reinician el reloj. Fechas en horario de Ciudad de México.
+        El tiempo de vida cuenta días completos de 24 horas; los cierres sin fecha registrada no tienen duración calculable.
+      </p>
     </div>
   );
 }
