@@ -170,4 +170,53 @@ suite("commercial dates against disposable Postgres", () => {
     expect(await db.proposal_audit_events.count({ where: { proposal_id: "historic-won", event_type: "historical_creation_reference" } })).toBe(1);
   });
 
+  it("moves a historical win to a chosen close month, preserving totals, audit and creation", async () => {
+    await db.opportunities.create({ data: { opportunity_id: "calendar-opp", opportunity_number: "OPP-CALENDAR", title: "Calendar test",
+      tenant_id: "lifecycle-a", owner_user_id: actor.userId, created_at: new Date("2026-07-01T23:00:00Z") } });
+    await db.proposals.create({ data: { proposal_id: "calendar-proposal", tenant_id: "lifecycle-a", status: "approved", outcome: "won",
+      created_by: actor.userId, created_by_user_id: actor.userId, created_at: new Date("2026-07-22T12:00:00Z"), opportunity_id: "calendar-opp" } });
+    await db.proposal_items.create({ data: { item_id: "calendar-item", proposal_id: "calendar-proposal", tenant_id: "lifecycle-a",
+      item_number: 1, quantity: 1, cost_unit: 60, price_unit: 100, subtotal_cost: 60, subtotal_price: 100, status: "active", created_at: new Date() } });
+    await db.proposal_audit_events.create({ data: { event_id: "legacy-creation-20261021:calendar-proposal", event_hash: "calendar-hash",
+      event_type: "historical_creation_reference", tenant_id: "lifecycle-a", proposal_id: "calendar-proposal", created_at: new Date(), payload: "{}" } });
+    const before = await kpis.getProposalMarginTimelineByTenant("lifecycle-a", null, true, 240);
+    const total = before.reduce((sum, row) => sum + row.wonAmount, 0);
+    const monthAmount = (rows: typeof before, month: string) => rows.find(row => row.period.startsWith(month))?.wonAmount ?? 0;
+    expect(await proposals.setProposalOutcomeByTenant("lifecycle-a", "calendar-proposal", "won", actor, true,
+      { closedOn: "2026-09-01", expectedOutcome: "won", expectedOutcomeAt: null })).toBe("updated");
+    const row = await db.proposals.findUniqueOrThrow({ where: { proposal_id: "calendar-proposal" } });
+    expect(row.outcome_at!.toISOString()).toBe("2026-09-01T06:00:00.000Z");
+    expect(row.created_at.toISOString()).toBe("2026-07-22T12:00:00.000Z");
+    expect(row.outcome).toBe("won");
+    const after = await kpis.getProposalMarginTimelineByTenant("lifecycle-a", null, true, 240);
+    expect(after.reduce((sum, point) => sum + point.wonAmount, 0)).toBe(total);
+    expect(monthAmount(after, "2026-07")).toBe(monthAmount(before, "2026-07") - 100);
+    expect(monthAmount(after, "2026-09")).toBe(monthAmount(before, "2026-09") + 100);
+    const audit = await db.proposal_audit_events.findFirstOrThrow({ where: { proposal_id: row.proposal_id, event_type: "outcome_date_changed" } });
+    expect(JSON.parse(audit.payload!)).toMatchObject({ actorUserId: actor.userId, previousOutcomeAt: null,
+      outcomeAt: "2026-09-01T06:00:00.000Z", selectedCloseDate: "2026-09-01", datePrecision: "day" });
+    expect(audit.created_at.getTime()).toBeGreaterThan(row.outcome_at!.getTime());
+    expect(await db.proposal_audit_events.count({ where: { proposal_id: row.proposal_id, event_type: "historical_creation_reference" } })).toBe(1);
+    expect(await proposals.setProposalOutcomeByTenant("lifecycle-a", row.proposal_id, "won", actor, true,
+      { closedOn: "2026-09-01", expectedOutcome: "won", expectedOutcomeAt: row.outcome_at!.toISOString() })).toBe("updated");
+    expect(await db.proposal_audit_events.count({ where: { proposal_id: row.proposal_id, event_type: "outcome_date_changed" } })).toBe(1);
+    expect(await proposals.setProposalOutcomeByTenant("lifecycle-a", row.proposal_id, "won", actor, true,
+      { closedOn: "2026-08-01", expectedOutcome: "won", expectedOutcomeAt: null })).toBe("conflict");
+  });
+
+  it("validates dates and tenant/seller access, and allows closure after opportunity start but before the document was created", async () => {
+    for (const closedOn of ["2999-01-01", "2026-06-30", "2026-02-30"]) {
+      expect(await proposals.setProposalOutcomeByTenant("lifecycle-a", "calendar-proposal", "won", actor, true, { closedOn })).toBe("invalid_date");
+    }
+    expect(await proposals.setProposalOutcomeByTenant("lifecycle-b", "calendar-proposal", "won", actor, true, { closedOn: "2026-08-01" })).toBe("not_found");
+    expect(await proposals.setProposalOutcomeByTenant("lifecycle-a", "calendar-proposal", "won", { ...actor, userId: "other" }, false, { closedOn: "2026-08-01" })).toBe("forbidden");
+    expect(await proposals.setProposalOutcomeByTenant("lifecycle-a", "calendar-proposal", "lost", actor, true, { closedOn: "2026-07-03" })).toBe("updated");
+    const pipeline = await opportunities.getOpportunityPipelineByTenant("lifecycle-a");
+    expect(pipeline.find(row => row.opportunityId === "calendar-opp")).toMatchObject({ stage: "lost", lifetimeDays: 2, closedAt: "2026-07-03T06:00:00.000Z" });
+    await proposals.updateProposalWorkflowByTenant("lifecycle-a", "calendar-proposal", { status: "draft" }, actor);
+    const row = await db.proposals.findUniqueOrThrow({ where: { proposal_id: "calendar-proposal" } });
+    expect(row.outcome_at).toBeNull();
+    expect(row.outcome).toBeNull();
+    expect((await opportunities.getOpportunityPipelineByTenant("lifecycle-a")).find(row => row.opportunityId === "calendar-opp")?.createdAt).toBe("2026-07-01T23:00:00.000Z");
+  });
 });

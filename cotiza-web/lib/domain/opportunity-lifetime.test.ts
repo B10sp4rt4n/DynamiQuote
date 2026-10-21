@@ -21,4 +21,8 @@ describe("opportunity lifetime", () => {
     expect(opportunityLifetimeDays("invalid", null, "open", now)).toBeNull();
     expect(opportunityLifetimeDays("2026-10-21T00:00:00Z", "2026-10-20T00:00:00Z", "lost", now)).toBeNull();
   });
+  it("counts the calendar date selected by the user without inventing an hour", () => {
+    expect(opportunityLifetimeDays("2026-10-20T23:00:00Z", "2026-10-20T06:00:00Z", "won", now)).toBe(0);
+    expect(opportunityLifetimeDays("2026-09-30T23:00:00Z", "2026-10-01T06:00:00Z", "won", now)).toBe(1);
+  });
 });

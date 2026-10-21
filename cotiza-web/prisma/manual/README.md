@@ -1,5 +1,33 @@
 # Fechas comerciales y tiempo de vida
 
+## Fecha de cierre seleccionada por el usuario
+
+Al marcar ganada o perdida, la interfaz solicita `closedOn` (YYYY-MM-DD).
+También permite registrar/corregir la fecha de una decisión existente, sin
+cambiar su etiqueta, importes ni fecha de creación. Las existentes no se
+actualizan en lote: su referencia histórica sigue vigente hasta la captura.
+
+Se reutiliza `outcome_at`; la fecha elegida se representa con un ancla a las
+06:00 UTC que conserva ese día en Ciudad de México. Es una fecha con precisión
+de día, no una afirmación sobre la hora del cierre. El historial conserva
+`datePrecision: day`, `selectedCloseDate`, valor anterior/nuevo, usuario y el
+momento real de registro (`created_at` y `recordedAt`). Una corrección de fecha
+genera `outcome_date_changed`; repetir el mismo valor no genera otro evento.
+
+Se valida que la fecha esté entre la creación de la oportunidad vinculada
+(o de la propuesta cuando no existe oportunidad) y hoy en Ciudad de México.
+Estado, permisos, fecha y referencia de edición se comprueban dentro del bloqueo
+de la propuesta. Una referencia desactualizada devuelve conflicto sin escribir.
+Los KPIs ya priorizan `outcome_at`, por lo que la captura traslada el importe
+al mes elegido sin duplicarlo ni borrar la etiqueta histórica de auditoría.
+
+Las duraciones de oportunidades cerradas cuentan días de calendario de Ciudad
+de México, porque el calendario no captura horas. Las abiertas conservan su
+cálculo de períodos completos de 24 horas. Sin cierre confirmado no se inventa
+una duración. Este ajuste no requiere una migración ni un relleno productivo.
+
+### Implementación anterior
+
 La oportunidad conserva su `created_at` original a través de las versiones de
 cotización y propuestas. `proposals.outcome_at` registra el instante UTC en que
 se asigna un desenlace comercial, independientemente de `proposals.closed_at`,

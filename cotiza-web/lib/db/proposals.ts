@@ -15,6 +15,7 @@ import {
 } from "@/lib/db/proposal-approvals";
 import { prisma } from "@/lib/db/prisma";
 import { NOT_DISCARDED_WHERE } from "@/lib/db/proposal-filters";
+import { closeDateInstant, isValidCloseDate } from "@/lib/domain/commercial-close-date";
 import {
   evaluateProposalLiberation,
   type ProposalLiberationEvaluation,
@@ -366,6 +367,7 @@ export type ProposalSummary = {
 
 export type ProposalWorkflowDetail = {
   createdAt: string;
+  opportunityCreatedAt?: string | null;
   outcomeAt: string | null;
   approvalGate: ProposalApprovalGate;
   approvals: ProposalApprovalRecord[];
@@ -1728,8 +1730,14 @@ export async function getProposalWorkflowByTenant(
       : normalizedFormal?.issuerContactName) ??
     (await getTenantDefaultIssuerName(tenantId));
 
+  const opportunity = row.opportunity_id ? await prisma.opportunities.findFirst({
+    where: { opportunity_id: row.opportunity_id, tenant_id: tenantId },
+    select: { created_at: true },
+  }) : null;
+
   return {
     createdAt: row.created_at.toISOString(),
+    opportunityCreatedAt: opportunity?.created_at.toISOString() ?? null,
     outcomeAt: row.outcome_at?.toISOString() ?? null,
     approvalGate,
     approvals,
@@ -1757,7 +1765,13 @@ export async function getProposalWorkflowByTenant(
   };
 }
 
-export type SetProposalOutcomeResult = "forbidden" | "invalid_status" | "not_found" | "updated";
+export type SetProposalOutcomeResult = "forbidden" | "invalid_status" | "invalid_date" | "conflict" | "not_found" | "updated";
+
+export type ProposalOutcomeDateInput = {
+  closedOn?: string;
+  expectedOutcome?: ProposalOutcome;
+  expectedOutcomeAt?: string | null;
+};
 
 // Etiqueta el desenlace comercial real (ganada/perdida) -- separado del
 // status de flujo interno. Solo se puede asignar (won/lost) cuando el
@@ -1770,6 +1784,7 @@ export async function setProposalOutcomeByTenant(
   outcome: ProposalOutcome,
   actor: { isSuperAdmin: boolean; userId: string | null; userRole: "superadmin" | "owner" | "admin" | "user" },
   canSeeAll: boolean,
+  dateInput: ProposalOutcomeDateInput = {},
 ): Promise<SetProposalOutcomeResult> {
   return prisma.$transaction(async (tx): Promise<SetProposalOutcomeResult> => {
     // Serialize decisions on the same proposal; status and ownership are
@@ -1786,16 +1801,31 @@ export async function setProposalOutcomeByTenant(
     if (!canSeeAll && row.created_by_user_id !== null && row.created_by_user_id !== actor.userId) {
       return "forbidden";
     }
+    if ((dateInput.expectedOutcome !== undefined && row.outcome !== dateInput.expectedOutcome)
+      || (dateInput.expectedOutcomeAt !== undefined
+        && (row.outcome_at?.toISOString() ?? null) !== (dateInput.expectedOutcomeAt ? new Date(dateInput.expectedOutcomeAt).toISOString() : null))) {
+      return "conflict";
+    }
     if ((outcome === "won" || outcome === "lost") && row.status !== "sent" && row.status !== "approved") {
       return "invalid_status";
     }
-    // Repeating the same decision never moves its date, nor manufactures a
-    // date for a historical outcome whose original timestamp is unknown.
-    if (row.outcome === outcome) return "updated";
-
     const now = new Date();
+    let outcomeAt = outcome ? now : null;
+    if (dateInput.closedOn !== undefined) {
+      if (outcome !== "won" && outcome !== "lost") return "invalid_date";
+      const opportunity = row.opportunity_id ? await tx.opportunities.findFirst({
+        where: { opportunity_id: row.opportunity_id, tenant_id: tenantId }, select: { created_at: true },
+      }) : null;
+      if (!isValidCloseDate(dateInput.closedOn, opportunity?.created_at ?? row.created_at, now)) return "invalid_date";
+      outcomeAt = closeDateInstant(dateInput.closedOn);
+    } else if (row.outcome === outcome) {
+      // Legacy callers/retries never manufacture a historical close.
+      return "updated";
+    }
+    if (row.outcome === outcome && row.outcome_at?.getTime() === outcomeAt?.getTime()) return "updated";
+
     await tx.proposals.update({
-      data: { outcome, outcome_at: outcome ? now : null },
+      data: { outcome, outcome_at: outcomeAt },
       where: { proposal_id: proposalId },
     });
     await tx.proposal_audit_events.create({
@@ -1803,9 +1833,11 @@ export async function setProposalOutcomeByTenant(
         created_at: now,
         event_hash: randomUUID(),
         event_id: randomUUID(),
-        event_type: "outcome_changed",
+        event_type: row.outcome === outcome ? "outcome_date_changed" : "outcome_changed",
         payload: JSON.stringify({ actorUserId: actor.userId, fromOutcome: row.outcome, toOutcome: outcome,
-          previousOutcomeAt: row.outcome_at?.toISOString() ?? null, outcomeAt: outcome ? now.toISOString() : null }),
+          previousOutcomeAt: row.outcome_at?.toISOString() ?? null, outcomeAt: outcomeAt?.toISOString() ?? null,
+          selectedCloseDate: dateInput.closedOn ?? null, datePrecision: dateInput.closedOn ? "day" : "instant",
+          recordedAt: now.toISOString() }),
         proposal_id: proposalId,
         tenant_id: tenantId,
       },

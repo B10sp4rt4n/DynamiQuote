@@ -5,6 +5,7 @@ const {
   getProposalWorkflowByTenantMock,
   isProposalVisibleToViewerMock,
   updateProposalWorkflowByTenantMock,
+  setProposalOutcomeByTenantMock,
   enforceRateLimitMock,
   getRequestIdentityMock,
   getProposalStatusForAuditMock,
@@ -14,6 +15,7 @@ const {
   getProposalWorkflowByTenantMock: vi.fn(),
   isProposalVisibleToViewerMock: vi.fn(),
   updateProposalWorkflowByTenantMock: vi.fn(),
+  setProposalOutcomeByTenantMock: vi.fn(),
   enforceRateLimitMock: vi.fn(),
   getRequestIdentityMock: vi.fn(),
   getProposalStatusForAuditMock: vi.fn(),
@@ -28,6 +30,7 @@ vi.mock("@/lib/db/proposals", () => ({
   getProposalWorkflowByTenant: getProposalWorkflowByTenantMock,
   isProposalVisibleToViewer: isProposalVisibleToViewerMock,
   updateProposalWorkflowByTenant: updateProposalWorkflowByTenantMock,
+  setProposalOutcomeByTenant: setProposalOutcomeByTenantMock,
 }));
 
 vi.mock("@/lib/db/proposal-audit", () => ({
@@ -40,9 +43,45 @@ vi.mock("@/lib/utils/rate-limit", () => ({
   getRequestIdentity: getRequestIdentityMock,
 }));
 
-import { PUT } from "@/app/api/proposals/[proposalId]/route";
+import { PATCH, PUT } from "@/app/api/proposals/[proposalId]/route";
 
 const ctx = (proposalId: string) => ({ params: Promise.resolve({ proposalId }) });
+
+describe("PATCH commercial close date", () => {
+  const request = (body: unknown) => new Request("http://localhost/api/proposals/p1", {
+    method: "PATCH", headers: { "Content-Type": "application/json" }, body: JSON.stringify(body),
+  });
+  beforeEach(() => {
+    vi.clearAllMocks();
+    getCurrentTenantContextMock.mockResolvedValue({ id: "t1", userId: "seller1", userRole: "user", isSuperAdmin: false });
+    enforceRateLimitMock.mockReturnValue({ allowed: true });
+    getRequestIdentityMock.mockReturnValue("seller1");
+    setProposalOutcomeByTenantMock.mockResolvedValue("updated");
+  });
+  it("requires a calendar choice for won/lost and rejects dates on untagging", async () => {
+    for (const body of [{ outcome: "won" }, { outcome: "lost" }, { outcome: null, closedOn: "2026-09-01" }]) {
+      expect((await PATCH(request(body), ctx("p1"))).status).toBe(422);
+    }
+    expect(setProposalOutcomeByTenantMock).not.toHaveBeenCalled();
+  });
+  it("forwards the selected day and edit reference within the current tenant/seller scope", async () => {
+    const result = await PATCH(request({ outcome: "won", closedOn: "2026-09-01", expectedOutcome: "won", expectedOutcomeAt: null }), ctx("p1"));
+    expect(result.status).toBe(200);
+    expect(setProposalOutcomeByTenantMock).toHaveBeenCalledWith("t1", "p1", "won",
+      { isSuperAdmin: false, userId: "seller1", userRole: "user" }, false,
+      { closedOn: "2026-09-01", expectedOutcome: "won", expectedOutcomeAt: null });
+    expect(await result.json()).toMatchObject({ outcome: "won", outcomeAt: "2026-09-01T06:00:00.000Z" });
+  });
+  it.each([["invalid_date", 422], ["conflict", 409], ["forbidden", 403], ["not_found", 404], ["invalid_status", 409]])("maps %s without reporting success", async (result, status) => {
+    setProposalOutcomeByTenantMock.mockResolvedValue(result);
+    expect((await PATCH(request({ outcome: "won", closedOn: "2026-09-01" }), ctx("p1"))).status).toBe(status);
+  });
+  it("does not write without a signed-in tenant", async () => {
+    getCurrentTenantContextMock.mockResolvedValue(null);
+    expect((await PATCH(request({ outcome: "won", closedOn: "2026-09-01" }), ctx("p1"))).status).toBe(401);
+    expect(setProposalOutcomeByTenantMock).not.toHaveBeenCalled();
+  });
+});
 
 describe("PUT /api/proposals/[proposalId]", () => {
   beforeEach(() => {
