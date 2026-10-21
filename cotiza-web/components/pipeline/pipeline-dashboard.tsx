@@ -268,6 +268,11 @@ export function PipelineDashboard({
   }, [opportunities, selectedVendorIds, showVendorFilter]);
 
   const summary = useMemo(() => computeSummary(filteredOpportunities), [filteredOpportunities]);
+  const openAges = filteredOpportunities.filter((opp) => opp.stage === "open" && opp.lifetimeDays !== null);
+  const wonCycles = filteredOpportunities.filter((opp) => opp.stage === "won" && opp.lifetimeDays !== null);
+  const averageDays = (items: OpportunityWithStage[]) => items.length
+    ? `${(items.reduce((sum, opp) => sum + (opp.lifetimeDays ?? 0), 0) / items.length).toFixed(1)} días`
+    : "Sin datos";
 
   function goToStage(stage: PipelineStageFilter) {
     setStageFilter(stage);
@@ -305,6 +310,18 @@ export function PipelineDashboard({
       </div>
 
       <ClosingRateMeter summary={summary} />
+      <div className="grid gap-4 sm:grid-cols-2">
+        <div className="rounded-xl border border-zinc-200 bg-white p-4">
+          <p className="text-sm font-semibold text-zinc-900">Antigüedad promedio de abiertas</p>
+          <p className="mt-1 text-2xl font-semibold text-zinc-900">{averageDays(openAges)}</p>
+          <p className="text-xs text-zinc-500">{openAges.length} oportunidades abiertas del filtro actual.</p>
+        </div>
+        <div className="rounded-xl border border-zinc-200 bg-white p-4">
+          <p className="text-sm font-semibold text-zinc-900">Tiempo promedio para ganar</p>
+          <p className="mt-1 text-2xl font-semibold text-zinc-900">{averageDays(wonCycles)}</p>
+          <p className="text-xs text-zinc-500">{wonCycles.length} de {summary.won.count} ganadas con duración conocida.</p>
+        </div>
+      </div>
 
       {filteredOpportunities.length === 0 ? (
         <div className="rounded-xl border border-dashed border-zinc-300 bg-white px-6 py-12 text-center">

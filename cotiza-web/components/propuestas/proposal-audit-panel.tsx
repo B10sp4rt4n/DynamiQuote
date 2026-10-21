@@ -35,6 +35,13 @@ function describe(item: ProposalAuditTimelineItem): { detail: string | null; tit
   const d = item.details;
 
   switch (item.type) {
+    case "outcome_changed": {
+      const labels: Record<string, string> = { won: "Ganada", lost: "Perdida", discarded: "Descartada" };
+      const label = (value: unknown) => typeof value === "string" ? labels[value] ?? value : "Sin desenlace";
+      return { title: "Decisión comercial registrada",
+        detail: `${label(d["fromOutcome"])} → ${label(d["toOutcome"])}${d["trigger"] === "workflow_status" ? " · reapertura por cambio de estatus" : ""}`,
+        tone: "neutral" };
+    }
     case "status_change_requested": {
       const isApprovalRequest =
         d["fromStatus"] === "draft" && (d["requestedStatus"] === "approved" || d["requestedStatus"] === "in_review");

@@ -140,7 +140,7 @@ export function ProposalDetailView({
         </div>
       </div>
 
-      <ProposalOutcomeActions initialOutcome={proposal.outcome} proposalId={proposal.proposalId} status={status} />
+      <ProposalOutcomeActions createdAt={proposal.createdAt} initialOutcome={proposal.outcome} initialOutcomeAt={proposal.outcomeAt} proposalId={proposal.proposalId} status={status} />
 
       {digestorFiscalEnabled && proposal.outcome === "won" ? (
         <ProposalInvoicePanel

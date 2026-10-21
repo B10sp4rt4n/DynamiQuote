@@ -1,6 +1,7 @@
 "use client";
 
 import { useState } from "react";
+import { useRouter } from "next/navigation";
 
 import type { ProposalOutcome, ProposalStatus } from "@/lib/validations/proposals";
 
@@ -18,11 +19,14 @@ const OUTCOME_BADGE_CLASS: Record<"discarded" | "lost" | "won", string> = {
 
 type ProposalOutcomeActionsProps = {
   initialOutcome: ProposalOutcome;
+  initialOutcomeAt?: string | null;
+  createdAt?: string;
   proposalId: string;
   status: ProposalStatus;
 };
 
-export function ProposalOutcomeActions({ initialOutcome, proposalId, status }: ProposalOutcomeActionsProps) {
+export function ProposalOutcomeActions({ initialOutcome, initialOutcomeAt, createdAt, proposalId, status }: ProposalOutcomeActionsProps) {
+  const router = useRouter();
   const [outcome, setOutcome] = useState<ProposalOutcome>(initialOutcome);
   const [saving, setSaving] = useState(false);
   const [error, setError] = useState<string | null>(null);
@@ -51,6 +55,7 @@ export function ProposalOutcomeActions({ initialOutcome, proposalId, status }: P
       }
 
       setOutcome(next);
+      router.refresh();
     } catch (err) {
       setError(err instanceof Error ? err.message : "Error desconocido");
     } finally {
@@ -70,6 +75,15 @@ export function ProposalOutcomeActions({ initialOutcome, proposalId, status }: P
           <span className="text-xs text-zinc-500">Sin etiquetar</span>
         )}
       </div>
+
+      <p className="mt-2 text-xs text-zinc-500">
+        {createdAt ? `Creación de la propuesta: ${new Intl.DateTimeFormat("es-MX", { dateStyle: "medium", timeStyle: "short", timeZone: "America/Mexico_City" }).format(new Date(createdAt))}. ` : ""}
+        {outcome !== initialOutcome ? "Actualizando fecha de decisión..." : outcome === "won" || outcome === "lost" ? initialOutcomeAt
+          ? `Declarada ${OUTCOME_LABELS[outcome].toLowerCase()}: ${new Intl.DateTimeFormat("es-MX", { dateStyle: "medium", timeStyle: "short", timeZone: "America/Mexico_City" }).format(new Date(initialOutcomeAt))}.`
+          : "Fecha de decisión sin registrar."
+          : "Cierre comercial pendiente."}
+        {" "}Horario de Ciudad de México.
+      </p>
 
       <div className="mt-3 flex flex-wrap gap-2">
         {canAssignWonLost ? (

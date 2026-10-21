@@ -401,6 +401,7 @@ model proposals {
   issuance_status                                                          String                       @default("normal")
   margin_override_target_user_id                                          String?
   outcome                                                                  String?
+  outcome_at                                                               DateTime?                    @db.Timestamp(6)
   opportunity_id                                                          String?
   invoice_draft_id                                                        String?
   invoice_uuid                                                            String?

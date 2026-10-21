@@ -4,6 +4,7 @@ import { randomUUID } from "crypto";
 import { Prisma } from "@prisma/client";
 
 import { prisma } from "@/lib/db/prisma";
+import { opportunityLifetimeDays } from "@/lib/domain/opportunity-lifetime";
 
 type PrismaClientOrTx = Prisma.TransactionClient | typeof prisma;
 
@@ -86,6 +87,8 @@ export type OpportunityWithStage = {
   clientCompany: string | null;
   clientId: string | null;
   createdAt: string;
+  closedAt: string | null;
+  lifetimeDays: number | null;
   expectedCloseDate: string | null;
   opportunityId: string;
   opportunityNumber: string;
@@ -100,6 +103,8 @@ export type OpportunityWithStage = {
 };
 
 type OpportunityFinancials = {
+  wonAt: string | null;
+  lostAt: string | null;
   hasLost: boolean;
   hasWon: boolean;
   // true cuando la oportunidad tiene al menos una propuesta ligada y NINGUNA
@@ -153,12 +158,18 @@ async function getOpportunityFinancialsByIds(
       opportunity_id: string;
       proposal_count: number;
       won_amount: Prisma.Decimal | null;
+      won_at: Date | null;
+      lost_at: Date | null;
     }>
   >(Prisma.sql`
     SELECT
       p.opportunity_id,
       MAX(CASE WHEN p.outcome = 'won' THEN 1 ELSE 0 END) AS has_won,
       MAX(CASE WHEN p.outcome = 'lost' THEN 1 ELSE 0 END) AS has_lost,
+      CASE WHEN COUNT(*) FILTER (WHERE p.outcome = 'won' AND p.outcome_at IS NULL) = 0
+        THEN MIN(p.outcome_at) FILTER (WHERE p.outcome = 'won') END AS won_at,
+      CASE WHEN COUNT(*) FILTER (WHERE p.outcome = 'lost' AND p.outcome_at IS NULL) = 0
+        THEN MIN(p.outcome_at) FILTER (WHERE p.outcome = 'lost') END AS lost_at,
       COUNT(DISTINCT p.proposal_id) AS proposal_count,
       COUNT(DISTINCT p.proposal_id) FILTER (WHERE p.outcome IS NULL) AS live_count,
       SUM(CASE WHEN p.outcome = 'won' THEN COALESCE(pi.subtotal_price, 0) ELSE 0 END) AS won_amount,
@@ -178,6 +189,8 @@ async function getOpportunityFinancialsByIds(
     const liveCount = toNumber(row.live_count);
 
     map.set(row.opportunity_id, {
+      wonAt: row.won_at?.toISOString() ?? null,
+      lostAt: row.lost_at?.toISOString() ?? null,
       hasLost,
       hasWon,
       isFullyDiscarded: !hasWon && !hasLost && proposalCount > 0 && liveCount === 0,
@@ -217,6 +230,7 @@ async function attachDerivedStage(
         })
       : [];
   const clientCompanyById = new Map(clients.map((c) => [c.client_id, c.company]));
+  const now = new Date();
 
   return opportunities
     .filter((o) => !financials.get(o.opportunity_id)?.isFullyDiscarded)
@@ -224,12 +238,17 @@ async function attachDerivedStage(
       const fin = financials.get(o.opportunity_id);
       const stage: OpportunityStage = fin?.hasWon ? "won" : fin?.hasLost ? "lost" : "open";
       const amount = fin ? (stage === "won" ? fin.wonAmount : stage === "lost" ? fin.lostAmount : fin.openAmount) : 0;
+      // Same source as stage: first currently winning decision, otherwise
+      // first losing one. An undated historical decision makes it unknown.
+      const closedAt = stage === "won" ? fin?.wonAt ?? null : stage === "lost" ? fin?.lostAt ?? null : null;
 
       return {
         amount,
         clientCompany: o.client_id ? (clientCompanyById.get(o.client_id) ?? null) : null,
         clientId: o.client_id,
         createdAt: o.created_at.toISOString(),
+        closedAt,
+        lifetimeDays: opportunityLifetimeDays(o.created_at.toISOString(), closedAt, stage, now),
         expectedCloseDate: o.expected_close_date ? o.expected_close_date.toISOString() : null,
         opportunityId: o.opportunity_id,
         opportunityNumber: o.opportunity_number,

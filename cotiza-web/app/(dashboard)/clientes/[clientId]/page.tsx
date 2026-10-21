@@ -173,6 +173,13 @@ export default async function ClientDetailPage({ params }: ClientDetailPageProps
                     {formatCurrency(opp.amount)}
                     {opp.expectedCloseDate ? ` · cierre esperado ${formatDate(opp.expectedCloseDate)}` : ""}
                   </p>
+                  <p className="text-xs text-zinc-500">
+                    Inicio: {new Intl.DateTimeFormat("es-MX", { dateStyle: "medium", timeZone: "America/Mexico_City" }).format(new Date(opp.createdAt))}
+                    {" · Cierre: "}{opp.stage === "open" ? "pendiente" : opp.closedAt
+                      ? new Intl.DateTimeFormat("es-MX", { dateStyle: "medium", timeZone: "America/Mexico_City" }).format(new Date(opp.closedAt))
+                      : "sin fecha registrada"}
+                    {opp.lifetimeDays !== null ? ` · ${opp.lifetimeDays} días${opp.stage === "open" ? " abierta" : " al cierre"}` : " · duración desconocida"}
+                  </p>
                 </div>
                 <span className={`shrink-0 rounded-full px-2.5 py-0.5 text-xs font-medium ${STAGE_CLASSES[opp.stage]}`}>
                   {STAGE_LABELS[opp.stage]}

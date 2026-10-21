@@ -142,6 +142,8 @@ export async function getProposalAmountTimelineByTenant(
 }
 
 export type ProposalKpiSummary = {
+  undatedOutcomeCount: number;
+  undatedWonAmount: number;
   wonAmount: number;
   wonProfit: number;
   approvedAmount: number;
@@ -172,6 +174,8 @@ export async function getProposalKpiSummaryByTenant(
 
   const rows = await prisma.$queryRaw<
     Array<{
+      undated_outcome_count: bigint;
+      undated_won_amount: Prisma.Decimal | null;
       won_amount: Prisma.Decimal | null;
       won_cost: Prisma.Decimal | null;
       approved: bigint;
@@ -187,6 +191,8 @@ export async function getProposalKpiSummaryByTenant(
     }>
   >(Prisma.sql`
     SELECT
+      COUNT(DISTINCT p.proposal_id) FILTER (WHERE p.outcome IN ('won', 'lost') AND p.outcome_at IS NULL) AS undated_outcome_count,
+      SUM(CASE WHEN p.outcome = 'won' AND p.outcome_at IS NULL THEN COALESCE(pi.subtotal_price, 0) ELSE 0 END) AS undated_won_amount,
       COUNT(DISTINCT p.proposal_id) AS total,
       COUNT(DISTINCT p.proposal_id) FILTER (WHERE p.status = 'draft') AS draft,
       COUNT(DISTINCT p.proposal_id) FILTER (WHERE p.status = 'sent') AS sent,
@@ -218,7 +224,8 @@ export async function getProposalKpiSummaryByTenant(
   const nonDraftCount = totalCount - draftCount;
 
   return {
-    wonAmount: toNumber(row?.won_amount),
+    undatedOutcomeCount: toNumber(row?.undated_outcome_count),
+    undatedWonAmount: toNumber(row?.undated_won_amount),    wonAmount: toNumber(row?.won_amount),
     wonProfit: toNumber(row?.won_amount) - toNumber(row?.won_cost),
     approvedAmount: toNumber(row?.approved_amount),
     approvedCount,
@@ -310,12 +317,9 @@ export type ProposalMarginTimelinePoint = {
   proposedProfit: number;
 };
 
-// Serie de tiempo (por mes) de margen (%) y utilidad ($) -- version por
-// periodo de la tarjeta "Margen promedio" que ya existia como un solo valor
-// tenant-wide. Mismo criterio proposed vs approved que
-// getProposalAmountTimelineByTenant (misma fecha de corte: created_at de la
-// propuesta). Salvador, 2026-10-20: "kpis com margren utilidad, agregado a
-// lo que ya hay por periodo, por mes".
+// Activity stays in its creation month. Won revenue/costs use the observed
+// commercial decision month in Mexico City, including old proposals won now.
+// Unknown historical dates remain only in historical totals.
 export async function getProposalMarginTimelineByTenant(
   tenantId: string,
   viewerUserId: string | null = null,
@@ -337,21 +341,33 @@ export async function getProposalMarginTimelineByTenant(
       proposed_cost: Prisma.Decimal | null;
     }>
   >(Prisma.sql`
-    SELECT
-      date_trunc('month', p.created_at) AS period,
-      SUM(CASE WHEN p.outcome = 'won' THEN COALESCE(pi.subtotal_price, 0) ELSE 0 END) AS won_amount,
-      SUM(CASE WHEN p.outcome = 'won' THEN COALESCE(pi.subtotal_cost, 0) ELSE 0 END) AS won_cost,
-      SUM(COALESCE(pi.subtotal_price, 0)) AS proposed_amount,
-      SUM(COALESCE(pi.subtotal_cost, 0)) AS proposed_cost,
-      SUM(CASE WHEN p.status = 'approved' THEN COALESCE(pi.subtotal_price, 0) ELSE 0 END) AS approved_amount,
-      SUM(CASE WHEN p.status = 'approved' THEN COALESCE(pi.subtotal_cost, 0) ELSE 0 END) AS approved_cost
-    FROM proposals p
-    LEFT JOIN proposal_items pi ON pi.proposal_id = p.proposal_id AND pi.status != 'deleted'
-    WHERE p.tenant_id = ${tenantId}
-      AND p.created_at >= ${monthsAgo(months)}
-      ${scopeFilter}
-    GROUP BY period
-    ORDER BY period ASC
+    WITH scoped AS (
+      SELECT p.proposal_id, p.created_at, p.outcome_at, p.outcome, p.status,
+        SUM(COALESCE(pi.subtotal_price, 0)) AS amount,
+        SUM(COALESCE(pi.subtotal_cost, 0)) AS cost
+      FROM proposals p
+      LEFT JOIN proposal_items pi ON pi.proposal_id = p.proposal_id AND pi.status != 'deleted'
+      WHERE p.tenant_id = ${tenantId} ${scopeFilter}
+      GROUP BY p.proposal_id
+    ), activity AS (
+      SELECT date_trunc('month', created_at) AS period,
+        amount AS proposed_amount, cost AS proposed_cost,
+        CASE WHEN status = 'approved' THEN amount ELSE 0 END AS approved_amount,
+        CASE WHEN status = 'approved' THEN cost ELSE 0 END AS approved_cost,
+        0 AS won_amount, 0 AS won_cost
+      FROM scoped WHERE created_at >= ${monthsAgo(months)}
+      UNION ALL
+      SELECT date_trunc('month', outcome_at AT TIME ZONE 'UTC' AT TIME ZONE 'America/Mexico_City'),
+        0, 0, 0, 0, amount, cost
+      FROM scoped
+      WHERE outcome = 'won' AND outcome_at >=
+        ((date_trunc('month', CURRENT_TIMESTAMP AT TIME ZONE 'America/Mexico_City')
+          - ${months} * interval '1 month') AT TIME ZONE 'America/Mexico_City' AT TIME ZONE 'UTC')
+    )
+    SELECT period, SUM(won_amount) AS won_amount, SUM(won_cost) AS won_cost,
+      SUM(proposed_amount) AS proposed_amount, SUM(proposed_cost) AS proposed_cost,
+      SUM(approved_amount) AS approved_amount, SUM(approved_cost) AS approved_cost
+    FROM activity GROUP BY period ORDER BY period ASC
   `);
 
   return rows.map((row) => {
@@ -387,21 +403,9 @@ export type ProposalOutcomeTimelinePoint = {
   wonCount: number;
 };
 
-// Serie de tiempo (por mes) de monto ganado vs perdido -- agrupado por
-// fecha de creacion de la propuesta (no existe un timestamp de "cuando se
-// decidio" el outcome), mismo criterio que las demas series de este
-// archivo. Excluye deliberadamente 'discarded' de los montos/conteos
-// (SUM/COUNT con FILTER solo por 'won'/'lost'): no es un desenlace
-// comercial real, es ruido de una version superada (ver CLAUDE.md,
-// 2026-09-17, "las descartadas no deben tener prioridad de visibilidad").
-// OJO: el filtro por outcome NO va en el WHERE -- un WHERE outcome IN
-// ('won','lost') hacia que un mes sin NINGUNA decision (todo en
-// borrador/enviada sin tagear) desapareciera del todo de la serie,
-// mientras que las otras dos series de este archivo si mostraban ese mes
-// (con sus propios conteos en cero). Detectado 2026-10-01: SynAppsSys
-// tenia actividad real en septiembre pero la grafica "Ganado vs perdido"
-// no mostraba ese mes, a diferencia de las otras dos graficas de la misma
-// pagina -- "los resultados de septiembre en kpis no se ven".
+// Commercial decisions are grouped by their recorded date (Mexico City).
+// Creation activity still supplies zero-decision months. Discarded versions
+// and historical decisions without a date never manufacture monthly closes.
 export async function getProposalOutcomeTimelineByTenant(
   tenantId: string,
   viewerUserId: string | null = null,
@@ -421,19 +425,30 @@ export async function getProposalOutcomeTimelineByTenant(
       won_count: bigint;
     }>
   >(Prisma.sql`
-    SELECT
-      date_trunc('month', p.created_at) AS period,
-      COUNT(DISTINCT p.proposal_id) FILTER (WHERE p.outcome = 'won') AS won_count,
-      COUNT(DISTINCT p.proposal_id) FILTER (WHERE p.outcome = 'lost') AS lost_count,
-      SUM(CASE WHEN p.outcome = 'won' THEN COALESCE(pi.subtotal_price, 0) ELSE 0 END) AS won_amount,
-      SUM(CASE WHEN p.outcome = 'lost' THEN COALESCE(pi.subtotal_price, 0) ELSE 0 END) AS lost_amount
-    FROM proposals p
-    LEFT JOIN proposal_items pi ON pi.proposal_id = p.proposal_id AND pi.status != 'deleted'
-    WHERE p.tenant_id = ${tenantId}
-      AND p.created_at >= ${monthsAgo(months)}
-      ${scopeFilter}
-    GROUP BY period
-    ORDER BY period ASC
+    WITH scoped AS (
+      SELECT p.proposal_id, p.created_at, p.outcome_at, p.outcome,
+        SUM(COALESCE(pi.subtotal_price, 0)) AS amount
+      FROM proposals p
+      LEFT JOIN proposal_items pi ON pi.proposal_id = p.proposal_id AND pi.status != 'deleted'
+      WHERE p.tenant_id = ${tenantId} ${scopeFilter}
+      GROUP BY p.proposal_id
+    ), decisions AS (
+      SELECT date_trunc('month', created_at) AS period,
+        0 AS won_count, 0 AS lost_count, 0 AS won_amount, 0 AS lost_amount
+      FROM scoped WHERE created_at >= ${monthsAgo(months)}
+      UNION ALL
+      SELECT date_trunc('month', outcome_at AT TIME ZONE 'UTC' AT TIME ZONE 'America/Mexico_City'),
+        CASE WHEN outcome = 'won' THEN 1 ELSE 0 END,
+        CASE WHEN outcome = 'lost' THEN 1 ELSE 0 END,
+        CASE WHEN outcome = 'won' THEN amount ELSE 0 END,
+        CASE WHEN outcome = 'lost' THEN amount ELSE 0 END
+      FROM scoped WHERE outcome IN ('won', 'lost') AND outcome_at >=
+        ((date_trunc('month', CURRENT_TIMESTAMP AT TIME ZONE 'America/Mexico_City')
+          - ${months} * interval '1 month') AT TIME ZONE 'America/Mexico_City' AT TIME ZONE 'UTC')
+    )
+    SELECT period, SUM(won_count) AS won_count, SUM(lost_count) AS lost_count,
+      SUM(won_amount) AS won_amount, SUM(lost_amount) AS lost_amount
+    FROM decisions GROUP BY period ORDER BY period ASC
   `);
 
   return rows.map((row) => ({
