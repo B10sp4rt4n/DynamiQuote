@@ -5,8 +5,6 @@ import {
   BarChart,
   CartesianGrid,
   Legend,
-  Line,
-  LineChart,
   ResponsiveContainer,
   Tooltip,
   XAxis,
@@ -179,23 +177,37 @@ function formatPercent(value: number): string {
   return `${value.toFixed(1)}%`;
 }
 
+type FinancialChartPoint = {
+  periodLabel: string;
+  wonAmount: number;
+  wonProfit: number;
+  wonMarginPct: number;
+};
+
+type OutcomeChartPoint = {
+  periodLabel: string;
+  wonAmount: number;
+  lostAmount: number;
+};
+
+function UndatedChartNote({ visible }: { visible: boolean }) {
+  return visible ? <p className="mt-1 text-xs text-zinc-600">
+    «Sin fecha» reúne cierres históricos sin fecha registrada; no corresponde a un mes.
+  </p> : null;
+}
+
 // Margen (%) por mes -- version por periodo de la tarjeta "Margen promedio"
 // (summary.avgMarginPct), que solo da un numero tenant-wide. Eje de
 // porcentaje, no de moneda: nunca combinar con Utilidad ($) en la misma
 // grafica (dos escalas distintas -- ver skill dataviz, "nunca dual-axis").
-function MarginTimelineChart({ data }: { data: ProposalMarginTimelinePoint[] }) {
+function MarginTimelineChart({ data }: { data: FinancialChartPoint[] }) {
   if (data.length === 0) {
     return <EmptyChartState />;
   }
 
-  const chartData = data.map((point) => ({
-    ...point,
-    periodLabel: formatPeriodLabel(point.period),
-  }));
-
   return (
     <ResponsiveContainer height={280} width="100%">
-      <LineChart data={chartData}>
+      <BarChart data={data}>
         <CartesianGrid stroke="#e4e4e7" vertical={false} />
         <XAxis axisLine={{ stroke: "#e4e4e7" }} dataKey="periodLabel" tick={{ fill: "#71717a", fontSize: 11 }} tickLine={false} />
         <YAxis
@@ -206,27 +218,22 @@ function MarginTimelineChart({ data }: { data: ProposalMarginTimelinePoint[] }) 
         />
         <Tooltip formatter={(value) => formatPercent(Number(value))} />
         <Legend wrapperStyle={{ fontSize: 12 }} />
-        <Line dataKey="wonMarginPct" name="Margen de propuestas ganadas" stroke={OUTCOME_COLORS.won} strokeWidth={2} type="linear" />
-      </LineChart>
+        <Bar dataKey="wonMarginPct" name="Margen de propuestas ganadas" fill={OUTCOME_COLORS.won} radius={[4, 4, 0, 0]} />
+      </BarChart>
     </ResponsiveContainer>
   );
 }
 
 // Utilidad ($) por mes -- precio menos costo, mismo corte proposed/approved
 // que las demas graficas de monto de esta pagina.
-function WonTimelineChart({ data, metric }: { data: ProposalMarginTimelinePoint[]; metric: "wonAmount" | "wonProfit" }) {
+function WonTimelineChart({ data, metric }: { data: FinancialChartPoint[]; metric: "wonAmount" | "wonProfit" }) {
   if (data.length === 0) {
     return <EmptyChartState />;
   }
 
-  const chartData = data.map((point) => ({
-    ...point,
-    periodLabel: formatPeriodLabel(point.period),
-  }));
-
   return (
     <ResponsiveContainer height={280} width="100%">
-      <BarChart data={chartData} barCategoryGap="22%">
+      <BarChart data={data} barCategoryGap="22%">
         <CartesianGrid stroke="#e4e4e7" vertical={false} />
         <XAxis axisLine={{ stroke: "#e4e4e7" }} dataKey="periodLabel" tick={{ fill: "#71717a", fontSize: 11 }} tickLine={false} />
         <YAxis
@@ -243,19 +250,14 @@ function WonTimelineChart({ data, metric }: { data: ProposalMarginTimelinePoint[
   );
 }
 
-function OutcomeTimelineChart({ data }: { data: ProposalOutcomeTimelinePoint[] }) {
+function OutcomeTimelineChart({ data }: { data: OutcomeChartPoint[] }) {
   if (data.length === 0) {
     return <EmptyChartState />;
   }
 
-  const chartData = data.map((point) => ({
-    ...point,
-    periodLabel: formatPeriodLabel(point.period),
-  }));
-
   return (
     <ResponsiveContainer height={280} width="100%">
-      <LineChart data={chartData}>
+      <BarChart data={data}>
         <CartesianGrid stroke="#e4e4e7" vertical={false} />
         <XAxis axisLine={{ stroke: "#e4e4e7" }} dataKey="periodLabel" tick={{ fill: "#71717a", fontSize: 11 }} tickLine={false} />
         <YAxis
@@ -265,27 +267,20 @@ function OutcomeTimelineChart({ data }: { data: ProposalOutcomeTimelinePoint[] }
           tickLine={false}
         />
         <Tooltip formatter={(value) => formatCurrency(Number(value))} />
-        <Legend
-          formatter={(value: string) => (value === "wonAmount" ? "Ganado" : "Perdido")}
-          wrapperStyle={{ fontSize: 12 }}
-        />
-        <Line
+        <Legend wrapperStyle={{ fontSize: 12 }} />
+        <Bar
           dataKey="wonAmount"
-          dot={{ r: 4, strokeWidth: 2, stroke: "#ffffff" }}
-          name="wonAmount"
-          stroke={OUTCOME_COLORS.won}
-          strokeWidth={2}
-          type="monotone"
+          name="Ganado"
+          fill={OUTCOME_COLORS.won}
+          radius={[4, 4, 0, 0]}
         />
-        <Line
+        <Bar
           dataKey="lostAmount"
-          dot={{ r: 4, strokeWidth: 2, stroke: "#ffffff" }}
-          name="lostAmount"
-          stroke={OUTCOME_COLORS.lost}
-          strokeWidth={2}
-          type="monotone"
+          name="Perdido"
+          fill={OUTCOME_COLORS.lost}
+          radius={[4, 4, 0, 0]}
         />
-      </LineChart>
+      </BarChart>
     </ResponsiveContainer>
   );
 }
@@ -347,6 +342,22 @@ export function ProposalKpisShell({
 }: ProposalKpisShellProps) {
   const financialTimeline = fillProposalFinancialMonths(marginTimeline);
   const financialSummary = summarizeProposalFinancials(financialTimeline);
+  const financialChartData: FinancialChartPoint[] = financialTimeline.map((point) => ({
+    ...point, periodLabel: formatPeriodLabel(point.period),
+  }));
+  if (summary.undatedWonCount > 0) {
+    financialChartData.push({
+      periodLabel: "Sin fecha", wonAmount: summary.undatedWonAmount,
+      wonProfit: summary.undatedWonProfit,
+      wonMarginPct: summary.undatedWonAmount !== 0 ? summary.undatedWonProfit / summary.undatedWonAmount * 100 : 0,
+    });
+  }
+  const outcomeChartData: OutcomeChartPoint[] = outcomeTimeline.map((point) => ({
+    ...point, periodLabel: formatPeriodLabel(point.period),
+  }));
+  if (summary.undatedOutcomeCount > 0) {
+    outcomeChartData.push({ periodLabel: "Sin fecha", wonAmount: summary.undatedWonAmount, lostAmount: summary.undatedLostAmount });
+  }
 
   return (
     <section className="rounded-xl border border-zinc-200 bg-white p-6 shadow-sm">
@@ -374,6 +385,22 @@ export function ProposalKpisShell({
         Pendientes de acción (borrador, enviada o en revisión): {summary.pendingActionCount}
       </p>
 
+      {summary.undatedOutcomeCount > 0 ? (
+        <section className="mt-6 rounded-xl border border-amber-200 bg-amber-50 p-4" aria-label="Cierres históricos sin fecha">
+          <h2 className="text-base font-semibold text-zinc-900">Ganadas y perdidas sin fecha de cierre</h2>
+          <p className="mt-1 text-sm text-zinc-700">
+            {summary.undatedWonCount} ganadas y {summary.undatedLostCount} perdidas siguen incluidas en el histórico.
+            Se muestran como «Sin fecha» en las gráficas y la tabla; no se les asigna un mes ni se incluyen en el promedio mensual.
+          </p>
+          <div className="mt-3 grid gap-3 sm:grid-cols-3">
+            <StatTile label="Revenue ganado sin fecha" value={formatCurrency(summary.undatedWonAmount)} />
+            <StatTile label="Utilidad de ganadas sin fecha" value={formatCurrency(summary.undatedWonProfit)} />
+            <StatTile label="Monto perdido sin fecha" value={formatCurrency(summary.undatedLostAmount)} />
+          </div>
+          <a className="mt-3 inline-block text-sm font-medium text-blue-700 underline" href="/pipeline">Ver oportunidades ganadas y perdidas en Pipeline</a>
+        </section>
+      ) : null}
+
       <section className="mt-6 rounded-xl border border-zinc-200 bg-zinc-50 p-4" aria-label="Resumen financiero del periodo">
         <h2 className="text-base font-semibold text-zinc-900">Revenue y margen del periodo</h2>
         <p className="mt-1 text-sm text-zinc-600">
@@ -384,18 +411,13 @@ export function ProposalKpisShell({
           Agrupado por mes en que se declaró ganada, en horario de Ciudad de México.
           Montos en MXN antes de IVA; no equivalen a cobros recibidos.
         </p>
-        {summary.undatedOutcomeCount > 0 ? <p className="mt-2 text-sm text-amber-800">
-          Hay {summary.undatedOutcomeCount} propuestas ganadas o perdidas sin fecha de decisión registrada.
-          Se conservan en los totales históricos y se excluyen de las gráficas de cierres por mes.
-          Revenue ganado sin mes asignable: {formatCurrency(summary.undatedWonAmount)}.
-        </p> : null}
         <div className="mt-4 grid gap-3 sm:grid-cols-2 xl:grid-cols-4">
-          <StatTile label="Revenue ganado del periodo" value={formatCurrency(financialSummary.revenue)} />
-          <StatTile label="Margen de ganadas en pesos" value={formatCurrency(financialSummary.profit)} />
+          <StatTile label="Revenue ganado con fecha en el periodo" value={formatCurrency(financialSummary.revenue)} />
+          <StatTile label="Margen de ganadas con fecha en pesos" value={formatCurrency(financialSummary.profit)} />
           <StatTile label="Margen ponderado de ganadas" value={financialSummary.marginPct === null ? "Sin revenue" : formatPercent(financialSummary.marginPct)} />
           <StatTile label="Revenue promedio mensual" value={formatCurrency(financialSummary.averageMonthlyRevenue)} />
         </div>
-        <p className="mt-2 text-xs text-zinc-500">Resumen de los mismos meses de las gráficas. El promedio incluye los meses intermedios sin propuestas.</p>
+        <p className="mt-2 text-xs text-zinc-500">Resumen de los meses con fecha; excluye el grupo «Sin fecha». El promedio incluye los meses intermedios sin propuestas.</p>
         <details className="mt-4 text-sm text-zinc-700">
           <summary className="cursor-pointer font-medium">Ver montos mensuales</summary>
           <div className="mt-3 overflow-x-auto">
@@ -406,7 +428,10 @@ export function ProposalKpisShell({
                 <th scope="row" className="py-2 pr-4 text-left font-normal">{formatPeriodLabel(point.period)}</th>
                 <td className="px-3">{formatCurrency(point.wonAmount)}</td><td className="px-3">{formatCurrency(point.wonProfit)}</td><td className="px-3">{formatCurrency(point.proposedAmount)}</td><td className="pl-3">{formatCurrency(point.approvedAmount)}</td>
               </tr>)}</tbody>
-              <tfoot><tr className="font-semibold"><th scope="row" className="py-2 pr-4 text-left">Total</th><td className="px-3">{formatCurrency(financialSummary.revenue)}</td><td className="px-3">{formatCurrency(financialSummary.profit)}</td><td className="px-3">{formatCurrency(financialTimeline.reduce((sum, point) => sum + point.proposedAmount, 0))}</td><td className="pl-3">{formatCurrency(financialSummary.approvedRevenue)}</td></tr></tfoot>
+              <tfoot>
+                <tr className="font-semibold"><th scope="row" className="py-2 pr-4 text-left">Total del periodo con fecha</th><td className="px-3">{formatCurrency(financialSummary.revenue)}</td><td className="px-3">{formatCurrency(financialSummary.profit)}</td><td className="px-3">{formatCurrency(financialTimeline.reduce((sum, point) => sum + point.proposedAmount, 0))}</td><td className="pl-3">{formatCurrency(financialSummary.approvedRevenue)}</td></tr>
+                {summary.undatedWonCount > 0 ? <tr className="bg-amber-50"><th scope="row" className="py-2 pr-4 text-left">Sin fecha de cierre (histórico)</th><td className="px-3">{formatCurrency(summary.undatedWonAmount)}</td><td className="px-3">{formatCurrency(summary.undatedWonProfit)}</td><td className="px-3">—</td><td className="pl-3">—</td></tr> : null}
+              </tfoot>
             </table>
           </div>
         </details>
@@ -421,29 +446,33 @@ export function ProposalKpisShell({
         </div>
         <div className="rounded-xl border border-zinc-200 p-4">
           <p className="text-sm font-semibold text-zinc-900">Revenue ganado por mes</p>
+          <UndatedChartNote visible={summary.undatedWonCount > 0} />
           <div className="mt-3">
-            <WonTimelineChart data={financialTimeline} metric="wonAmount" />
+            <WonTimelineChart data={financialChartData} metric="wonAmount" />
           </div>
         </div>
         <div className="rounded-xl border border-zinc-200 p-4">
           <p className="text-sm font-semibold text-zinc-900">Ganado vs. perdido (por mes)</p>
           <p className="mt-1 text-xs text-zinc-500">
-            Por fecha de decisión registrada, en horario de Ciudad de México. Excluye descartadas y cierres sin fecha.
+            Por fecha de decisión registrada, en horario de Ciudad de México. Excluye descartadas.
           </p>
+          <UndatedChartNote visible={summary.undatedOutcomeCount > 0} />
           <div className="mt-3">
-            <OutcomeTimelineChart data={outcomeTimeline} />
+            <OutcomeTimelineChart data={outcomeChartData} />
           </div>
         </div>
         <div className="rounded-xl border border-zinc-200 p-4">
           <p className="text-sm font-semibold text-zinc-900">Margen de ganadas por mes (%)</p>
+          <UndatedChartNote visible={summary.undatedWonCount > 0} />
           <div className="mt-3">
-            <MarginTimelineChart data={financialTimeline} />
+            <MarginTimelineChart data={financialChartData} />
           </div>
         </div>
         <div className="rounded-xl border border-zinc-200 p-4">
           <p className="text-sm font-semibold text-zinc-900">Margen de ganadas en pesos por mes</p>
+          <UndatedChartNote visible={summary.undatedWonCount > 0} />
           <div className="mt-3">
-            <WonTimelineChart data={financialTimeline} metric="wonProfit" />
+            <WonTimelineChart data={financialChartData} metric="wonProfit" />
           </div>
         </div>
         <div className="rounded-xl border border-zinc-200 p-4">
