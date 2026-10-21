@@ -29,6 +29,7 @@ function toNumber(value: unknown): number {
 
 function monthsAgo(months: number): Date {
   const date = new Date();
+  date.setUTCDate(1);
   date.setUTCMonth(date.getUTCMonth() - months);
   date.setUTCDate(1);
   date.setUTCHours(0, 0, 0, 0);
@@ -141,6 +142,8 @@ export async function getProposalAmountTimelineByTenant(
 }
 
 export type ProposalKpiSummary = {
+  wonAmount: number;
+  wonProfit: number;
   approvedAmount: number;
   approvedCount: number;
   avgMarginPct: number;
@@ -169,6 +172,8 @@ export async function getProposalKpiSummaryByTenant(
 
   const rows = await prisma.$queryRaw<
     Array<{
+      won_amount: Prisma.Decimal | null;
+      won_cost: Prisma.Decimal | null;
       approved: bigint;
       approved_amount: Prisma.Decimal | null;
       draft: bigint;
@@ -191,6 +196,8 @@ export async function getProposalKpiSummaryByTenant(
       COUNT(DISTINCT p.proposal_id) FILTER (WHERE p.status = 'expired') AS expired,
       SUM(COALESCE(pi.subtotal_price, 0)) AS proposed_amount,
       SUM(CASE WHEN p.status = 'approved' THEN COALESCE(pi.subtotal_price, 0) ELSE 0 END) AS approved_amount,
+      SUM(CASE WHEN p.outcome = 'won' THEN COALESCE(pi.subtotal_price, 0) ELSE 0 END) AS won_amount,
+      SUM(CASE WHEN p.outcome = 'won' THEN COALESCE(pi.subtotal_cost, 0) ELSE 0 END) AS won_cost,
       SUM(COALESCE(pi.subtotal_cost, 0)) AS total_cost
     FROM proposals p
     LEFT JOIN proposal_items pi ON pi.proposal_id = p.proposal_id AND pi.status != 'deleted'
@@ -211,6 +218,8 @@ export async function getProposalKpiSummaryByTenant(
   const nonDraftCount = totalCount - draftCount;
 
   return {
+    wonAmount: toNumber(row?.won_amount),
+    wonProfit: toNumber(row?.won_amount) - toNumber(row?.won_cost),
     approvedAmount: toNumber(row?.approved_amount),
     approvedCount,
     avgMarginPct: proposedAmount > 0 ? ((proposedAmount - totalCost) / proposedAmount) * 100 : 0,
@@ -289,6 +298,9 @@ export async function getSalesRepRankingByTenant(tenantId: string): Promise<Sale
 }
 
 export type ProposalMarginTimelinePoint = {
+  wonAmount: number;
+  wonProfit: number;
+  wonMarginPct: number;
   approvedAmount: number;
   approvedMarginPct: number;
   approvedProfit: number;
@@ -316,6 +328,8 @@ export async function getProposalMarginTimelineByTenant(
 
   const rows = await prisma.$queryRaw<
     Array<{
+      won_amount: Prisma.Decimal | null;
+      won_cost: Prisma.Decimal | null;
       approved_amount: Prisma.Decimal | null;
       approved_cost: Prisma.Decimal | null;
       period: Date;
@@ -325,6 +339,8 @@ export async function getProposalMarginTimelineByTenant(
   >(Prisma.sql`
     SELECT
       date_trunc('month', p.created_at) AS period,
+      SUM(CASE WHEN p.outcome = 'won' THEN COALESCE(pi.subtotal_price, 0) ELSE 0 END) AS won_amount,
+      SUM(CASE WHEN p.outcome = 'won' THEN COALESCE(pi.subtotal_cost, 0) ELSE 0 END) AS won_cost,
       SUM(COALESCE(pi.subtotal_price, 0)) AS proposed_amount,
       SUM(COALESCE(pi.subtotal_cost, 0)) AS proposed_cost,
       SUM(CASE WHEN p.status = 'approved' THEN COALESCE(pi.subtotal_price, 0) ELSE 0 END) AS approved_amount,
@@ -339,6 +355,8 @@ export async function getProposalMarginTimelineByTenant(
   `);
 
   return rows.map((row) => {
+    const wonAmount = toNumber(row.won_amount);
+    const wonProfit = wonAmount - toNumber(row.won_cost);
     const proposedAmount = toNumber(row.proposed_amount);
     const proposedCost = toNumber(row.proposed_cost);
     const approvedAmount = toNumber(row.approved_amount);
@@ -347,6 +365,9 @@ export async function getProposalMarginTimelineByTenant(
     const approvedProfit = approvedAmount - approvedCost;
 
     return {
+      wonAmount,
+      wonProfit,
+      wonMarginPct: wonAmount !== 0 ? wonProfit / wonAmount * 100 : 0,
       approvedAmount,
       approvedMarginPct: approvedAmount > 0 ? (approvedProfit / approvedAmount) * 100 : 0,
       approvedProfit,
