@@ -4,6 +4,7 @@ import { randomUUID } from "crypto";
 import { Prisma } from "@prisma/client";
 
 import { prisma } from "@/lib/db/prisma";
+import { summarizeQuoteMonths, type MonthlyQuoteKpi } from "@/lib/domain/quote-kpis";
 
 type QuoteSummaryRow = {
   quote_group_id: string | null;
@@ -63,6 +64,8 @@ export type QuoteDashboardSnapshot = {
   activeQuoteCount: number;
   recentQuotes: RecentQuote[];
   totalRevenue: number;
+  monthlyKpis: MonthlyQuoteKpi[];
+  undatedQuoteCount: number;
 };
 
 export type CreateQuoteInput = {
@@ -226,18 +229,34 @@ export async function getQuoteGroupsSummaryByTenant(
 export async function getQuoteDashboardSnapshotByTenant(
   tenantId: string,
 ): Promise<QuoteDashboardSnapshot> {
-  const [aggregate, recentRows] = await Promise.all([
-    prisma.quote.aggregate({
-      _count: {
-        quote_id: true,
-      },
-      _sum: {
-        total_revenue: true,
-      },
-      where: {
-        tenantId,
-      },
-    }),
+  const [monthlyRows, recentRows] = await Promise.all([
+    prisma.$queryRaw<{
+      month: string | null;
+      revenue: Prisma.Decimal;
+      gross_profit: Prisma.Decimal;
+      quote_count: bigint;
+      missing_margin_count: bigint;
+    }[]>(Prisma.sql`
+      WITH ranked AS (
+        SELECT total_revenue, total_cost, gross_profit,
+          MIN(created_at) OVER (PARTITION BY COALESCE(NULLIF(quote_group_id, ''), quote_id)) AS group_created_at,
+          ROW_NUMBER() OVER (
+            PARTITION BY COALESCE(NULLIF(quote_group_id, ''), quote_id)
+            ORDER BY version DESC NULLS LAST, created_at DESC NULLS LAST, quote_id DESC
+          ) AS position
+        FROM quotes
+        WHERE tenant_id = ${tenantId}
+      )
+      SELECT to_char(group_created_at, 'YYYY-MM') AS month,
+        COALESCE(SUM(total_revenue), 0) AS revenue,
+        COALESCE(SUM(COALESCE(gross_profit, total_revenue - total_cost)), 0) AS gross_profit,
+        COUNT(*) AS quote_count,
+        COUNT(*) FILTER (WHERE total_revenue IS NULL OR (gross_profit IS NULL AND total_cost IS NULL)) AS missing_margin_count
+      FROM ranked
+      WHERE position = 1
+      GROUP BY to_char(group_created_at, 'YYYY-MM')
+      ORDER BY month NULLS LAST
+    `),
     prisma.$queryRaw<RecentQuoteRow[]>(Prisma.sql`
       SELECT q.quote_id, q.quote_group_id, q.version, q.created_at, q.status,
              q.total_revenue, q.avg_margin, q.client_name, q.proposal_name, q.quoted_by
@@ -254,8 +273,19 @@ export async function getQuoteDashboardSnapshotByTenant(
     `),
   ]);
 
+  const allMonths = monthlyRows.map((row) => ({
+    month: row.month ?? "",
+    revenue: decimalToNumber(row.revenue) ?? 0,
+    grossProfit: decimalToNumber(row.gross_profit) ?? 0,
+    quoteCount: Number(row.quote_count),
+    missingMarginCount: Number(row.missing_margin_count),
+  }));
+  const totals = summarizeQuoteMonths(allMonths);
+
   return {
-    activeQuoteCount: aggregate._count.quote_id,
+    activeQuoteCount: totals.quoteCount,
+    monthlyKpis: allMonths.filter((row) => row.month !== ""),
+    undatedQuoteCount: allMonths.find((row) => row.month === "")?.quoteCount ?? 0,
     recentQuotes: recentRows
       .filter((row) => row.quote_group_id)
       .map((row) => ({
@@ -270,7 +300,7 @@ export async function getQuoteDashboardSnapshotByTenant(
         totalRevenue: decimalToNumber(row.total_revenue),
         version: row.version ?? 1,
       })),
-    totalRevenue: decimalToNumber(aggregate._sum.total_revenue) ?? 0,
+    totalRevenue: totals.revenue,
   };
 }
 

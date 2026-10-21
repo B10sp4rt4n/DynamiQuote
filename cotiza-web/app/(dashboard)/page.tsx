@@ -5,6 +5,7 @@ import {
 } from "@/lib/db/proposals";
 import { getQuoteDashboardSnapshotByTenant } from "@/lib/db/quotes";
 import { getCurrentTenantContext } from "@/lib/auth/tenant-context";
+import { MonthlyQuoteKpis } from "@/components/dashboard/monthly-quote-kpis";
 
 export const dynamic = "force-dynamic";
 
@@ -77,7 +78,7 @@ export default async function DashboardPage() {
         <p className="mb-3 text-xs font-medium uppercase tracking-widest text-zinc-400">Cotizaciones</p>
         <div className="grid gap-4 md:grid-cols-3">
           <StatCard label="Grupos registrados" value={snapshot.activeQuoteCount} />
-          <StatCard label="Revenue acumulado" value={formatCurrency(snapshot.totalRevenue)} />
+          <StatCard label="Revenue cotizado acumulado" value={formatCurrency(snapshot.totalRevenue)} sub="Última versión por cotización · todos los periodos" />
           <StatCard
             label="Paquetes disponibles"
             value={activePackages}
@@ -85,6 +86,13 @@ export default async function DashboardPage() {
           />
         </div>
       </section>
+
+      <MonthlyQuoteKpis
+        months={snapshot.monthlyKpis}
+        currentYear={new Intl.DateTimeFormat("en", { year: "numeric", timeZone: "America/Mexico_City" }).format(new Date())}
+        currentMonth={Number(new Intl.DateTimeFormat("en", { month: "numeric", timeZone: "America/Mexico_City" }).format(new Date()))}
+        undatedQuoteCount={snapshot.undatedQuoteCount}
+      />
 
       <section>
         <p className="mb-3 text-xs font-medium uppercase tracking-widest text-zinc-400">
