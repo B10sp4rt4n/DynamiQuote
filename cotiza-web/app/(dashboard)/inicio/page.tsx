@@ -10,7 +10,7 @@ import {
   getProposalSummariesByTenant,
 } from "@/lib/db/proposals";
 import { getQuoteDashboardSnapshotByTenant } from "@/lib/db/quotes";
-import { getAppUsersByTenant, getAppUsersForSuperAdmin, getIssuerProfilesByTenant } from "@/lib/db/settings";
+import { getAppUsersByTenant, getIssuerProfilesByTenant } from "@/lib/db/settings";
 import { getPendingTasksByTenant } from "@/lib/db/tasks";
 import { getTenantProfileByTenant } from "@/lib/db/tenants";
 
@@ -50,11 +50,7 @@ export default async function InicioPage() {
     getProposalSummariesByTenant(tenant.id, 6, tenant.userId, canSeeAll),
     getTenantProfileByTenant(tenant.id),
     canSeeAll ? getIssuerProfilesByTenant(tenant.id) : Promise.resolve([]),
-    canSeeAll
-      ? tenant.isSuperAdmin
-        ? getAppUsersForSuperAdmin()
-        : getAppUsersByTenant(tenant.id)
-      : Promise.resolve([]),
+    canSeeAll ? getAppUsersByTenant(tenant.id) : Promise.resolve([]),
     canSeeAll ? getProposalKpiSummaryByTenant(tenant.id, tenant.userId, canSeeAll) : Promise.resolve(null),
     canSeeAll ? getSalesRepRankingByTenant(tenant.id) : Promise.resolve([]),
     getProposalOutcomeCountsByTenant(tenant.id, tenant.userId, canSeeAll),
