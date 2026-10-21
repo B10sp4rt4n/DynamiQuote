@@ -97,14 +97,19 @@ function RankingTable({ ranking }: { ranking: ProposalKpiReportData["ranking"] }
 function Frame({ title, children, scope, tenantName, period, date }: { title: string; children: ReactNode; scope: string; tenantName: string; period: string; date: string }) {
   return <Page size="LETTER" style={styles.page}>
     <View style={styles.header}>
-      <Text style={styles.eyebrow} render={() => `${scope.toUpperCase()} DE KPIs`} />
-      <Text style={styles.title} render={() => tenantName} />
-      <Text style={styles.meta} render={() => `Periodo: ${period} | Emision: ${date} (Ciudad de Mexico)`} />
-      <Text style={styles.meta} render={() => "Moneda: MXN | Importes antes de IVA"} />
+      <Svg width={540} height={64} viewBox="0 0 540 64">
+        <Text x={0} y={8} style={{ fontSize: 8 }} fill={colors.muted}>{scope.toUpperCase()} DE KPIs</Text>
+        <Text x={0} y={31} style={{ fontSize: Math.max(12, Math.min(22, 540 / Math.max(1, tenantName.length * 0.6))), fontFamily: "Helvetica-Bold" }} fill={colors.ink}>{tenantName}</Text>
+        <Text x={0} y={47} style={{ fontSize: 8 }} fill={colors.muted}>{`Periodo: ${period} | Emision: ${date} (Ciudad de Mexico)`}</Text>
+        <Text x={0} y={61} style={{ fontSize: 8 }} fill={colors.muted}>Moneda: MXN | Importes antes de IVA</Text>
+      </Svg>
     </View>
     <Text style={styles.sectionTitle}>{title}</Text>
     {children}
-    <View style={styles.footer} fixed><Text render={() => `${tenantName} | KPIs comerciales`} /><Text render={({ pageNumber, totalPages }) => `${pageNumber} / ${totalPages}`} /></View>
+    <View style={styles.footer} fixed>
+      <Svg width={440} height={10}><Text x={0} y={7} style={{ fontSize: 7 }} fill={colors.muted}>{`${tenantName} | KPIs comerciales`}</Text></Svg>
+      <Text render={({ pageNumber, totalPages }) => `${pageNumber} / ${totalPages}`} />
+    </View>
   </Page>;
 }
 
