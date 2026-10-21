@@ -13,6 +13,8 @@ import {
   YAxis,
 } from "recharts";
 
+import { fillProposalFinancialMonths, summarizeProposalFinancials } from "@/lib/domain/proposal-financial-kpis";
+
 import type {
   ProposalAmountTimelinePoint,
   ProposalKpiSummary,
@@ -23,7 +25,6 @@ import type {
 } from "@/lib/db/proposal-kpis";
 
 type ProposalKpisShellProps = {
-  amountTimeline: ProposalAmountTimelinePoint[];
   canSeeAll: boolean;
   marginTimeline: ProposalMarginTimelinePoint[];
   outcomeTimeline: ProposalOutcomeTimelinePoint[];
@@ -156,7 +157,7 @@ function AmountTimelineChart({ data }: { data: ProposalAmountTimelinePoint[] }) 
 
   return (
     <ResponsiveContainer height={280} width="100%">
-      <LineChart data={chartData}>
+      <BarChart data={chartData} barCategoryGap="22%">
         <CartesianGrid stroke="#e4e4e7" vertical={false} />
         <XAxis dataKey="periodLabel" tick={{ fill: "#71717a", fontSize: 11 }} tickLine={false} axisLine={{ stroke: "#e4e4e7" }} />
         <YAxis
@@ -165,28 +166,11 @@ function AmountTimelineChart({ data }: { data: ProposalAmountTimelinePoint[] }) 
           tickLine={false}
           axisLine={false}
         />
-        <Tooltip formatter={(value, _name, _item, _index, _payload) => formatCurrency(Number(value))} />
-        <Legend
-          formatter={(value: string) => (value === "proposedAmount" ? "Propuesto" : "Aprobado")}
-          wrapperStyle={{ fontSize: 12 }}
-        />
-        <Line
-          dataKey="proposedAmount"
-          dot={{ r: 4, strokeWidth: 2, stroke: "#ffffff" }}
-          name="proposedAmount"
-          stroke={AMOUNT_COLORS.proposed}
-          strokeWidth={2}
-          type="monotone"
-        />
-        <Line
-          dataKey="approvedAmount"
-          dot={{ r: 4, strokeWidth: 2, stroke: "#ffffff" }}
-          name="approvedAmount"
-          stroke={AMOUNT_COLORS.approved}
-          strokeWidth={2}
-          type="monotone"
-        />
-      </LineChart>
+        <Tooltip formatter={(value) => formatCurrency(Number(value))} />
+        <Legend wrapperStyle={{ fontSize: 12 }} />
+        <Bar dataKey="proposedAmount" fill={AMOUNT_COLORS.proposed} name="Revenue propuesto" radius={[4, 4, 0, 0]} />
+        <Bar dataKey="approvedAmount" fill={AMOUNT_COLORS.approved} name="Revenue aprobado" radius={[4, 4, 0, 0]} />
+      </BarChart>
     </ResponsiveContainer>
   );
 }
@@ -220,7 +204,7 @@ function MarginTimelineChart({ data }: { data: ProposalMarginTimelinePoint[] }) 
           tickFormatter={(value: number) => formatPercent(value)}
           tickLine={false}
         />
-        <Tooltip formatter={(value, _name, _item, _index, _payload) => formatPercent(Number(value))} />
+        <Tooltip formatter={(value) => formatPercent(Number(value))} />
         <Legend
           formatter={(value: string) => (value === "proposedMarginPct" ? "Propuesto" : "Aprobado")}
           wrapperStyle={{ fontSize: 12 }}
@@ -260,7 +244,7 @@ function ProfitTimelineChart({ data }: { data: ProposalMarginTimelinePoint[] }) 
 
   return (
     <ResponsiveContainer height={280} width="100%">
-      <LineChart data={chartData}>
+      <BarChart data={chartData} barCategoryGap="22%">
         <CartesianGrid stroke="#e4e4e7" vertical={false} />
         <XAxis axisLine={{ stroke: "#e4e4e7" }} dataKey="periodLabel" tick={{ fill: "#71717a", fontSize: 11 }} tickLine={false} />
         <YAxis
@@ -269,28 +253,11 @@ function ProfitTimelineChart({ data }: { data: ProposalMarginTimelinePoint[] }) 
           tickFormatter={(value: number) => formatCompactCurrency(value)}
           tickLine={false}
         />
-        <Tooltip formatter={(value, _name, _item, _index, _payload) => formatCurrency(Number(value))} />
-        <Legend
-          formatter={(value: string) => (value === "proposedProfit" ? "Propuesto" : "Aprobado")}
-          wrapperStyle={{ fontSize: 12 }}
-        />
-        <Line
-          dataKey="proposedProfit"
-          dot={{ r: 4, strokeWidth: 2, stroke: "#ffffff" }}
-          name="proposedProfit"
-          stroke={AMOUNT_COLORS.proposed}
-          strokeWidth={2}
-          type="monotone"
-        />
-        <Line
-          dataKey="approvedProfit"
-          dot={{ r: 4, strokeWidth: 2, stroke: "#ffffff" }}
-          name="approvedProfit"
-          stroke={AMOUNT_COLORS.approved}
-          strokeWidth={2}
-          type="monotone"
-        />
-      </LineChart>
+        <Tooltip formatter={(value) => formatCurrency(Number(value))} />
+        <Legend wrapperStyle={{ fontSize: 12 }} />
+        <Bar dataKey="proposedProfit" fill={AMOUNT_COLORS.proposed} name="Margen propuesto" radius={[4, 4, 0, 0]} />
+        <Bar dataKey="approvedProfit" fill={AMOUNT_COLORS.approved} name="Margen aprobado" radius={[4, 4, 0, 0]} />
+      </BarChart>
     </ResponsiveContainer>
   );
 }
@@ -316,7 +283,7 @@ function OutcomeTimelineChart({ data }: { data: ProposalOutcomeTimelinePoint[] }
           tickFormatter={(value: number) => formatCompactCurrency(value)}
           tickLine={false}
         />
-        <Tooltip formatter={(value, _name, _item, _index, _payload) => formatCurrency(Number(value))} />
+        <Tooltip formatter={(value) => formatCurrency(Number(value))} />
         <Legend
           formatter={(value: string) => (value === "wonAmount" ? "Ganado" : "Perdido")}
           wrapperStyle={{ fontSize: 12 }}
@@ -372,7 +339,7 @@ function RankingChart({ data }: { data: SalesRepRankingRow[] }) {
         />
         <Tooltip
           cursor={{ fill: "#fafafa" }}
-          formatter={(value, _name, _item, _index, _payload) => formatCurrency(Number(value))}
+          formatter={(value) => formatCurrency(Number(value))}
         />
         <Bar barSize={20} dataKey="approvedAmount" fill={AMOUNT_COLORS.proposed} radius={[0, 4, 4, 0]} />
       </BarChart>
@@ -389,7 +356,6 @@ function EmptyChartState() {
 }
 
 export function ProposalKpisShell({
-  amountTimeline,
   canSeeAll,
   marginTimeline,
   outcomeTimeline,
@@ -398,6 +364,9 @@ export function ProposalKpisShell({
   summary,
   tenantName,
 }: ProposalKpisShellProps) {
+  const financialTimeline = fillProposalFinancialMonths(marginTimeline);
+  const financialSummary = summarizeProposalFinancials(financialTimeline);
+
   return (
     <section className="rounded-xl border border-zinc-200 bg-white p-6 shadow-sm">
       <div className="flex flex-col gap-2 border-b border-zinc-200 pb-4">
@@ -423,6 +392,38 @@ export function ProposalKpisShell({
         Pendientes de acción (borrador, enviada o en revisión): {summary.pendingActionCount}
       </p>
 
+      <section className="mt-6 rounded-xl border border-zinc-200 bg-zinc-50 p-4" aria-label="Resumen financiero del periodo">
+        <h2 className="text-base font-semibold text-zinc-900">Revenue y margen del periodo</h2>
+        <p className="mt-1 text-sm text-zinc-600">
+          {financialTimeline.length > 0
+            ? `${formatPeriodLabel(financialTimeline[0].period)} a ${formatPeriodLabel(financialTimeline[financialTimeline.length - 1].period)} · ${financialTimeline.length} meses mostrados.`
+            : "Sin propuestas en el periodo mostrado."}
+          {" "}Revenue es el monto propuesto; aprobado es parte de ese total, no se suma de nuevo.
+          Margen bruto es revenue menos costo. Montos en MXN antes de IVA; no representan facturación ni cobranza.
+        </p>
+        <div className="mt-4 grid gap-3 sm:grid-cols-2 xl:grid-cols-4">
+          <StatTile label="Revenue total del periodo" value={formatCurrency(financialSummary.revenue)} />
+          <StatTile label="Margen total en pesos" value={formatCurrency(financialSummary.profit)} />
+          <StatTile label="Margen ponderado del periodo" value={financialSummary.marginPct === null ? "Sin revenue" : formatPercent(financialSummary.marginPct)} />
+          <StatTile label="Revenue promedio mensual" value={formatCurrency(financialSummary.averageMonthlyRevenue)} />
+        </div>
+        <p className="mt-2 text-xs text-zinc-500">Resumen de los mismos meses de las gráficas. El promedio incluye los meses intermedios sin propuestas.</p>
+        <details className="mt-4 text-sm text-zinc-700">
+          <summary className="cursor-pointer font-medium">Ver montos mensuales</summary>
+          <div className="mt-3 overflow-x-auto">
+            <table className="min-w-[640px] w-full text-right text-sm">
+              <caption className="sr-only">Revenue y margen mensual en MXN antes de IVA</caption>
+              <thead className="border-b border-zinc-200"><tr><th scope="col" className="py-2 pr-4 text-left">Mes</th><th scope="col" className="px-3">Revenue total</th><th scope="col" className="px-3">Margen en pesos</th><th scope="col" className="px-3">Revenue aprobado</th><th scope="col" className="pl-3">Margen aprobado</th></tr></thead>
+              <tbody>{financialTimeline.map((point) => <tr className="border-b border-zinc-200" key={point.period}>
+                <th scope="row" className="py-2 pr-4 text-left font-normal">{formatPeriodLabel(point.period)}</th>
+                <td className="px-3">{formatCurrency(point.proposedAmount)}</td><td className="px-3">{formatCurrency(point.proposedProfit)}</td><td className="px-3">{formatCurrency(point.approvedAmount)}</td><td className="pl-3">{formatCurrency(point.approvedProfit)}</td>
+              </tr>)}</tbody>
+              <tfoot><tr className="font-semibold"><th scope="row" className="py-2 pr-4 text-left">Total</th><td className="px-3">{formatCurrency(financialSummary.revenue)}</td><td className="px-3">{formatCurrency(financialSummary.profit)}</td><td className="px-3">{formatCurrency(financialSummary.approvedRevenue)}</td><td className="pl-3">{formatCurrency(financialSummary.approvedProfit)}</td></tr></tfoot>
+            </table>
+          </div>
+        </details>
+      </section>
+
       <div className="mt-8 grid gap-6 lg:grid-cols-2">
         <div className="rounded-xl border border-zinc-200 p-4">
           <p className="text-sm font-semibold text-zinc-900">Propuestas por estatus (por mes)</p>
@@ -431,9 +432,9 @@ export function ProposalKpisShell({
           </div>
         </div>
         <div className="rounded-xl border border-zinc-200 p-4">
-          <p className="text-sm font-semibold text-zinc-900">Monto propuesto vs. aprobado (por mes)</p>
+          <p className="text-sm font-semibold text-zinc-900">Revenue total por mes</p>
           <div className="mt-3">
-            <AmountTimelineChart data={amountTimeline} />
+            <AmountTimelineChart data={financialTimeline} />
           </div>
         </div>
         <div className="rounded-xl border border-zinc-200 p-4">
@@ -448,13 +449,13 @@ export function ProposalKpisShell({
         <div className="rounded-xl border border-zinc-200 p-4">
           <p className="text-sm font-semibold text-zinc-900">Margen por mes (%)</p>
           <div className="mt-3">
-            <MarginTimelineChart data={marginTimeline} />
+            <MarginTimelineChart data={financialTimeline} />
           </div>
         </div>
         <div className="rounded-xl border border-zinc-200 p-4">
-          <p className="text-sm font-semibold text-zinc-900">Utilidad por mes</p>
+          <p className="text-sm font-semibold text-zinc-900">Margen en pesos por mes</p>
           <div className="mt-3">
-            <ProfitTimelineChart data={marginTimeline} />
+            <ProfitTimelineChart data={financialTimeline} />
           </div>
         </div>
       </div>
