@@ -8,6 +8,7 @@ import { hasClerkCredentials } from "@/lib/auth/clerk";
 import { getCurrentTenantContext } from "@/lib/auth/tenant-context";
 import { ExpiryAlertsBell } from "@/components/layout/expiry-alerts-bell";
 import { CotizaBrand } from "@/components/ui/cotiza-brand";
+import { DashboardNav } from "@/components/layout/dashboard-nav";
 
 type DashboardLayoutProps = {
   children: React.ReactNode;
@@ -48,16 +49,9 @@ export default async function DashboardLayout({ children }: DashboardLayoutProps
   return (
     <div className="min-h-screen bg-zinc-100">
       <header className="border-b border-zinc-200 bg-white">
-        <div className="mx-auto flex max-w-7xl items-center justify-between px-6 py-4">
+        <div className="mx-auto flex max-w-7xl flex-wrap items-center justify-between gap-4 px-6 py-4">
           <CotizaBrand href="/inicio" subtitle={`Tenant activo: ${tenant.name}`} />
-          <nav className="flex items-center gap-4 text-sm text-zinc-600">
-            <Link href="/inicio">Inicio</Link>
-            <Link href="/cotizaciones">Cotizaciones</Link>
-            <Link href="/propuestas">Propuestas</Link>
-            <Link href="/paquetes">Paquetes</Link>
-            <Link href="/configuracion/clientes">Clientes</Link>
-            <Link href="/pipeline">Pipeline</Link>
-            <Link href="/configuracion">Configuracion</Link>
+          <div className="flex shrink-0 items-center gap-4 text-sm text-zinc-600">
             <ExpiryAlertsBell />
             {clerkEnabled ? (
               <UserButton
@@ -69,7 +63,10 @@ export default async function DashboardLayout({ children }: DashboardLayoutProps
                 }}
               />
             ) : <Link href="/sign-in">Activar autenticacion</Link>}
-          </nav>
+          </div>
+          <div className="w-full">
+            <DashboardNav />
+          </div>
         </div>
       </header>
       <main className="mx-auto max-w-7xl px-6 py-8">{children}</main>
