@@ -56,3 +56,23 @@ por los helpers de aprobación aunque aún no declarado en el esquema Prisma.
 Una base generada desde cero requiere agregar esa columna de texto para
 reproducir el flujo actual. No se cambia esa estructura productiva en este
 ajuste. No habilitar `validate-quote-lifecycle.e2e.test.ts` contra una base real.
+
+# Referencia histórica para KPIs (21 de octubre de 2026)
+
+`20261021_legacy_outcome_creation_reference.sql` registra una etiqueta de auditoría
+por propuesta ganada/perdida anterior al inicio del 21 de octubre en Ciudad de
+México que no tiene `outcome_at`. Por instrucción del usuario, esos registros
+usan `created_at` como referencia mensual del histórico. No representa una
+fecha real de cierre ni modifica el tiempo de vida de la oportunidad.
+
+Es idempotente y sólo agrega eventos `historical_creation_reference`; conserva
+identificadores, creación, aprobación interna, desenlaces e importes. Los KPIs
+dan prioridad a `outcome_at` cuando existe. Una reapertura conserva la etiqueta
+como evidencia; una nueva decisión se registra con su fecha real y prevalece
+sobre la referencia histórica. Los registros sin fecha y sin etiqueta siguen
+mostrándose como «Sin fecha».
+
+Validar primero en una copia de producción, comparar conteos/importes y el hash
+de los campos originales; ejecutar dos veces para comprobar idempotencia. La
+etiqueta es compatible con el código anterior; aplicar antes del despliegue
+del código que la consume. No hay DDL ni dependencias nuevas.

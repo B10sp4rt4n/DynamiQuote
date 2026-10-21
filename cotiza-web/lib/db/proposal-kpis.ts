@@ -4,6 +4,16 @@ import { Prisma } from "@prisma/client";
 
 import { prisma } from "@/lib/db/prisma";
 
+// One-time, auditable cohort authorized on 2026-10-21. Only those existing
+// decisions use creation as a reporting reference. A recorded close always wins.
+const hasLegacyCreationReference = Prisma.sql`EXISTS (
+  SELECT 1 FROM proposal_audit_events legacy
+  WHERE legacy.event_id = 'legacy-creation-20261021:' || p.proposal_id
+    AND legacy.tenant_id = p.tenant_id
+    AND legacy.event_type = 'historical_creation_reference'
+)`;
+const reportingDate = Prisma.sql`COALESCE(p.outcome_at, CASE WHEN ${hasLegacyCreationReference} THEN p.created_at END)`;
+
 // Convierte de forma segura cualquier tipo numerico que pueda regresar una
 // consulta $queryRaw (Decimal, bigint por COUNT/SUM, string, number) a number.
 function toNumber(value: unknown): number {
@@ -142,6 +152,8 @@ export async function getProposalAmountTimelineByTenant(
 }
 
 export type ProposalKpiSummary = {
+  legacyCreationOutcomeCount: number;
+  legacyCreationWonAmount: number;
   undatedOutcomeCount: number;
   undatedWonCount: number;
   undatedLostCount: number;
@@ -178,6 +190,8 @@ export async function getProposalKpiSummaryByTenant(
 
   const rows = await prisma.$queryRaw<
     Array<{
+      legacy_creation_outcome_count: bigint;
+      legacy_creation_won_amount: Prisma.Decimal | null;
       undated_outcome_count: bigint;
       undated_won_count: bigint;
       undated_lost_count: bigint;
@@ -199,12 +213,14 @@ export async function getProposalKpiSummaryByTenant(
     }>
   >(Prisma.sql`
     SELECT
-      COUNT(DISTINCT p.proposal_id) FILTER (WHERE p.outcome IN ('won', 'lost') AND p.outcome_at IS NULL) AS undated_outcome_count,
-      COUNT(DISTINCT p.proposal_id) FILTER (WHERE p.outcome = 'won' AND p.outcome_at IS NULL) AS undated_won_count,
-      COUNT(DISTINCT p.proposal_id) FILTER (WHERE p.outcome = 'lost' AND p.outcome_at IS NULL) AS undated_lost_count,
-      SUM(CASE WHEN p.outcome = 'won' AND p.outcome_at IS NULL THEN COALESCE(pi.subtotal_price, 0) ELSE 0 END) AS undated_won_amount,
-      SUM(CASE WHEN p.outcome = 'won' AND p.outcome_at IS NULL THEN COALESCE(pi.subtotal_cost, 0) ELSE 0 END) AS undated_won_cost,
-      SUM(CASE WHEN p.outcome = 'lost' AND p.outcome_at IS NULL THEN COALESCE(pi.subtotal_price, 0) ELSE 0 END) AS undated_lost_amount,
+      COUNT(DISTINCT p.proposal_id) FILTER (WHERE p.outcome IN ('won', 'lost') AND p.outcome_at IS NULL AND ${hasLegacyCreationReference}) AS legacy_creation_outcome_count,
+      SUM(CASE WHEN p.outcome = 'won' AND p.outcome_at IS NULL AND ${hasLegacyCreationReference} THEN COALESCE(pi.subtotal_price, 0) ELSE 0 END) AS legacy_creation_won_amount,
+      COUNT(DISTINCT p.proposal_id) FILTER (WHERE p.outcome IN ('won', 'lost') AND ${reportingDate} IS NULL) AS undated_outcome_count,
+      COUNT(DISTINCT p.proposal_id) FILTER (WHERE p.outcome = 'won' AND ${reportingDate} IS NULL) AS undated_won_count,
+      COUNT(DISTINCT p.proposal_id) FILTER (WHERE p.outcome = 'lost' AND ${reportingDate} IS NULL) AS undated_lost_count,
+      SUM(CASE WHEN p.outcome = 'won' AND ${reportingDate} IS NULL THEN COALESCE(pi.subtotal_price, 0) ELSE 0 END) AS undated_won_amount,
+      SUM(CASE WHEN p.outcome = 'won' AND ${reportingDate} IS NULL THEN COALESCE(pi.subtotal_cost, 0) ELSE 0 END) AS undated_won_cost,
+      SUM(CASE WHEN p.outcome = 'lost' AND ${reportingDate} IS NULL THEN COALESCE(pi.subtotal_price, 0) ELSE 0 END) AS undated_lost_amount,
       COUNT(DISTINCT p.proposal_id) AS total,
       COUNT(DISTINCT p.proposal_id) FILTER (WHERE p.status = 'draft') AS draft,
       COUNT(DISTINCT p.proposal_id) FILTER (WHERE p.status = 'sent') AS sent,
@@ -236,6 +252,8 @@ export async function getProposalKpiSummaryByTenant(
   const nonDraftCount = totalCount - draftCount;
 
   return {
+    legacyCreationOutcomeCount: toNumber(row?.legacy_creation_outcome_count),
+    legacyCreationWonAmount: toNumber(row?.legacy_creation_won_amount),
     undatedOutcomeCount: toNumber(row?.undated_outcome_count),
     undatedWonCount: toNumber(row?.undated_won_count),
     undatedLostCount: toNumber(row?.undated_lost_count),
@@ -336,7 +354,7 @@ export type ProposalMarginTimelinePoint = {
 
 // Activity stays in its creation month. Won revenue/costs use the observed
 // commercial decision month in Mexico City, including old proposals won now.
-// Unknown historical dates remain only in historical totals.
+// The explicitly tagged historical cohort uses creation for reporting only.
 export async function getProposalMarginTimelineByTenant(
   tenantId: string,
   viewerUserId: string | null = null,
@@ -359,7 +377,7 @@ export async function getProposalMarginTimelineByTenant(
     }>
   >(Prisma.sql`
     WITH scoped AS (
-      SELECT p.proposal_id, p.created_at, p.outcome_at, p.outcome, p.status,
+      SELECT p.proposal_id, p.created_at, ${reportingDate} AS reporting_at, p.outcome, p.status,
         SUM(COALESCE(pi.subtotal_price, 0)) AS amount,
         SUM(COALESCE(pi.subtotal_cost, 0)) AS cost
       FROM proposals p
@@ -374,10 +392,10 @@ export async function getProposalMarginTimelineByTenant(
         0 AS won_amount, 0 AS won_cost
       FROM scoped WHERE created_at >= ${monthsAgo(months)}
       UNION ALL
-      SELECT date_trunc('month', outcome_at AT TIME ZONE 'UTC' AT TIME ZONE 'America/Mexico_City'),
+      SELECT date_trunc('month', reporting_at AT TIME ZONE 'UTC' AT TIME ZONE 'America/Mexico_City'),
         0, 0, 0, 0, amount, cost
       FROM scoped
-      WHERE outcome = 'won' AND outcome_at >=
+      WHERE outcome = 'won' AND reporting_at >=
         ((date_trunc('month', CURRENT_TIMESTAMP AT TIME ZONE 'America/Mexico_City')
           - ${months} * interval '1 month') AT TIME ZONE 'America/Mexico_City' AT TIME ZONE 'UTC')
     )
@@ -422,7 +440,8 @@ export type ProposalOutcomeTimelinePoint = {
 
 // Commercial decisions are grouped by their recorded date (Mexico City).
 // Creation activity still supplies zero-decision months. Discarded versions
-// and historical decisions without a date never manufacture monthly closes.
+// are excluded. Explicit historical creation references are reporting dates,
+// not observed closes, and never change outcome_at or opportunity lifetime.
 export async function getProposalOutcomeTimelineByTenant(
   tenantId: string,
   viewerUserId: string | null = null,
@@ -443,7 +462,7 @@ export async function getProposalOutcomeTimelineByTenant(
     }>
   >(Prisma.sql`
     WITH scoped AS (
-      SELECT p.proposal_id, p.created_at, p.outcome_at, p.outcome,
+      SELECT p.proposal_id, p.created_at, ${reportingDate} AS reporting_at, p.outcome,
         SUM(COALESCE(pi.subtotal_price, 0)) AS amount
       FROM proposals p
       LEFT JOIN proposal_items pi ON pi.proposal_id = p.proposal_id AND pi.status != 'deleted'
@@ -454,12 +473,12 @@ export async function getProposalOutcomeTimelineByTenant(
         0 AS won_count, 0 AS lost_count, 0 AS won_amount, 0 AS lost_amount
       FROM scoped WHERE created_at >= ${monthsAgo(months)}
       UNION ALL
-      SELECT date_trunc('month', outcome_at AT TIME ZONE 'UTC' AT TIME ZONE 'America/Mexico_City'),
+      SELECT date_trunc('month', reporting_at AT TIME ZONE 'UTC' AT TIME ZONE 'America/Mexico_City'),
         CASE WHEN outcome = 'won' THEN 1 ELSE 0 END,
         CASE WHEN outcome = 'lost' THEN 1 ELSE 0 END,
         CASE WHEN outcome = 'won' THEN amount ELSE 0 END,
         CASE WHEN outcome = 'lost' THEN amount ELSE 0 END
-      FROM scoped WHERE outcome IN ('won', 'lost') AND outcome_at >=
+      FROM scoped WHERE outcome IN ('won', 'lost') AND reporting_at >=
         ((date_trunc('month', CURRENT_TIMESTAMP AT TIME ZONE 'America/Mexico_City')
           - ${months} * interval '1 month') AT TIME ZONE 'America/Mexico_City' AT TIME ZONE 'UTC')
     )
