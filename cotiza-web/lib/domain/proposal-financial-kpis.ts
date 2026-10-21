@@ -1,4 +1,7 @@
 export type ProposalFinancialMonth = {
+  wonAmount: number;
+  wonProfit: number;
+  wonMarginPct: number;
   period: string;
   proposedAmount: number;
   approvedAmount: number;
@@ -20,7 +23,7 @@ export function fillProposalFinancialMonths(points: ProposalFinancialMonth[]): P
   while (cursor.toISOString().slice(0, 7) <= end) {
     const period = cursor.toISOString();
     result.push(byMonth.get(period.slice(0, 7)) ?? {
-      period, proposedAmount: 0, approvedAmount: 0, proposedProfit: 0,
+      period, wonAmount: 0, wonProfit: 0, wonMarginPct: 0, proposedAmount: 0, approvedAmount: 0, proposedProfit: 0,
       approvedProfit: 0, proposedMarginPct: 0, approvedMarginPct: 0,
     });
     cursor.setUTCMonth(cursor.getUTCMonth() + 1);
@@ -29,8 +32,8 @@ export function fillProposalFinancialMonths(points: ProposalFinancialMonth[]): P
 }
 
 export function summarizeProposalFinancials(points: ProposalFinancialMonth[]) {
-  const revenue = points.reduce((sum, point) => sum + point.proposedAmount, 0);
-  const profit = points.reduce((sum, point) => sum + point.proposedProfit, 0);
+  const revenue = points.reduce((sum, point) => sum + point.wonAmount, 0);
+  const profit = points.reduce((sum, point) => sum + point.wonProfit, 0);
   return {
     revenue,
     profit,
