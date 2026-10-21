@@ -20,4 +20,14 @@ describe("won revenue queries", () => {
     expect(result.wonProfit).toBeCloseTo(66274.94);
     expect(result.approvedAmount).toBe(9000000);
   });
+  it("returns undated wins and losses for display without assigning a month", async () => {
+    mock.$queryRaw.mockResolvedValue([{ undated_outcome_count: BigInt(3), undated_won_count: BigInt(2), undated_lost_count: BigInt(1),
+      undated_won_amount: "672400", undated_won_cost: "570708", undated_lost_amount: "264",
+      won_amount: "672500", won_cost: "570768" }]);
+    expect(await getProposalKpiSummaryByTenant("tenant-a")).toMatchObject({
+      undatedOutcomeCount: 3, undatedWonCount: 2, undatedLostCount: 1,
+      undatedWonAmount: 672400, undatedWonProfit: 101692, undatedLostAmount: 264,
+      wonAmount: 672500, wonProfit: 101732,
+    });
+  });
 });

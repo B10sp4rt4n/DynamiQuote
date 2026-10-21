@@ -143,7 +143,11 @@ export async function getProposalAmountTimelineByTenant(
 
 export type ProposalKpiSummary = {
   undatedOutcomeCount: number;
+  undatedWonCount: number;
+  undatedLostCount: number;
   undatedWonAmount: number;
+  undatedWonProfit: number;
+  undatedLostAmount: number;
   wonAmount: number;
   wonProfit: number;
   approvedAmount: number;
@@ -175,7 +179,11 @@ export async function getProposalKpiSummaryByTenant(
   const rows = await prisma.$queryRaw<
     Array<{
       undated_outcome_count: bigint;
+      undated_won_count: bigint;
+      undated_lost_count: bigint;
       undated_won_amount: Prisma.Decimal | null;
+      undated_won_cost: Prisma.Decimal | null;
+      undated_lost_amount: Prisma.Decimal | null;
       won_amount: Prisma.Decimal | null;
       won_cost: Prisma.Decimal | null;
       approved: bigint;
@@ -192,7 +200,11 @@ export async function getProposalKpiSummaryByTenant(
   >(Prisma.sql`
     SELECT
       COUNT(DISTINCT p.proposal_id) FILTER (WHERE p.outcome IN ('won', 'lost') AND p.outcome_at IS NULL) AS undated_outcome_count,
+      COUNT(DISTINCT p.proposal_id) FILTER (WHERE p.outcome = 'won' AND p.outcome_at IS NULL) AS undated_won_count,
+      COUNT(DISTINCT p.proposal_id) FILTER (WHERE p.outcome = 'lost' AND p.outcome_at IS NULL) AS undated_lost_count,
       SUM(CASE WHEN p.outcome = 'won' AND p.outcome_at IS NULL THEN COALESCE(pi.subtotal_price, 0) ELSE 0 END) AS undated_won_amount,
+      SUM(CASE WHEN p.outcome = 'won' AND p.outcome_at IS NULL THEN COALESCE(pi.subtotal_cost, 0) ELSE 0 END) AS undated_won_cost,
+      SUM(CASE WHEN p.outcome = 'lost' AND p.outcome_at IS NULL THEN COALESCE(pi.subtotal_price, 0) ELSE 0 END) AS undated_lost_amount,
       COUNT(DISTINCT p.proposal_id) AS total,
       COUNT(DISTINCT p.proposal_id) FILTER (WHERE p.status = 'draft') AS draft,
       COUNT(DISTINCT p.proposal_id) FILTER (WHERE p.status = 'sent') AS sent,
@@ -225,7 +237,12 @@ export async function getProposalKpiSummaryByTenant(
 
   return {
     undatedOutcomeCount: toNumber(row?.undated_outcome_count),
-    undatedWonAmount: toNumber(row?.undated_won_amount),    wonAmount: toNumber(row?.won_amount),
+    undatedWonCount: toNumber(row?.undated_won_count),
+    undatedLostCount: toNumber(row?.undated_lost_count),
+    undatedWonAmount: toNumber(row?.undated_won_amount),
+    undatedWonProfit: toNumber(row?.undated_won_amount) - toNumber(row?.undated_won_cost),
+    undatedLostAmount: toNumber(row?.undated_lost_amount),
+    wonAmount: toNumber(row?.won_amount),
     wonProfit: toNumber(row?.won_amount) - toNumber(row?.won_cost),
     approvedAmount: toNumber(row?.approved_amount),
     approvedCount,

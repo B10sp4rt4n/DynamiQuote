@@ -83,7 +83,8 @@ suite("commercial dates against disposable Postgres", () => {
     const opp = (await opportunities.getOpportunityPipelineByTenant("lifecycle-a"))[0];
     expect(opp).toMatchObject({ stage: "won", closedAt: null, lifetimeDays: null });
     const summary = await kpis.getProposalKpiSummaryByTenant("lifecycle-a");
-    expect(summary).toMatchObject({ wonAmount: 100, undatedOutcomeCount: 1, undatedWonAmount: 100 });
+    expect(summary).toMatchObject({ wonAmount: 100, undatedOutcomeCount: 1, undatedWonCount: 1,
+      undatedLostCount: 0, undatedWonAmount: 100, undatedWonProfit: 40, undatedLostAmount: 0 });
     expect((await kpis.getProposalMarginTimelineByTenant("lifecycle-a", null, true, 240)).every((p) => p.wonAmount === 0)).toBe(true);
   });
 
@@ -112,5 +113,26 @@ suite("commercial dates against disposable Postgres", () => {
     expect((await opportunities.getOpportunityPipelineByTenant("lifecycle-a"))[0]).toMatchObject({ closedAt: null, lifetimeDays: null, stage: "won" });
     await proposals.setProposalOutcomeByTenant("lifecycle-a", "lifecycle-another-proposal", "discarded", actor, true);
     expect((await opportunities.getOpportunityPipelineByTenant("lifecycle-a"))[0].closedAt).toBe("2026-10-01T02:00:00.000Z");
+  });
+
+  it("reconciles undated amounts across items, ignores discarded/deleted data and preserves tenant/seller scope", async () => {
+    await db.proposals.createMany({ data: [
+      { proposal_id: "historic-won", tenant_id: "lifecycle-a", created_by: actor.userId, created_by_user_id: actor.userId, created_at: new Date("2026-01-01"), status: "approved", outcome: "won" },
+      { proposal_id: "historic-lost", tenant_id: "lifecycle-a", created_by: actor.userId, created_by_user_id: actor.userId, created_at: new Date("2026-01-01"), status: "approved", outcome: "lost" },
+    ] });
+    await db.proposal_items.createMany({ data: [
+      { item_id: "hw-1", proposal_id: "historic-won", tenant_id: "lifecycle-a", item_number: 1, subtotal_price: 100, subtotal_cost: 60, status: "active", created_at: new Date() },
+      { item_id: "hw-2", proposal_id: "historic-won", tenant_id: "lifecycle-a", item_number: 2, subtotal_price: 200, subtotal_cost: 120, status: "active", created_at: new Date() },
+      { item_id: "hw-deleted", proposal_id: "historic-won", tenant_id: "lifecycle-a", item_number: 3, subtotal_price: 9999, subtotal_cost: 1, status: "deleted", created_at: new Date() },
+      { item_id: "hl-1", proposal_id: "historic-lost", tenant_id: "lifecycle-a", item_number: 1, subtotal_price: 75, subtotal_cost: 50, status: "active", created_at: new Date() },
+    ].map((item) => ({ ...item, quantity: 1, cost_unit: item.subtotal_cost, price_unit: item.subtotal_price })) });
+    const summary = await kpis.getProposalKpiSummaryByTenant("lifecycle-a", actor.userId, false);
+    expect(summary).toMatchObject({ wonAmount: 400, undatedWonCount: 1, undatedLostCount: 1,
+      undatedOutcomeCount: 2, undatedWonAmount: 300, undatedWonProfit: 120, undatedLostAmount: 75 });
+    expect((await kpis.getProposalKpiSummaryByTenant("lifecycle-b"))).toMatchObject({ undatedOutcomeCount: 0, undatedWonAmount: 0 });
+    expect((await kpis.getProposalKpiSummaryByTenant("lifecycle-a", "other", false))).toMatchObject({ undatedOutcomeCount: 0, undatedWonAmount: 0 });
+    expect((await kpis.getProposalMarginTimelineByTenant("lifecycle-a", null, true, 240)).reduce((sum, p) => sum + p.wonAmount, 0)).toBe(100);
+    expect((await kpis.getProposalOutcomeTimelineByTenant("lifecycle-a", null, true, 240)).reduce((sum, p) => sum + p.lostAmount, 0)).toBe(0);
+    expect((await db.proposals.findUniqueOrThrow({ where: { proposal_id: "historic-won" } })).outcome_at).toBeNull();
   });
 });
