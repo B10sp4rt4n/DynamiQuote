@@ -1,12 +1,6 @@
 import { ProposalKpisShell } from "@/components/propuestas/proposal-kpis-shell";
 import { getCurrentTenantContext } from "@/lib/auth/tenant-context";
-import {
-  getProposalKpiSummaryByTenant,
-  getProposalMarginTimelineByTenant,
-  getProposalOutcomeTimelineByTenant,
-  getProposalStatusTimelineByTenant,
-  getSalesRepRankingByTenant,
-} from "@/lib/db/proposal-kpis";
+import { getProposalKpiReportData } from "@/lib/reports/proposal-kpis";
 
 export const dynamic = "force-dynamic";
 
@@ -21,25 +15,6 @@ export default async function ProposalKpisPage() {
     );
   }
 
-  const canSeeAll = tenant.isSuperAdmin || tenant.userRole === "owner" || tenant.userRole === "admin";
-
-  const [summary, statusTimeline, marginTimeline, outcomeTimeline, ranking] = await Promise.all([
-    getProposalKpiSummaryByTenant(tenant.id, tenant.userId, canSeeAll),
-    getProposalStatusTimelineByTenant(tenant.id, tenant.userId, canSeeAll),
-    getProposalMarginTimelineByTenant(tenant.id, tenant.userId, canSeeAll),
-    getProposalOutcomeTimelineByTenant(tenant.id, tenant.userId, canSeeAll),
-    canSeeAll ? getSalesRepRankingByTenant(tenant.id) : Promise.resolve([]),
-  ]);
-
-  return (
-    <ProposalKpisShell
-      canSeeAll={canSeeAll}
-      marginTimeline={marginTimeline}
-      outcomeTimeline={outcomeTimeline}
-      ranking={ranking}
-      statusTimeline={statusTimeline}
-      summary={summary}
-      tenantName={tenant.name}
-    />
-  );
+  const report = await getProposalKpiReportData(tenant);
+  return <ProposalKpisShell {...report} />;
 }
