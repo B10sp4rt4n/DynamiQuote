@@ -14,6 +14,8 @@ import {
   YAxis,
 } from "recharts";
 
+import { DownloadKpiReportButton } from "@/components/propuestas/download-kpi-report-button";
+
 import { fillProposalFinancialMonths, summarizeProposalFinancials } from "@/lib/domain/proposal-financial-kpis";
 
 import type {
@@ -397,6 +399,8 @@ export function ProposalKpisShell({
             : "Propuestas creadas por ti."}
         </p>
       </div>
+
+      <DownloadKpiReportButton />
 
       <div className="mt-6 grid grid-cols-2 gap-3 sm:grid-cols-3 lg:grid-cols-6">
         <StatTile label="Total de propuestas" value={String(summary.totalCount)} />
