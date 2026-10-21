@@ -31,10 +31,19 @@ function viaLabel(value: unknown): string {
   return typeof value === "string" ? (VIA_LABELS[value] ?? value) : "documento";
 }
 
+function closeDateLabel(value: unknown): string {
+  if (typeof value !== "string" || !Number.isFinite(Date.parse(value))) return "sin fecha confirmada";
+  return new Intl.DateTimeFormat("es-MX", { dateStyle: "medium", timeZone: "America/Mexico_City" }).format(new Date(value));
+}
+
 function describe(item: ProposalAuditTimelineItem): { detail: string | null; title: string; tone: Tone } {
   const d = item.details;
 
   switch (item.type) {
+    case "outcome_date_changed":
+      return { title: "Fecha de cierre corregida",
+        detail: `${closeDateLabel(d["previousOutcomeAt"])} → ${closeDateLabel(d["outcomeAt"])}. La fecha elegida determina el mes de los KPIs.`,
+        tone: "neutral" };
     case "historical_creation_reference":
       return { title: "Referencia histórica asignada",
         detail: "Para los KPIs se usa la fecha de creación. La fecha real de cierre no se modifica.", tone: "neutral" };
@@ -42,7 +51,7 @@ function describe(item: ProposalAuditTimelineItem): { detail: string | null; tit
       const labels: Record<string, string> = { won: "Ganada", lost: "Perdida", discarded: "Descartada" };
       const label = (value: unknown) => typeof value === "string" ? labels[value] ?? value : "Sin desenlace";
       return { title: "Decisión comercial registrada",
-        detail: `${label(d["fromOutcome"])} → ${label(d["toOutcome"])}${d["trigger"] === "workflow_status" ? " · reapertura por cambio de estatus" : ""}`,
+        detail: `${label(d["fromOutcome"])} → ${label(d["toOutcome"])}${d["trigger"] === "workflow_status" ? " · reapertura por cambio de estatus" : ""}${d["selectedCloseDate"] ? ` · cierre: ${closeDateLabel(d["outcomeAt"])}` : ""}`,
         tone: "neutral" };
     }
     case "status_change_requested": {

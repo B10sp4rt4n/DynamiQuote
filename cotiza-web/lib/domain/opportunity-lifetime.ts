@@ -1,5 +1,8 @@
-// Full elapsed 24-hour periods. Closed opportunities without an observed
-// decision date deliberately have no duration; creation is never a fallback.
+import { mexicoCalendarDate } from "./commercial-close-date";
+
+// Open opportunities retain full elapsed 24-hour periods. A closed opportunity
+// uses calendar days: the selected close is a date, not an asserted hour.
+// Historical decisions without a confirmed date still have no duration.
 export function opportunityLifetimeDays(
   createdAt: string,
   closedAt: string | null,
@@ -8,6 +11,13 @@ export function opportunityLifetimeDays(
 ): number | null {
   const end = stage === "open" ? now.getTime() : closedAt ? Date.parse(closedAt) : NaN;
   const start = Date.parse(createdAt);
-  if (!Number.isFinite(start) || !Number.isFinite(end) || end < start) return null;
+  if (!Number.isFinite(start) || !Number.isFinite(end)) return null;
+  if (stage !== "open") {
+    const startDay = mexicoCalendarDate(createdAt);
+    const endDay = mexicoCalendarDate(new Date(end));
+    if (endDay < startDay) return null;
+    return (Date.parse(endDay) - Date.parse(startDay)) / 86_400_000;
+  }
+  if (end < start) return null;
   return Math.floor((end - start) / 86_400_000);
 }

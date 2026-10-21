@@ -1,4 +1,5 @@
 import { NextResponse } from "next/server";
+import { closeDateInstant } from "@/lib/domain/commercial-close-date";
 
 import { getCurrentTenantContext } from "@/lib/auth/tenant-context";
 import { getProposalStatusForAudit, recordProposalAuditEvent } from "@/lib/db/proposal-audit";
@@ -205,6 +206,7 @@ export async function PATCH(request: Request, context: RouteContext) {
     parsed.data.outcome,
     { isSuperAdmin: tenant.isSuperAdmin, userId: tenant.userId, userRole: tenant.userRole },
     canSeeAll,
+    { closedOn: parsed.data.closedOn, expectedOutcome: parsed.data.expectedOutcome, expectedOutcomeAt: parsed.data.expectedOutcomeAt },
   );
 
   if (result === "not_found") {
@@ -222,5 +224,14 @@ export async function PATCH(request: Request, context: RouteContext) {
     );
   }
 
-  return NextResponse.json({ outcome: parsed.data.outcome }, { status: 200 });
+  if (result === "invalid_date") {
+    return NextResponse.json({ error: "El cierre debe ser una fecha válida, desde la creación de la oportunidad hasta hoy" }, { status: 422 });
+  }
+  if (result === "conflict") {
+    return NextResponse.json({ error: "La decisión cambió mientras editabas. Recarga la propuesta antes de guardar" }, { status: 409 });
+  }
+
+  return NextResponse.json({ outcome: parsed.data.outcome,
+    outcomeAt: parsed.data.closedOn ? closeDateInstant(parsed.data.closedOn).toISOString() : null,
+  }, { status: 200 });
 }
