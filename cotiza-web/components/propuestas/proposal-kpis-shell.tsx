@@ -5,6 +5,9 @@ import {
   BarChart,
   CartesianGrid,
   Legend,
+  Line,
+  LineChart,
+  ReferenceLine,
   ResponsiveContainer,
   Tooltip,
   XAxis,
@@ -196,31 +199,53 @@ function UndatedChartNote({ visible }: { visible: boolean }) {
   </p> : null;
 }
 
-// Margen (%) por mes -- version por periodo de la tarjeta "Margen promedio"
-// (summary.avgMarginPct), que solo da un numero tenant-wide. Eje de
-// porcentaje, no de moneda: nunca combinar con Utilidad ($) en la misma
-// grafica (dos escalas distintas -- ver skill dataviz, "nunca dual-axis").
-function MarginTimelineChart({ data }: { data: FinancialChartPoint[] }) {
+// Columnas y tendencia en porcentaje comparten el margen ponderado del periodo.
+function MarginTimelineChart({ data, averageMarginPct, trend = false }: {
+  data: FinancialChartPoint[];
+  averageMarginPct: number | null;
+  trend?: boolean;
+}) {
   if (data.length === 0) {
     return <EmptyChartState />;
   }
 
+  const chartData = data.map((point) => ({
+    ...point,
+    wonMarginPct: point.wonAmount !== 0 ? point.wonMarginPct : null,
+  }));
+  const Chart = trend ? LineChart : BarChart;
+
   return (
-    <ResponsiveContainer height={280} width="100%">
-      <BarChart data={data}>
-        <CartesianGrid stroke="#e4e4e7" vertical={false} />
-        <XAxis axisLine={{ stroke: "#e4e4e7" }} dataKey="periodLabel" tick={{ fill: "#71717a", fontSize: 11 }} tickLine={false} />
-        <YAxis
-          axisLine={false}
-          tick={{ fill: "#71717a", fontSize: 11 }}
-          tickFormatter={(value: number) => formatPercent(value)}
-          tickLine={false}
-        />
-        <Tooltip formatter={(value) => formatPercent(Number(value))} />
-        <Legend wrapperStyle={{ fontSize: 12 }} />
-        <Bar dataKey="wonMarginPct" name="Margen de propuestas ganadas" fill={OUTCOME_COLORS.won} radius={[4, 4, 0, 0]} />
-      </BarChart>
-    </ResponsiveContainer>
+    <>
+      {averageMarginPct !== null ? (
+        <p className="mb-2 flex items-center gap-2 text-xs text-zinc-600">
+          <span aria-hidden="true" className="inline-block w-6 border-t-2 border-dashed border-zinc-700" />
+          Promedio ponderado del periodo: {formatPercent(averageMarginPct)}
+        </p>
+      ) : null}
+      <ResponsiveContainer height={280} width="100%">
+        <Chart data={chartData}>
+          <CartesianGrid stroke="#e4e4e7" vertical={false} />
+          <XAxis axisLine={{ stroke: "#e4e4e7" }} dataKey="periodLabel" tick={{ fill: "#71717a", fontSize: 11 }} tickLine={false} />
+          <YAxis
+            axisLine={false}
+            tick={{ fill: "#71717a", fontSize: 11 }}
+            tickFormatter={(value: number) => formatPercent(value)}
+            tickLine={false}
+          />
+          <Tooltip formatter={(value) => formatPercent(Number(value))} />
+          <Legend wrapperStyle={{ fontSize: 12 }} />
+          {averageMarginPct !== null ? (
+            <ReferenceLine y={averageMarginPct} stroke="#3f3f46" strokeDasharray="6 4" strokeWidth={2} ifOverflow="extendDomain" />
+          ) : null}
+          {trend ? (
+            <Line type="linear" dataKey="wonMarginPct" name="Margen mensual de ganadas" stroke={OUTCOME_COLORS.won} strokeWidth={3} dot={{ r: 4 }} activeDot={{ r: 6 }} connectNulls={false} />
+          ) : (
+            <Bar dataKey="wonMarginPct" name="Margen de propuestas ganadas" fill={OUTCOME_COLORS.won} radius={[4, 4, 0, 0]} />
+          )}
+        </Chart>
+      </ResponsiveContainer>
+    </>
   );
 }
 
@@ -477,7 +502,21 @@ export function ProposalKpisShell({
           <p className="text-sm font-semibold text-zinc-900">Margen de ganadas por mes (%)</p>
           <UndatedChartNote visible={summary.undatedWonCount > 0} />
           <div className="mt-3">
-            <MarginTimelineChart data={financialChartData} />
+            <MarginTimelineChart data={financialChartData} averageMarginPct={financialSummary.marginPct} />
+          </div>
+        </div>
+        <div className="rounded-xl border border-zinc-200 p-4">
+          <p className="text-sm font-semibold text-zinc-900">Tendencia del margen mes a mes (%)</p>
+          <p className="mt-1 text-xs text-zinc-500">
+            La línea punteada muestra el promedio ponderado: utilidad total / revenue ganado del periodo.
+            Los meses sin revenue quedan sin punto; «Sin fecha» se excluye de la tendencia y del promedio.
+          </p>
+          <div className="mt-3">
+            <MarginTimelineChart
+              data={financialTimeline.map((point) => ({ ...point, periodLabel: formatPeriodLabel(point.period) }))}
+              averageMarginPct={financialSummary.marginPct}
+              trend
+            />
           </div>
         </div>
         <div className="rounded-xl border border-zinc-200 p-4">
