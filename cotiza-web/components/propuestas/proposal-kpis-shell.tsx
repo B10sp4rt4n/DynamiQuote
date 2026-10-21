@@ -385,11 +385,22 @@ export function ProposalKpisShell({
         Pendientes de acción (borrador, enviada o en revisión): {summary.pendingActionCount}
       </p>
 
+      {summary.legacyCreationOutcomeCount > 0 ? (
+        <section className="mt-6 rounded-xl border border-blue-200 bg-blue-50 p-4" aria-label="Histórico por fecha de creación">
+          <h2 className="text-base font-semibold text-zinc-900">Histórico por fecha de creación</h2>
+          <p className="mt-1 text-sm text-zinc-700">
+            {summary.legacyCreationOutcomeCount} propuestas ganadas o perdidas existentes se agrupan por su fecha de creación.
+            Revenue ganado incluido con esta referencia: {formatCurrency(summary.legacyCreationWonAmount)}.
+            Desde el 21 de octubre de 2026, las nuevas decisiones se agrupan por su fecha real de cierre y conservan su fecha de creación.
+          </p>
+        </section>
+      ) : null}
+
       {summary.undatedOutcomeCount > 0 ? (
         <section className="mt-6 rounded-xl border border-amber-200 bg-amber-50 p-4" aria-label="Cierres históricos sin fecha">
           <h2 className="text-base font-semibold text-zinc-900">Ganadas y perdidas sin fecha de cierre</h2>
           <p className="mt-1 text-sm text-zinc-700">
-            {summary.undatedWonCount} ganadas y {summary.undatedLostCount} perdidas siguen incluidas en el histórico.
+            Ganadas: {summary.undatedWonCount}. Perdidas: {summary.undatedLostCount}. Siguen incluidas en el histórico.
             Se muestran como «Sin fecha» en las gráficas y la tabla; no se les asigna un mes ni se incluyen en el promedio mensual.
           </p>
           <div className="mt-3 grid gap-3 sm:grid-cols-3">
@@ -408,16 +419,16 @@ export function ProposalKpisShell({
             ? `${formatPeriodLabel(financialTimeline[0].period)} a ${formatPeriodLabel(financialTimeline[financialTimeline.length - 1].period)} · ${financialTimeline.length} meses mostrados.`
             : "Sin propuestas en el periodo mostrado."}
           {" "}Revenue suma únicamente propuestas marcadas como ganadas. El margen resta solo sus costos.
-          Agrupado por mes en que se declaró ganada, en horario de Ciudad de México.
+          Nuevos cierres por mes de decisión; histórico etiquetado por mes de creación. Horario de Ciudad de México.
           Montos en MXN antes de IVA; no equivalen a cobros recibidos.
         </p>
         <div className="mt-4 grid gap-3 sm:grid-cols-2 xl:grid-cols-4">
-          <StatTile label="Revenue ganado con fecha en el periodo" value={formatCurrency(financialSummary.revenue)} />
-          <StatTile label="Margen de ganadas con fecha en pesos" value={formatCurrency(financialSummary.profit)} />
+          <StatTile label="Revenue ganado del periodo" value={formatCurrency(financialSummary.revenue)} />
+          <StatTile label="Margen de ganadas en pesos" value={formatCurrency(financialSummary.profit)} />
           <StatTile label="Margen ponderado de ganadas" value={financialSummary.marginPct === null ? "Sin revenue" : formatPercent(financialSummary.marginPct)} />
           <StatTile label="Revenue promedio mensual" value={formatCurrency(financialSummary.averageMonthlyRevenue)} />
         </div>
-        <p className="mt-2 text-xs text-zinc-500">Resumen de los meses con fecha; excluye el grupo «Sin fecha». El promedio incluye los meses intermedios sin propuestas.</p>
+        <p className="mt-2 text-xs text-zinc-500">Incluye los cierres fechados y el histórico por creación; excluye el grupo «Sin fecha». El promedio incluye los meses intermedios sin propuestas.</p>
         <details className="mt-4 text-sm text-zinc-700">
           <summary className="cursor-pointer font-medium">Ver montos mensuales</summary>
           <div className="mt-3 overflow-x-auto">
@@ -429,7 +440,7 @@ export function ProposalKpisShell({
                 <td className="px-3">{formatCurrency(point.wonAmount)}</td><td className="px-3">{formatCurrency(point.wonProfit)}</td><td className="px-3">{formatCurrency(point.proposedAmount)}</td><td className="pl-3">{formatCurrency(point.approvedAmount)}</td>
               </tr>)}</tbody>
               <tfoot>
-                <tr className="font-semibold"><th scope="row" className="py-2 pr-4 text-left">Total del periodo con fecha</th><td className="px-3">{formatCurrency(financialSummary.revenue)}</td><td className="px-3">{formatCurrency(financialSummary.profit)}</td><td className="px-3">{formatCurrency(financialTimeline.reduce((sum, point) => sum + point.proposedAmount, 0))}</td><td className="pl-3">{formatCurrency(financialSummary.approvedRevenue)}</td></tr>
+                <tr className="font-semibold"><th scope="row" className="py-2 pr-4 text-left">Total del periodo</th><td className="px-3">{formatCurrency(financialSummary.revenue)}</td><td className="px-3">{formatCurrency(financialSummary.profit)}</td><td className="px-3">{formatCurrency(financialTimeline.reduce((sum, point) => sum + point.proposedAmount, 0))}</td><td className="pl-3">{formatCurrency(financialSummary.approvedRevenue)}</td></tr>
                 {summary.undatedWonCount > 0 ? <tr className="bg-amber-50"><th scope="row" className="py-2 pr-4 text-left">Sin fecha de cierre (histórico)</th><td className="px-3">{formatCurrency(summary.undatedWonAmount)}</td><td className="px-3">{formatCurrency(summary.undatedWonProfit)}</td><td className="px-3">—</td><td className="pl-3">—</td></tr> : null}
               </tfoot>
             </table>
@@ -446,6 +457,7 @@ export function ProposalKpisShell({
         </div>
         <div className="rounded-xl border border-zinc-200 p-4">
           <p className="text-sm font-semibold text-zinc-900">Revenue ganado por mes</p>
+          {summary.legacyCreationOutcomeCount > 0 ? <p className="mt-1 text-xs text-zinc-600">Histórico por creación; nuevos cierres por fecha de decisión.</p> : null}
           <UndatedChartNote visible={summary.undatedWonCount > 0} />
           <div className="mt-3">
             <WonTimelineChart data={financialChartData} metric="wonAmount" />
@@ -454,7 +466,7 @@ export function ProposalKpisShell({
         <div className="rounded-xl border border-zinc-200 p-4">
           <p className="text-sm font-semibold text-zinc-900">Ganado vs. perdido (por mes)</p>
           <p className="mt-1 text-xs text-zinc-500">
-            Por fecha de decisión registrada, en horario de Ciudad de México. Excluye descartadas.
+            Histórico por creación; nuevos cierres por fecha de decisión. Horario de Ciudad de México. Excluye descartadas.
           </p>
           <UndatedChartNote visible={summary.undatedOutcomeCount > 0} />
           <div className="mt-3">

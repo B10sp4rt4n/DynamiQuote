@@ -1,4 +1,5 @@
 import { afterAll, beforeAll, describe, expect, it, vi } from "vitest";
+import { readFileSync } from "node:fs";
 
 vi.mock("server-only", () => ({}));
 
@@ -135,4 +136,38 @@ suite("commercial dates against disposable Postgres", () => {
     expect((await kpis.getProposalOutcomeTimelineByTenant("lifecycle-a", null, true, 240)).reduce((sum, p) => sum + p.lostAmount, 0)).toBe(0);
     expect((await db.proposals.findUniqueOrThrow({ where: { proposal_id: "historic-won" } })).outcome_at).toBeNull();
   });
+  it("tags only existing undated decisions once, restores creation months and prioritizes real closes after reopening", async () => {
+    const migration = readFileSync("prisma/manual/20261021_legacy_outcome_creation_reference.sql", "utf8");
+    // The migration has one INSERT; its reason contains a semicolon, so use
+    // the full SQL body as one statement, preserving quoted text.
+    const insert = migration.slice(migration.indexOf("INSERT INTO"), migration.lastIndexOf("COMMIT;")).trim().replace(/;$/, "");
+    await db.$executeRawUnsafe(insert);
+    await db.$executeRawUnsafe(insert);
+    expect(await db.proposal_audit_events.count({ where: { event_type: "historical_creation_reference" } })).toBe(2);
+    const summary = await kpis.getProposalKpiSummaryByTenant("lifecycle-a", actor.userId, false);
+    expect(summary).toMatchObject({ legacyCreationOutcomeCount: 2, legacyCreationWonAmount: 300,
+      undatedOutcomeCount: 0, undatedWonAmount: 0, wonAmount: 400 });
+    const timeline = await kpis.getProposalMarginTimelineByTenant("lifecycle-a", null, true, 240);
+    expect(timeline.find(p => p.period.startsWith("2025-12"))).toMatchObject({ wonAmount: 300, wonProfit: 120 });
+    expect(timeline.find(p => p.period.startsWith("2026-09"))).toMatchObject({ wonAmount: 100, wonProfit: 40 });
+    const outcomes = await kpis.getProposalOutcomeTimelineByTenant("lifecycle-a", null, true, 240);
+    expect(outcomes.find(p => p.period.startsWith("2025-12"))).toMatchObject({ wonCount: 1, lostCount: 1, wonAmount: 300, lostAmount: 75 });
+    expect((await db.proposals.findUniqueOrThrow({ where: { proposal_id: "historic-won" } })).outcome_at).toBeNull();
+    expect((await kpis.getProposalKpiSummaryByTenant("lifecycle-b"))).toMatchObject({ legacyCreationOutcomeCount: 0 });
+    expect((await kpis.getProposalKpiSummaryByTenant("lifecycle-a", "other", false))).toMatchObject({ legacyCreationOutcomeCount: 0 });
+    await proposals.updateProposalWorkflowByTenant("lifecycle-a", "historic-won", { status: "draft" }, actor);
+    // Reusing a historical proposal still requires a new, observed decision.
+    expect((await kpis.getProposalKpiSummaryByTenant("lifecycle-a"))).toMatchObject({ legacyCreationOutcomeCount: 1, legacyCreationWonAmount: 0 });
+    await db.proposals.update({ where: { proposal_id: "historic-won" }, data: { status: "approved" } });
+    await proposals.setProposalOutcomeByTenant("lifecycle-a", "historic-won", "won", actor, true);
+    const closed = await db.proposals.findUniqueOrThrow({ where: { proposal_id: "historic-won" } });
+    expect(closed.created_at.toISOString()).toBe("2026-01-01T00:00:00.000Z");
+    expect(closed.outcome_at).not.toBeNull();
+    expect((await kpis.getProposalKpiSummaryByTenant("lifecycle-a"))).toMatchObject({ legacyCreationOutcomeCount: 1, legacyCreationWonAmount: 0 });
+    const refreshed = await kpis.getProposalMarginTimelineByTenant("lifecycle-a", null, true, 240);
+    expect(refreshed.find(p => p.period.startsWith("2025-12"))).toBeUndefined();
+    expect(refreshed.reduce((sum, p) => sum + p.wonAmount, 0)).toBe(400);
+    expect(await db.proposal_audit_events.count({ where: { proposal_id: "historic-won", event_type: "historical_creation_reference" } })).toBe(1);
+  });
+
 });

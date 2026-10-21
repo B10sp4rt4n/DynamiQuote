@@ -35,6 +35,9 @@ function describe(item: ProposalAuditTimelineItem): { detail: string | null; tit
   const d = item.details;
 
   switch (item.type) {
+    case "historical_creation_reference":
+      return { title: "Referencia histórica asignada",
+        detail: "Para los KPIs se usa la fecha de creación. La fecha real de cierre no se modifica.", tone: "neutral" };
     case "outcome_changed": {
       const labels: Record<string, string> = { won: "Ganada", lost: "Perdida", discarded: "Descartada" };
       const label = (value: unknown) => typeof value === "string" ? labels[value] ?? value : "Sin desenlace";
