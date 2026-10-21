@@ -224,7 +224,7 @@ export function InicioShell({
         <MetricCard helper="Propuestas ya enviadas" title="Enviadas" value={proposalStatusCounts.sent} />
         <MetricCard helper="Fuera de política de margen" title="Bloqueadas" value={proposalMarginBlockedCount} />
         {canSeeAll ? (
-          <MetricCard helper="Usuarios operando dentro del tenant" title="Usuarios activos" value={activeUsers} />
+          <MetricCard helper={`Cuentas habilitadas en ${tenantName}`} title="Usuarios habilitados" value={activeUsers} />
         ) : null}
       </div>
 
