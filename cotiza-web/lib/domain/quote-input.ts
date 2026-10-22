@@ -12,7 +12,14 @@ export const quoteInputLineSchema = z.object({
   serviceOrigin: z.string().trim().max(200).default(""),
 });
 export type QuoteInputLine = z.infer<typeof quoteInputLineSchema>;
-export type QuoteInputSource = { kind: "template" | "excel"; id?: string; revision?: string };
+export type QuoteInputSource = { kind: "template" | "excel" | "threatdown-pdf"; id?: string; revision?: string;
+  commercial?: {
+    currency: "USD"; targetCurrency: "MXN"; exchangeRate: number; marginPct: number;
+    expiresOn: string; startsOn: string; endsOn: string; termMonths: number; preliminary: boolean;
+    netTotal: number; reviewedBy: string | null;
+    lines: Array<{ sku: string; quantity: number; costUnit: number; netTotal: number }>;
+  };
+};
 
 export class QuoteInputError extends Error {
   constructor(message: string, public readonly status = 422) { super(message); }
