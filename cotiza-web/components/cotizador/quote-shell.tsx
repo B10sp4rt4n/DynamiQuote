@@ -23,6 +23,7 @@ type TenantOption = {
 };
 
 type QuoteShellProps = {
+  threatDownImportEnabled?: boolean;
   canSwitchTenant?: boolean;
   currentTenantSlug: string;
   items: QuoteGroupSummary[];
@@ -73,6 +74,7 @@ function sortQuotes(items: QuoteGroupSummary[]): QuoteGroupSummary[] {
 }
 
 export function QuoteShell({
+  threatDownImportEnabled = false,
   canSwitchTenant = false,
   currentTenantSlug,
   items,
@@ -811,6 +813,7 @@ export function QuoteShell({
       </div>
       {quoteItems.length > 0 ? (
         <QuoteLineEditor
+          threatDownImportEnabled={threatDownImportEnabled}
           forcedSelectedQuoteId={activeQuoteId}
           onSelectedQuoteChange={setActiveQuoteId}
           onQuoteVersionSaved={handleQuoteVersionSaved}

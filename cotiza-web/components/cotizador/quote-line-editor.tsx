@@ -28,6 +28,7 @@ type ApiErrorResponse = {
 export type QuoteVersionSaved = QuoteVersionResponse;
 
 type QuoteLineEditorProps = {
+  threatDownImportEnabled?: boolean;
   forcedSelectedQuoteId?: string | null;
   onSelectedQuoteChange?: (quoteId: string) => void;
   onQuoteVersionSaved?: (quote: QuoteVersionSaved) => void;
@@ -444,6 +445,7 @@ function StatusBadge({ status }: { status: string }) {
 }
 
 export function QuoteLineEditor({
+  threatDownImportEnabled = false,
   forcedSelectedQuoteId,
   onSelectedQuoteChange,
   onQuoteVersionSaved,
@@ -1373,10 +1375,10 @@ export function QuoteLineEditor({
             Usar plantilla
           </button>
           <SaveTemplateButton key={selectedQuoteId} quoteId={selectedQuoteId} disabled={!selectedQuoteId || loading || saving || lines.length === 0 || hasUnsavedTemplateChanges} />
-          <button className="rounded-lg border border-sky-300 px-3 py-2 text-sm font-medium text-sky-700 disabled:opacity-50"
+          {threatDownImportEnabled ? <button className="rounded-lg border border-sky-300 px-3 py-2 text-sm font-medium text-sky-700 disabled:opacity-50"
             disabled={!selectedQuoteId || loading || saving || hasUnsavedTemplateChanges}
             title={hasUnsavedTemplateChanges ? "Guarda los cambios antes de importar" : undefined}
-            onClick={() => setShowThreatDownImport(true)} type="button">Importar PDF ThreatDown</button>
+            onClick={() => setShowThreatDownImport(true)} type="button">Importar PDF ThreatDown</button> : null}
           <button
             className="rounded-lg border border-zinc-300 px-3 py-2 text-sm font-medium text-zinc-700 hover:bg-zinc-100 disabled:opacity-50"
             disabled={!selectedQuoteId}
@@ -1450,7 +1452,7 @@ export function QuoteLineEditor({
         )}
       </div>
 
-      {showThreatDownImport && selectedQuote ? <ThreatDownImportModal key={selectedQuoteId}
+      {threatDownImportEnabled && showThreatDownImport && selectedQuote ? <ThreatDownImportModal key={selectedQuoteId}
         quoteId={selectedQuoteId} clientName={selectedQuote.clientName} onClose={() => setShowThreatDownImport(false)}
         onImported={(data: QuoteLinesPutResponse) => {
           setShowThreatDownImport(false);

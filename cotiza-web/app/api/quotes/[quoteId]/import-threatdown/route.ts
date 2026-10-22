@@ -2,6 +2,7 @@ import { createHash } from "node:crypto";
 import { NextResponse } from "next/server";
 import { z } from "zod";
 import { getCurrentTenantContext } from "@/lib/auth/tenant-context";
+import { isTenantCapabilityEnabled, THREATDOWN_PDF_IMPORT } from "@/lib/db/tenant-capabilities";
 import { isQuoteVisibleToViewer } from "@/lib/db/quotes";
 import { createDraftFromQuoteInput } from "@/lib/db/quote-input";
 import { readThreatDownPdf } from "@/lib/import/threatdown-pdf";
@@ -21,6 +22,9 @@ const applySchema = z.object({
 export async function POST(request: Request, { params }: { params: Promise<{ quoteId: string }> }) {
   const tenant = await getCurrentTenantContext();
   if (!tenant) return NextResponse.json({ error: "No autorizado" }, { status: 401 });
+  if (!await isTenantCapabilityEnabled(tenant.id, THREATDOWN_PDF_IMPORT)) {
+    return NextResponse.json({ error: "La importación de PDF ThreatDown no está habilitada para esta empresa. Contacta a superadmin." }, { status: 403 });
+  }
   const { quoteId } = await params;
   const canSeeAll = tenant.isSuperAdmin || tenant.userRole === "owner" || tenant.userRole === "admin";
   if (!await isQuoteVisibleToViewer(tenant.id, quoteId, tenant.userId, canSeeAll)) {
