@@ -16,6 +16,7 @@ type ProposalOutcomeActionsProps = {
   initialOutcome: ProposalOutcome;
   initialOutcomeAt?: string | null;
   createdAt?: string;
+  closeDateMinimum?: string;
   opportunityCreatedAt?: string | null;
   proposalId: string;
   status: ProposalStatus;
@@ -25,7 +26,7 @@ function displayDate(iso: string): string {
   return new Intl.DateTimeFormat("es-MX", { dateStyle: "medium", timeZone: "America/Mexico_City" }).format(new Date(iso));
 }
 
-export function ProposalOutcomeActions({ initialOutcome, initialOutcomeAt, createdAt, opportunityCreatedAt, proposalId, status }: ProposalOutcomeActionsProps) {
+export function ProposalOutcomeActions({ initialOutcome, initialOutcomeAt, createdAt, closeDateMinimum, opportunityCreatedAt, proposalId, status }: ProposalOutcomeActionsProps) {
   const router = useRouter();
   const [outcome, setOutcome] = useState<ProposalOutcome>(initialOutcome);
   const [outcomeAt, setOutcomeAt] = useState(initialOutcomeAt ?? null);
@@ -35,7 +36,7 @@ export function ProposalOutcomeActions({ initialOutcome, initialOutcomeAt, creat
   const [error, setError] = useState<string | null>(null);
   const canAssignWonLost = status === "sent" || status === "approved";
   const start = opportunityCreatedAt ?? createdAt;
-  const minimumDay = start ? mexicoCalendarDate(start) : undefined;
+  const minimumDay = closeDateMinimum ?? (start ? mexicoCalendarDate(start) : undefined);
   const dateId = `close-date-${proposalId}`;
 
   function openCalendar(next: "won" | "lost") {
