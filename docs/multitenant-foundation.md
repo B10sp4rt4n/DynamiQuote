@@ -149,3 +149,29 @@ Los controles Next.js y PostgreSQL preparados aquí no certifican que toda la
 plataforma legacy sea multitenant. El PR sigue en borrador, sin despliegue de
 producción ni migración del CRM anterior. Para liberar: login real, confirmar
 el despliegue que usa Cotiza y resolver o aislar el acceso legacy documentado.
+
+## Contención del acceso antiguo y bloqueo de liberación
+
+`app.py` verifica la base antes de inicializarla, autenticar usuarios o ejecutar
+migraciones. Si tiene más de un tenant (también cuenta inactivos), cero tenants
+en PostgreSQL, una identidad de tenant inválida o no puede comprobar el estado,
+se detiene. Solo se conserva el arranque de SQLite local nuevo y bases con un
+solo tenant. No hay una variable de entorno para saltar esta comprobación.
+Con los cuatro tenants actuales, el entrypoint antiguo queda bloqueado al
+recibir este cambio. No se han detenido servicios ni cambiado despliegues.
+
+Nueve pruebas Python pasan para bases nuevas, de un tenant, compartidas,
+tenants inactivos, estado desconocido y orden del guard antes del setup. Esta
+contención del entrypoint no hace seguras las funciones `database.py` para
+consumo directo: siguen fuera del contrato de integración y no deben exponerse
+como API ni reutilizarse sin tenant obligatorio.
+
+Se localizó el proyecto Vercel `dynami-quote`, vinculado al repositorio
+B10sp4rt4n/DynamiQuote, en el equipo `salvador-ruiz-esparzas-projects`
+(`team_wCPRqvRGXWpRT4eUvfAz38jF`). Las dos conexiones disponibles devuelven
+403 al inspeccionar ese equipo. El mecanismo de recuperación `authorize_team_access`
+que indica Vercel no está expuesto entre las herramientas disponibles, y no hay
+credencial Vercel CLI en el entorno. Esto bloquea confirmar el despliegue y
+contrastar usuarios con Clerk: necesita autorización de la integración para
+ese equipo. Railway está autenticado y sano; reinstalar Railway no resuelve
+esta autorización distinta. No se ejecutó un despliegue por una ruta alternativa.
