@@ -88,7 +88,13 @@ function readNumber(value: unknown): number {
   return Number.NaN;
 }
 
-export async function GET(_: Request, context: RouteContext) {
+// Avoid Next's automatic HEAD -> GET fallback issuing another document.
+export async function HEAD(request: Request, context: RouteContext) {
+  return GET(request, context);
+}
+
+export async function GET(request: Request, context: RouteContext) {
+  const metadataOnly = request.method === "HEAD";
   const tenant = await getCurrentTenantContext();
 
   if (!tenant) {
@@ -121,6 +127,19 @@ export async function GET(_: Request, context: RouteContext) {
     marginCanAuthorizeFinal: payload.marginCanAuthorizeFinal,
     status: payload.status,
   });
+
+  if (metadataOnly) {
+    const filename = sanitizeFilename(payload.formal?.proposalNumber ?? payload.proposalId);
+    return new NextResponse(null, {
+      headers: {
+        "Cache-Control": "no-store",
+        "Content-Disposition": `attachment; filename="${filename}.xlsx"`,
+        "Content-Type": "application/vnd.openxmlformats-officedocument.spreadsheetml.sheet",
+        "X-Content-Type-Options": "nosniff",
+      },
+      status: issuanceGate.kind === "blocked" ? 403 : 200,
+    });
+  }
 
   if (issuanceGate.kind === "blocked") {
     await recordProposalAuditEvent({
@@ -155,6 +174,7 @@ export async function GET(_: Request, context: RouteContext) {
     eventType: "document_issued",
     payload: {
       forced: issuanceGate.forced,
+      httpMethod: request.method,
       status: payload.status,
       via: "xlsx",
       watermark: issuanceGate.watermark,
