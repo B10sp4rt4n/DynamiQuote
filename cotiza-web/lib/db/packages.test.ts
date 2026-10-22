@@ -1,6 +1,9 @@
 import { beforeEach, describe, expect, it, vi } from "vitest";
 
 const prismaMock = vi.hoisted(() => ({
+  $executeRaw: vi.fn(),
+  $queryRaw: vi.fn(),
+  $transaction: vi.fn(),
   package: {
     create: vi.fn(),
     findFirst: vi.fn(),
@@ -16,6 +19,8 @@ const prismaMock = vi.hoisted(() => ({
 }));
 
 const randomUUIDMock = vi.hoisted(() => vi.fn());
+const inputMock = vi.hoisted(() => vi.fn());
+vi.mock("@/lib/db/quote-input", async () => ({ createDraftFromQuoteInput: inputMock, quoteInputHash: (v: unknown) => JSON.stringify(v).padEnd(64, "x").slice(0,64) }));
 
 vi.mock("server-only", () => ({}));
 vi.mock("@/lib/db/prisma", () => ({ prisma: prismaMock }));
@@ -39,6 +44,8 @@ import {
 describe("lib/db/packages", () => {
   beforeEach(() => {
     vi.clearAllMocks();
+    prismaMock.$transaction.mockImplementation((cb) => cb(prismaMock));
+    prismaMock.$queryRaw.mockResolvedValue([{ last_number: "9" }]);
     randomUUIDMock.mockReturnValue("uuid-1");
   });
 
@@ -120,9 +127,7 @@ describe("lib/db/packages", () => {
   });
 
   it("createPackageForTenant crea package y devuelve detalle", async () => {
-    prismaMock.package.findFirst
-      .mockResolvedValueOnce({ pkg_number: "PKG-0009" })
-      .mockResolvedValueOnce({
+    prismaMock.package.findFirst.mockResolvedValueOnce({
         active: true,
         created_at: new Date("2026-01-10T00:00:00.000Z"),
         description: "Desc",
@@ -172,53 +177,24 @@ describe("lib/db/packages", () => {
     );
   });
 
-  it("insertPackageIntoQuote devuelve 0 si package no existe", async () => {
+  it("no aplica una plantilla inexistente", async () => {
     prismaMock.package.findFirst.mockResolvedValue(null);
-
-    const inserted = await insertPackageIntoQuote("tenant-1", "pkg-1", "quote-1");
-
-    expect(inserted).toBe(0);
-    expect(prismaMock.quote_lines.createMany).not.toHaveBeenCalled();
+    expect(await insertPackageIntoQuote("t1", "p1", "q-v2", { operationId: "op" })).toBeNull();
+    expect(inputMock).not.toHaveBeenCalled();
   });
-
-  it("insertPackageIntoQuote copia lineas y devuelve cantidad", async () => {
-    prismaMock.package.findFirst.mockResolvedValue({
-      lines: [
-        {
-          classification1: "product",
-          classification2: "equipo",
-          cost_unit: 10,
-          description: "L1",
-          margin_pct: 20,
-          price_unit: 12,
-          quantity: 2,
-          sku: "SKU1",
-        },
-        {
-          classification1: "service",
-          classification2: null,
-          cost_unit: 30,
-          description: "L2",
-          margin_pct: 25,
-          price_unit: 40,
-          quantity: 1,
-          sku: "SKU2",
-        },
-      ],
-      tenant_id: "tenant-1",
-    });
-    prismaMock.quote.findFirst.mockResolvedValue({ quote_id: "quote-1" });
-    randomUUIDMock.mockReturnValueOnce("line-1").mockReturnValueOnce("line-2");
-
-    const inserted = await insertPackageIntoQuote("tenant-1", "pkg-1", "quote-1");
-
-    expect(inserted).toBe(2);
-    expect(prismaMock.quote_lines.createMany).toHaveBeenCalledTimes(1);
-    const payload = prismaMock.quote_lines.createMany.mock.calls[0][0] as {
-      data: Array<{ gross_profit: number; line_id: string }>;
-    };
-    expect(payload.data).toHaveLength(2);
-    expect(payload.data[0]).toMatchObject({ gross_profit: 2, line_id: "line-1" });
-    expect(payload.data[1]).toMatchObject({ gross_profit: 10, line_id: "line-2" });
+  it("envia cantidades por partida al escritor comun y conserva el cargo fijo", async () => {
+    prismaMock.package.findFirst.mockResolvedValue({ active: true, name: "Base", package_id: "p1",
+      created_at: new Date(), lines: [
+        { line_id: "l1", line_order: 0, sku: "ENDPOINT", description: "Licencia", quantity: 1, cost_unit: 10, price_unit: 20, classification1: "product" },
+        { line_id: "l2", line_order: 1, sku: "SETUP", description: "Instalacion", quantity: 1, cost_unit: 30, price_unit: 50, classification1: "service" },
+      ] });
+    inputMock.mockResolvedValue({ quote: { quoteId: "q-v3" }, replayed: false });
+    const result = await insertPackageIntoQuote("t1", "p1", "q-v2", { operationId: "op", quantities: [{ lineId: "l1", quantity: 21 }] });
+    expect(result?.inserted).toBe(2);
+    expect(inputMock).toHaveBeenCalledWith(expect.objectContaining({ tenantId: "t1", quoteId: "q-v2", mode: "append", lines: [
+      expect.objectContaining({ sku: "ENDPOINT", quantity: 21 }), expect.objectContaining({ sku: "SETUP", quantity: 1 }),
+    ] }));
+    await expect(insertPackageIntoQuote("t1", "p1", "q-v2", { operationId: "op", expectedRevision: "stale" })).rejects.toThrow("cambió");
+    await expect(insertPackageIntoQuote("t1", "p1", "q-v2", { operationId: "op", quantities: [{ lineId: "foreign", quantity: 2 }] })).rejects.toThrow("ajenas");
   });
 });

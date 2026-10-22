@@ -75,6 +75,7 @@ model Package {
   updated_at   DateTime?     @db.Timestamp(6)
   created_by   String?
   active       Boolean       @default(true)
+  source_metadata Json?      @db.JsonB
   tenant       Tenant        @relation(fields: [tenant_id], references: [tenant_id], onDelete: NoAction, onUpdate: NoAction)
   lines        PackageLine[]
 
@@ -121,6 +122,7 @@ model Quote {
   opportunity_id     String?
   tenantId           String?              @map("tenant_id")
   created_by_user_id String?
+  input_metadata     Json?              @db.JsonB
   sent_at            DateTime?            @map("sent_at") @db.Timestamp(6)
   sent_by            String?              @map("sent_by")
   closed_at          DateTime?            @map("closed_at") @db.Timestamp(6)

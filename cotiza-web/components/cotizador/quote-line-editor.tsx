@@ -6,7 +6,8 @@ import { Cell, Pie, PieChart, ResponsiveContainer, Tooltip } from "recharts";
 
 import type { QuoteGroupSummary } from "@/lib/db/quotes";
 import { resolveBidirectionalPricing } from "@/lib/domain/pricing-engine";
-import type { PackageSummary } from "@/lib/db/packages";
+import { TemplatePickerModal } from "@/components/cotizador/template-picker-modal";
+import { SaveTemplateButton } from "@/components/cotizador/save-template-button";
 import type {
   EditableQuoteLineResponse,
   QuoteLinesGetResponse,
@@ -30,83 +31,6 @@ type QuoteLineEditorProps = {
   onQuoteVersionSaved?: (quote: QuoteVersionSaved) => void;
   quotes: QuoteGroupSummary[];
 };
-
-// ---------------------------------------------------------------------------
-// Package picker modal
-// ---------------------------------------------------------------------------
-
-function PackagePickerModal({
-  onClose,
-  onInsert,
-}: {
-  onClose: () => void;
-  onInsert: (packageId: string) => void;
-}) {
-  const [packages, setPackages] = useState<PackageSummary[]>([]);
-  const [loading, setLoading] = useState(true);
-  const [pending, setPending] = useState<string | null>(null);
-  const [error, setError] = useState<string | null>(null);
-
-  useEffect(() => {
-    fetch("/api/packages")
-      .then((r) => r.json())
-      .then((d: { packages?: PackageSummary[] }) => setPackages(d.packages?.filter((p) => p.active) ?? []))
-      .catch(() => setError("No se pudieron cargar los paquetes"))
-      .finally(() => setLoading(false));
-  }, []);
-
-  return (
-    <div className="fixed inset-0 z-50 flex items-center justify-center">
-      <button
-        aria-label="Cerrar"
-        className="absolute inset-0 bg-black/30"
-        onClick={onClose}
-        type="button"
-      />
-      <div className="relative w-full max-w-lg rounded-xl bg-white p-6 shadow-2xl">
-        <div className="flex items-start justify-between">
-          <h3 className="text-base font-semibold text-zinc-900">Insertar paquete</h3>
-          <button className="ml-4 text-zinc-400 hover:text-zinc-700" onClick={onClose} type="button">✕</button>
-        </div>
-        <p className="mt-1 text-xs text-zinc-500">
-          Las líneas se copiarán a la cotización actual y serán editables.
-        </p>
-        {error && <p className="mt-3 text-sm text-rose-700">{error}</p>}
-        {loading && <p className="mt-3 text-sm text-zinc-500">Cargando paquetes...</p>}
-        <ul className="mt-4 max-h-72 space-y-2 overflow-y-auto">
-          {packages.map((pkg) => (
-            <li
-              key={pkg.packageId}
-              className="flex items-center justify-between rounded-lg border border-zinc-200 px-4 py-3"
-            >
-              <div>
-                <p className="text-sm font-medium text-zinc-900">{pkg.name}</p>
-                <p className="text-xs text-zinc-500">
-                  {pkg.pkgNumber} · {pkg.lineCount} líneas{pkg.playbookTag ? ` · ${pkg.playbookTag}` : ""}
-                </p>
-              </div>
-              <button
-                className="rounded-lg bg-zinc-900 px-3 py-1.5 text-xs font-medium text-white disabled:opacity-50"
-                disabled={pending === pkg.packageId}
-                onClick={() => {
-                  setPending(pkg.packageId);
-                  onInsert(pkg.packageId);
-                }}
-                type="button"
-              >
-                {pending === pkg.packageId ? "..." : "Insertar"}
-              </button>
-            </li>
-          ))}
-          {!loading && packages.length === 0 && (
-            <li className="text-sm text-zinc-500">No hay paquetes activos disponibles.</li>
-          )}
-        </ul>
-      </div>
-    </div>
-  );
-}
-
 
 type LineFieldKey =
   | "classification1"
@@ -527,6 +451,8 @@ export function QuoteLineEditor({
   const descriptionInputRefs = useRef<Record<string, HTMLInputElement | null>>({});
   const [selectedQuoteId, setSelectedQuoteId] = useState<string>(quotes[0]?.quoteId ?? "");
   const [lines, setLines] = useState<EditableQuoteLine[]>([]);
+  const savedLinesRef = useRef<string>("[]");
+  const [loadedQuoteId, setLoadedQuoteId] = useState<string | null>(null);
   const [quantityDrafts, setQuantityDrafts] = useState<Record<string, string>>({});
   const [costDrafts, setCostDrafts] = useState<Record<string, string>>({});
   const [priceDrafts, setPriceDrafts] = useState<Record<string, string>>({});
@@ -591,6 +517,7 @@ export function QuoteLineEditor({
   }
 
   async function loadLines(quoteId: string) {
+    setLoadedQuoteId(null);
     if (!quoteId) {
       setLines([]);
       setQuantityDrafts({});
@@ -618,6 +545,8 @@ export function QuoteLineEditor({
         return;
       }
 
+      savedLinesRef.current = JSON.stringify(data.lines.map(normalizeLineQuantity));
+      setLoadedQuoteId(quoteId);
       setLines(data.lines.map(normalizeLineQuantity));
       setQuantityDrafts({});
       setCostDrafts({});
@@ -975,6 +904,7 @@ export function QuoteLineEditor({
 
       const nextDiffResult = buildLineDiffMap(previousLines, data.lines);
 
+      savedLinesRef.current = JSON.stringify(data.lines.map(normalizeLineQuantity));
       setLines(data.lines.map(normalizeLineQuantity));
       setQuantityDrafts({});
       setCostDrafts({});
@@ -1144,6 +1074,9 @@ export function QuoteLineEditor({
       setCreatingProposal(false);
     }
   }
+
+  const hasUnsavedTemplateChanges = loadedQuoteId !== selectedQuoteId || JSON.stringify(lines) !== savedLinesRef.current ||
+    Object.keys(quantityDrafts).length > 0 || Object.keys(costDrafts).length > 0 || Object.keys(priceDrafts).length > 0;
 
   const totals = useMemo(() => {
     const totalCost = lines.reduce((sum, line) => sum + line.quantity * line.costUnit, 0);
@@ -1429,12 +1362,14 @@ export function QuoteLineEditor({
           </button>
           <button
             className="rounded-lg border border-emerald-400 px-3 py-2 text-sm font-medium text-emerald-700 hover:bg-emerald-50 disabled:opacity-50"
-            disabled={!selectedQuoteId}
+            disabled={!selectedQuoteId || loading || saving || hasUnsavedTemplateChanges}
+            title={hasUnsavedTemplateChanges ? "Guarda los cambios antes de usar una plantilla" : undefined}
             onClick={() => setShowPackagePicker(true)}
             type="button"
           >
-            + Paquete
+            Usar plantilla
           </button>
+          <SaveTemplateButton key={selectedQuoteId} quoteId={selectedQuoteId} disabled={!selectedQuoteId || loading || saving || lines.length === 0 || hasUnsavedTemplateChanges} />
           <button
             className="rounded-lg border border-zinc-300 px-3 py-2 text-sm font-medium text-zinc-700 hover:bg-zinc-100 disabled:opacity-50"
             disabled={!selectedQuoteId}
@@ -1509,23 +1444,26 @@ export function QuoteLineEditor({
       </div>
 
       {showPackagePicker && (
-        <PackagePickerModal
+        <TemplatePickerModal
           onClose={() => setShowPackagePicker(false)}
-          onInsert={async (packageId) => {
+          onInsert={async (packageId, application) => {
             try {
               const res = await fetch(`/api/packages/${packageId}`, {
-                body: JSON.stringify({ action: "insert", quoteId: selectedQuoteId }),
+                body: JSON.stringify({ action: "insert", quoteId: selectedQuoteId, ...application }),
                 headers: { "Content-Type": "application/json" },
                 method: "PATCH",
               });
-              const data = (await res.json()) as { error?: string; inserted?: number };
+              const data = (await res.json()) as QuoteLinesPutResponse & { error?: string; inserted?: number; replayed?: boolean };
               if (!res.ok) throw new Error(data.error ?? "Error al insertar");
               setShowPackagePicker(false);
-              await loadLines(selectedQuoteId);
-              setMessage(`Paquete insertado: ${data.inserted} líneas agregadas.`);
+              onQuoteVersionSaved?.(data.quote);
+              setSelectedQuoteId(data.quote.quoteId);
+              onSelectedQuoteChange?.(data.quote.quoteId);
+              savedLinesRef.current = JSON.stringify(data.lines.map(normalizeLineQuantity));
+              setLines(data.lines.map(normalizeLineQuantity));
+              setMessage(`Plantilla aplicada: ${data.inserted} partidas en el borrador v${data.quote.version}.`);
             } catch (err) {
-              setMessage(err instanceof Error ? err.message : "Error al insertar paquete");
-              setShowPackagePicker(false);
+              throw new Error(err instanceof Error ? err.message : "Error al aplicar plantilla");
             }
           }}
         />

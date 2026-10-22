@@ -1,6 +1,8 @@
 import { NextResponse } from "next/server";
 
 import { getCurrentTenantContext } from "@/lib/auth/tenant-context";
+import { isQuoteVisibleToViewer } from "@/lib/db/quotes";
+import { QuoteInputError } from "@/lib/domain/quote-input";
 import {
   getPackageDetailByTenant,
   insertPackageIntoQuote,
@@ -98,9 +100,19 @@ export async function PATCH(req: Request, { params }: Params) {
       return NextResponse.json({ error: parsed.error.flatten() }, { status: 422 });
     }
 
-    const count = await insertPackageIntoQuote(tenant.id, packageId, parsed.data.quoteId);
-    if (count === 0) return NextResponse.json({ error: "No encontrado o inactivo" }, { status: 404 });
-    return NextResponse.json({ inserted: count });
+    const canSeeAll = tenant.isSuperAdmin || tenant.userRole === "owner" || tenant.userRole === "admin";
+    if (!await isQuoteVisibleToViewer(tenant.id, parsed.data.quoteId, tenant.userId, canSeeAll)) {
+      return NextResponse.json({ error: "Cotización no encontrada" }, { status: 404 });
+    }
+    try {
+      const result = await insertPackageIntoQuote(tenant.id, packageId, parsed.data.quoteId, parsed.data);
+      if (!result) return NextResponse.json({ error: "Plantilla no encontrada o inactiva" }, { status: 404 });
+      return NextResponse.json(result);
+    } catch (error) {
+      if (error instanceof QuoteInputError) return NextResponse.json({ error: error.message }, { status: error.status });
+      console.error("[templates:insert]", error);
+      return NextResponse.json({ error: "No se pudo aplicar la plantilla. Puedes reintentar la misma solicitud." }, { status: 500 });
+    }
   }
 
   // Actualizar metadata

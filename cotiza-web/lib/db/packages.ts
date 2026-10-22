@@ -1,6 +1,9 @@
 import "server-only";
 
 import { randomUUID } from "crypto";
+import { Prisma } from "@prisma/client";
+import { createDraftFromQuoteInput, quoteInputHash } from "@/lib/db/quote-input";
+import { normalizeQuoteInput, QuoteInputError } from "@/lib/domain/quote-input";
 
 import { prisma } from "@/lib/db/prisma";
 
@@ -34,22 +37,13 @@ export type PackageSummary = {
 
 export type PackageDetail = PackageSummary & {
   lines: PackageLineSummary[];
+  revision: string;
+  sourceQuoteVersion: number | null;
 };
 
 // ---------------------------------------------------------------------------
-// Consecutivo PKG-XXXX por tenant
+// Identidad de paquete; numeración global según la restricción existente
 // ---------------------------------------------------------------------------
-
-async function nextPkgNumber(tenantId: string): Promise<string> {
-  const last = await prisma.package.findFirst({
-    orderBy: { pkg_number: "desc" },
-    select: { pkg_number: true },
-    where: { tenant_id: tenantId },
-  });
-  const lastNum = last ? parseInt(last.pkg_number.replace("PKG-", ""), 10) : 0;
-  const next = String(lastNum + 1).padStart(4, "0");
-  return `PKG-${next}`;
-}
 
 // ---------------------------------------------------------------------------
 // Queries
@@ -90,10 +84,11 @@ export async function getPackageDetailByTenant(
   const pkg = await prisma.package.findFirst({
     select: {
       active: true,
+      source_metadata: true,
       created_at: true,
       description: true,
       lines: {
-        orderBy: { line_order: "asc" },
+        orderBy: [{ line_order: "asc" }, { line_id: "asc" }],
         select: {
           classification1: true,
           classification2: true,
@@ -134,6 +129,8 @@ export async function getPackageDetailByTenant(
       quantity: Number(l.quantity),
       sku: l.sku,
     })),
+    revision: quoteInputHash({ name: pkg.name, active: pkg.active, lines: pkg.lines }),
+    sourceQuoteVersion: (pkg.source_metadata as Record<string, unknown> | null)?.sourceQuoteVersion as number ?? null,
     name: pkg.name,
     packageId: pkg.package_id,
     pkgNumber: pkg.pkg_number,
@@ -166,42 +163,76 @@ export async function createPackageForTenant(
   tenantId: string,
   input: CreatePackageInput,
 ): Promise<PackageDetail> {
-  const pkgNumber = await nextPkgNumber(tenantId);
+  const packageId = await prisma.$transaction((tx) => persistPackage(tx, tenantId, input));
+  return (await getPackageDetailByTenant(tenantId, packageId))!;
+}
+
+async function persistPackage(
+  tx: Prisma.TransactionClient, tenantId: string, input: CreatePackageInput,
+  sourceMetadata?: Prisma.InputJsonObject,
+) {
+  const normalized = normalizeQuoteInput(input.lines.map((l) => ({
+    sku: l.sku ?? "", description: l.description, quantity: l.quantity,
+    costUnit: l.costUnit, priceUnit: l.priceUnit,
+    lineType: l.classification1 === "service" ? "service" : "product",
+    serviceOrigin: l.classification2 ?? "",
+  })));
+  // pkg_number is globally unique in the existing schema. Lock and allocate
+  // globally; a per-tenant counter collided on the second tenant's PKG-0001.
+  await tx.$executeRaw`SELECT pg_advisory_xact_lock(hashtextextended(${'package-number'}, 0))`;
+  const [counter] = await tx.$queryRaw<Array<{ last_number: string }>>`
+    SELECT coalesce(max(substring(pkg_number from '^PKG-([0-9]+)$')::numeric), 0)::text AS last_number FROM packages
+  `;
+  const next = Number(counter.last_number) + 1;
+  if (!Number.isSafeInteger(next)) throw new QuoteInputError("No se pudo asignar el número de plantilla.");
   const packageId = randomUUID();
   const now = new Date();
+  await tx.package.create({ data: {
+    package_id: packageId, tenant_id: tenantId, pkg_number: `PKG-${String(next).padStart(4, "0")}`,
+    active: true, created_at: now, updated_at: now, created_by: input.createdBy ?? null,
+    name: input.name, description: input.description ?? null, playbook_tag: input.playbookTag ?? null,
+    ...(sourceMetadata ? { source_metadata: sourceMetadata } : {}),
+    lines: { create: normalized.lines.map((l, i) => ({
+      line_id: randomUUID(), tenant_id: tenantId, line_order: i, sku: l.sku || null,
+      description: l.description, quantity: l.quantity, cost_unit: l.costUnit, price_unit: l.priceUnit,
+      margin_pct: l.marginPct, classification1: l.lineType, classification2: l.serviceOrigin || null,
+    })) },
+  } });
+  return packageId;
+}
 
-  await prisma.package.create({
-    data: {
-      active: true,
-      created_at: now,
-      created_by: input.createdBy,
-      description: input.description ?? null,
-      lines: {
-        create: input.lines.map((l, i) => ({
-          classification1: l.classification1 ?? null,
-          classification2: l.classification2 ?? null,
-          cost_unit: l.costUnit,
-          description: l.description,
-          line_id: randomUUID(),
-          line_order: i,
-          margin_pct: l.marginPct ?? null,
-          price_unit: l.priceUnit,
-          quantity: l.quantity,
-          sku: l.sku ?? null,
-          tenant_id: tenantId,
-        })),
-      },
-      name: input.name,
-      package_id: packageId,
-      pkg_number: pkgNumber,
-      playbook_tag: input.playbookTag ?? null,
-      tenant_id: tenantId,
-      updated_at: now,
-    },
+export async function createPackageFromQuote(tenantId: string, actorId: string | null, input: {
+  quoteId: string; name: string; description?: string; playbookTag?: string; operationId: string;
+}) {
+  const requestHash = quoteInputHash(input);
+  const packageId = await prisma.$transaction(async (tx) => {
+    await tx.$executeRaw`SELECT pg_advisory_xact_lock(hashtextextended(${`template-save:${tenantId}:${input.operationId}`}, 0))`;
+    const prior = await tx.package.findFirst({ where: {
+      tenant_id: tenantId, source_metadata: { path: ["operationId"], equals: input.operationId },
+    } });
+    if (prior) {
+      if ((prior.source_metadata as Record<string, unknown> | null)?.requestHash !== requestHash) {
+        throw new QuoteInputError("La solicitud ya fue utilizada con datos distintos.", 409);
+      }
+      return prior.package_id;
+    }
+    const quote = await tx.quote.findFirst({ where: { quote_id: input.quoteId, tenantId } });
+    if (!quote) return null;
+    const lines = await tx.quote_lines.findMany({ where: { quote_id: quote.quote_id },
+      orderBy: [{ created_at: "asc" }, { line_id: "asc" }] });
+    if (lines.length > 200) throw new QuoteInputError("Una plantilla admite hasta 200 partidas.");
+    // Copy only the offer lines, never client/contact, proposal or tax identity.
+    return persistPackage(tx, tenantId, {
+      name: input.name, description: input.description, playbookTag: input.playbookTag,
+      createdBy: actorId ?? undefined, lines: lines.map((l) => ({
+        sku: l.sku ?? "", description: l.description_final ?? l.description_original ?? "Sin descripción",
+        quantity: Number(l.quantity ?? 1), costUnit: Number(l.cost_unit ?? 0), priceUnit: Number(l.final_price_unit ?? 0),
+        classification1: l.line_type === "service" ? "service" : "product", classification2: l.service_origin ?? "",
+      })),
+    }, { contractVersion: 1, sourceQuoteId: quote.quote_id, sourceQuoteVersion: quote.version ?? 1,
+      operationId: input.operationId, requestHash, capturedAt: new Date().toISOString() });
   });
-
-  const detail = await getPackageDetailByTenant(tenantId, packageId);
-  return detail!;
+  return packageId ? getPackageDetailByTenant(tenantId, packageId) : null;
 }
 
 export async function updatePackageMetaForTenant(
@@ -270,58 +301,23 @@ export async function togglePackageActiveForTenant(
 // ---------------------------------------------------------------------------
 
 export async function insertPackageIntoQuote(
-  tenantId: string,
-  packageId: string,
-  quoteId: string,
-): Promise<number> {
-  const pkg = await prisma.package.findFirst({
-    select: {
-      lines: {
-        orderBy: { line_order: "asc" },
-        select: {
-          classification1: true,
-          classification2: true,
-          cost_unit: true,
-          description: true,
-          margin_pct: true,
-          price_unit: true,
-          quantity: true,
-          sku: true,
-        },
-      },
-      tenant_id: true,
-    },
-    where: { active: true, package_id: packageId, tenant_id: tenantId },
+  tenantId: string, packageId: string, quoteId: string,
+  options: { operationId: string; expectedRevision?: string; quantities?: Array<{ lineId: string; quantity: number }> },
+) {
+  const pkg = await getPackageDetailByTenant(tenantId, packageId);
+  if (!pkg || !pkg.active) return null;
+  if (options.expectedRevision && options.expectedRevision !== pkg.revision) {
+    throw new QuoteInputError("La plantilla cambió. Vuelve a abrirla para revisar sus valores.", 409);
+  }
+  const quantities = new Map(options.quantities?.map((q) => [q.lineId, q.quantity]));
+  if (quantities.size !== (options.quantities?.length ?? 0) || [...quantities.keys()].some((id) => !pkg.lines.some((l) => l.lineId === id))) {
+    throw new QuoteInputError("Hay cantidades repetidas o partidas ajenas a la plantilla.");
+  }
+  const result = await createDraftFromQuoteInput({ tenantId, quoteId, operationId: options.operationId,
+    mode: "append", source: { kind: "template", id: packageId, revision: pkg.revision },
+    lines: pkg.lines.map((l) => ({ sku: l.sku ?? "", description: l.description,
+      quantity: quantities.get(l.lineId) ?? l.quantity, costUnit: l.costUnit, priceUnit: l.priceUnit,
+      lineType: l.classification1 === "service" ? "service" : "product", serviceOrigin: l.classification2 ?? "" })),
   });
-
-  if (!pkg) return 0;
-
-  // Verificar que la cotización pertenece al mismo tenant
-  const quote = await prisma.quote.findFirst({
-    select: { quote_id: true },
-    where: { quote_id: quoteId, tenantId: tenantId },
-  });
-  if (!quote) return 0;
-
-  const now = new Date();
-  await prisma.quote_lines.createMany({
-    data: pkg.lines.map((l) => ({
-      classification1: l.classification1,
-      classification2: l.classification2,
-      cost_unit: l.cost_unit,
-      created_at: now,
-      description_final: l.description,
-      description_original: l.description,
-      gross_profit: Number(l.price_unit) - Number(l.cost_unit),
-      line_id: randomUUID(),
-      margin_pct: l.margin_pct,
-      price_unit: l.price_unit,
-      quantity: l.quantity,
-      quote_id: quoteId,
-      sku: l.sku,
-      tenant_id: tenantId,
-    })),
-  });
-
-  return pkg.lines.length;
+  return result ? { ...result, inserted: pkg.lines.length } : null;
 }

@@ -3,6 +3,9 @@ import * as XLSX from "xlsx";
 
 import { getCurrentTenantContext } from "@/lib/auth/tenant-context";
 import { importQuoteLinesByTenant, type QuoteImportLineInput } from "@/lib/db/quotes";
+import { isQuoteVisibleToViewer } from "@/lib/db/quotes";
+import { QuoteInputError } from "@/lib/domain/quote-input";
+import { z } from "zod";
 import { enforceRateLimit, getRequestIdentity } from "@/lib/utils/rate-limit";
 
 export const runtime = "nodejs";
@@ -24,11 +27,11 @@ const MAX_DECIMAL_10_2 = 99999999.99;
 
 function readNumber(value: unknown): number {
   if (typeof value === "number" && Number.isFinite(value)) {
-    return Math.max(0, value);
+    return value;
   }
   if (typeof value === "string" && value.trim().length > 0) {
     const parsed = Number(value);
-    return Number.isFinite(parsed) ? Math.max(0, parsed) : 0;
+    return parsed;
   }
   return 0;
 }
@@ -63,9 +66,14 @@ function parseImportRow(row: Record<string, unknown>): ImportRowResult {
   ).trim();
   const costUnit = readNumber(normalizedRow["costunit"] ?? normalizedRow["costo"] ?? normalizedRow["cost_unit"]);
   const priceUnit = readNumber(normalizedRow["priceunit"] ?? normalizedRow["precio"] ?? normalizedRow["final_price_unit"]);
-  const quantity = readNumber(normalizedRow["quantity"] ?? normalizedRow["cantidad"]) || 1;
+  const rawQuantity = normalizedRow["quantity"] ?? normalizedRow["cantidad"];
+  const quantity = rawQuantity === undefined || rawQuantity === null || rawQuantity === "" ? 1 : readNumber(rawQuantity);
   const lineType = String(normalizedRow["linetype"] ?? normalizedRow["line_type"] ?? normalizedRow["tipo"] ?? "product");
   const sku = String(normalizedRow["sku"] ?? "");
+
+  if (![costUnit, priceUnit, quantity].every(Number.isFinite) || costUnit < 0 || priceUnit < 0 || !Number.isInteger(quantity) || quantity <= 0) {
+    return { ok: false, reason: "Cantidad entera positiva o valores de costo/precio inválidos" };
+  }
 
   if (description.length === 0 && costUnit === 0 && priceUnit === 0) {
     return { ok: false, reason: "Sin descripción ni valores de costo/precio reconocidos" };
@@ -89,6 +97,10 @@ export async function POST(request: Request, context: RouteContext) {
   }
 
   const { quoteId } = await context.params;
+  const canSeeAll = tenant.isSuperAdmin || tenant.userRole === "owner" || tenant.userRole === "admin";
+  if (!await isQuoteVisibleToViewer(tenant.id, quoteId, tenant.userId, canSeeAll)) {
+    return NextResponse.json({ error: "Cotización no encontrada" }, { status: 404 });
+  }
   const identity = getRequestIdentity(request, tenant.userId ?? tenant.id);
   const rateLimit = enforceRateLimit(`xlsx:import:quote:${tenant.id}:${quoteId}:${identity}`, 10, 60_000);
 
@@ -106,6 +118,9 @@ export async function POST(request: Request, context: RouteContext) {
 
   const formData = await request.formData();
   const file = formData.get("file");
+  const rawOperationId = formData.get("operationId");
+  const operationId = rawOperationId === null ? undefined : z.string().uuid().safeParse(rawOperationId);
+  if (operationId && !operationId.success) return NextResponse.json({ error: "Referencia de importación inválida" }, { status: 422 });
 
   if (!(file instanceof File)) {
     return NextResponse.json({ error: "Debes adjuntar un archivo .xlsx" }, { status: 400 });
@@ -201,8 +216,9 @@ export async function POST(request: Request, context: RouteContext) {
   let result: Awaited<ReturnType<typeof importQuoteLinesByTenant>>;
 
   try {
-    result = await importQuoteLinesByTenant(tenant.id, quoteId, items);
+    result = await importQuoteLinesByTenant(tenant.id, quoteId, items, operationId?.data);
   } catch (error) {
+    if (error instanceof QuoteInputError) return NextResponse.json({ error: error.message }, { status: error.status });
     // El desbordamiento por fila individual ya se filtra arriba (skipped);
     // esto cubre el caso restante: la SUMA de costo/precio de todas las
     // filas excede el limite de la cotizacion (tambien Decimal(10,2)).
@@ -226,6 +242,7 @@ export async function POST(request: Request, context: RouteContext) {
   return NextResponse.json({
     importedCount: result.importedCount,
     quoteId: result.quoteId,
+    replayed: result.replayed,
     skipped,
     skippedCount: skipped.length,
   });

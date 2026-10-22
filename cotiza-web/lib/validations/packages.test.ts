@@ -97,7 +97,8 @@ describe("updatePackageMetaSchema", () => {
 describe("insertPackageIntoQuoteSchema", () => {
   it("acepta quoteId UUID valido", () => {
     const result = insertPackageIntoQuoteSchema.safeParse({
-      quoteId: "8f71c0f5-5cc5-4de4-beb3-7da4c8f3e5ca",
+      quoteId: "8f71c0f5-5cc5-4de4-beb3-7da4c8f3e5ca-v3-abc",
+      operationId: "8f71c0f5-5cc5-4de4-beb3-7da4c8f3e5ca",
     });
 
     expect(result.success).toBe(true);

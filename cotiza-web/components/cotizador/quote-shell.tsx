@@ -103,6 +103,7 @@ export function QuoteShell({
   const [importStatus, setImportStatus] = useState<"idle" | "uploading" | "success" | "error">("idle");
   const [importMessage, setImportMessage] = useState<string | null>(null);
   const importFileRef = useRef<HTMLInputElement>(null);
+  const importOperationRef = useRef<{ quoteId: string; id: string } | null>(null);
   const clientSearchTimeout = useRef<ReturnType<typeof setTimeout> | null>(null);
   const clientDropdownRef = useRef<HTMLDivElement>(null);
   const [deletingQuoteId, setDeletingQuoteId] = useState<string | null>(null);
@@ -463,6 +464,10 @@ export function QuoteShell({
 
     const formData = new FormData();
     formData.append("file", importFile);
+    if (importOperationRef.current?.quoteId !== activeQuoteId) {
+      importOperationRef.current = { quoteId: activeQuoteId, id: crypto.randomUUID() };
+    }
+    formData.append("operationId", importOperationRef.current.id);
 
     try {
       const response = await fetch(`/api/quotes/${activeQuoteId}/import`, {
@@ -816,7 +821,7 @@ export function QuoteShell({
         <div className="mt-4 rounded-lg border border-dashed border-zinc-300 bg-white p-4">
           <p className="text-xs uppercase tracking-[0.18em] text-zinc-500">Importar partidas desde Excel</p>
           <p className="mt-1 text-xs text-zinc-500">
-            Reemplaza las partidas de la cotización activa con las filas del archivo. Usa la{" "}
+            Crea una nueva versión en borrador con las partidas del archivo; conserva la versión anterior. Usa la{" "}
             <Link className="text-zinc-700 underline hover:text-zinc-900" href="/api/quotes/import-template">
               plantilla descargable
             </Link>{" "}
@@ -829,6 +834,7 @@ export function QuoteShell({
               className="hidden"
               onChange={(event) => {
                 setImportFile(event.target.files?.[0] ?? null);
+                importOperationRef.current = null;
                 setImportStatus("idle");
                 setImportMessage(null);
               }}

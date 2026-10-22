@@ -240,7 +240,7 @@ export function PackagesShell({ initialPackages, tenantName }: PackagesShellProp
           <p className="text-sm uppercase tracking-[0.18em] text-zinc-500">Tenant activo</p>
           <h1 className="text-2xl font-semibold text-zinc-900">Paquetes · {tenantName}</h1>
           <p className="text-sm text-zinc-500">
-            Plantillas de líneas reutilizables. Al insertar en cotización las líneas se copian y son editables.
+            Plantillas de partidas reutilizables. En el cotizador puedes guardarlas desde una cotización y revisar sus cantidades antes de crear un borrador.
           </p>
         </div>
 
@@ -284,10 +284,10 @@ export function PackagesShell({ initialPackages, tenantName }: PackagesShellProp
                   <div key={i} className="grid grid-cols-[1fr_3fr_1fr_1fr_1fr_1fr_auto] gap-2 items-end rounded-lg border border-zinc-100 bg-zinc-50 p-2 text-xs">
                     <input className="rounded border border-zinc-300 bg-white px-2 py-1 text-zinc-900" placeholder="SKU" value={line.sku} onChange={(e) => updateLineField(i, "sku", e.target.value)} />
                     <input className="rounded border border-zinc-300 bg-white px-2 py-1 text-zinc-900" placeholder="Descripción *" required value={line.description} onChange={(e) => updateLineField(i, "description", e.target.value)} />
-                    <input className="rounded border border-zinc-300 bg-white px-2 py-1 text-zinc-900" placeholder="Cantidad" type="number" min="0.01" step="0.01" value={line.quantity} onChange={(e) => updateLineField(i, "quantity", e.target.value)} />
+                    <input className="rounded border border-zinc-300 bg-white px-2 py-1 text-zinc-900" aria-label={`Cantidad de partida ${i + 1}`} placeholder="Cantidad" type="number" min="1" step="1" value={line.quantity} onChange={(e) => updateLineField(i, "quantity", e.target.value)} />
                     <input className="rounded border border-zinc-300 bg-white px-2 py-1 text-zinc-900" placeholder="Costo" type="number" min="0" step="0.01" value={line.costUnit} onChange={(e) => updateLineField(i, "costUnit", e.target.value)} />
                     <input className="rounded border border-zinc-300 bg-white px-2 py-1 text-zinc-900" placeholder="Precio" type="number" min="0" step="0.01" value={line.priceUnit} onChange={(e) => updateLineField(i, "priceUnit", e.target.value)} />
-                    <input className="rounded border border-zinc-300 bg-white px-2 py-1 text-zinc-900" placeholder="Margen%" type="number" min="-100" max="100" step="0.1" value={line.marginPct} onChange={(e) => updateLineField(i, "marginPct", e.target.value)} />
+                    <span className="px-2 py-1 text-zinc-600" title="Margen calculado con costo y precio">{Number(line.priceUnit) > 0 ? `${((Number(line.priceUnit) - Number(line.costUnit)) / Number(line.priceUnit) * 100).toFixed(1)}%` : "—"}</span>
                     <button className="text-rose-500 hover:text-rose-700" disabled={createForm.lines.length === 1} onClick={() => removeLine(i)} type="button">✕</button>
                   </div>
                 ))}
