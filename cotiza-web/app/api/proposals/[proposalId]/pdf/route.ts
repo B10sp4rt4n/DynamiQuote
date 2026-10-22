@@ -27,7 +27,14 @@ function sanitizeFilename(value: string): string {
   return value.replace(/[^a-zA-Z0-9-_]/g, "_");
 }
 
-export async function GET(_: Request, context: RouteContext) {
+// Next otherwise implements HEAD by running GET, including its audit writes
+// and one-use issuance authorization. Metadata probes must not issue documents.
+export async function HEAD(request: Request, context: RouteContext) {
+  return GET(request, context);
+}
+
+export async function GET(request: Request, context: RouteContext) {
+  const metadataOnly = request.method === "HEAD";
   const tenant = await getCurrentTenantContext();
 
   if (!tenant) {
@@ -49,7 +56,7 @@ export async function GET(_: Request, context: RouteContext) {
     );
   }
 
-  const proposal = await getProposalWorkflowByTenant(tenant.id, proposalId, { includeLogoData: true });
+  const proposal = await getProposalWorkflowByTenant(tenant.id, proposalId, { includeLogoData: !metadataOnly });
 
   if (!proposal) {
     return NextResponse.json({ error: "Propuesta no encontrada" }, { status: 404 });
@@ -60,6 +67,19 @@ export async function GET(_: Request, context: RouteContext) {
     marginCanAuthorizeFinal: proposal.marginEvaluation.canAuthorizeFinal,
     status: proposal.status,
   });
+
+  if (metadataOnly) {
+    const filename = sanitizeFilename(proposal.formal?.proposalNumber ?? proposal.proposalId);
+    return new NextResponse(null, {
+      headers: {
+        "Cache-Control": "no-store",
+        "Content-Disposition": `attachment; filename="${filename}.pdf"`,
+        "Content-Type": "application/pdf",
+        "X-Content-Type-Options": "nosniff",
+      },
+      status: issuanceGate.kind === "blocked" ? 403 : 200,
+    });
+  }
 
   if (issuanceGate.kind === "blocked") {
     await recordProposalAuditEvent({
@@ -121,6 +141,7 @@ export async function GET(_: Request, context: RouteContext) {
     eventType: "document_issued",
     payload: {
       forced: issuanceGate.forced,
+      httpMethod: request.method,
       status: proposal.status,
       via: "pdf",
       watermark: issuanceGate.watermark,

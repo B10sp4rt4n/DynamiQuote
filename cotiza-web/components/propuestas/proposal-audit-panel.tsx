@@ -78,7 +78,7 @@ function describe(item: ProposalAuditTimelineItem): { detail: string | null; tit
       ].filter(Boolean);
       return {
         detail: notes.join(" · "),
-        title: d["via"] === "email" ? "Enviada por correo (al vendedor)" : `${viaLabel(d["via"])} descargado`.replace(/^./, (c) => c.toUpperCase()),
+        title: d["via"] === "email" ? "Enviada por correo (al vendedor)" : `${viaLabel(d["via"])} generado para descarga`.replace(/^./, (c) => c.toUpperCase()),
         tone: d["watermark"] === true ? "warn" : "neutral",
       };
     }
