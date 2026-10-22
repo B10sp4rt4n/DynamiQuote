@@ -193,3 +193,39 @@ correo/facturación están limitados a producción en la configuración consulta
 
 Este preview no habilita automáticamente capacidades CRM en producción y el
 PR permanece en borrador hasta recopilar evidencia de login y aislamiento.
+
+## Revisión posterior al acceso reportado por Salvador
+
+Salvador respondió «Ya» al paso de entrar con su cuenta habitual al preview.
+Se registra como confirmación del usuario de haber completado ese paso, no como
+una prueba automatizada de sesión, del tenant mostrado ni del acceso de otros roles.
+Vercel reportó READY para el despliegue del commit `2baff3c`; su protección
+bloqueó la comprobación HTTP automática con la conexión disponible.
+
+Una consulta de solo lectura sobre la rama aislada confirmó cuatro tenants,
+62 clientes y cero oportunidades, tareas o interacciones con cliente de otro
+tenant. No había eventos de cambio de contexto en esa copia; no se acredita
+por ello el uso real del selector ni una prueba con un vendedor distinto.
+
+Se corrigieron los JOIN de KPIs: las cinco consultas de importes vinculan
+partidas por propuesta Y tenant; el ranking resuelve nombres de usuarios solo
+dentro del tenant de la propuesta. Una referencia histórica a un autor de otra
+empresa conserva su ID, pero no obtiene su nombre ni alias. Las claves
+compuestas siguen siendo necesarias para impedir nuevas partidas cruzadas.
+
+Seis pruebas ejecutan el SQL parametrizado real de estas consultas en PGlite
+con dos empresas, dos vendedores, una partida borrada y una partida cruzada
+deliberada (sin claves foráneas en el fixture para comprobar la defensa de
+lectura). Las seis fallaban antes de la corrección y pasan después. Verifican
+totales, margen, decisiones, filtro por vendedor, tenant inexistente y
+anonimización del nombre de un autor ajeno. No usan Neon ni DATABASE_URL.
+
+Validación: 461 pruebas pasan, 18 opt-in omitidas, excluido el E2E que requiere
+DATABASE_URL; TypeScript y ESLint de los dos archivos modificados sin errores.
+Para incluir las seis pruebas de SQL, ejecutar desde `cotiza-web`:
+`PGLITE_MODULE=/ruta/temporal/pglite/dist/index.js npm test -- --exclude validate-quote-lifecycle.e2e.test.ts`.
+La dependencia continúa siendo temporal y no se agregó al runtime del producto.
+
+Sigue pendiente la prueba autenticada con dos tenants y vendedor, el recorrido
+comercial completo y la revisión de procesos de fondo/legacy antes de declarar
+cerrado el aislamiento de toda la plataforma o activar la integración CRM.
