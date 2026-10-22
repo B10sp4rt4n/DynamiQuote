@@ -124,15 +124,13 @@ function formatWhen(iso: string): string {
   }).format(new Date(iso));
 }
 
-// Historial de solicitudes y emision de documentos -- solo lectura, solo
-// para owner/admin/superadmin (la pagina decide si lo monta). Salvador,
-// 2026-09-19: hoy no habia forma de saber si un vendedor pidio aprobacion,
-// bajo el PDF de un borrador o si un intento fallo.
+// Historial de solo lectura para quienes pueden consultar la propuesta.
+// La pagina verifica acceso y filtra los detalles internos en el servidor.
 export function ProposalAuditPanel({ items }: { items: ProposalAuditTimelineItem[] }) {
   return (
     <details className="rounded-xl border border-zinc-200 bg-white p-4 shadow-sm" open>
       <summary className="cursor-pointer text-sm font-semibold text-zinc-900">
-        Historial ({items.length})
+        Historial de la propuesta ({items.length})
       </summary>
 
       {items.length === 0 ? (

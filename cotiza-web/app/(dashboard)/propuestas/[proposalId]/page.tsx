@@ -4,6 +4,7 @@ import { ProposalAuditPanel } from "@/components/propuestas/proposal-audit-panel
 import { ProposalDetailView } from "@/components/propuestas/proposal-detail-view";
 import { getCurrentTenantContext } from "@/lib/auth/tenant-context";
 import { getProposalAuditTimelineByTenant } from "@/lib/db/proposal-audit";
+import { projectProposalAuditTimeline } from "@/lib/domain/proposal-audit-visibility";
 import {
   getProposalDerivationInfoByTenant,
   getProposalWorkflowByTenant,
@@ -49,12 +50,10 @@ export default async function ProposalDetailPage({ params }: ProposalDetailPageP
     );
   }
 
-  const [proposal, tenantProfile, derivationInfo, auditTimeline] = await Promise.all([
+  const [proposal, tenantProfile, derivationInfo] = await Promise.all([
     getProposalWorkflowByTenant(tenant.id, proposalId, { viewerUserId: tenant.userId }),
     getTenantProfileByTenant(tenant.id),
     getProposalDerivationInfoByTenant(tenant.id, proposalId),
-    // Historial solo para quien ya puede ver todo el tenant (owner/admin/superadmin).
-    canSeeAll ? getProposalAuditTimelineByTenant(tenant.id, proposalId) : Promise.resolve(null),
   ]);
 
   if (!proposal) {
@@ -64,6 +63,13 @@ export default async function ProposalDetailPage({ params }: ProposalDetailPageP
       </section>
     );
   }
+
+  // La consulta acompaña el acceso a la propuesta, sin conceder permisos de escritura.
+  // Proyectar en el servidor antes de entregar datos al componente de historial.
+  const auditTimeline = projectProposalAuditTimeline(
+    await getProposalAuditTimelineByTenant(tenant.id, proposalId),
+    canSeeAll,
+  );
 
   const issuerContact = proposal.formal?.issuerContactName?.trim().toLowerCase() ?? "";
   const shouldUseSessionName =
@@ -115,7 +121,7 @@ export default async function ProposalDetailPage({ params }: ProposalDetailPageP
         tenantWebsite={tenantProfile?.website ?? null}
       />
 
-      {auditTimeline ? <ProposalAuditPanel items={auditTimeline} /> : null}
+      <ProposalAuditPanel items={auditTimeline} />
     </div>
   );
 }

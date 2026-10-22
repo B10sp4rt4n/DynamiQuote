@@ -74,8 +74,8 @@ function parsePayload(payload: string | null): Record<string, unknown> {
 
 // Linea de tiempo unificada: eventos de proposal_audit_events (solicitudes,
 // documentos, forzamientos/overrides) + decisiones de proposal_approvals,
-// mas reciente primero. Solo para owner/admin/superadmin (la pagina lo
-// restringe) -- nombres de actor resueltos contra app_users del mismo tenant.
+// mas reciente primero. El caller verifica acceso a la propuesta y proyecta
+// los detalles segun el rol antes de mostrarlos. Nombres del mismo tenant.
 export async function getProposalAuditTimelineByTenant(
   tenantId: string,
   proposalId: string,
