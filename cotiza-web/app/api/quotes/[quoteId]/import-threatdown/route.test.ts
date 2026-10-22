@@ -1,7 +1,8 @@
 import { createHash } from "node:crypto";
 import { beforeEach, describe, expect, it, vi } from "vitest";
-const m = vi.hoisted(() => ({ tenant: vi.fn(), visible: vi.fn(), read: vi.fn(), write: vi.fn(), rate: vi.fn() }));
+const m = vi.hoisted(() => ({ tenant: vi.fn(), visible: vi.fn(), read: vi.fn(), write: vi.fn(), rate: vi.fn(), capability: vi.fn() }));
 vi.mock("@/lib/auth/tenant-context", () => ({ getCurrentTenantContext: m.tenant }));
+vi.mock("@/lib/db/tenant-capabilities", () => ({ isTenantCapabilityEnabled: m.capability, THREATDOWN_PDF_IMPORT: "threatdown_pdf_import" }));
 vi.mock("@/lib/db/quotes", () => ({ isQuoteVisibleToViewer: m.visible }));
 vi.mock("@/lib/db/quote-input", () => ({ createDraftFromQuoteInput: m.write }));
 vi.mock("@/lib/import/threatdown-pdf", () => ({ readThreatDownPdf: m.read }));
@@ -23,7 +24,7 @@ const apply = { action: "apply", operationId, expectedHash: hash, exchangeRate: 
 describe("ThreatDown PDF route", () => {
   beforeEach(() => {
     vi.clearAllMocks(); m.tenant.mockResolvedValue({ id: "tenant-1", userId: "u1", userRole: "seller", isSuperAdmin: false });
-    m.visible.mockResolvedValue(true); m.rate.mockReturnValue({ allowed: true }); m.read.mockResolvedValue(source);
+    m.capability.mockResolvedValue(true); m.visible.mockResolvedValue(true); m.rate.mockReturnValue({ allowed: true }); m.read.mockResolvedValue(source);
     m.write.mockResolvedValue({ quote: { quoteId: "new-v3" }, replayed: false });
   });
   it("requires a session", async () => {
@@ -32,6 +33,14 @@ describe("ThreatDown PDF route", () => {
   it("checks tenant and seller ownership before parsing any file", async () => {
     m.visible.mockResolvedValue(false); expect((await POST(request(),ctx)).status).toBe(404);
     expect(m.visible).toHaveBeenCalledWith("tenant-1","quote-v2","u1",false); expect(m.read).not.toHaveBeenCalled();
+  });
+  it.each([false, true])("blocks preview and apply for disabled tenants even when superadmin=%s", async (isSuperAdmin) => {
+    m.tenant.mockResolvedValue({ id: "disabled-tenant", userId: "u1", userRole: "owner", isSuperAdmin });
+    m.capability.mockResolvedValue(false);
+    for (const fields of [{}, apply]) expect((await POST(request(fields),ctx)).status).toBe(403);
+    expect(m.capability).toHaveBeenCalledWith("disabled-tenant", "threatdown_pdf_import");
+    expect(m.read).not.toHaveBeenCalled(); expect(m.write).not.toHaveBeenCalled();
+    expect(m.visible).not.toHaveBeenCalled();
   });
   it("rate limits parsing", async () => {
     m.rate.mockReturnValue({ allowed:false, resetAt:Date.now()+5000 });

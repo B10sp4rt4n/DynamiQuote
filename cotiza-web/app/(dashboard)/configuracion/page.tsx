@@ -1,4 +1,5 @@
 import { SettingsShell } from "@/components/configuracion/settings-shell";
+import { isTenantCapabilityEnabled, THREATDOWN_PDF_IMPORT } from "@/lib/db/tenant-capabilities";
 import { getCurrentTenantContext } from "@/lib/auth/tenant-context";
 import { getMarginPolicyByTenant } from "@/lib/db/margin-policies";
 import { getAppUsersByTenant, getAppUsersForSuperAdmin, getIssuerProfilesByTenant } from "@/lib/db/settings";
@@ -20,7 +21,7 @@ export default async function SettingsPage() {
   const canSwitchTenant = tenant.isSuperAdmin;
   const canManageUsers = tenant.isSuperAdmin || tenant.userRole === "owner" || tenant.userRole === "admin";
 
-  const [users, issuerProfiles, marginPolicy, tenantOptions, tenantProfile] = await Promise.all([
+  const [users, issuerProfiles, marginPolicy, tenantOptions, tenantProfile, threatDownImportEnabled] = await Promise.all([
     canManageUsers
       ? tenant.isSuperAdmin
         ? getAppUsersForSuperAdmin()
@@ -30,10 +31,12 @@ export default async function SettingsPage() {
     getMarginPolicyByTenant(tenant.id),
     canSwitchTenant ? getActiveTenants() : Promise.resolve([{ id: tenant.id, name: tenant.name, slug: tenant.slug }]),
     getTenantProfileByTenant(tenant.id),
+    isTenantCapabilityEnabled(tenant.id, THREATDOWN_PDF_IMPORT),
   ]);
 
   return (
     <SettingsShell
+      threatDownImportEnabled={threatDownImportEnabled}
       canSwitchTenant={canSwitchTenant}
       canManageAllTenants={tenant.isSuperAdmin}
       canViewTenantConfig={tenant.isSuperAdmin || tenant.userRole === "owner"}

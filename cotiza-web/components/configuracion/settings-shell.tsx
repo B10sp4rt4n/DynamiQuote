@@ -3,11 +3,13 @@
 import { useSearchParams } from "next/navigation";
 import { Fragment, startTransition, useEffect, useState, type FormEvent } from "react";
 
+import { TenantCapabilitiesPanel } from "./tenant-capabilities-panel";
 import type { MarginPolicySummary } from "@/lib/db/margin-policies";
 import type { AppUserSummary, IssuerProfileSummary } from "@/lib/db/settings";
 import type { ActiveTenantOption, ClosingContactLevel, TenantProfile } from "@/lib/db/tenants";
 
 type SettingsShellProps = {
+  threatDownImportEnabled?: boolean;
   canSwitchTenant?: boolean;
   canViewTenantConfig?: boolean;
   canManageAllTenants?: boolean;
@@ -2229,6 +2231,7 @@ function IssuerProfilesTab({
 const VALID_TABS: Tab[] = ["tenant", "users", "issuer", "policy"];
 
 export function SettingsShell({
+  threatDownImportEnabled = false,
   canSwitchTenant = false,
   users,
   issuerProfiles,
@@ -2366,6 +2369,8 @@ export function SettingsShell({
         {tab === "tenant" && canViewTenantConfig && (
           <div className="space-y-4">
             {canManageAllTenants ? <CreateTenantForm /> : null}
+            {canManageAllTenants ? <TenantCapabilitiesPanel key={tenantId} tenantName={tenantName}
+              initialEnabled={threatDownImportEnabled} /> : null}
             <TenantConfigurationTab
               issuerProfiles={issuerProfilesState}
               marginPolicy={marginPolicyState}

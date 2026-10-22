@@ -27,6 +27,8 @@ model Tenant {
   formal_proposals formal_proposals[]
   import_files     import_files[]
   packages         Package[]
+  capabilities     TenantCapability[]
+  capability_events TenantCapabilityEvent[]
   quotes           Quote[]
 
   @@map("tenants")
@@ -478,4 +480,30 @@ model quote_search_index {
   @@index([client_name], map: "idx_client_name")
   @@index([created_at(sort: Desc)], map: "idx_created_at")
   @@index([proposal_name], map: "idx_proposal_name")
+}
+
+model TenantCapability {
+  tenant_id String
+  capability_key String
+  enabled Boolean @default(false)
+  updated_at DateTime @default(now()) @db.Timestamptz(6)
+  updated_by String
+  tenant Tenant @relation(fields: [tenant_id], references: [tenant_id], onDelete: NoAction, onUpdate: NoAction)
+
+  @@id([tenant_id, capability_key])
+  @@map("tenant_capabilities")
+}
+
+model TenantCapabilityEvent {
+  event_id String @id @default(uuid())
+  tenant_id String
+  capability_key String
+  previous_enabled Boolean?
+  enabled Boolean
+  changed_at DateTime @default(now()) @db.Timestamptz(6)
+  changed_by String
+  tenant Tenant @relation(fields: [tenant_id], references: [tenant_id], onDelete: NoAction, onUpdate: NoAction)
+
+  @@index([tenant_id, changed_at])
+  @@map("tenant_capability_events")
 }

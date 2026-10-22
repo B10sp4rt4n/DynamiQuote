@@ -1,4 +1,5 @@
 import { QuoteShell } from "@/components/cotizador/quote-shell";
+import { isTenantCapabilityEnabled, THREATDOWN_PDF_IMPORT } from "@/lib/db/tenant-capabilities";
 import { getCurrentTenantContext } from "@/lib/auth/tenant-context";
 import { getQuoteGroupsSummaryByTenant } from "@/lib/db/quotes";
 import { getActiveTenants } from "@/lib/db/tenants";
@@ -17,7 +18,10 @@ export default async function QuotesPage() {
   }
 
   const canSeeAll = tenant.isSuperAdmin || tenant.userRole === "owner" || tenant.userRole === "admin";
-  const items = await getQuoteGroupsSummaryByTenant(tenant.id, 12, tenant.userId, canSeeAll);
+  const [items, threatDownImportEnabled] = await Promise.all([
+    getQuoteGroupsSummaryByTenant(tenant.id, 12, tenant.userId, canSeeAll),
+    isTenantCapabilityEnabled(tenant.id, THREATDOWN_PDF_IMPORT),
+  ]);
   const canSwitchTenant = tenant.isSuperAdmin;
   const tenantOptions = canSwitchTenant
     ? await getActiveTenants()
@@ -25,6 +29,7 @@ export default async function QuotesPage() {
 
   return (
     <QuoteShell
+      threatDownImportEnabled={threatDownImportEnabled}
       canSwitchTenant={canSwitchTenant}
       currentTenantSlug={tenant.slug}
       items={items}
