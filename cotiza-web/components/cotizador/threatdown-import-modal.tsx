@@ -4,8 +4,8 @@ import { useEffect, useRef, useState } from "react";
 import { priceThreatDownQuote, type ThreatDownQuote } from "@/lib/domain/threatdown-quote";
 import { quoteLinesPutResponseSchema, type QuoteLinesPutResponse } from "@/lib/validations/quote-editor-response";
 
-export function ThreatDownImportModal({ quoteId, clientName, onClose, onImported }: {
-  quoteId: string; clientName: string; onClose: () => void;
+export function ThreatDownImportModal({ quoteId, clientName, hasUnsavedChanges = false, onClose, onImported }: {
+  quoteId: string; clientName: string; hasUnsavedChanges?: boolean; onClose: () => void;
   onImported: (data: QuoteLinesPutResponse) => void;
 }) {
   const dialog = useRef<HTMLDialogElement>(null);
@@ -28,7 +28,7 @@ export function ThreatDownImportModal({ quoteId, clientName, onClose, onImported
   function resetReview() { setConfirmed(false); operationId.current = null; }
   async function submit(action: "preview" | "apply") {
     if (!file || busy) return;
-    if (action === "apply" && (!preview || !confirmed)) return;
+    if (action === "apply" && (!preview || !confirmed || hasUnsavedChanges)) return;
     setBusy(true); setError(null);
     try {
       const form = new FormData(); form.set("file", file); form.set("action", action);
@@ -47,20 +47,26 @@ export function ThreatDownImportModal({ quoteId, clientName, onClose, onImported
     finally { setBusy(false); }
   }
 
-  return <dialog aria-labelledby="td-import-title" className="m-auto max-h-[90vh] w-[min(95vw,64rem)] overflow-auto rounded-xl border border-zinc-200 bg-white p-5 text-zinc-900 shadow-xl backdrop:bg-black/40"
+  return <dialog aria-labelledby="td-import-title" aria-busy={busy} className="m-auto max-h-[90vh] w-[min(95vw,64rem)] overflow-auto rounded-xl border border-zinc-200 bg-white p-5 text-zinc-900 shadow-xl backdrop:bg-black/40"
     ref={dialog} onCancel={(e) => { e.preventDefault(); if (!busy) onClose(); }}>
     <div className="flex items-center justify-between gap-3">
       <h3 className="text-lg font-semibold" id="td-import-title">Importar cotización ThreatDown</h3>
       <button className="min-h-11 px-3" disabled={busy} onClick={onClose} type="button">Cerrar</button>
     </div>
     <p className="mt-2 text-sm">Cotización destino: <strong>{clientName}</strong>. Crea una versión nueva y reemplaza sus partidas con las del PDF.</p>
+    {hasUnsavedChanges ? <p className="mt-3 rounded-lg bg-amber-50 p-3 text-sm text-amber-900" role="status">
+      Puedes leer el PDF y revisar sus datos. Para crear el borrador, cierra esta ventana y guarda primero los cambios pendientes de la cotización.
+    </p> : null}
     <div className="mt-4 flex flex-wrap items-end gap-3">
       <label className="text-sm" htmlFor="td-file">PDF de ThreatDown, hasta 3 MB
         <input accept="application/pdf,.pdf" className="mt-1 block max-w-full text-sm" disabled={busy} id="td-file" type="file"
           onChange={(e) => { setFile(e.target.files?.[0] ?? null); setSource(null); setFileHash(""); setError(null); resetReview(); }} />
       </label>
-      <button className="min-h-11 rounded-lg bg-zinc-900 px-4 text-sm text-white disabled:opacity-50" disabled={busy || !file} onClick={() => { void submit("preview"); }} type="button">Leer PDF</button>
+      <button className="min-h-11 rounded-lg bg-zinc-900 px-4 text-sm text-white disabled:opacity-50" disabled={busy || !file} onClick={() => { void submit("preview"); }} type="button">{busy ? "Procesando PDF…" : "Leer PDF"}</button>
     </div>
+    <p className="mt-2 text-sm text-zinc-600" role="status" aria-live="polite">
+      {busy ? "Procesando el PDF. Espera a que aparezca la vista previa." : file ? `Archivo seleccionado: ${file.name}` : "Selecciona un archivo PDF para habilitar su lectura."}
+    </p>
     {error ? <p className="mt-3 text-sm text-rose-700" role="alert">{error}</p> : null}
     {source ? <>
       <div className="mt-4 rounded-lg bg-zinc-50 p-3 text-sm">
@@ -90,10 +96,10 @@ export function ThreatDownImportModal({ quoteId, clientName, onClose, onImported
       </div>
       <p className="mt-3 text-sm font-semibold">{preview ? `Costo MXN ${preview.totals.totalCost.toFixed(2)} · Venta MXN ${preview.totals.totalRevenue.toFixed(2)} · Margen ${preview.totals.avgMargin.toFixed(2)}%` : "Indica el tipo de cambio y margen para revisar los totales."}</p>
       <label className="mt-4 flex items-start gap-3 text-sm" htmlFor="td-confirm">
-        <input className="mt-1 size-5 shrink-0" checked={confirmed} disabled={busy || !preview} id="td-confirm" type="checkbox" onChange={(e) => setConfirmed(e.target.checked)} />
+        <input className="mt-1 size-5 shrink-0" checked={confirmed} disabled={busy || !preview || hasUnsavedChanges} id="td-confirm" type="checkbox" onChange={(e) => setConfirmed(e.target.checked)} />
         Confirmo que las licencias corresponden al cliente destino y revisé cantidades, vigencia, plazo, tipo de cambio y precios. Acepto reemplazar las partidas en un borrador nuevo.
       </label>
-      <div className="mt-4 flex justify-end"><button className="min-h-11 rounded-lg bg-emerald-700 px-4 text-sm font-medium text-white disabled:opacity-50" disabled={busy || !preview || !confirmed}
+      <div className="mt-4 flex justify-end"><button className="min-h-11 rounded-lg bg-emerald-700 px-4 text-sm font-medium text-white disabled:opacity-50" disabled={busy || !preview || !confirmed || hasUnsavedChanges}
         onClick={() => { void submit("apply"); }} type="button">{busy ? "Procesando..." : "Crear borrador en MXN"}</button></div>
     </> : <p className="mt-4 text-sm text-zinc-600">Admite cotizaciones digitales con la tabla Purchase Summary. Los PDF escaneados requieren captura manual.</p>}
   </dialog>;

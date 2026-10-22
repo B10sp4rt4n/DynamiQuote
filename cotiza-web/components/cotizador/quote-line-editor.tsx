@@ -8,8 +8,7 @@ import type { QuoteGroupSummary } from "@/lib/db/quotes";
 import { resolveBidirectionalPricing } from "@/lib/domain/pricing-engine";
 import { TemplatePickerModal } from "@/components/cotizador/template-picker-modal";
 import { SaveTemplateButton } from "@/components/cotizador/save-template-button";
-import dynamic from "next/dynamic";
-const ThreatDownImportModal = dynamic(() => import("./threatdown-import-modal").then((m) => m.ThreatDownImportModal), { ssr: false });
+import { ThreatDownImportModal } from "@/components/cotizador/threatdown-import-modal";
 import type {
   EditableQuoteLineResponse,
   QuoteLinesGetResponse,
@@ -1375,9 +1374,9 @@ export function QuoteLineEditor({
             Usar plantilla
           </button>
           <SaveTemplateButton key={selectedQuoteId} quoteId={selectedQuoteId} disabled={!selectedQuoteId || loading || saving || lines.length === 0 || hasUnsavedTemplateChanges} />
-          {threatDownImportEnabled ? <button className="rounded-lg border border-sky-300 px-3 py-2 text-sm font-medium text-sky-700 disabled:opacity-50"
-            disabled={!selectedQuoteId || loading || saving || hasUnsavedTemplateChanges}
-            title={hasUnsavedTemplateChanges ? "Guarda los cambios antes de importar" : undefined}
+          {threatDownImportEnabled ? <button className="min-h-11 rounded-lg border border-sky-300 px-3 py-2 text-sm font-medium text-sky-700 hover:bg-sky-50 disabled:opacity-50"
+            disabled={!selectedQuote || saving}
+            aria-haspopup="dialog"
             onClick={() => setShowThreatDownImport(true)} type="button">Importar PDF ThreatDown</button> : null}
           <button
             className="rounded-lg border border-zinc-300 px-3 py-2 text-sm font-medium text-zinc-700 hover:bg-zinc-100 disabled:opacity-50"
@@ -1453,7 +1452,9 @@ export function QuoteLineEditor({
       </div>
 
       {threatDownImportEnabled && showThreatDownImport && selectedQuote ? <ThreatDownImportModal key={selectedQuoteId}
-        quoteId={selectedQuoteId} clientName={selectedQuote.clientName} onClose={() => setShowThreatDownImport(false)}
+        quoteId={selectedQuoteId} clientName={selectedQuote.clientName}
+        hasUnsavedChanges={hasUnsavedTemplateChanges}
+        onClose={() => setShowThreatDownImport(false)}
         onImported={(data: QuoteLinesPutResponse) => {
           setShowThreatDownImport(false);
           onQuoteVersionSaved?.(data.quote);
