@@ -1,7 +1,7 @@
 import { beforeEach, describe, expect, it, vi } from "vitest";
 
 const {
-  getCurrentTenantContextMock,
+  visibleMock,  getCurrentTenantContextMock,
   getPackageDetailByTenantMock,
   togglePackageActiveForTenantMock,
   updatePackageMetaForTenantMock,
@@ -9,6 +9,7 @@ const {
   enforceRateLimitMock,
   getRequestIdentityMock,
 } = vi.hoisted(() => ({
+  visibleMock: vi.fn(),
   getCurrentTenantContextMock: vi.fn(),
   getPackageDetailByTenantMock: vi.fn(),
   togglePackageActiveForTenantMock: vi.fn(),
@@ -17,6 +18,8 @@ const {
   enforceRateLimitMock: vi.fn(),
   getRequestIdentityMock: vi.fn(),
 }));
+
+vi.mock("@/lib/db/quotes", () => ({ isQuoteVisibleToViewer: visibleMock }));
 
 vi.mock("@/lib/auth/tenant-context", () => ({
   getCurrentTenantContext: getCurrentTenantContextMock,
@@ -41,6 +44,7 @@ const ctx = (packageId: string) => ({ params: Promise.resolve({ packageId }) });
 describe("/api/packages/[packageId]", () => {
   beforeEach(() => {
     vi.clearAllMocks();
+    visibleMock.mockResolvedValue(true);
     enforceRateLimitMock.mockReturnValue({ allowed: true, remaining: 10, resetAt: Date.now() + 10_000 });
     getRequestIdentityMock.mockReturnValue("ip-1");
   });
@@ -130,7 +134,7 @@ describe("/api/packages/[packageId]", () => {
 
   it("PATCH insert devuelve 404 cuando no inserta lineas", async () => {
     getCurrentTenantContextMock.mockResolvedValue({ id: "t1", userId: "u1" });
-    insertPackageIntoQuoteMock.mockResolvedValue(0);
+    insertPackageIntoQuoteMock.mockResolvedValue(null);
 
     const res = await PATCH(
       new Request("http://localhost/api/packages/p1", {
@@ -139,6 +143,7 @@ describe("/api/packages/[packageId]", () => {
         body: JSON.stringify({
           action: "insert",
           quoteId: "8f71c0f5-5cc5-4de4-beb3-7da4c8f3e5ca",
+          operationId: "8f71c0f5-5cc5-4de4-beb3-7da4c8f3e5ca",
         }),
       }),
       ctx("p1"),
@@ -149,7 +154,7 @@ describe("/api/packages/[packageId]", () => {
 
   it("PATCH insert devuelve 200 con cantidad insertada", async () => {
     getCurrentTenantContextMock.mockResolvedValue({ id: "t1", userId: "u1" });
-    insertPackageIntoQuoteMock.mockResolvedValue(3);
+    insertPackageIntoQuoteMock.mockResolvedValue({ inserted: 3, quote: { quoteId: "q-v3" } });
 
     const res = await PATCH(
       new Request("http://localhost/api/packages/p1", {
@@ -158,6 +163,7 @@ describe("/api/packages/[packageId]", () => {
         body: JSON.stringify({
           action: "insert",
           quoteId: "8f71c0f5-5cc5-4de4-beb3-7da4c8f3e5ca",
+          operationId: "8f71c0f5-5cc5-4de4-beb3-7da4c8f3e5ca",
         }),
       }),
       ctx("p1"),
@@ -171,6 +177,7 @@ describe("/api/packages/[packageId]", () => {
       "t1",
       "p1",
       "8f71c0f5-5cc5-4de4-beb3-7da4c8f3e5ca",
+      expect.objectContaining({ operationId: "8f71c0f5-5cc5-4de4-beb3-7da4c8f3e5ca" }),
     );
   });
 

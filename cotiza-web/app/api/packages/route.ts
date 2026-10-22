@@ -7,6 +7,7 @@ import {
 } from "@/lib/db/packages";
 import { enforceRateLimit, getRequestIdentity } from "@/lib/utils/rate-limit";
 import { createPackageSchema } from "@/lib/validations/packages";
+import { QuoteInputError } from "@/lib/domain/quote-input";
 
 export async function GET(_req: Request) {
   const tenant = await getCurrentTenantContext();
@@ -47,12 +48,18 @@ export async function POST(req: Request) {
     );
   }
 
-  const body: unknown = await req.json();
+  const body: unknown = await req.json().catch(() => null);
   const parsed = createPackageSchema.safeParse(body);
   if (!parsed.success) {
     return NextResponse.json({ error: parsed.error.flatten() }, { status: 422 });
   }
 
-  const pkg = await createPackageForTenant(tenant.id, parsed.data);
-  return NextResponse.json({ package: pkg }, { status: 201 });
+  try {
+    const pkg = await createPackageForTenant(tenant.id, { ...parsed.data, createdBy: tenant.userId ?? undefined });
+    return NextResponse.json({ package: pkg }, { status: 201 });
+  } catch (error) {
+    if (error instanceof QuoteInputError) return NextResponse.json({ error: error.message }, { status: error.status });
+    console.error("[templates:create]", error);
+    return NextResponse.json({ error: "No se pudo crear la plantilla" }, { status: 500 });
+  }
 }
