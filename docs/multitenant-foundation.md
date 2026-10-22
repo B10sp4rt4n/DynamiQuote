@@ -166,12 +166,30 @@ contención del entrypoint no hace seguras las funciones `database.py` para
 consumo directo: siguen fuera del contrato de integración y no deben exponerse
 como API ni reutilizarse sin tenant obligatorio.
 
-Se localizó el proyecto Vercel `dynami-quote`, vinculado al repositorio
-B10sp4rt4n/DynamiQuote, en el equipo `salvador-ruiz-esparzas-projects`
-(`team_wCPRqvRGXWpRT4eUvfAz38jF`). Las dos conexiones disponibles devuelven
-403 al inspeccionar ese equipo. El mecanismo de recuperación `authorize_team_access`
-que indica Vercel no está expuesto entre las herramientas disponibles, y no hay
-credencial Vercel CLI en el entorno. Esto bloquea confirmar el despliegue y
-contrastar usuarios con Clerk: necesita autorización de la integración para
-ese equipo. Railway está autenticado y sano; reinstalar Railway no resuelve
-esta autorización distinta. No se ejecutó un despliegue por una ruta alternativa.
+## Preview aislada de Cotiza
+
+El proyecto Vercel `dynami-quote` (`prj_DJT883Ac7UNuSKMrZUD1rPjZdsOd`) está
+vinculado al repositorio B10sp4rt4n/DynamiQuote. El 403 anterior se produce al
+pasar el equipo explícitamente. Consultar por ID de proyecto con la conexión
+existente, sin `teamId`, sí funciona; no se necesitó reinstalar Vercel ni
+ampliar permisos. Este acceso no equivale a haber probado un login Clerk.
+
+Se configuró un override `DATABASE_URL` exclusivamente para target preview y
+rama Git `fix/multitenant-foundation`, apuntando a la rama Neon aislada
+`br-old-pond-ahe5jto3`. Producción, desarrollo y previews de otras ramas
+conservan sus valores anteriores. La rama Neon expira el 23 octubre 2026 a las
+20:25 UTC (14:25 Ciudad de México); el preview dejará de tener base al expirar
+hasta que se cree/seleccione otra rama de pruebas. No se cambian credenciales
+ni DNS de producción. Las dos migraciones ya están aplicadas en esta copia.
+
+La autenticación conserva la configuración Clerk existente. No probar altas,
+invitaciones ni cambios de roles reales desde el preview. La validación manual
+inicial es iniciar sesión, comprobar el tenant visible y recorrer clientes,
+oportunidades y propuestas propias. Para validar otro tenant, superadmin usa
+el selector autenticado (la auditoría se guarda únicamente en la copia).
+Después probar con un vendedor y comprobar rechazo al usar IDs ajenos,
+PDF/XLSX y vistas de factura, sin timbrar ni enviar correo. Los secretos de
+correo/facturación están limitados a producción en la configuración consultada.
+
+Este preview no habilita automáticamente capacidades CRM en producción y el
+PR permanece en borrador hasta recopilar evidencia de login y aislamiento.
