@@ -1505,6 +1505,7 @@ export async function getProposalWorkflowByTenant(
   const row = await prisma.proposals.findFirst({
     include: {
       formal_proposals: {
+        where: { tenant_id: tenantId },
         orderBy: [{ created_at: "desc" }, { proposal_doc_id: "desc" }],
         select: {
           client_logo_id: true,
@@ -1547,6 +1548,7 @@ export async function getProposalWorkflowByTenant(
           subtotal_price: true,
         },
         where: {
+          tenant_id: tenantId,
           status: {
             not: "deleted",
           },
@@ -2666,6 +2668,7 @@ export async function getProposalExcelPayloadByTenant(
   const row = await prisma.proposals.findFirst({
     include: {
       formal_proposals: {
+        where: { tenant_id: tenantId },
         orderBy: [{ created_at: "desc" }, { proposal_doc_id: "desc" }],
         select: {
           currency: true,
@@ -2691,6 +2694,7 @@ export async function getProposalExcelPayloadByTenant(
         take: 1,
       },
       proposal_items: {
+        where: { tenant_id: tenantId },
         orderBy: [{ item_number: "asc" }, { created_at: "asc" }],
         select: {
           component_type: true,

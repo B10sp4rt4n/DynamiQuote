@@ -92,6 +92,7 @@ export async function getClientFiscalDataForProposalByTenant(
     select: {
       origin: true,
       formal_proposals: {
+        where: { tenant_id: tenantId },
         orderBy: [{ created_at: "desc" }, { proposal_doc_id: "desc" }],
         select: { quote_id: true },
         take: 1,
@@ -122,7 +123,7 @@ export async function getClientFiscalDataForProposalByTenant(
         },
       },
     },
-    where: { quote_id: linkedQuoteId, tenantId },
+    where: { quote_id: linkedQuoteId, tenantId, client: { tenant_id: tenantId } },
   });
 
   if (!quote?.client) {

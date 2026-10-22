@@ -100,3 +100,52 @@ un directorio temporal y ejecutar `scripts/check_multitenant_migration.mjs`
 con `PGLITE_MODULE` apuntando al `dist/index.js` de esa instalación, o instalar
 `@electric-sql/pglite` temporalmente sin guardar dependencias y ejecutar el script.
 No necesita DATABASE_URL ni claves de producción.
+
+## Segunda revisión: descargas, facturación y rutas legacy
+
+- PDF y XLSX, incluidos HEAD y carga de partidas, aplican el mismo gate de
+  propietario que el detalle de propuesta. Owner/admin/superadmin conservan
+  alcance dentro del tenant seleccionado; un vendedor ajeno obtiene 404.
+- Estado de factura, generación de prefactura, preview, PDF y timbrado aplican
+  ese gate antes de leer información fiscal o llamar al proveedor. Las pruebas
+  mockean el proveedor: no se enviaron correos ni se timbraron facturas reales.
+- Los lectores de propuestas filtran por tenant tanto el padre como sus
+  documentos y partidas. Los datos fiscales no siguen un cliente de otro tenant.
+- `20261022_multitenant_documents.sql` se aplica DESPUÉS de la migración de
+  foundation y ANTES del código nuevo. Refuerza partidas, documentos formales y
+  auditoría con tres claves compuestas adicionales. Validada en la misma rama
+  Neon y contrastada con escrituras cruzadas rechazadas sin registros residuales.
+- El script aislado prueba ambas migraciones dos veces y doce relaciones
+  cruzadas rechazadas. Las consultas sobre la copia de datos no encontraron
+  relaciones inconsistentes en partidas, documentos ni auditoría.
+- Resultado actualizado: 455 pruebas pasan, incluidas 66 nuevas respecto de la
+  base inicial; 18 casos opt-in omitidos y el E2E dependiente de DATABASE_URL
+  excluido. TypeScript sin errores. ESLint de los archivos modificados sin
+  errores; conserva una advertencia preexistente en proposals.ts por variable
+  no utilizada.
+
+### Identidad y despliegue: comprobado y pendiente
+
+La conexión Railway se restableció tras reinstalar su integración en ChatGPT.
+Se confirmó servicio `cotiza-web` online, sin cambios pendientes ni cron dentro
+  del proyecto del mismo nombre. Railway muestra nombres de variables, no sus
+valores, con estas credenciales OAuth. Tener configuradas las variables Clerk
+no acredita que un usuario exista o que un login haya pasado.
+
+Neon confirma que `salvador.ruiz` tiene un `user_id` de formato Clerk y rol
+superadmin. El superadmin legacy tiene alias `admin`, ID distinto y pertenece
+a otro tenant. No son identidades intercambiables: no se fusionaron, reasignaron
+ni desactivaron. Falta contrastar los IDs exactos con Clerk y probar login real.
+
+La revisión estática de `app.py`/`database.py` encontró lectores legacy por ID
+sin tenant obligatorio (`get_quote_by_id`, `get_quote_by_group_id`,
+`load_versions_for_group`, `load_lines_for_quote`, `get_logos`). El FastAPI en
+`src/api/main.py` expone cálculos sin persistencia de clientes; no es una API de
+acceso a los registros del CRM. No se comprobó el despliegue activo de las rutas
+legacy ni se modificaron sus permisos. No exponer ni reutilizar esos lectores
+como puente de integración hasta convertirlos a tenant obligatorio y probarlos.
+
+Los controles Next.js y PostgreSQL preparados aquí no certifican que toda la
+plataforma legacy sea multitenant. El PR sigue en borrador, sin despliegue de
+producción ni migración del CRM anterior. Para liberar: login real, confirmar
+el despliegue que usa Cotiza y resolver o aislar el acceso legacy documentado.

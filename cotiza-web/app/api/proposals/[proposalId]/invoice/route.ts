@@ -11,7 +11,7 @@ import {
   getProposalInvoiceStatusByTenant,
   saveProposalInvoiceDraftByTenant,
 } from "@/lib/db/proposal-invoices";
-import { getProposalWorkflowByTenant } from "@/lib/db/proposals";
+import { getProposalWorkflowByTenant, isProposalVisibleToViewer } from "@/lib/db/proposals";
 import { getTenantProfileByTenant } from "@/lib/db/tenants";
 import { createProposalInvoiceSchema } from "@/lib/validations/proposal-invoice";
 
@@ -30,6 +30,10 @@ export async function GET(_: Request, context: RouteContext) {
   }
 
   const { proposalId } = await context.params;
+  const canSeeAll = tenant.isSuperAdmin || tenant.userRole === "owner" || tenant.userRole === "admin";
+  if (!await isProposalVisibleToViewer(tenant.id, proposalId, tenant.userId, canSeeAll)) {
+    return NextResponse.json({ error: "Propuesta no encontrada" }, { status: 404 });
+  }
   const [invoice, clientFiscalData] = await Promise.all([
     getProposalInvoiceStatusByTenant(tenant.id, proposalId),
     getClientFiscalDataForProposalByTenant(tenant.id, proposalId),
@@ -53,6 +57,10 @@ export async function POST(request: Request, context: RouteContext) {
   }
 
   const { proposalId } = await context.params;
+  const canSeeAll = tenant.isSuperAdmin || tenant.userRole === "owner" || tenant.userRole === "admin";
+  if (!await isProposalVisibleToViewer(tenant.id, proposalId, tenant.userId, canSeeAll)) {
+    return NextResponse.json({ error: "Propuesta no encontrada" }, { status: 404 });
+  }
   const parsed = createProposalInvoiceSchema.safeParse(await request.json().catch(() => null));
   if (!parsed.success) {
     return NextResponse.json({ error: parsed.error.issues[0]?.message ?? "Payload invalido" }, { status: 422 });

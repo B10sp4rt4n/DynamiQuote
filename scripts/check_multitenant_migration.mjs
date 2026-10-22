@@ -12,12 +12,18 @@ CREATE TABLE tasks(task_id text PRIMARY KEY, tenant_id text NOT NULL, client_id 
 CREATE TABLE interaction_logs(interaction_id text PRIMARY KEY, tenant_id text NOT NULL, client_id text NOT NULL, opportunity_id text);
 CREATE TABLE quotes(quote_id text PRIMARY KEY, tenant_id text, client_id text, opportunity_id text);
 CREATE TABLE proposals(proposal_id text PRIMARY KEY, tenant_id text NOT NULL, opportunity_id text);
+CREATE TABLE proposal_items(item_id text PRIMARY KEY, tenant_id text NOT NULL, proposal_id text NOT NULL);
+CREATE TABLE formal_proposals(proposal_doc_id text PRIMARY KEY, tenant_id text, proposal_id text);
+CREATE TABLE proposal_audit_events(event_id text PRIMARY KEY, tenant_id text NOT NULL, proposal_id text NOT NULL);
 INSERT INTO tenants VALUES('a'),('b');
 INSERT INTO clients VALUES('ca','a'),('ca2','a'),('cb','b');
 INSERT INTO opportunities VALUES('oa','a','ca'),('ob','b','cb');
 `);
 const sql=readFileSync(new URL('../cotiza-web/prisma/manual/20261022_multitenant_foundation.sql', import.meta.url),'utf8');
 await db.exec(sql); await db.exec(sql);
+const docSql=readFileSync(new URL('../cotiza-web/prisma/manual/20261022_multitenant_documents.sql', import.meta.url),'utf8');
+await db.exec(docSql); await db.exec(docSql);
+await db.exec("INSERT INTO proposals VALUES('pa','a','oa'); INSERT INTO proposal_items VALUES('valid-item','a','pa'); INSERT INTO formal_proposals VALUES('valid-document','a','pa')");
 let count=0;
 async function rejects(sql) { await assert.rejects(db.exec(sql), e=>e.code==='23503'); count++; }
 await db.exec("INSERT INTO tasks VALUES('valid','a','ca','oa'); INSERT INTO tasks VALUES('no-opp','a','ca',NULL)");
@@ -29,6 +35,9 @@ await rejects("INSERT INTO opportunities VALUES('foreign','a','cb')");
 await rejects("INSERT INTO quotes VALUES('foreign','a','cb',NULL)");
 await rejects("INSERT INTO quotes VALUES('foreign','a','ca','ob')");
 await rejects("INSERT INTO proposals VALUES('foreign','a','ob')");
+await rejects("INSERT INTO proposal_items VALUES('foreign-item','b','pa')");
+await rejects("INSERT INTO formal_proposals VALUES('foreign-doc','b','pa')");
+await rejects("INSERT INTO proposal_audit_events VALUES('foreign-audit','b','pa')");
 await rejects("UPDATE opportunities SET tenant_id='b' WHERE opportunity_id='oa'");
 await db.exec("INSERT INTO tenant_context_events(event_id,actor_user_id,from_tenant_id,to_tenant_id) VALUES('audit','admin','a','b')");
 assert.equal((await db.query('SELECT count(*)::int AS n FROM tenant_context_events')).rows[0].n,1);
