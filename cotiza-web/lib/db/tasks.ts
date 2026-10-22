@@ -3,6 +3,7 @@ import "server-only";
 import { randomUUID } from "crypto";
 
 import { prisma } from "@/lib/db/prisma";
+import { assertClientOpportunityForTenant } from "@/lib/db/tenant-relations";
 
 export type PendingTask = {
   clientCompany: string;
@@ -23,6 +24,7 @@ export type CreateTaskInput = {
 };
 
 export async function createTaskForTenant(tenantId: string, input: CreateTaskInput): Promise<string> {
+  await assertClientOpportunityForTenant(tenantId, input.clientId, input.opportunityId);
   const taskId = randomUUID();
 
   await prisma.tasks.create({

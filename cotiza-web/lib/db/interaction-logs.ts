@@ -3,6 +3,7 @@ import "server-only";
 import { randomUUID } from "crypto";
 
 import { prisma } from "@/lib/db/prisma";
+import { assertClientOpportunityForTenant } from "@/lib/db/tenant-relations";
 
 export type InteractionLog = {
   authorDisplayName: string | null;
@@ -48,7 +49,7 @@ export async function listInteractionLogsForTenant(tenantId: string, clientId: s
     userIds.length > 0
       ? prisma.app_users.findMany({
           select: { alias: true, first_name: true, last_name: true, user_id: true },
-          where: { user_id: { in: userIds } },
+          where: { user_id: { in: userIds }, tenant_id: tenantId },
         })
       : Promise.resolve([]),
   ]);
@@ -73,6 +74,7 @@ export async function createInteractionLogForTenant(
   clientId: string,
   input: CreateInteractionLogInput,
 ): Promise<InteractionLog> {
+  await assertClientOpportunityForTenant(tenantId, clientId, input.opportunityId);
   const interactionId = randomUUID();
 
   const row = await prisma.interaction_logs.create({
@@ -102,7 +104,7 @@ export async function createInteractionLogForTenant(
   if (row.created_by_user_id) {
     const user = await prisma.app_users.findFirst({
       select: { alias: true, first_name: true, last_name: true },
-      where: { user_id: row.created_by_user_id },
+      where: { user_id: row.created_by_user_id, tenant_id: tenantId },
     });
     authorDisplayName = user ? `${user.first_name} ${user.last_name}`.trim() || user.alias : null;
   }

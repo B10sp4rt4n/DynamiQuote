@@ -4,6 +4,7 @@ import { randomUUID } from "crypto";
 import { Prisma } from "@prisma/client";
 
 import { prisma } from "@/lib/db/prisma";
+import { assertClientOpportunityForTenant } from "@/lib/db/tenant-relations";
 import { opportunityLifetimeDays } from "@/lib/domain/opportunity-lifetime";
 
 type PrismaClientOrTx = Prisma.TransactionClient | typeof prisma;
@@ -60,6 +61,7 @@ export async function createOpportunityForTenant(
   input: { clientId: string | null; createdByUserId: string | null; title: string },
   client: PrismaClientOrTx = prisma,
 ): Promise<string> {
+  await assertClientOpportunityForTenant(tenantId, input.clientId, null, client);
   const opportunityId = randomUUID();
   const opportunityNumber = await nextOpportunityNumber(tenantId);
   const now = new Date();
