@@ -2,7 +2,7 @@
 
 import { useMemo, useState } from "react";
 
-import { PIPELINE_TABLE_ANCHOR_ID, PipelineTable, type PipelineStageFilter } from "@/components/pipeline/pipeline-table";
+import { PIPELINE_TABLE_ANCHOR_ID, PipelineTable, type PipelineCloseFilter, type PipelineStageFilter } from "@/components/pipeline/pipeline-table";
 import type { OpportunityStage, OpportunityWithStage } from "@/lib/db/opportunities";
 
 // Paleta de estado fija (nunca tematizada) -- ver skill dataviz. good=ganado,
@@ -261,6 +261,8 @@ export function PipelineDashboard({
     () => new Set([UNASSIGNED_KEY, ...effectiveVendors.map((v) => v.userId)]),
   );
   const [stageFilter, setStageFilter] = useState<PipelineStageFilter>("all");
+  const [closeFilter, setCloseFilter] = useState<PipelineCloseFilter>("all");
+  const [search, setSearch] = useState("");
 
   const filteredOpportunities = useMemo(() => {
     if (!showVendorFilter) return opportunities;
@@ -270,12 +272,16 @@ export function PipelineDashboard({
   const summary = useMemo(() => computeSummary(filteredOpportunities), [filteredOpportunities]);
   const openAges = filteredOpportunities.filter((opp) => opp.stage === "open" && opp.lifetimeDays !== null);
   const wonCycles = filteredOpportunities.filter((opp) => opp.stage === "won" && opp.lifetimeDays !== null);
+  const undatedWins = filteredOpportunities.filter((opp) => opp.stage === "won" && opp.closedAt === null);
+  const winsToReview = filteredOpportunities.filter((opp) => opp.stage === "won" && opp.closedAt !== null && opp.lifetimeDays === null);
   const averageDays = (items: OpportunityWithStage[]) => items.length
     ? `${(items.reduce((sum, opp) => sum + (opp.lifetimeDays ?? 0), 0) / items.length).toFixed(1)} días`
     : "Sin datos";
 
-  function goToStage(stage: PipelineStageFilter) {
+  function goToStage(stage: PipelineStageFilter, close: PipelineCloseFilter = "all") {
     setStageFilter(stage);
+    setCloseFilter(close);
+    setSearch("");
     document.getElementById(PIPELINE_TABLE_ANCHOR_ID)?.scrollIntoView({ behavior: "smooth", block: "start" });
   }
 
@@ -318,8 +324,28 @@ export function PipelineDashboard({
         </div>
         <div className="rounded-xl border border-zinc-200 bg-white p-4">
           <p className="text-sm font-semibold text-zinc-900">Tiempo promedio para ganar</p>
-          <p className="mt-1 text-2xl font-semibold text-zinc-900">{averageDays(wonCycles)}</p>
-          <p className="text-xs text-zinc-500">{wonCycles.length} de {summary.won.count} ganadas con duración conocida.</p>
+          <p className="mt-1 text-2xl font-semibold text-zinc-900">
+            {wonCycles.length > 0 ? averageDays(wonCycles) : summary.won.count > 0 ? "Aún sin cierres calculables" : "Aún sin ganadas"}
+          </p>
+          <p className="text-xs text-zinc-500">Calculado con {wonCycles.length} de {summary.won.count} ganadas del filtro de vendedor.</p>
+          <div className="mt-3 flex flex-wrap gap-2">
+            {([
+              { filter: "calculable", label: "Incluidas en el promedio", count: wonCycles.length },
+              { filter: "undated", label: "Sin fecha de cierre", count: undatedWins.length },
+              { filter: "review", label: "Fechas por revisar", count: winsToReview.length },
+            ] as const).map(({ filter, label, count }) => (
+              <button
+                aria-controls={PIPELINE_TABLE_ANCHOR_ID}
+                aria-pressed={stageFilter === "won" && closeFilter === filter}
+                className="rounded-lg border border-zinc-300 px-3 py-2 text-sm text-zinc-700 hover:bg-zinc-50 aria-pressed:border-zinc-600 aria-pressed:bg-zinc-100"
+                key={filter}
+                onClick={() => goToStage("won", filter)}
+                type="button"
+              >
+                {label}: {count}
+              </button>
+            ))}
+          </div>
         </div>
       </div>
 
@@ -330,7 +356,18 @@ export function PipelineDashboard({
           </p>
         </div>
       ) : (
-        <PipelineTable onStageFilterChange={setStageFilter} opportunities={filteredOpportunities} stageFilter={stageFilter} />
+        <PipelineTable
+          closeFilter={closeFilter}
+          onCloseFilterChange={setCloseFilter}
+          onSearchChange={setSearch}
+          onStageFilterChange={(stage) => {
+            setStageFilter(stage);
+            setCloseFilter("all");
+          }}
+          opportunities={filteredOpportunities}
+          search={search}
+          stageFilter={stageFilter}
+        />
       )}
     </div>
   );
