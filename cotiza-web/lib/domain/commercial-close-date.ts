@@ -24,3 +24,10 @@ export function isValidCloseDate(day: string, startedAt: Date | string, now: Dat
   const startDay = mexicoCalendarDate(startedAt);
   return startDay !== "" && day >= startDay && day <= mexicoCalendarDate(now);
 }
+
+/** Preserve original commercial history after late linking or reopening. */
+export function earliestCommercialStart(...values: (Date | string | null | undefined)[]): Date | null {
+  const dates = values.filter((value) => value != null).map((value) => new Date(value!))
+    .filter((date) => Number.isFinite(date.getTime()));
+  return dates.length ? new Date(Math.min(...dates.map((date) => date.getTime()))) : null;
+}

@@ -15,7 +15,7 @@ import {
 } from "@/lib/db/proposal-approvals";
 import { prisma } from "@/lib/db/prisma";
 import { NOT_DISCARDED_WHERE } from "@/lib/db/proposal-filters";
-import { closeDateInstant, isValidCloseDate } from "@/lib/domain/commercial-close-date";
+import { closeDateInstant, earliestCommercialStart, isValidCloseDate, mexicoCalendarDate } from "@/lib/domain/commercial-close-date";
 import {
   evaluateProposalLiberation,
   type ProposalLiberationEvaluation,
@@ -368,6 +368,7 @@ export type ProposalSummary = {
 export type ProposalWorkflowDetail = {
   createdAt: string;
   opportunityCreatedAt?: string | null;
+  closeDateMinimum?: string;
   outcomeAt: string | null;
   approvalGate: ProposalApprovalGate;
   approvals: ProposalApprovalRecord[];
@@ -1735,7 +1736,14 @@ export async function getProposalWorkflowByTenant(
     select: { created_at: true },
   }) : null;
 
+  const originalFormal = await prisma.formal_proposals.findFirst({
+    where: { proposal_id: proposalId, tenant_id: tenantId },
+    orderBy: { issued_date: "asc" }, select: { issued_date: true },
+  });
+  const commercialStart = earliestCommercialStart(row.created_at, opportunity?.created_at, originalFormal?.issued_date)!;
+
   return {
+    closeDateMinimum: mexicoCalendarDate(commercialStart),
     createdAt: row.created_at.toISOString(),
     opportunityCreatedAt: opportunity?.created_at.toISOString() ?? null,
     outcomeAt: row.outcome_at?.toISOString() ?? null,
@@ -1816,7 +1824,12 @@ export async function setProposalOutcomeByTenant(
       const opportunity = row.opportunity_id ? await tx.opportunities.findFirst({
         where: { opportunity_id: row.opportunity_id, tenant_id: tenantId }, select: { created_at: true },
       }) : null;
-      if (!isValidCloseDate(dateInput.closedOn, opportunity?.created_at ?? row.created_at, now)) return "invalid_date";
+      const originalFormal = await tx.formal_proposals.findFirst({
+        where: { proposal_id: proposalId, tenant_id: tenantId },
+        orderBy: { issued_date: "asc" }, select: { issued_date: true },
+      });
+      const commercialStart = earliestCommercialStart(row.created_at, opportunity?.created_at, originalFormal?.issued_date)!;
+      if (!isValidCloseDate(dateInput.closedOn, commercialStart, now)) return "invalid_date";
       outcomeAt = closeDateInstant(dateInput.closedOn);
     } else if (row.outcome === outcome) {
       // Legacy callers/retries never manufacture a historical close.
