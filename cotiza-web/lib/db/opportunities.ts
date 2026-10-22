@@ -34,8 +34,8 @@ function toNumber(value: unknown): number {
 
 // Folio atomico/consecutivo por tenant, igual que COT-XXXX y PKG-XXXX (ver
 // CLAUDE.md "Convenciones de codigo").
-async function nextOpportunityNumber(tenantId: string): Promise<string> {
-  const rows = await prisma.opportunities.findMany({
+async function nextOpportunityNumber(tenantId: string, client: PrismaClientOrTx): Promise<string> {
+  const rows = await client.opportunities.findMany({
     select: { opportunity_number: true },
     where: {
       opportunity_number: { startsWith: "OPP-" },
@@ -63,7 +63,7 @@ export async function createOpportunityForTenant(
 ): Promise<string> {
   await assertClientOpportunityForTenant(tenantId, input.clientId, null, client);
   const opportunityId = randomUUID();
-  const opportunityNumber = await nextOpportunityNumber(tenantId);
+  const opportunityNumber = await nextOpportunityNumber(tenantId, client);
   const now = new Date();
 
   await client.opportunities.create({

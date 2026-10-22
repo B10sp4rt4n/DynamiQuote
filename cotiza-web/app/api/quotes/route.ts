@@ -2,6 +2,7 @@ import { NextResponse } from "next/server";
 
 import { getCurrentTenantContext } from "@/lib/auth/tenant-context";
 import { createQuoteForTenant } from "@/lib/db/quotes";
+import { TenantRelationError } from "@/lib/db/tenant-relations";
 import { enforceRateLimit, getRequestIdentity } from "@/lib/utils/rate-limit";
 import { createQuoteSchema } from "@/lib/validations/quotes";
 
@@ -33,7 +34,13 @@ export async function POST(request: Request) {
     return NextResponse.json({ error: parsed.error.flatten() }, { status: 422 });
   }
 
-  const quote = await createQuoteForTenant(tenant.id, parsed.data, tenant.userId ?? null);
-
-  return NextResponse.json({ quote }, { status: 201 });
+  try {
+    const quote = await createQuoteForTenant(tenant.id, parsed.data, tenant.userId ?? null);
+    return NextResponse.json({ quote }, { status: 201 });
+  } catch (error) {
+    if (error instanceof TenantRelationError) {
+      return NextResponse.json({ error: error.message }, { status: 404 });
+    }
+    throw error;
+  }
 }

@@ -229,3 +229,63 @@ La dependencia continúa siendo temporal y no se agregó al runtime del producto
 Sigue pendiente la prueba autenticada con dos tenants y vendedor, el recorrido
 comercial completo y la revisión de procesos de fondo/legacy antes de declarar
 cerrado el aislamiento de toda la plataforma o activar la integración CRM.
+
+## Recorrido CRM contra PostgreSQL local desechable
+
+El runner `scripts/check_crm_isolation.mjs` genera el esquema Prisma desde cero
+en PGlite en memoria, aplica ambas migraciones y sirve el protocolo PostgreSQL
+solo en loopback con un puerto aleatorio. Inyecta esa conexión nueva a los
+tests; nunca reutiliza DATABASE_URL del entorno para conectarse a Neon. Al
+terminar cierra el socket y la base. No se agregan dependencias al producto.
+
+La suite nueva crea dos empresas ficticias, dos vendedores de la misma empresa
+y un owner por empresa. Solo sustituye el contexto autenticado; ejecuta los
+handlers API, servicios, Prisma, SQL, transacciones y claves foráneas reales.
+No ejecuta un navegador, Clerk real, middleware ni tráfico HTTP de Vercel.
+
+Se comprobaron cliente, cotización y oportunidad, nueva versión de cotización,
+propuesta con reintento, lectura por vendedor/owner, tarea de seguimiento,
+rechazo de padres cruzados, finalización autorizada, cierre/reapertura,
+conservación de la creación de la oportunidad, KPIs y auditoría. Los IDs de
+tenant y privilegios enviados en el cuerpo no cambian el contexto del servidor.
+
+La prueba reprodujo y corrigió tres casos:
+
+- Crear cotización con cliente ajeno ahora responde 404; se conserva el rollback
+  que impide guardar la cotización y su oportunidad. Antes el error de relación
+  escapaba del handler y provocaba un error interno.
+- Generar propuesta comprueba permiso sobre la cotización fuente antes de
+  escribir; un vendedor ajeno del mismo tenant recibe 404, no una propuesta.
+- Repetir la generación de una propuesta existente comprueba también permiso
+  sobre esa propuesta antes de devolverla o rellenar información. Ser dueño de
+  la cotización fuente no concede acceso a una propuesta creada por otro actor.
+  Owner/admin/superadmin mantienen su alcance autorizado dentro del tenant.
+
+La consulta del folio de oportunidad reutiliza ahora el cliente de transacción
+recibido, sin pedir otra conexión al pool mientras la creación mantiene una
+transacción abierta. La reproducción inicial agotaba el tiempo de transacción
+en el runner de una sola sesión. Este ajuste no convierte el contador actual
+MAX+1 en una secuencia atómica ni acredita asignación concurrente de folios.
+
+Resultado: los 12 casos nuevos de recorrido/aislamiento y los 10 casos
+existentes de fechas comerciales pasan (22 en total). La suite general con los
+seis tests SQL de KPIs mantiene 461 pruebas aprobadas; omite 30 casos opt-in,
+incluidos los 22 ejecutados por separado. El E2E antiguo dependiente de
+DATABASE_URL sigue excluido. TypeScript y ESLint de los archivos cambiados sin
+errores. La concurrencia distribuida no queda certificada por el multiplexer
+de PGlite. No se escribieron fixtures ni se alteraron cuentas reales en Neon.
+
+Reproducción desde la raíz, con dependencias temporales:
+
+```sh
+npm install --prefix /tmp/cotiza-pg-review --no-audit --no-fund --save-exact \
+  @electric-sql/pglite@0.5.11 @electric-sql/pglite-socket@0.2.14
+PGLITE_MODULE=/tmp/cotiza-pg-review/node_modules/@electric-sql/pglite/dist/index.js \
+PGLITE_SOCKET_MODULE=/tmp/cotiza-pg-review/node_modules/@electric-sql/pglite-socket/dist/index.js \
+  node scripts/check_crm_isolation.mjs
+```
+
+El recorrido de backend queda validado con datos ficticios. Sigue pendiente el
+recorrido en navegador con sesiones reales de dos tenants y vendedor, más las
+revisiones abiertas de fondo/legacy. El PR conserva el estado de borrador y no
+se aplicó esta corrección a producción ni se migró el CRM antiguo.
