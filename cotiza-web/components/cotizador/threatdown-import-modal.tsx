@@ -9,6 +9,7 @@ export function ThreatDownImportModal({ quoteId, clientName, hasUnsavedChanges =
   onImported: (data: QuoteLinesPutResponse) => void;
 }) {
   const dialog = useRef<HTMLDialogElement>(null);
+  const fileInput = useRef<HTMLInputElement>(null);
   const operationId = useRef<string | null>(null);
   const [file, setFile] = useState<File | null>(null);
   const [source, setSource] = useState<ThreatDownQuote | null>(null);
@@ -26,25 +27,32 @@ export function ThreatDownImportModal({ quoteId, clientName, hasUnsavedChanges =
   })();
 
   function resetReview() { setConfirmed(false); operationId.current = null; }
-  async function submit(action: "preview" | "apply") {
-    if (!file || busy) return;
+  async function submit(action: "preview" | "apply", selectedFile: File | null = file) {
+    if (!selectedFile || busy) return;
     if (action === "apply" && (!preview || !confirmed || hasUnsavedChanges)) return;
     setBusy(true); setError(null);
+    const controller = new AbortController();
+    const timeout = setTimeout(() => controller.abort(), 35_000);
     try {
-      const form = new FormData(); form.set("file", file); form.set("action", action);
+      const form = new FormData(); form.set("file", selectedFile); form.set("action", action);
       if (action === "apply") {
         operationId.current ??= crypto.randomUUID();
         form.set("operationId", operationId.current); form.set("expectedHash", fileHash);
         form.set("exchangeRate", exchangeRate); form.set("marginPct", margin); form.set("confirmed", "yes");
       }
-      const response = await fetch(`/api/quotes/${quoteId}/import-threatdown`, { method: "POST", body: form });
+      const response = await fetch(`/api/quotes/${quoteId}/import-threatdown`, { method: "POST", body: form, signal: controller.signal });
       const data = await response.json();
       if (!response.ok) throw new Error(typeof data.error === "string" ? data.error : "No se pudo procesar la cotización.");
       if (action === "preview") {
         setSource(data.source); setFileHash(data.fileHash); resetReview();
       } else onImported(quoteLinesPutResponseSchema.parse(data));
-    } catch (e) { setError(e instanceof Error ? e.message : "Error de red. Puedes reintentar."); }
-    finally { setBusy(false); }
+    } catch (e) {
+      setError(controller.signal.aborted
+        ? action === "preview"
+          ? "La lectura tardó demasiado. Pulsa Volver a leer PDF para reintentar."
+          : "La respuesta tardó demasiado. Reintenta Crear borrador sin cambiar los datos para consultar la misma operación."
+        : e instanceof Error ? e.message : "Error de red. Puedes reintentar.");
+    } finally { clearTimeout(timeout); setBusy(false); }
   }
 
   return <dialog aria-labelledby="td-import-title" aria-busy={busy} className="m-auto max-h-[90vh] w-[min(95vw,64rem)] overflow-auto rounded-xl border border-zinc-200 bg-white p-5 text-zinc-900 shadow-xl backdrop:bg-black/40"
@@ -57,16 +65,28 @@ export function ThreatDownImportModal({ quoteId, clientName, hasUnsavedChanges =
     {hasUnsavedChanges ? <p className="mt-3 rounded-lg bg-amber-50 p-3 text-sm text-amber-900" role="status">
       Puedes leer el PDF y revisar sus datos. Para crear el borrador, cierra esta ventana y guarda primero los cambios pendientes de la cotización.
     </p> : null}
-    <div className="mt-4 flex flex-wrap items-end gap-3">
-      <label className="text-sm" htmlFor="td-file">PDF de ThreatDown, hasta 3 MB
-        <input accept="application/pdf,.pdf" className="mt-1 block max-w-full text-sm" disabled={busy} id="td-file" type="file"
-          onChange={(e) => { setFile(e.target.files?.[0] ?? null); setSource(null); setFileHash(""); setError(null); resetReview(); }} />
-      </label>
-      <button className="min-h-11 rounded-lg bg-zinc-900 px-4 text-sm text-white disabled:opacity-50" disabled={busy || !file} onClick={() => { void submit("preview"); }} type="button">{busy ? "Procesando PDF…" : "Leer PDF"}</button>
+    <div className="mt-4 rounded-lg border border-zinc-200 bg-zinc-50 p-4">
+      <p className="text-sm font-medium">PDF de ThreatDown, hasta 3 MB</p>
+      <p className="mt-1 text-sm text-zinc-600">Elige un PDF guardado en tu equipo. Si lo recibiste por correo, descárgalo primero.</p>
+      <input accept="application/pdf,.pdf" className="hidden" disabled={busy} id="td-file" ref={fileInput} type="file"
+        aria-label="Archivo PDF de ThreatDown"
+        onChange={(e) => {
+          const selectedFile = e.target.files?.[0] ?? null;
+          setFile(selectedFile); setSource(null); setFileHash(""); setError(null); resetReview();
+          if (selectedFile) void submit("preview", selectedFile);
+        }} />
+      <div className="mt-3 flex flex-wrap gap-3">
+        <button className="min-h-12 rounded-lg bg-sky-700 px-5 py-3 text-sm font-semibold text-white hover:bg-sky-800 disabled:opacity-50"
+          disabled={busy} onClick={() => fileInput.current?.click()} type="button">
+          {busy ? "Leyendo PDF…" : file ? "Seleccionar otro PDF" : "Seleccionar PDF"}
+        </button>
+        {file ? <button className="min-h-12 rounded-lg border border-zinc-300 bg-white px-4 py-3 text-sm font-medium text-zinc-800 disabled:opacity-50"
+          disabled={busy} onClick={() => { void submit("preview"); }} type="button">Volver a leer PDF</button> : null}
+      </div>
+      <p className="mt-3 text-sm text-zinc-600" role="status" aria-live="polite">
+        {busy ? "Procesando el PDF. Espera a que aparezca la vista previa." : file ? `Archivo seleccionado: ${file.name}` : "La lectura comenzará al seleccionar el archivo."}
+      </p>
     </div>
-    <p className="mt-2 text-sm text-zinc-600" role="status" aria-live="polite">
-      {busy ? "Procesando el PDF. Espera a que aparezca la vista previa." : file ? `Archivo seleccionado: ${file.name}` : "Selecciona un archivo PDF para habilitar su lectura."}
-    </p>
     {error ? <p className="mt-3 text-sm text-rose-700" role="alert">{error}</p> : null}
     {source ? <>
       <div className="mt-4 rounded-lg bg-zinc-50 p-3 text-sm">
