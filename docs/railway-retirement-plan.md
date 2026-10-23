@@ -47,6 +47,53 @@ Identificación inequívoca del servicio antiguo:
   identidades antiguas. Sin embargo, Neon contiene documentos con evidencia
   de entrega y por lo menos una factura timbrada: **no borrar datos**.
 
+## Evidencia adicional: recuperación y dependencias (23/10/2026)
+
+Inspección **solo lectura** del proyecto Neon `cool-resonance-22906937`:
+
+| Evidencia | Resultado | Consecuencia |
+| --- | --- | --- |
+| `list_snapshots` | Cero snapshots registrados | No hay snapshot fijo verificado para recuperar el estado previo al corte |
+| `get_snapshot_schedule` rama production | `schedule: []` | No existe programación de snapshots configurada en esa rama |
+| `describe_project.history_retention_seconds` | `21600` = **6 horas** | La capacidad histórica de recuperación es limitada; no reemplaza un respaldo verificado y retenido |
+| Rama aislada existente `br-old-pond-ahe5jto3` | Copia iniciada el 22/10/2026 20:23 UTC, expiración **23/10/2026 20:25 UTC** | Es un entorno temporal de pruebas, con datos transformados; **no** es un respaldo durable ni refleja necesariamente el estado actual |
+| Railway webhooks del proyecto | Ninguno configurado | No prueba ausencia de webhooks **entrantes** ni consumidores de otras plataformas |
+| Vercel webhooks del proyecto | Consulta **403 forbidden** | Inventario de destinos externos incompleto |
+| Variables Vercel | Nombres productivos sin clave nominal `RAILWAY` | No se descifraron valores; una clave puede apuntar a Railway de modo indirecto |
+| GitHub code search en rama predeterminada | Sin coincidencia para `railway.app` ni `cotiza-web-production` | No equivale a análisis exhaustivo de todas las ramas o repositorios |
+| Gmail, referencias exactas consultadas | Sin resultados para dominio Railway/Cotiza | No demuestra ausencia de vínculos compartidos por otros canales |
+| Postgres roles de Neon production | Solo `neondb_owner` listado por la API | No identifica quién usa las conexiones ni distingue Vercel de Railway |
+| `pg_stat_activity` en una consulta puntual | Sin sesiones adicionales | No prueba ausencia de conexiones intermitentes, poolers o escrituras en otras ventanas |
+
+**Regla de bloqueo obligatoria:** NO ejecutar detención de Railway, migraciones de
+Neon o publicación del PR con fines de corte hasta disponer de un **punto de
+recuperación independiente y reproducible**, cuya lectura y restauración se
+hayan probado sin riesgo sobre production. La historia de 6 horas no
+sustituye por sí sola esta prueba.
+
+La ruta de menor gasto es evaluar opciones **ya disponibles** en Neon.
+Si no permiten un checkpoint durable y ensayo de restauración dentro
+de los recursos existentes, preparar exportación lógica `pg_dump`
+con almacenamiento seguro y cifrado gestionado por el responsable,
+más importación de prueba a un PostgreSQL desechable y revisión de
+conteos/integridad. **No** exponer credenciales en scripts, logs ni
+repositorios; no ejecutar exportación de producción ni crear recursos
+con posible costo sin autorización explícita.
+
+Control operativo para habilitar suspensión de Railway:
+1. Registrar responsables y destinos de webhooks entrantes: Clerk,
+   proveedor fiscal/Timbrado, Resend y servicios que puedan llamar APIs
+   públicas; consultar configuraciones de cada proveedor antes de afirmar
+   que no apuntan al dominio antiguo.
+2. Verificar consumidores de base directos externos al proyecto y cualquier
+   equipo local o tarea periódica con `DATABASE_URL`.
+3. Obtener y probar el respaldo mencionado, con alcance y fecha explícitos.
+4. Definir ventana y detener por separado la instancia Railway con un
+   mecanismo que realmente deje **0 réplicas**. Confirmar sin escrituras
+   pendientes antes de liberar las migraciones. No borrar el servicio como
+   sustituto de suspensión reversible.
+5. El PR se mantiene draft y CRM desconectado hasta satisfacer lo anterior.
+
 ## Condiciones obligatorias antes de detener Railway
 
 - [ ] Confirmar que ninguno de los usuarios autorizados utiliza el dominio
