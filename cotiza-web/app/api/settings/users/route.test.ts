@@ -93,7 +93,7 @@ vi.mock("@clerk/nextjs/server", () => ({
 // Import del handler después de todos los mocks.
 // ---------------------------------------------------------------------------
 
-import { POST } from "@/app/api/settings/users/route";
+import { GET, POST } from "@/app/api/settings/users/route";
 
 // ---------------------------------------------------------------------------
 // Fixtures comunes.
@@ -163,6 +163,64 @@ beforeEach(() => {
     primaryEmailAddressId: "ea_1",
   });
   clerkUpdateUserMetadataMock.mockResolvedValue({});
+});
+
+
+describe("GET /api/settings/users — directorio de minimo privilegio", () => {
+  const self = { userId: "user_admin123", alias: "self", active: true, firstName: "Self", lastName: "Test",
+    role: "user", email: "self@example.test", contactEmail: "self-contact@example.test", phone: "555-0001",
+    createdAt: "2026-10-01T00:00:00.000Z", sellerCode: "S1", tenantId: "tenant-abc", tenantName: "SynAppsSys",
+    subtenantKey: "tenant-abc:user_admin123" };
+  const coworker = { ...self, userId: "user_coworker", alias: "peer", firstName: "Peer",
+    email: "peer@example.test", contactEmail: "peer-contact@example.test", phone: "555-0002",
+    createdAt: "2026-10-02T00:00:00.000Z", subtenantKey: "tenant-abc:user_coworker" };
+  const inactive = { ...coworker, userId: "user_inactive", alias: "inactive", active: false };
+
+  beforeEach(() => {
+    getAppUsersByTenantMock.mockResolvedValue([self, coworker, inactive]);
+    getAppUsersForSuperAdminMock.mockResolvedValue([self, coworker, inactive]);
+  });
+
+  it("denies unauthenticated requests before consulting user directories", async () => {
+    getCurrentTenantContextMock.mockResolvedValue(null);
+    expect((await GET()).status).toBe(401);
+    expect(getAppUsersByTenantMock).not.toHaveBeenCalled();
+    expect(getAppUsersForSuperAdminMock).not.toHaveBeenCalled();
+  });
+
+  it("returns a minimal active coworker directory, preserving only the viewer's own personal fields", async () => {
+    getCurrentTenantContextMock.mockResolvedValue({ ...TENANT, userRole: "user" });
+    const response = await GET();
+    const body = await response.json();
+    expect(response.headers.get("Cache-Control")).toBe("private, no-store");
+    expect(getAppUsersByTenantMock).toHaveBeenCalledWith("tenant-abc");
+    expect(getAppUsersForSuperAdminMock).not.toHaveBeenCalled();
+    expect(body.canManageAllTenants).toBe(false);
+    expect(body.users).toHaveLength(2);
+    expect(body.users[0]).toEqual(self);
+    expect(body.users[1]).toEqual({
+      active: true, alias: "peer", firstName: "Peer", lastName: "Test", role: "user",
+      sellerCode: "S1", tenantId: "tenant-abc", tenantName: "SynAppsSys", userId: "user_coworker",
+    });
+    expect(JSON.stringify(body.users[1])).not.toMatch(/email|phone|createdAt|subtenantKey/i);
+  });
+
+  it.each(["owner", "admin"])("allows %s to manage complete user profiles only within its tenant", async (role) => {
+    getCurrentTenantContextMock.mockResolvedValue({ ...TENANT, userRole: role });
+    const response = await GET();
+    expect((await response.json()).users).toEqual([self, coworker, inactive]);
+    expect(getAppUsersByTenantMock).toHaveBeenCalledWith("tenant-abc");
+    expect(getAppUsersForSuperAdminMock).not.toHaveBeenCalled();
+  });
+
+  it("permits the exact superadmin role to inspect the global directory", async () => {
+    getCurrentTenantContextMock.mockResolvedValue({ ...TENANT, userRole: "superadmin", isSuperAdmin: true });
+    const body = await (await GET()).json();
+    expect(body.canManageAllTenants).toBe(true);
+    expect(body.users).toEqual([self, coworker, inactive]);
+    expect(getAppUsersForSuperAdminMock).toHaveBeenCalledOnce();
+    expect(getAppUsersByTenantMock).not.toHaveBeenCalled();
+  });
 });
 
 // ---------------------------------------------------------------------------
