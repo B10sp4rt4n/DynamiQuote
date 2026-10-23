@@ -333,4 +333,33 @@ suite("CRM workflow and authorization against disposable PostgreSQL", () => {
     expect(foreign?.formal?.issuerLogoDataUrl).toBe("");
     expect(foreign?.formal?.clientLogoDataUrl).toBe("");
   });
+  it.each([
+    ["historical", true, false, false],
+    ["designated", true, true, true],
+    ["regular", false, false, true],
+  ] as const)("selects a safe issuer for a new proposal: %s", async (label, historical, designated, selected) => {
+    const tenantId = `crm-issuer-${label}`;
+    const userId = `${tenantId}-owner`;
+    await db.tenant.create({ data: { tenant_id: tenantId, slug: tenantId, name: tenantId, created_at: new Date() } });
+    await db.app_users.create({ data: { user_id: userId, alias: userId, first_name: "Fixture", last_name: label,
+      tenant_id: tenantId, role: "owner", password_hash: "unused", created_at: new Date() } });
+    const logoId = historical ? `crm-legacy-logo:${tenantId}:original` : `${tenantId}-logo`;
+    await db.company_logos.create({ data: { logo_id: logoId, logo_name: label, logo_type: "issuer",
+      company_name: "Historical company", logo_data: new Uint8Array([7,8,9]), logo_format: "png",
+      uploaded_at: new Date(), tenant_id: tenantId, is_default: designated } });
+    asUser(tenantId, userId, "owner");
+    const response = await quotes.POST(request({ clientName: "Issuer fixture", proposalName: label }));
+    expect(response.status).toBe(201);
+    const quoteId = (await response.json()).quote.quoteId;
+    const created = await proposalService.createProposalFromQuoteByTenant(tenantId, { quoteId }, userId, userId);
+    const formal = await db.formal_proposals.findFirstOrThrow({ where: { proposal_id: created!.proposalId } });
+    expect(formal.issuer_logo_id).toBe(selected ? logoId : null);
+    expect(formal.issuer_company).toBe(selected ? "Historical company" : tenantId);
+    const payload = await proposalService.getProposalWorkflowByTenant(tenantId, created!.proposalId, { includeLogoData: true });
+    expect(payload?.formal?.issuerLogoDataUrl).toBe(selected ? "data:image/png;base64,BwgJ" : "");
+    // Explicit historical references remain valid even when automatic selection is disabled.
+    await db.formal_proposals.update({ where: { proposal_doc_id: formal.proposal_doc_id }, data: { issuer_logo_id: logoId } });
+    expect((await proposalService.getProposalWorkflowByTenant(tenantId, created!.proposalId, { includeLogoData: true }))?.formal?.issuerLogoDataUrl)
+      .toBe("data:image/png;base64,BwgJ");
+  });
 });

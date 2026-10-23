@@ -177,6 +177,42 @@ Auditoría reproducible de solo lectura: `scripts/audit_multitenant_readiness.sq
 
 ## Secuencia para continuar
 
+### Revisión posterior del emisor y muestra documental
+
+La sesión real de superadmin volvió a entrar en la preview de `b977f0b`.
+Se inspeccionó PROP-2026-0211 (SynAppsSys / UNITAM), que referencia una copia
+histórica de emisor. La descarga de navegador produjo un PDF válido de dos
+páginas; se renderizó la primera y se comprobaron emisor, receptor e imagen
+de UNITAM. Su moneda original era NULL: se usó MXN solo como valor de ensayo
+en la copia aislada y se restauró NULL inmediatamente después. El PDF de QA
+no acredita la moneda comercial. No se envió correo ni se facturó.
+
+La revisión de selección encontró un problema adicional: DynamiQuote no tiene
+emisor predeterminado, y el fallback por `uploaded_at` elegía la copia histórica
+de EQUIPOS Y LIMPIEZA DE ALTO NIVEL SA DE CV. La nueva prueba de integración
+reprodujo la selección incorrecta antes del arreglo.
+
+Se excluyen los IDs reservados `crm-legacy-logo:` del fallback automático de
+perfil e imagen. Una copia puede usarse si se designa explícitamente como default;
+las referencias explícitas de documentos históricos siguen funcionando.
+Los perfiles ordinarios propios conservan su fallback actual. Si solo existen
+copias históricas, las nuevas propuestas usan el nombre del tenant sin ese logo.
+No se modifica la razón social, los defaults ni las imágenes en Neon.
+
+Validación después del arreglo: 35 casos de integración aprobados, incluidos
+tres nuevos casos (solo copias históricas, copia designada como default y perfil
+ordinario propio), 464 pruebas generales, TypeScript y ESLint sin errores.
+ESLint conserva el aviso preexistente de `hasNonTermsContentUpdate`.
+Queda comprobar el comportamiento corregido en la nueva compilación de preview.
+La publicación inicial fue rechazada por requerir autorización explícita del
+repositorio y rama. Salvador la otorgó para B10sp4rt4n/DynamiQuote,
+fix/multitenant-foundation, PR #28. Se utiliza el conector GitHub autorizado
+porque la terminal no dispone de credenciales. Producción no cambió.
+La restauración de moneda NULL también se confirmó después de recargar en
+navegador: `docs/evidence/crm-issuer-restored-20261023.jpg`.
+La muestra visual no certifica los 282 documentos ni los doce documentos sin
+`proposal_id`, que no tienen una ruta directa en el frontend actual.
+
 1. Comprobar en preview documentos históricos con las copias de logos y el
    emisor de nuevas propuestas, notas privadas/compartidas, owner/vendedor y
    descarga, sin correos ni facturación real. La ventana temporal de acceso

@@ -545,6 +545,9 @@ async function resolvePreferredIssuerProfileByTenant(tenantId: string): Promise<
     where: {
       logo_type: "issuer",
       tenant_id: tenantId,
+      // Reconciled assets preserve historical documents; they do not designate
+      // the issuer for new business unless explicitly marked as default.
+      NOT: { logo_id: { startsWith: "crm-legacy-logo:" } },
     },
   });
 
@@ -580,7 +583,10 @@ async function resolvePreferredIssuerLogoAssetByTenant(tenantId: string): Promis
         logo_format: true,
       },
       take: 20,
-      where,
+      where: {
+        ...where,
+        ...(where.is_default ? {} : { NOT: { logo_id: { startsWith: "crm-legacy-logo:" } } }),
+      },
     });
 
     const withBytes = rows.filter((row) => row.logo_data?.length > 0);
