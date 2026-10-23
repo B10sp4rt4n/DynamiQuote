@@ -28,7 +28,7 @@ EOF
 }
 
 need() { command -v "$1" >/dev/null 2>&1 || { printf 'Missing tool: %s\n' "$1" >&2; exit 2; }; }
-required() { [[ -n "\${!1:-}" ]] || { printf 'Missing required setting: %s\n' "$1" >&2; exit 2; }; }
+required() { [[ -n "${!1:-}" ]] || { printf 'Missing required setting: %s\n' "$1" >&2; exit 2; }; }
 check_passfile() {
   local file="$1" permissions
   [[ -f "$file" && ! -L "$file" ]] || { echo 'Password file must be an existing regular non-symlink file' >&2; exit 2; }
@@ -61,7 +61,7 @@ check_archive() {
   expected="$(cat -- "$1.sha256")"
   [[ "$expected" =~ ^[[:xdigit:]]{64}$ ]] || { echo 'Invalid checksum manifest' >&2; exit 2; }
   actual="$(sha256sum < "$1")"
-  actual="\${actual%% *}"
+  actual="${actual%% *}"
   [[ "$expected" == "$actual" ]] || { echo 'Archive checksum mismatch' >&2; exit 2; }
 }
 verify_archive() {
@@ -78,7 +78,7 @@ verify_archive() {
   printf 'Encrypted archive checksum and archive table-of-contents verified. No plaintext file created.\n'
 }
 
-mode="\${1:-}"
+mode="${1:-}"
 case "$mode" in
   backup)
     [[ $# == 2 ]] || { usage; exit 2; }
@@ -97,7 +97,7 @@ case "$mode" in
     cleanup() { rm -f -- "$tmp"; }
     trap cleanup EXIT
     (
-      export PGHOST="$COTIZA_BACKUP_PGHOST" PGPORT="\${COTIZA_BACKUP_PGPORT:-5432}"
+      export PGHOST="$COTIZA_BACKUP_PGHOST" PGPORT="${COTIZA_BACKUP_PGPORT:-5432}"
       export PGUSER="$COTIZA_BACKUP_PGUSER" PGDATABASE="$COTIZA_BACKUP_PGDATABASE"
       export PGPASSFILE="$COTIZA_BACKUP_PGPASSFILE" PGSSLMODE=verify-full
       pg_dump --no-password --format=custom --no-owner --no-acl --dbname="$PGDATABASE" \
@@ -135,7 +135,7 @@ case "$mode" in
     check_passfile "$COTIZA_RESTORE_PGPASSFILE"
     verify_archive "$2"
     (
-      export PGHOST="$COTIZA_RESTORE_PGHOST" PGPORT="\${COTIZA_RESTORE_PGPORT:-5432}"
+      export PGHOST="$COTIZA_RESTORE_PGHOST" PGPORT="${COTIZA_RESTORE_PGPORT:-5432}"
       export PGUSER="$COTIZA_RESTORE_PGUSER" PGDATABASE="$COTIZA_RESTORE_PGDATABASE"
       export PGPASSFILE="$COTIZA_RESTORE_PGPASSFILE" PGSSLMODE=prefer
       # Never drop/create the test database; require an existing empty database.
