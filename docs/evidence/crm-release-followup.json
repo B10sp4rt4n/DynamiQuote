@@ -1281,5 +1281,13 @@
     "seller": "General visible; privada de oportunidad ajena ausente del DOM",
     "owner": "General y privada visibles",
     "restored": "superadmin y propietario original confirmados por SQL y contexto de pantalla"
+  },
+  "maintenance_recovery_followup": {
+    "evidence": "crm-maintenance-recovery-verification.json",
+    "code_commit": "d65414698f56d94c57aba8d543a11749a3cc1753",
+    "local_status": "source restored, production build and HTTP pause/resume passed",
+    "remote_rollback_tested": false,
+    "identity_provider_validation_completed": false,
+    "production_changed": false
   }
 }

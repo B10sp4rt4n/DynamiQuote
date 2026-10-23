@@ -12,8 +12,9 @@ permisos, interrupciones de servicios, correos, facturación ni publicación.
 | Notas y contexto | Otra empresa no abre la ficha; vendedor ve nota general y owner ambas; rol y propietario restaurados | Evidencia limitada al caso ficticio y rutas comprobadas |
 | Documentos históricos | Muestra PDF previa y 12 documentos reparados en copia | No certifica todos los documentos ni una moneda original NULL |
 | Emisor nuevo | Tres escenarios de integración y PROP-2026-0283 ficticia en navegador/PDF | No designa razón social ni perfil default por el usuario |
-| Identidad | 5 IDs con formato Clerk; login real del superadmin | Verificar otros IDs; resolver 3 pendientes y superadmin legacy por ID exacto |
-| Otros escritores | Inventario de rutas, catálogo Neon y servicio Railway | Confirmar conexión/código del servicio antiguo; inventario externo no cerrado |
+| Identidad | Alta sin reasignación por correo; ID explícito verificado y exclusivo de superadmin; login real del superadmin | Validar proveedor para otros IDs; resolver 3 pendientes y superadmin legacy por ID exacto |
+| Otros escritores | Inventario de rutas, catálogo Neon y servicio Railway SUCCESS confirmado de nuevo | Confirmar conexión/código del servicio antiguo; inventario externo no cerrado |
+| Mantenimiento y recuperación | Pausa HTTP y reanudación probadas localmente en dev y build de producción; 384 archivos restaurados verificados | Ensayo remoto aislado con identidad real; respaldo de base y parada/drenado de todos los escritores |
 | Manifiestos | 7 comprobaciones sin discrepancias en producción/copia; control negativo detectado | Repetir en destino al corte, dentro de ventana sin escrituras |
 
 La muestra nueva guardó venta 100/costo 60 y usa emisor DynamiQuote sin logo
@@ -51,18 +52,21 @@ desenlaces sin fecha no se rellenan por suposición. No se importan datos QA.
    base. El guard de `app.py` contiene ese entrypoint legacy, no llamadas directas
    a bibliotecas Python. Las FK protegen relaciones; no autorizan lecturas ni
    impiden a un escritor antiguo omitir el contrato AUP. RLS permanece desactivado.
-5. Completar los ensayos visuales pendientes y dejar listo un artefacto de
-   recuperación que conserve el resolver estricto, el aislamiento y el escritor
-   AUP. No se ha ensayado aquí un rollback productivo ni un modo de mantenimiento.
+5. Usar el candidato de recuperación y la pausa HTTP descritos abajo. El ensayo
+   local no sustituye probar el despliegue aislado con identidad real, preparar
+   respaldo de base y comprobar la parada/drenado de otros escritores. No se ha
+   ensayado un rollback en producción.
 6. Presentar versión, destino, impacto, procedimiento, responsables y evidencia;
    obtener la aprobación de liberación cuando todos los bloqueos estén cerrados.
 
 ## Ejecución propuesta, únicamente después de aprobación
 
 1. Establecer una ventana de mantenimiento con todos los escritores identificados
-   detenidos mediante su procedimiento aprobado. No hay un flag de solo lectura
-   universal implementado en este alcance. Comprobar que el mecanismo elegido
-   también cubre clientes directos y webhooks; un aviso visual no basta.
+   detenidos mediante su procedimiento aprobado. Esta versión incorpora
+   `CRM_MAINTENANCE_MODE=paused` para cerrar el tráfico HTTP antes de los handlers,
+   incluidos GET y webhooks. No detiene clientes directos, otros builds/servicios,
+   trabajos de fondo o solicitudes ya iniciadas. Comprobar su drenado y verificar
+   el 503 en todos los destinos. No hay un flag universal de base de datos.
 2. Capturar respaldo/punto de recuperación y metadatos del destino actual. Una
    restauración completa posterior podría perder operaciones nuevas, por lo que
    requiere una decisión explícita; no es una recuperación automática por defecto.
@@ -115,3 +119,52 @@ ausencia de procesos externos ni autorización para usarlos en la integración.
 El ensayo visual autorizado por roles está en
 `docs/evidence/crm-notes-role-verification.json`; confirma también la restauración
 de superadmin y del propietario original de OPP-0063 en la copia aislada.
+
+
+## Candidato de recuperación y pausa HTTP
+
+Código: commit remoto `d65414698f56d94c57aba8d543a11749a3cc1753`, árbol
+`af2fc5592398bd124c89017c8fbf76a2c2891c70`. El commit local de la misma fuente es
+`8e1e0f82794d115e99bd3fc39079af90ac0d12dc`; se comprobó igualdad de árboles.
+
+`node scripts/prepare_crm_recovery.mjs <SHA-completo-disponible-localmente> <directorio-absoluto-nuevo>`
+crea un archivo de fuente desde Git, lo extrae y compara SHA-256 de cada archivo
+contra el commit. Solo incluye archivos versionados, no variables de entorno,
+dependencias ni respaldo de base. Detiene la preparación si encuentra un archivo
+`.env` versionado distinto de `.env.example`. No conecta servicios ni despliega.
+El manifiesto de este ensayo está en
+`docs/evidence/crm-recovery-source-manifest.json`.
+
+Se restauraron y comprobaron 384 archivos. La fuente restaurada compiló con
+`next build --webpack`. Se reutilizaron las dependencias locales existentes por
+symlink; no se verificó una instalación limpia de dependencias. El build restaurado
+se ejecutó con `next start` en loopback, con Clerk deshabilitado y DATABASE_URL
+ficticia e inaccesible. Pasaron 11 rechazos HTTP 503 y dos comprobaciones de
+reanudación (401 al crear cotización sin sesión; 200 al diagnóstico de webhook).
+El mismo conjunto pasó con `next dev`. Esto no verifica autenticación real,
+lectura/escritura remota, restauración de base ni rollback del hosting.
+
+La variable `CRM_MAINTENANCE_MODE` ausente, vacía o `off` deja continuar el
+middleware existente. `paused` y cualquier otro valor no vacío tras trim cierran
+la aplicación con 503, `Retry-After: 300` y `Cache-Control: no-store`. El control
+abarca todos los métodos y páginas/API de esta versión; excluye recursos internos
+`_next/static`, `_next/image` y favicon. No hay excepción por rol o cabecera de
+usuario. Al pausar también se interrumpen entradas de webhooks: comprobar
+reintentos y conciliación antes de reabrir.
+
+En un despliegue aislado, establecer la variable en el entorno correcto y
+redeplegar según el mecanismo del proveedor; no asumir efecto instantáneo por
+editarla. Comprobar 503 antes de migrar y esperar el drenado. Para reabrir, usar
+`off` en ese mismo destino, desplegar y comprobar login y alcance. No se ha
+activado esta variable remotamente ni en producción en este ensayo.
+
+El alta por `/api/settings/users` ya no vincula una identidad encontrada por
+correo ni reasigna una pertenencia existente. El correo encontrado responde 409
+antes de escribir o enviar. Un ID explícito exige superadmin, verificación por ID
+exacto en Clerk, coincidencia de correo verificado y cuenta habilitada. El alta
+local mantiene sus conflictos por ID/alias. Se ensayó con Clerk simulado; no
+resuelve por sí sola las cuentas actuales ni certifica otros flujos de usuarios.
+
+Evidencia adicional: `docs/evidence/crm-maintenance-recovery-verification.json`,
+`crm-maintenance-development-http.json`, `crm-recovery-production-http.json` y
+`crm-recovery-build.log`. Repetición HTTP local: `node scripts/check_crm_maintenance.mjs`.

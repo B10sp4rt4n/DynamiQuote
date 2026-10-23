@@ -373,3 +373,40 @@ Evidencia: `docs/evidence/crm-notes-role-baseline.json`,
 aplicación 11698a20 ni amplía su cobertura a todas las rutas o perfiles. Siguen
 abiertos el cierre de identidades, destino/código de escritores externos y ensayo
 de mantenimiento/recuperación segura antes de autorizar producción.
+
+
+## Continuación: altas de identidad y recuperación local
+
+Se encontró en el alta de usuarios un camino que, al encontrar correo en Clerk
+y un ID ya existente en la base, podía reasignar pertenencia/rol al tenant destino
+y borrar la fila provisional. Se eliminó ese comportamiento: correo coincidente
+responde 409 antes de crear; un ID explícito exige superadmin y verificación de ID,
+correo verificado y estado habilitado en Clerk. No se cambia metadata ni se
+reasigna una cuenta ante conflicto local. Las pruebas usan proveedor simulado;
+no se crearon usuarios reales, invitaciones ni correos.
+
+Producción se consultó solo mediante SELECT: siguen nueve usuarios activos, cinco
+IDs con formato Clerk, tres pending y un UUID legacy. Solo Salvador tiene login
+real comprobado en el alcance previo. No hay credenciales Clerk locales para
+validar el resto contra el proveedor. Railway se revisó por lectura: sigue SUCCESS
+el deployment 1e21faa5-0be3-4ceb-9235-12eacd65c925, una réplica us-west2,
+sin cambios preparados. No expone commit fuente ni destino de DATABASE_URL.
+
+Se incorpora pausa HTTP antes de auth/handlers mediante CRM_MAINTENANCE_MODE,
+incluyendo GET, mutaciones y webhooks. Dev y build de producción restaurado pasaron
+cada uno 13 comprobaciones HTTP locales (11 cierres, dos de reanudación). No cubre
+otros escritores, procesos de fondo ni operaciones ya iniciadas; no se activó
+remotamente. Se restauraron 384 archivos de un commit fijo y se verificó cada hash;
+el build restaurado compiló con webpack y dependencias locales compartidas.
+No se ensayó instalación limpia, base restaurada ni rollback del proveedor.
+
+Validación de esta continuación: 488 pruebas generales aprobadas y dos omitidas;
+63 pruebas dirigidas de identidad, contexto y proxy incluidas en esas generales;
+TypeScript y ESLint de los TS cambiados pasan. Los 40 casos de integración DB
+anteriores no se repitieron al no modificar servicios DB/contrato.
+Código remoto d65414698f56d94c57aba8d543a11749a3cc1753, árbol
+ af2fc5592398bd124c89017c8fbf76a2c2891c70. Evidencia y límites en
+`docs/evidence/crm-maintenance-recovery-verification.json` y runbook actualizado.
+El PR sigue borrador y producción no se modificó. Se conserva el historial de
+pendientes anterior; mantenimiento/recuperación quedan probados localmente y
+pendientes en el despliegue aislado antes de solicitar el corte.
