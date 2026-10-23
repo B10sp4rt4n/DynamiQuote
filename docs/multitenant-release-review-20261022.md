@@ -203,7 +203,22 @@ detección de alteración, vínculo de corrección, preservación de fechas,
 aislamiento y reintentos concurrentes (un acto y un conflicto). TypeScript y
 ESLint sin errores, conservando el aviso previo documentado.
 Contrato y límites: `docs/commercial-act-contract.md`.
-La comprobación en preview de esta revisión queda pendiente de compilación.
+La compilación AUP `25bdc442` quedó READY y se completó la comprobación en
+preview con Clerk/GitHub autorizado por Salvador. En SynAppsSys, la propuesta
+ficticia PROP-2026-0282 pasó por aprobación interna, cierre como ganada y
+reapertura a borrador. Los dos actos nuevos mostraron «Registro local: contenido
+verificado». La consulta de lectura confirmó secuencias 1 y 2; la segunda revoca
+la primera y conserva su SHA-256 como precedente. El primer acto referencia un
+evento legacy sin atribuirle una huella verificada.
+
+Guardar de nuevo la misma fecha no duplicó el acto. No se ensayó una fecha
+distinta en navegador porque la oportunidad nació el mismo día comercial de
+la prueba; la corrección con cambio de fecha está cubierta por la integración
+local. El estado final quedó `draft`, `outcome = NULL`, `outcome_at = NULL`,
+confirmado en pantalla y mediante SQL de lectura en la copia aislada. Los actos
+permanecen en el historial. No se enviaron correos, no se facturó ni se alteró
+producción. Evidencia: `docs/evidence/crm-aup-browser-qa.json`,
+`docs/evidence/crm-aup-won-verified.jpg` y `docs/evidence/crm-aup-restored.jpg`.
 
 ### Revisión posterior del emisor y muestra documental
 
