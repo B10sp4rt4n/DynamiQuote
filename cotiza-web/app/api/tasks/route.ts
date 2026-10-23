@@ -40,13 +40,14 @@ export async function POST(request: Request) {
   }
 
   try {
+    const canSeeAll = tenant.isSuperAdmin || tenant.userRole === "owner" || tenant.userRole === "admin";
     const taskId = await createTaskForTenant(tenant.id, {
       clientId: parsed.data.clientId,
       createdByUserId: tenant.userId,
       description: parsed.data.description,
       dueDate: parsed.data.dueDate,
       opportunityId: parsed.data.opportunityId,
-    });
+    }, canSeeAll);
 
     return NextResponse.json({ taskId }, { status: 201 });
   } catch (error) {

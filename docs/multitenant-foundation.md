@@ -444,3 +444,76 @@ owner y vendedor, incluida la visibilidad comercial entre vendedores del mismo
 tenant. La suite de backend documentada
 arriba cubre esas reglas con contexto suministrado por el harness. Se conserva
 el PR en borrador; esta evidencia no autoriza liberación ni migración a producción.
+
+
+## Validación de roles y cierre de filtros por vendedor
+
+Se utilizó la sesión Clerk real de Salvador en la preview
+`dpl_HntnTnRr6hKcAqNwfXVscGRVo4Yz`. No se inició sesión en cuentas de otras
+personas. En la rama Neon aislada `br-old-pond-ahe5jto3` se guardó el estado
+original del usuario y de los fixtures, y se cambió temporalmente el rol local
+de superadmin a owner, conservando su identidad Clerk y tenant SynAppsSys.
+Esto prueba resolución y aplicación del rol owner con Clerk real; no equivale
+a iniciar sesión con un segundo usuario owner distinto.
+
+Para comprobar acceso del owner a la operación de otro vendedor se utilizó
+la identidad ficticia `crm-role-peer-20261023`, inactiva, sin correo ni cuenta
+Clerk, exclusivamente como propietario temporal de las dos versiones de
+COT-0065, PROP-2026-0282 y OPP-0063. No se enviaron invitaciones. Como owner:
+
+- Configuración mostró solo SynAppsSys, sin la opción global de cambiar a
+  otra empresa ni de otorgar el rol superadmin.
+- La ficha 360 mostró cotización, propuesta y oportunidad de ese vendedor
+  ficticio, y permitió consultar el detalle de la propuesta.
+- La apertura directa de un cliente de SALSA devolvió «Cliente no encontrado».
+
+### Restauración y límite de la prueba de navegador
+
+La revisión automática rechazó el cambio temporal siguiente a rol user
+(vendedor), indicando que podía dejar el usuario con permisos diferentes del
+superadmin original. No se reintentó ese cambio ni se usó una vía alternativa.
+Se restauraron inmediatamente, mediante una transacción acotada:
+
+- Rol superadmin y tenant SynAppsSys de Salvador.
+- Autor original de ambas versiones de COT-0065 y de PROP-2026-0282.
+- Propietario original de OPP-0063.
+
+La respuesta PostgreSQL verificó cada ID restaurado. La ficha 360 del estado
+restaurado se conserva en `docs/evidence/crm-role-restored-20261023.jpg`.
+El usuario ficticio sigue
+inactivo y sin acceso Clerk; no se borraron registros. La propuesta permanece
+en borrador, sin desenlace ni fecha de cierre; la tarea continúa completada.
+La prueba de navegador como vendedor está pendiente de autorización explícita
+para bajar temporalmente ese rol en la copia y restaurarlo después, o de una
+sesión legítima ya disponible de vendedor.
+
+### Defectos reproducidos y corregidos sin cambiar permisos en Neon
+
+La revisión de código y tres pruebas de regresión contra PostgreSQL/PGlite
+local desechable demostraron que la ficha 360 y el endpoint del selector de
+tareas omitían el alcance por vendedor. Además, POST /api/tasks aceptaba un
+ID de oportunidad ajena del mismo tenant. Antes de corregir, los tres casos
+fallaron: se obtenía la oportunidad privada y la petición de tarea devolvía
+201 en vez de 404, creando una fila no autorizada.
+
+Se aplicó el mismo alcance que Pipeline (`owner_user_id` del vendedor o NULL
+para el legado sin asignar) a la ficha 360 y al selector de oportunidades.
+Owner/admin/superadmin mantienen el alcance completo del tenant seleccionado.
+El guardado de tareas comprueba también el propietario de la oportunidad y
+rechaza con 404 antes de insertar. El permiso de alcance completo se deriva
+del contexto autenticado del servidor; un canSeeAll o tenantId enviado en el
+cuerpo no lo concede. Clientes y contactos conservan su catálogo compartido
+por tenant; no se declara aquí auditado todo el acceso a notas históricas.
+
+Validación de esta corrección:
+
+- 26 casos de integración pasan contra esquema real Prisma y las migraciones
+  multitenant: 16 CRM (cuatro nuevos) y 10 de ciclo comercial.
+- Los casos nuevos cubren historial 360, selector API, rechazo sin escritura
+  de una tarea con oportunidad privada y seguimiento permitido a owner.
+- La suite general pasa 464 pruebas; omite 34 opt-in, incluidos los 26 corridos
+  por separado. El E2E antiguo dependiente de DATABASE_URL sigue excluido.
+- TypeScript y ESLint de los seis archivos modificados terminan sin errores.
+
+El perfil vendedor todavía no tiene evidencia de navegador autenticado.
+No se levantó el bloqueo de liberación ni se integró el CRM antiguo.

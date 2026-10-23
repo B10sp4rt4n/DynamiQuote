@@ -3,7 +3,7 @@ import "server-only";
 import { randomUUID } from "crypto";
 
 import { prisma } from "@/lib/db/prisma";
-import { assertClientOpportunityForTenant } from "@/lib/db/tenant-relations";
+import { assertClientOpportunityForTenant, TenantRelationError } from "@/lib/db/tenant-relations";
 
 export type PendingTask = {
   clientCompany: string;
@@ -23,8 +23,18 @@ export type CreateTaskInput = {
   opportunityId?: string | null;
 };
 
-export async function createTaskForTenant(tenantId: string, input: CreateTaskInput): Promise<string> {
+export async function createTaskForTenant(tenantId: string, input: CreateTaskInput, canSeeAllOpportunities = false): Promise<string> {
   await assertClientOpportunityForTenant(tenantId, input.clientId, input.opportunityId);
+  if (input.opportunityId && !canSeeAllOpportunities) {
+    const opportunity = await prisma.opportunities.findFirst({
+      select: { opportunity_id: true },
+      where: {
+        opportunity_id: input.opportunityId, client_id: input.clientId, tenant_id: tenantId,
+        OR: [{ owner_user_id: input.createdByUserId }, { owner_user_id: null }],
+      },
+    });
+    if (!opportunity) throw new TenantRelationError();
+  }
   const taskId = randomUUID();
 
   await prisma.tasks.create({
@@ -183,11 +193,16 @@ export type OpenOpportunityOption = {
 export async function getOpenOpportunitiesByClientForTenant(
   tenantId: string,
   clientId: string,
+  viewerUserId: string | null = null,
+  canSeeAll = true,
 ): Promise<OpenOpportunityOption[]> {
   const rows = await prisma.opportunities.findMany({
     orderBy: { created_at: "desc" },
     select: { opportunity_id: true, opportunity_number: true, title: true },
-    where: { client_id: clientId, stage: "open", tenant_id: tenantId },
+    where: {
+      client_id: clientId, stage: "open", tenant_id: tenantId,
+      ...(canSeeAll ? {} : { OR: [{ owner_user_id: viewerUserId }, { owner_user_id: null }] }),
+    },
   });
 
   return rows.map((row) => ({

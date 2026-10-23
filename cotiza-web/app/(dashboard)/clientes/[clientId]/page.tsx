@@ -97,7 +97,7 @@ export default async function ClientDetailPage({ params }: ClientDetailPageProps
 
   const [contacts, opportunities, quoteGroups, proposals, tasks, interactions] = await Promise.all([
     listClientContactsForTenant(tenant.id, clientId),
-    getOpportunitiesByClientForTenant(tenant.id, clientId),
+    getOpportunitiesByClientForTenant(tenant.id, clientId, tenant.userId, canSeeAll),
     getQuoteGroupsByClientForTenant(tenant.id, clientId, tenant.userId, canSeeAll),
     getClientProposalHistoryByTenant(tenant.id, clientId, tenant.userId, canSeeAll),
     getPendingTasksByClientForTenant(tenant.id, clientId, tenant.userId, canSeeAll),

@@ -13,6 +13,7 @@ const a = "crm-fixture-a", b = "crm-fixture-b";
 const seller = "crm-seller-a", colleague = "crm-colleague-a", owner = "crm-owner-a", foreign = "crm-owner-b";
 let db: typeof import("./prisma").prisma;
 let clients: typeof import("@/app/api/clients/route");
+let clientOpportunities: typeof import("@/app/api/clients/[clientId]/opportunities/route");
 let quotes: typeof import("@/app/api/quotes/route");
 let proposals: typeof import("@/app/api/proposals/route");
 let proposal: typeof import("@/app/api/proposals/[proposalId]/route");
@@ -49,6 +50,7 @@ suite("CRM workflow and authorization against disposable PostgreSQL", () => {
     process.env.DATABASE_URL = testUrl;
     ({ prisma: db } = await import("./prisma"));
     clients = await import("@/app/api/clients/route");
+    clientOpportunities = await import("@/app/api/clients/[clientId]/opportunities/route");
     quotes = await import("@/app/api/quotes/route");
     proposals = await import("@/app/api/proposals/route");
     proposal = await import("@/app/api/proposals/[proposalId]/route");
@@ -136,6 +138,36 @@ suite("CRM workflow and authorization against disposable PostgreSQL", () => {
     expect(await proposalService.getProposalWorkflowByTenant(b, proposalA)).toBeNull();
   });
 
+  it("keeps the client 360 opportunity history within the same seller scope as Pipeline", async () => {
+    expect(await opportunityService.getOpportunitiesByClientForTenant(a, clientA, colleague, false)).toEqual([]);
+    expect((await opportunityService.getOpportunitiesByClientForTenant(a, clientA, seller, false)).map(o => o.opportunityId)).toEqual([opportunityA]);
+    expect((await opportunityService.getOpportunitiesByClientForTenant(a, clientA, owner, true)).map(o => o.opportunityId)).toEqual([opportunityA]);
+    expect(await opportunityService.getOpportunitiesByClientForTenant(b, clientA, foreign, true)).toEqual([]);
+  });
+
+  it("does not disclose another seller's opportunity through the task selector API", async () => {
+    for (const [tenantId, userId, role, expected] of [
+      [a, colleague, "user", []], [a, seller, "user", [opportunityA]],
+      [a, owner, "owner", [opportunityA]], [b, foreign, "owner", []],
+    ] as const) {
+      asUser(tenantId, userId, role);
+      const result = await clientOpportunities.GET(request(undefined, "GET"), { params: Promise.resolve({ clientId: clientA }) });
+      expect(result.status).toBe(200);
+      expect((await result.json()).opportunities.map((o: { opportunityId: string }) => o.opportunityId)).toEqual(expected);
+    }
+    session.current.mockResolvedValue(null);
+    expect((await clientOpportunities.GET(request(undefined, "GET"), { params: Promise.resolve({ clientId: clientA }) })).status).toBe(401);
+  });
+
+  it("rejects a forged task link to a colleague's opportunity without writing", async () => {
+    asUser(a, colleague);
+    const before = await db.tasks.count({ where: { tenant_id: a } });
+    const result = await tasks.POST(request({ clientId: clientA, opportunityId: opportunityA,
+      description: "Forbidden private deal", dueDate: "2026-10-23", canSeeAll: true, tenantId: b }));
+    expect(result.status).toBe(404);
+    expect(await db.tasks.count({ where: { tenant_id: a } })).toBe(before);
+  });
+
   it("rejects proposals from a foreign company and context forgery", async () => {
     asUser(a, seller);
     expect((await proposals.POST(request({ quoteId: quoteB, tenantId: b, isSuperAdmin: true }))).status).toBe(404);
@@ -204,5 +236,14 @@ suite("CRM workflow and authorization against disposable PostgreSQL", () => {
     expect((await clients.GET(request(undefined, "GET"))).status).toBe(401);
     expect((await proposals.POST(request({ quoteId: quoteA }))).status).toBe(401);
     expect((await tasks.POST(request({}))).status).toBe(401);
+  });
+
+  it("allows owner follow-up on another seller's opportunity", async () => {
+    asUser(a, owner, "owner");
+    const result = await tasks.POST(request({ clientId: clientA, opportunityId: opportunityA,
+      description: "Owner follow up", dueDate: "2026-10-23" }));
+    expect(result.status).toBe(201);
+    const taskId = (await result.json()).taskId;
+    expect((await task.PATCH(request(undefined, "PATCH"), { params: Promise.resolve({ taskId }) })).status).toBe(200);
   });
 });

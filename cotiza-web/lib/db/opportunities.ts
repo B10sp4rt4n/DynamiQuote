@@ -267,10 +267,15 @@ async function attachDerivedStage(
 export async function getOpportunitiesByClientForTenant(
   tenantId: string,
   clientId: string,
+  viewerUserId: string | null = null,
+  canSeeAll = true,
 ): Promise<OpportunityWithStage[]> {
   const opportunities = await prisma.opportunities.findMany({
     orderBy: { created_at: "desc" },
-    where: { client_id: clientId, tenant_id: tenantId },
+    where: {
+      client_id: clientId, tenant_id: tenantId,
+      ...(canSeeAll ? {} : { OR: [{ owner_user_id: viewerUserId }, { owner_user_id: null }] }),
+    },
   });
 
   return attachDerivedStage(tenantId, opportunities);
