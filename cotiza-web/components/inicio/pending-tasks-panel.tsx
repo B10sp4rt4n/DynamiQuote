@@ -4,12 +4,7 @@ import Link from "next/link";
 import { useState } from "react";
 
 import type { PendingTask } from "@/lib/db/tasks";
-
-function formatDueDate(iso: string): string {
-  return new Intl.DateTimeFormat("es-MX", { day: "2-digit", month: "short", year: "numeric" }).format(
-    new Date(iso),
-  );
-}
+import { formatTaskDueDate } from "@/lib/domain/task-due-date";
 
 export function PendingTasksPanel({ tasks: initialTasks }: { tasks: PendingTask[] }) {
   const [tasks, setTasks] = useState(initialTasks);
@@ -63,7 +58,7 @@ export function PendingTasksPanel({ tasks: initialTasks }: { tasks: PendingTask[
                     </Link>
                     {task.opportunityNumber ? ` · ${task.opportunityNumber}` : ""}
                     {" · vence "}
-                    {formatDueDate(task.dueDate)}
+                    {formatTaskDueDate(task.dueDate)}
                   </p>
                 </div>
                 <button
