@@ -1190,7 +1190,8 @@
     "PROP-2026-0283 creada desde COT-0023 en DynamiQuote: issuer_company DynamiQuote, issuer_logo_id NULL. MXN y condiciones ficticias seleccionadas expresamente para QA.",
     "PDF de 2 páginas descargado; waitForEvent agotó su espera, pero el archivo apareció en el directorio sincronizado. pdfinfo, extracción de texto y render de ambas páginas confirmaron emisor, receptor ficticio, marca BORRADOR, subtotal 100 y total con IVA 116. No contiene logo histórico ajeno.",
     "Ficha 360 de nueva preview confirmó 22 oct 2026, 8:50 p.m. para ambas notas, alineada con edición. El instante UTC de base no cambió.",
-    "Sesión de preview corregida restablecida a SynAppsSys. La sesión anterior no confirmó restauración; no se usa como evidencia de contexto final."
+    "Sesión de preview corregida restablecida a SynAppsSys. La sesión anterior no confirmó restauración; no se usa como evidencia de contexto final.",
+    "Tras autorización específica de Salvador se completó el ensayo vendedor/owner de notas. Se restauraron rol superadmin y propietario original de OPP-0063; peer siguió inactivo y permanecieron las dos notas. Los estados anteriores de pendiente/rechazo se conservan como historia de la revisión."
   ],
   "checks": {
     "integration_local": 40,
@@ -1199,7 +1200,6 @@
     "production_writes": 0
   },
   "pending": [
-    "Ensayo visual vendedor/owner de notas requiere autorización específica para cambios temporales rechazados.",
     "Vincular tres pendientes y decidir tratamiento de superadmin legacy con identidades comprobadas.",
     "Confirmar destino y versión del servicio Railway y cualquier escritor externo.",
     "Preparar y ensayar artefacto de recuperación seguro y mecanismo de mantenimiento antes de pedir el corte productivo.",
@@ -1274,5 +1274,12 @@
     "crm-notes-qa-review.jpg",
     "crm-issuer-dynamiquote-verified.jpg",
     "crm-issuer-dynamiquote-qa.pdf"
-  ]
+  ],
+  "notes_role_verification": {
+    "status": "completed_with_explicit_authorization",
+    "evidence": "crm-notes-role-verification.json",
+    "seller": "General visible; privada de oportunidad ajena ausente del DOM",
+    "owner": "General y privada visibles",
+    "restored": "superadmin y propietario original confirmados por SQL y contexto de pantalla"
+  }
 }

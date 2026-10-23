@@ -9,7 +9,7 @@ permisos, interrupciones de servicios, correos, facturación ni publicación.
 | Frente | Evidencia existente | Condición restante |
 | --- | --- | --- |
 | Memoria AUP local | Cierre y reapertura con contenido verificado; transacción y alteraciones probadas | Sin acuse externo Recordia ni custodia HotVault |
-| Notas y contexto | Notas QA persistidas; otra empresa no puede abrir la misma ficha | Completar ensayo visual de vendedor/owner con permiso específico |
+| Notas y contexto | Otra empresa no abre la ficha; vendedor ve nota general y owner ambas; rol y propietario restaurados | Evidencia limitada al caso ficticio y rutas comprobadas |
 | Documentos históricos | Muestra PDF previa y 12 documentos reparados en copia | No certifica todos los documentos ni una moneda original NULL |
 | Emisor nuevo | Tres escenarios de integración y PROP-2026-0283 ficticia en navegador/PDF | No designa razón social ni perfil default por el usuario |
 | Identidad | 5 IDs con formato Clerk; login real del superadmin | Verificar otros IDs; resolver 3 pendientes y superadmin legacy por ID exacto |
@@ -112,3 +112,6 @@ Sin un artefacto de recuperación seguro ensayado, el corte sigue bloqueado.
 Evidencia de esta revisión: `docs/evidence/crm-release-followup.json` y
 `docs/evidence/crm-writer-route-inventory.json`. La instantánea no demuestra
 ausencia de procesos externos ni autorización para usarlos en la integración.
+El ensayo visual autorizado por roles está en
+`docs/evidence/crm-notes-role-verification.json`; confirma también la restauración
+de superadmin y del propietario original de OPP-0063 en la copia aislada.

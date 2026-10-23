@@ -344,3 +344,32 @@ un modo de mantenimiento universal. El procedimiento preparado no es autorizaci�
 Evidencia: `docs/evidence/crm-release-followup.json`,
 `docs/evidence/crm-writer-route-inventory.json`, capturas `crm-notes-*`,
 `crm-issuer-dynamiquote-verified.jpg` y `crm-issuer-dynamiquote-qa.pdf`.
+
+### Cierre del ensayo visual de notas por rol
+
+Salvador autorizó expresamente cambiar temporalmente salvador.ruiz a vendedor y
+owner y reasignar OPP-0063 al usuario ficticio inactivo, únicamente en
+br-old-pond-ahe5jto3, con restauración al terminar. El estado anterior de rechazo
+y pendiente descrito arriba no se elimina; este ensayo posterior lo resuelve.
+
+Se bloqueó y validó el estado inicial antes de aplicar las dos modificaciones en
+una transacción. Como vendedor (role user), una recarga real de la ficha 360
+mostró Oportunidades (0) y la nota general. La nota ligada a OPP-0063 no estaba
+en el DOM. Como owner, manteniendo la oportunidad asignada al peer, otra recarga
+mostró la oportunidad y ambas notas. La cotización/propuesta siguieron visibles
+para el vendedor por su propia autoría; no se afirma que se ocultaran con este
+cambio de propietario de oportunidad.
+
+La restauración de superadmin y propietario original fue atómica y se contrastó
+con el estado inicial. SQL confirmó role superadmin, tenant sys, cuenta activa,
+owner_user_id original, peer inactivo y exactamente las dos notas QA. La pantalla
+de Configuración volvió a mostrar SynAppsSys, selector de empresas y la fila de
+salvador.ruiz con superadmin. No se modificaron notas, otros usuarios ni producción.
+
+Evidencia: `docs/evidence/crm-notes-role-baseline.json`,
+`docs/evidence/crm-notes-role-verification.json`,
+`docs/evidence/crm-notes-seller-verified.jpg` y
+`docs/evidence/crm-notes-owner-verified.jpg`. El ensayo no cambia el código de
+aplicación 11698a20 ni amplía su cobertura a todas las rutas o perfiles. Siguen
+abiertos el cierre de identidades, destino/código de escritores externos y ensayo
+de mantenimiento/recuperación segura antes de autorizar producción.
