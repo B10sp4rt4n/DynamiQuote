@@ -177,6 +177,34 @@ Auditoría reproducible de solo lectura: `scripts/audit_multitenant_readiness.sq
 
 ## Secuencia para continuar
 
+### Primer contrato de acto comercial AUP / memoria local
+
+La revisión AUP/Recordia añadió un contrato versionado en el payload existente
+de decisiones, correcciones de fecha y limpieza del cierre/reapertura. La
+decisión y su evento se escriben en la misma transacción; errores de auditoría
+cancelan también la modificación comercial. Se conservan los tipos/campos
+anteriores y no se alteran registros históricos.
+
+Cada acto identifica tenant, propuesta, oportunidad cuando existe, actor/rol,
+estado anterior/nuevo, regla aplicada, momento de acción/registro y fecha
+comercial con su precisión/procedencia. Conserva referencias locales y enlaza
+correcciones/revocaciones con el evento previo. El payload completo usa SHA-256
+con marcador `aup1:sha256:`; la lectura verifica contenido y la interfaz señala
+una discrepancia sin presentar el payload alterado como decisión confiable.
+
+Recordia figura como `local_only`, sin acuse externo; las referencias históricas
+no se inventan ni se migran en este alcance. No se conecta HotVault ni se afirma
+custodia, firma o inmutabilidad. La huella local no protege frente a reescritura
+de datos y huellas por un administrador de base.
+
+Pasaron 468 pruebas generales y 39 de integración contra PostgreSQL/PGlite
+local. Se probaron rollback de decisión y reapertura ante falla de inserción,
+detección de alteración, vínculo de corrección, preservación de fechas,
+aislamiento y reintentos concurrentes (un acto y un conflicto). TypeScript y
+ESLint sin errores, conservando el aviso previo documentado.
+Contrato y límites: `docs/commercial-act-contract.md`.
+La comprobación en preview de esta revisión queda pendiente de compilación.
+
 ### Revisión posterior del emisor y muestra documental
 
 La sesión real de superadmin volvió a entrar en la preview de `b977f0b`.

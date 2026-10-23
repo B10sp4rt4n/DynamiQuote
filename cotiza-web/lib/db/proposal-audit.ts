@@ -4,6 +4,7 @@ import { randomUUID } from "crypto";
 
 import { prisma } from "@/lib/db/prisma";
 import { getProposalApprovalsByTenant } from "@/lib/db/proposal-approvals";
+import { verifyCommercialPayload, type CommercialIntegrity } from "@/lib/domain/commercial-act";
 
 // Auditoria de solicitudes y emision de documentos de una propuesta. Reusa
 // proposal_audit_events (sin DDL nuevo): la tabla no tiene columna de actor,
@@ -60,6 +61,7 @@ export type ProposalAuditTimelineItem = {
   details: Record<string, unknown>;
   id: string;
   type: string;
+  integrity?: CommercialIntegrity;
 };
 
 function parsePayload(payload: string | null): Record<string, unknown> {
@@ -98,6 +100,7 @@ export async function getProposalAuditTimelineByTenant(
         actorUserId: typeof actor === "string" ? actor : null,
         createdAt: event.created_at,
         details,
+        integrity: verifyCommercialPayload(details, event.event_hash),
         id: event.event_id,
         type: event.event_type,
       };
@@ -110,6 +113,7 @@ export async function getProposalAuditTimelineByTenant(
         decision: approval.decision,
         reason: approval.reason,
       } as Record<string, unknown>,
+      integrity: undefined,
       id: approval.approvalId,
       type: "approval_decision",
     })),
@@ -138,5 +142,6 @@ export async function getProposalAuditTimelineByTenant(
       details: item.details,
       id: item.id,
       type: item.type,
+      integrity: item.integrity,
     }));
 }

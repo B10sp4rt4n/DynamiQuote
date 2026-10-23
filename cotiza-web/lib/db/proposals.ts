@@ -14,6 +14,7 @@ import {
   type ProposalApproverRole,
 } from "@/lib/db/proposal-approvals";
 import { prisma } from "@/lib/db/prisma";
+import { recordCommercialAct } from "@/lib/db/commercial-acts";
 import { NOT_DISCARDED_WHERE } from "@/lib/db/proposal-filters";
 import { closeDateInstant, earliestCommercialStart, isValidCloseDate, mexicoCalendarDate } from "@/lib/domain/commercial-close-date";
 import {
@@ -1794,19 +1795,19 @@ export async function setProposalOutcomeByTenant(
       data: { outcome, outcome_at: outcomeAt },
       where: { proposal_id: proposalId },
     });
-    await tx.proposal_audit_events.create({
-      data: {
-        created_at: now,
-        event_hash: randomUUID(),
-        event_id: randomUUID(),
-        event_type: row.outcome === outcome ? "outcome_date_changed" : "outcome_changed",
-        payload: JSON.stringify({ actorUserId: actor.userId, fromOutcome: row.outcome, toOutcome: outcome,
+    await recordCommercialAct(tx, {
+        eventType: row.outcome === outcome ? "outcome_date_changed" : "outcome_changed",
+        actorUserId: actor.userId, actorRole: actor.userRole, canSeeAll,
+        proposalId, tenantId, opportunityId: row.opportunity_id,
+        action: row.outcome === outcome ? "close_date_corrected" : outcome === null ? "outcome_cleared" : "outcome_set",
+        before: { status: row.status, outcome: row.outcome, outcomeAt: row.outcome_at?.toISOString() ?? null },
+        after: { status: outcome === "won" && row.status === "sent" && actor.userId ? "approved" : row.status,
+          outcome, outcomeAt: outcomeAt?.toISOString() ?? null },
+        recordedAt: now.toISOString(), selectedCloseDate: dateInput.closedOn ?? null,
+        legacyPayload: { actorUserId: actor.userId, fromOutcome: row.outcome, toOutcome: outcome,
           previousOutcomeAt: row.outcome_at?.toISOString() ?? null, outcomeAt: outcomeAt?.toISOString() ?? null,
           selectedCloseDate: dateInput.closedOn ?? null, datePrecision: dateInput.closedOn ? "day" : "instant",
-          recordedAt: now.toISOString() }),
-        proposal_id: proposalId,
-        tenant_id: tenantId,
-      },
+          recordedAt: now.toISOString() },
     });
     if (outcome === "won" && row.status === "sent" && actor.userId) {
       await applyProposalStatusOnly(tx, { currentOutcome: outcome, nextStatus: "approved", proposalId });
@@ -1833,6 +1834,7 @@ export async function setProposalOutcomeByTenant(
 // acquired a row lock; an earlier read may have preceded another decision.
 async function clearCommercialOutcomeForStatus(
   tx: Prisma.TransactionClient, proposalId: string, nextStatus: ProposalStatus, actorUserId: string | null = null,
+  previousStatus: string | null = null, actorRole: string | null = null,
 ): Promise<void> {
   if (OUTCOME_DECISION_STATUSES.has(nextStatus)) return;
   const row = await tx.proposals.findUnique({ where: { proposal_id: proposalId } });
@@ -1840,14 +1842,16 @@ async function clearCommercialOutcomeForStatus(
   await tx.proposals.update({
     data: { outcome: null, outcome_at: null }, where: { proposal_id: proposalId },
   });
-  await tx.proposal_audit_events.create({
-    data: {
-      created_at: new Date(), event_hash: randomUUID(), event_id: randomUUID(),
-      event_type: "outcome_changed", proposal_id: proposalId, tenant_id: row.tenant_id,
-      payload: JSON.stringify({ actorUserId, fromOutcome: row.outcome, toOutcome: null,
+  const now = new Date();
+  await recordCommercialAct(tx, {
+      eventType: "outcome_changed", proposalId, tenantId: row.tenant_id,
+      opportunityId: row.opportunity_id, actorUserId, actorRole, canSeeAll: null,
+      action: "outcome_cleared", selectedCloseDate: null, recordedAt: now.toISOString(),
+      before: { status: previousStatus, outcome: row.outcome, outcomeAt: row.outcome_at?.toISOString() ?? null },
+      after: { status: nextStatus, outcome: null, outcomeAt: null },
+      legacyPayload: { actorUserId, fromOutcome: row.outcome, toOutcome: null,
         previousOutcomeAt: row.outcome_at?.toISOString() ?? null, outcomeAt: null,
-        trigger: "workflow_status", nextStatus }),
-    },
+        trigger: "workflow_status", nextStatus },
   });
 }
 
@@ -2038,6 +2042,7 @@ async function applyProposalStatusOnly(
 ): Promise<void> {
   const now = new Date();
   const shouldClose = terminalStatuses.includes(input.nextStatus);
+  const before = await tx.proposals.findUnique({ where: { proposal_id: input.proposalId }, select: { status: true } });
 
   await tx.proposals.update({
     data: {
@@ -2048,7 +2053,7 @@ async function applyProposalStatusOnly(
     where: { proposal_id: input.proposalId },
   });
 
-  await clearCommercialOutcomeForStatus(tx, input.proposalId, input.nextStatus, input.actorUserId);
+  await clearCommercialOutcomeForStatus(tx, input.proposalId, input.nextStatus, input.actorUserId, before?.status ?? null);
 
   await tx.formal_proposals.updateMany({
     data: { status: input.nextStatus, updated_at: now },
@@ -2383,6 +2388,11 @@ export async function updateProposalWorkflowByTenant(
   const shouldClose = terminalStatuses.includes(nextStatus);
 
   await prisma.$transaction(async (tx) => {
+    await tx.$queryRaw(Prisma.sql`SELECT proposal_id FROM proposals
+      WHERE proposal_id = ${proposalId} AND tenant_id = ${tenantId} FOR UPDATE`);
+    const commercialBefore = await tx.proposals.findFirst({
+      where: { proposal_id: proposalId, tenant_id: tenantId }, select: { status: true },
+    });
     await tx.proposals.update({
       data: {
         closed_at: shouldClose ? now : null,
@@ -2400,7 +2410,8 @@ export async function updateProposalWorkflowByTenant(
       },
     });
 
-    await clearCommercialOutcomeForStatus(tx, proposalId, nextStatus, actor?.userId ?? null);
+    await clearCommercialOutcomeForStatus(tx, proposalId, nextStatus, actor?.userId ?? null,
+      commercialBefore?.status ?? null, actor?.userRole ?? null);
 
     const termsToPersist = input.termsAndConditions;
     const issuerCompanyToPersist = input.issuerCompany;
