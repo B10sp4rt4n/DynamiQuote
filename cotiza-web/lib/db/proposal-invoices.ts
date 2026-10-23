@@ -2,7 +2,7 @@ import "server-only";
 
 import { prisma } from "@/lib/db/prisma";
 
-export type ProposalInvoiceStatus = "draft" | "stamped" | "rejected" | null;
+export type ProposalInvoiceStatus = "draft" | "stamping" | "stamped" | "rejected" | null;
 
 export type ProposalInvoiceInfo = {
   draftId: string | null;
@@ -13,7 +13,7 @@ export type ProposalInvoiceInfo = {
 };
 
 function normalizeInvoiceStatus(value: string | null): ProposalInvoiceStatus {
-  return value === "draft" || value === "stamped" || value === "rejected" ? value : null;
+  return value === "draft" || value === "stamping" || value === "stamped" || value === "rejected" ? value : null;
 }
 
 export async function getProposalInvoiceStatusByTenant(
@@ -44,32 +44,103 @@ export async function getProposalInvoiceStatusByTenant(
   };
 }
 
+// Todas las transiciones criticas comparan el estado en la propia UPDATE.
+// Un check previo en la ruta NO evita carreras concurrentes entre requests.
 export async function saveProposalInvoiceDraftByTenant(
   tenantId: string,
   proposalId: string,
   draftId: string,
-): Promise<void> {
-  await prisma.proposals.updateMany({
-    data: { invoice_draft_id: draftId, invoice_status: "draft" },
-    where: { proposal_id: proposalId, tenant_id: tenantId },
+): Promise<boolean> {
+  const result = await prisma.proposals.updateMany({
+    data: {
+      invoice_draft_id: draftId,
+      invoice_status: "draft",
+      invoice_stamped_at: null,
+      invoice_uuid: null,
+      invoice_xml_base64: null,
+    },
+    where: {
+      proposal_id: proposalId,
+      tenant_id: tenantId,
+      invoice_uuid: null,
+      invoice_xml_base64: null,
+      invoice_stamped_at: null,
+      OR: [{ invoice_status: null }, { invoice_status: { in: ["draft", "rejected"] } }],
+    },
   });
+  return result.count === 1;
+}
+
+export async function claimProposalInvoiceStampByTenant(
+  tenantId: string,
+  proposalId: string,
+  draftId: string,
+): Promise<boolean> {
+  const result = await prisma.proposals.updateMany({
+    data: { invoice_status: "stamping" },
+    where: {
+      proposal_id: proposalId,
+      tenant_id: tenantId,
+      invoice_draft_id: draftId,
+      invoice_uuid: null,
+      invoice_xml_base64: null,
+      invoice_stamped_at: null,
+      invoice_status: { in: ["draft", "rejected"] },
+    },
+  });
+  return result.count === 1;
 }
 
 export async function markProposalInvoiceStampedByTenant(
   tenantId: string,
   proposalId: string,
-  uuid: string | null,
-  xmlBase64: string | null,
-): Promise<void> {
-  await prisma.proposals.updateMany({
+  draftId: string,
+  uuid: string,
+  xmlBase64: string,
+): Promise<boolean> {
+  const result = await prisma.proposals.updateMany({
     data: {
       invoice_stamped_at: new Date(),
-      invoice_status: uuid ? "stamped" : "rejected",
+      invoice_status: "stamped",
       invoice_uuid: uuid,
       invoice_xml_base64: xmlBase64,
     },
-    where: { proposal_id: proposalId, tenant_id: tenantId },
+    where: {
+      proposal_id: proposalId,
+      tenant_id: tenantId,
+      invoice_draft_id: draftId,
+      invoice_uuid: null,
+      invoice_xml_base64: null,
+      invoice_stamped_at: null,
+      invoice_status: "stamping",
+    },
   });
+  return result.count === 1;
+}
+
+export async function markProposalInvoiceRejectedByTenant(
+  tenantId: string,
+  proposalId: string,
+  draftId: string,
+): Promise<boolean> {
+  const result = await prisma.proposals.updateMany({
+    data: {
+      invoice_stamped_at: null,
+      invoice_status: "rejected",
+      invoice_uuid: null,
+      invoice_xml_base64: null,
+    },
+    where: {
+      proposal_id: proposalId,
+      tenant_id: tenantId,
+      invoice_draft_id: draftId,
+      invoice_uuid: null,
+      invoice_xml_base64: null,
+      invoice_stamped_at: null,
+      invoice_status: "stamping",
+    },
+  });
+  return result.count === 1;
 }
 
 export type ClientFiscalData = {

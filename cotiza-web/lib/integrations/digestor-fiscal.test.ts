@@ -3,6 +3,28 @@ import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 // digestor-fiscal.ts usa "server-only" -- mock para tests sin runtime de Next.js.
 vi.mock("server-only", () => ({}));
 
+describe("consulta de timbrado persistido", () => {
+  const originalFetch = global.fetch;
+  afterEach(() => {
+    clearConfigEnv();
+    global.fetch = originalFetch;
+    vi.restoreAllMocks();
+  });
+  it("consulta el draft exacto por GET sin solicitar otro timbre", async () => {
+    vi.resetModules();
+    setConfigEnv();
+    const fetchMock = vi.fn()
+      .mockResolvedValueOnce(jsonResponse({ access_token: "fixture-token", expires_in: 3600 }))
+      .mockResolvedValueOnce(jsonResponse({ stamp_status: "stamped", uuid: "fixture-uuid", xml_base64: "fixture-xml" }));
+    global.fetch = fetchMock as unknown as typeof fetch;
+    const { getBillingDraftStampResult } = await import("./digestor-fiscal");
+    expect(await getBillingDraftStampResult("draft/one")).toEqual({ stampStatus: "stamped", uuid: "fixture-uuid", xmlBase64: "fixture-xml" });
+    expect(fetchMock.mock.calls[1][0]).toBe("https://digestor.test/v1/billing/drafts/draft%2Fone/stamp-result");
+    expect(fetchMock.mock.calls[1][1].method).toBe("GET");
+    expect(fetchMock.mock.calls.some(([url]) => String(url).endsWith("/stamp"))).toBe(false);
+  });
+});
+
 const ENV_KEYS = ["DIGESTOR_FISCAL_BASE_URL", "DIGESTOR_FISCAL_USERNAME", "DIGESTOR_FISCAL_PASSWORD"] as const;
 
 function setConfigEnv(): void {

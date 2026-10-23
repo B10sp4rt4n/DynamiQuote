@@ -39,6 +39,7 @@ for (const mode of ['paused', 'off']) {
       ['PATCH', '/api/settings/users/qa'], ['DELETE', '/api/quotes/qa'],
       ['POST', '/clientes/qa'], ['GET', '/api/exports/report.xlsx'],
       ['GET', '/clientes/report.csv'],
+      ['POST', '/api/proposals/qa/invoice/reconcile'],
     ] : [['POST', '/api/quotes'], ['GET', '/api/webhooks/clerk']];
     for (const [method, route] of cases) {
       const response = await fetch(origin + route, { method, redirect: 'manual', signal: AbortSignal.timeout(45000) });

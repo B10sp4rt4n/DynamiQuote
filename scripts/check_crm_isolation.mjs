@@ -34,6 +34,7 @@ try {
     path.join(root, 'node_modules/vitest/vitest.mjs'), 'run',
     'lib/db/crm-isolation.integration.test.ts',
     'lib/db/opportunity-lifecycle.integration.test.ts',
+    'lib/db/proposal-invoices.integration.test.ts',
     '--maxWorkers=1', '--no-file-parallelism',
   ], {
     cwd: web, stdio: 'inherit',
