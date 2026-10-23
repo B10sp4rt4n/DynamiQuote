@@ -108,6 +108,30 @@ suite("CRM workflow and authorization against disposable PostgreSQL", () => {
     expect(await db.opportunities.count({ where: { tenant_id: a } })).toBe(oppBefore);
   });
 
+  it("saves the first edited line through PUT on a newly created free-text quotation", async () => {
+    asUser(a, owner, "owner");
+    const created = await quotes.POST(request({ clientName: "QA issuer fixture", proposalName: "Not commercial" }));
+    expect(created.status).toBe(201);
+    const quoteId = (await created.json()).quote.quoteId;
+    const route = await import("@/app/api/quotes/[quoteId]/lines/route");
+    const context = { params: Promise.resolve({ quoteId }) };
+    const initial = await route.GET(request(undefined, "GET"), context);
+    expect(initial.status).toBe(200);
+    const line = (await initial.json()).lines[0];
+    const payload = { forceNewVersion: false, lines: [{ ...line, sku: "QA-EMISOR",
+      description: "Fictional issuer verification", quantity: 1, costUnit: 60,
+      priceUnit: 100, marginPct: 40, mode: "price" }] };
+    const saved = await route.PUT(request(payload, "PUT"), context);
+    const result = await saved.json();
+    expect(result, JSON.stringify(result)).toMatchObject({ quote: { quoteId, totalRevenue: 100 },
+      totals: { totalCost: 60, totalRevenue: 100 }, versionCreated: false });
+    expect(saved.status).toBe(200);
+    expect(await db.quote_lines.count({ where: { quote_id: quoteId } })).toBe(1);
+    asUser(b, foreign, "owner");
+    expect((await route.PUT(request(payload, "PUT"), context)).status).toBe(404);
+    expect((await db.quote.findUniqueOrThrow({ where: { quote_id: quoteId } })).total_revenue?.toNumber()).toBe(100);
+  });
+
   it("rejects generating a proposal from another seller's quotation without writes", async () => {
     asUser(a, colleague);
     const before = await db.proposals.count({ where: { tenant_id: a } });

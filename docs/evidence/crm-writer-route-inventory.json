@@ -1,0 +1,314 @@
+{
+  "scope": "Static call inventory only; presence does not certify authorization of every branch or external process.",
+  "routes": [
+    {
+      "path": "cotiza-web/app/api/clients/[clientId]/contacts/[contactId]/route.ts",
+      "methods": [
+        "DELETE"
+      ],
+      "tenant_context_call": true,
+      "signed_webhook_call": false
+    },
+    {
+      "path": "cotiza-web/app/api/clients/[clientId]/contacts/route.ts",
+      "methods": [
+        "POST"
+      ],
+      "tenant_context_call": true,
+      "signed_webhook_call": false
+    },
+    {
+      "path": "cotiza-web/app/api/clients/[clientId]/interactions/[interactionId]/route.ts",
+      "methods": [
+        "DELETE"
+      ],
+      "tenant_context_call": true,
+      "signed_webhook_call": false
+    },
+    {
+      "path": "cotiza-web/app/api/clients/[clientId]/interactions/route.ts",
+      "methods": [
+        "POST"
+      ],
+      "tenant_context_call": true,
+      "signed_webhook_call": false
+    },
+    {
+      "path": "cotiza-web/app/api/clients/[clientId]/route.ts",
+      "methods": [
+        "PATCH"
+      ],
+      "tenant_context_call": true,
+      "signed_webhook_call": false
+    },
+    {
+      "path": "cotiza-web/app/api/clients/fiscal-validation/route.ts",
+      "methods": [
+        "POST"
+      ],
+      "tenant_context_call": true,
+      "signed_webhook_call": false
+    },
+    {
+      "path": "cotiza-web/app/api/clients/route.ts",
+      "methods": [
+        "POST"
+      ],
+      "tenant_context_call": true,
+      "signed_webhook_call": false
+    },
+    {
+      "path": "cotiza-web/app/api/context/tenant/route.ts",
+      "methods": [
+        "POST",
+        "DELETE"
+      ],
+      "tenant_context_call": true,
+      "signed_webhook_call": false
+    },
+    {
+      "path": "cotiza-web/app/api/packages/[packageId]/route.ts",
+      "methods": [
+        "PATCH"
+      ],
+      "tenant_context_call": true,
+      "signed_webhook_call": false
+    },
+    {
+      "path": "cotiza-web/app/api/packages/from-quote/route.ts",
+      "methods": [
+        "POST"
+      ],
+      "tenant_context_call": true,
+      "signed_webhook_call": false
+    },
+    {
+      "path": "cotiza-web/app/api/packages/route.ts",
+      "methods": [
+        "POST"
+      ],
+      "tenant_context_call": true,
+      "signed_webhook_call": false
+    },
+    {
+      "path": "cotiza-web/app/api/proposals/[proposalId]/approvals/route.ts",
+      "methods": [
+        "POST"
+      ],
+      "tenant_context_call": true,
+      "signed_webhook_call": false
+    },
+    {
+      "path": "cotiza-web/app/api/proposals/[proposalId]/invoice/route.ts",
+      "methods": [
+        "POST"
+      ],
+      "tenant_context_call": true,
+      "signed_webhook_call": false
+    },
+    {
+      "path": "cotiza-web/app/api/proposals/[proposalId]/invoice/stamp/route.ts",
+      "methods": [
+        "POST"
+      ],
+      "tenant_context_call": true,
+      "signed_webhook_call": false
+    },
+    {
+      "path": "cotiza-web/app/api/proposals/[proposalId]/override/execute/route.ts",
+      "methods": [
+        "POST"
+      ],
+      "tenant_context_call": true,
+      "signed_webhook_call": false
+    },
+    {
+      "path": "cotiza-web/app/api/proposals/[proposalId]/override/route.ts",
+      "methods": [
+        "POST"
+      ],
+      "tenant_context_call": true,
+      "signed_webhook_call": false
+    },
+    {
+      "path": "cotiza-web/app/api/proposals/[proposalId]/route.ts",
+      "methods": [
+        "PUT",
+        "PATCH"
+      ],
+      "tenant_context_call": true,
+      "signed_webhook_call": false
+    },
+    {
+      "path": "cotiza-web/app/api/proposals/[proposalId]/send-email/route.ts",
+      "methods": [
+        "POST"
+      ],
+      "tenant_context_call": true,
+      "signed_webhook_call": false
+    },
+    {
+      "path": "cotiza-web/app/api/proposals/[proposalId]/xlsx/route.ts",
+      "methods": [
+        "POST"
+      ],
+      "tenant_context_call": true,
+      "signed_webhook_call": false
+    },
+    {
+      "path": "cotiza-web/app/api/proposals/route.ts",
+      "methods": [
+        "POST"
+      ],
+      "tenant_context_call": true,
+      "signed_webhook_call": false
+    },
+    {
+      "path": "cotiza-web/app/api/quotes/[quoteId]/import/route.ts",
+      "methods": [
+        "POST"
+      ],
+      "tenant_context_call": true,
+      "signed_webhook_call": false
+    },
+    {
+      "path": "cotiza-web/app/api/quotes/[quoteId]/import-threatdown/route.ts",
+      "methods": [
+        "POST"
+      ],
+      "tenant_context_call": true,
+      "signed_webhook_call": false
+    },
+    {
+      "path": "cotiza-web/app/api/quotes/[quoteId]/lines/route.ts",
+      "methods": [
+        "PUT"
+      ],
+      "tenant_context_call": true,
+      "signed_webhook_call": false
+    },
+    {
+      "path": "cotiza-web/app/api/quotes/[quoteId]/route.ts",
+      "methods": [
+        "PATCH",
+        "DELETE"
+      ],
+      "tenant_context_call": true,
+      "signed_webhook_call": false
+    },
+    {
+      "path": "cotiza-web/app/api/quotes/route.ts",
+      "methods": [
+        "POST"
+      ],
+      "tenant_context_call": true,
+      "signed_webhook_call": false
+    },
+    {
+      "path": "cotiza-web/app/api/settings/issuer-profiles/[logoId]/route.ts",
+      "methods": [
+        "PATCH",
+        "DELETE"
+      ],
+      "tenant_context_call": true,
+      "signed_webhook_call": false
+    },
+    {
+      "path": "cotiza-web/app/api/settings/issuer-profiles/route.ts",
+      "methods": [
+        "POST"
+      ],
+      "tenant_context_call": true,
+      "signed_webhook_call": false
+    },
+    {
+      "path": "cotiza-web/app/api/settings/margin-policy/route.ts",
+      "methods": [
+        "PUT"
+      ],
+      "tenant_context_call": true,
+      "signed_webhook_call": false
+    },
+    {
+      "path": "cotiza-web/app/api/settings/tenant-capabilities/route.ts",
+      "methods": [
+        "PATCH"
+      ],
+      "tenant_context_call": true,
+      "signed_webhook_call": false
+    },
+    {
+      "path": "cotiza-web/app/api/settings/tenant-profile/route.ts",
+      "methods": [
+        "PUT"
+      ],
+      "tenant_context_call": true,
+      "signed_webhook_call": false
+    },
+    {
+      "path": "cotiza-web/app/api/settings/tenants/route.ts",
+      "methods": [
+        "POST"
+      ],
+      "tenant_context_call": true,
+      "signed_webhook_call": false
+    },
+    {
+      "path": "cotiza-web/app/api/settings/test-email/route.ts",
+      "methods": [
+        "POST"
+      ],
+      "tenant_context_call": true,
+      "signed_webhook_call": false
+    },
+    {
+      "path": "cotiza-web/app/api/settings/users/[userId]/resend-access/route.ts",
+      "methods": [
+        "POST"
+      ],
+      "tenant_context_call": true,
+      "signed_webhook_call": false
+    },
+    {
+      "path": "cotiza-web/app/api/settings/users/[userId]/route.ts",
+      "methods": [
+        "PATCH",
+        "DELETE"
+      ],
+      "tenant_context_call": true,
+      "signed_webhook_call": false
+    },
+    {
+      "path": "cotiza-web/app/api/settings/users/route.ts",
+      "methods": [
+        "POST"
+      ],
+      "tenant_context_call": true,
+      "signed_webhook_call": false
+    },
+    {
+      "path": "cotiza-web/app/api/tasks/[taskId]/route.ts",
+      "methods": [
+        "PATCH"
+      ],
+      "tenant_context_call": true,
+      "signed_webhook_call": false
+    },
+    {
+      "path": "cotiza-web/app/api/tasks/route.ts",
+      "methods": [
+        "POST"
+      ],
+      "tenant_context_call": true,
+      "signed_webhook_call": false
+    },
+    {
+      "path": "cotiza-web/app/api/webhooks/clerk/route.ts",
+      "methods": [
+        "POST"
+      ],
+      "tenant_context_call": false,
+      "signed_webhook_call": true
+    }
+  ]
+}

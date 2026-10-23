@@ -269,3 +269,78 @@ La muestra visual no certifica los 282 documentos ni los doce documentos sin
    a destino y desplegar de forma controlada, conservando las restricciones en un rollback.
 
 No migrar el CRM antiguo ni activar la integración en vivo hasta ese corte.
+
+## Seguimiento: privacidad, emisor nuevo y preparación del corte
+
+Se repitieron las 119 comprobaciones de solo lectura en producción y copia.
+Producción mantiene 281 documentos, 12 con tenant NULL, 81 logos y 6 propuestas
+de tenant inválido. La copia conserva las reparaciones anteriores; sus diferencias
+adicionales corresponden a fixtures de QA. Los manifiestos vigentes de 12 documentos,
+45 copias y 132 referencias pasan los siete contadores de
+`scripts/preflight_crm_cutover.sql` en ambas ramas. Alterar deliberadamente un
+hash en una consulta SELECT de control produce dos discrepancias de fuente;
+no se modificaron datos ni el manifiesto canónico.
+
+Dos notas ficticias se crearon en el cliente QA de SynAppsSys: una general y
+otra ligada a OPP-0063. Superadmin las ve en edición y ficha 360. Al cambiar a
+DynamiQuote mediante el selector, la misma ficha responde «Cliente no encontrado»
+sin notas. El selector usa una recarga completa. La prueba visual de vendedor y
+owner sigue pendiente: la revisión automática rechazó el UPDATE temporal de rol
+y propietario por falta de autorización específica. La lectura posterior confirma
+superadmin y propietario originales, sin cambios. Las pruebas locales de filtros,
+creación cruzada y eliminación de notas siguen pasando.
+
+Se detectó una diferencia de fecha en notas: la ficha 360 usaba zona del servidor
+y mostraba día 23, frente al 22 por la noche en edición. `11698a20` fija
+America/Mexico_City para ambos formatos, sin cambiar el instante UTC ni las fechas
+comerciales. La nueva preview quedó READY y, con login Clerk/GitHub real autorizado,
+mostró 22 oct 2026, 8:50 p.m. en ambas notas. Capturas antes/después conservadas.
+
+En DynamiQuote se creó COT-0023 ficticia y PROP-2026-0283. La sesión anterior falló
+dos veces al guardar partidas y la consulta confirmó que no persistieron; con
+sesión nueva en preview vigente el guardado respondió éxito y persistió venta
+100, costo 60 y margen 40. No hubo cambio en la lógica de guardado y no se afirma
+una causa del fallo previo. Los logs Vercel devolvieron 403, no ausencia de errores;
+no había CLI autenticada disponible. Un caso adicional reproduce POST y PUT de
+primera partida en PostgreSQL/PGlite y verifica rechazo de otro tenant: **40 casos
+de integración pasan**. TypeScript pasa. ESLint de página 360 y prueba nueva pasa;
+client-shell conserva el error previo de sincronización de logos
+`react-hooks/set-state-in-effect`, ajeno a la línea de zona horaria añadida.
+
+La nueva propuesta usa emisor DynamiQuote e issuer_logo_id NULL. Se eligieron MXN
+y condiciones NO COMERCIAL para este fixture nuevo. El PDF de 2 páginas se
+descargó, extrajo y renderizó completo: sin logo ajeno, emisor correcto, marca
+BORRADOR, subtotal 100 y total con IVA 116. El evento de descarga del navegador
+agotó su espera aunque el archivo apareció correctamente en el directorio
+sincronizado; no se repitió la descarga. La propuesta quedó draft y sin desenlace.
+La preview vigente se restableció a SynAppsSys; la sesión anterior que no confirmó
+restauración se cerró. No se enviaron correos ni se facturó.
+
+Inventario actualizado: 38 rutas mutadoras, 37 con llamada de contexto y webhook
+Clerk con verificación de firma. Es un inventario estático de llamadas, no una
+certificación de cada rama de autorización. El catálogo de producción no mostró
+funciones públicas, triggers de usuario ni extensiones de programación. La única
+conexión observada fue pgbouncer/neondb_owner; una instantánea no enumera todos
+los clientes con credenciales. Railway mantiene cotiza-web SUCCESS, deployment
+1e21faa5-0be3-4ceb-9235-12eacd65c925, sin cron ni cambios pendientes. OAuth oculta
+DATABASE_URL y el origen/commit no está expuesto: no se ha demostrado qué base
+usa o que tenga las protecciones actuales. Los logs HTTP/DNS vacíos tampoco
+demuestran inactividad. Este frente permanece abierto.
+
+Identidades por resolver: e.hdz (owner, fumicontrol), ma.glz (owner, salsa),
+ruben.arroyo (user, salsa) usan pending_*. El superadmin legacy admin de
+DynamiQuote conserva su UUID; no se fusiona con Salvador por compartir correo.
+Los otros cinco IDs tienen formato Clerk, lo que no verifica su existencia; solo
+el login real del superadmin tiene evidencia en este ensayo. No se modificó ni
+invitó a estas cuentas.
+
+Procedimiento y condiciones de parada/recuperación: `docs/crm-cutover-runbook.md`.
+Incluye orden foundation → documents → formal repair → logo repair, contraste de
+destino, ventana sin escritores, conservación de restricciones y prohibición de
+volver al resolver permisivo. La ejecución del corte sigue bloqueada hasta cerrar
+identidades/escritores y ensayar recuperación segura; no se implementó ni ensayó
+un modo de mantenimiento universal. El procedimiento preparado no es autorización.
+
+Evidencia: `docs/evidence/crm-release-followup.json`,
+`docs/evidence/crm-writer-route-inventory.json`, capturas `crm-notes-*`,
+`crm-issuer-dynamiquote-verified.jpg` y `crm-issuer-dynamiquote-qa.pdf`.
