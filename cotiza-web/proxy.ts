@@ -1,5 +1,5 @@
 import { clerkMiddleware, createRouteMatcher } from "@clerk/nextjs/server";
-import { NextResponse } from "next/server";
+import { NextResponse, type NextRequest, type NextFetchEvent } from "next/server";
 
 import { hasClerkCredentials } from "@/lib/auth/clerk";
 
@@ -33,11 +33,24 @@ const clerkEnabledMiddleware = clerkMiddleware(async (auth, request) => {
   return NextResponse.next();
 });
 
-export default hasClerkCredentials() ? clerkEnabledMiddleware : noopMiddleware;
+const authenticatedMiddleware = hasClerkCredentials() ? clerkEnabledMiddleware : noopMiddleware;
+
+export default function proxy(request: NextRequest, event: NextFetchEvent) {
+  // Pause the whole application before auth or any route, including GET routes
+  // with side effects and signed webhooks. Only an absent flag or "off" opens it.
+  const mode = process.env["CRM_MAINTENANCE_MODE"]?.trim();
+  if (mode && mode !== "off") {
+    return NextResponse.json(
+      { error: "CRM temporalmente en mantenimiento. Intenta nuevamente mas tarde.", code: "CRM_MAINTENANCE" },
+      { status: 503, headers: { "Retry-After": "300", "Cache-Control": "no-store" } },
+    );
+  }
+  return authenticatedMiddleware(request, event);
+}
 
 export const config = {
   matcher: [
-    "/((?!_next|[^?]*\\.(?:html?|css|js(?!on)|jpe?g|png|gif|svg|ttf|woff2?|ico|csv|docx?|xlsx?|zip|webmanifest)).*)",
+    "/((?!_next/static|_next/image|favicon.ico).*)",
     "/(api|trpc)(.*)",
   ],
 };

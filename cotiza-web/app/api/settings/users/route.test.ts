@@ -231,40 +231,79 @@ describe("POST /api/settings/users — flujo Clerk sin usuario previo", () => {
 // ---------------------------------------------------------------------------
 
 describe("POST /api/settings/users — flujo Clerk usuario ya existente", () => {
-  it("E: correo ya existe en Clerk → clerkSynced=true, NO createInvitation", async () => {
-    clerkGetUserListMock.mockResolvedValue({
-      data: [{ id: "user_existing123" }],
-    });
-    relinkManagedUserIdByTenantMock.mockResolvedValue({
-      ...CREATED_USER,
-      userId: "user_existing123",
-    });
-
+  it("E: correo existente exige vinculacion explicita, sin escrituras ni correo", async () => {
+    clerkGetUserListMock.mockResolvedValue({ data: [{ id: "user_existing123" }] });
     const res = await POST(makeRequest(VALID_BODY));
-    const json = await res.json();
-
-    expect(res.status).toBe(201);
-    expect(json.clerkSynced).toBe(true);
-    expect(json.invitationSent).toBe(false);
+    expect(res.status).toBe(409);
+    expect(createManagedUserByTenantMock).not.toHaveBeenCalled();
+    expect(clerkUpdateUserMetadataMock).not.toHaveBeenCalled();
+    expect(relinkManagedUserIdByTenantMock).not.toHaveBeenCalled();
+    expect(updateManagedUserByTenantMock).not.toHaveBeenCalled();
+    expect(deleteManagedUserByTenantMock).not.toHaveBeenCalled();
     expect(clerkCreateInvitationMock).not.toHaveBeenCalled();
-    expect(clerkUpdateUserMetadataMock).toHaveBeenCalledOnce();
+    expect(sendInvitationEmailMock).not.toHaveBeenCalled();
   });
 
-  it("F: admin pasa userId user_xxx explícito → enlaza directamente sin buscar por email", async () => {
-    relinkManagedUserIdByTenantMock.mockResolvedValue({
-      ...CREATED_USER,
-      userId: "user_explicit999",
-    });
-
+  it("F: superadmin vincula ID exacto con correo verificado, sin buscar por email", async () => {
+    getCurrentTenantContextMock.mockResolvedValue({ ...TENANT, isSuperAdmin: true, userRole: "superadmin" });
+    clerkGetUserMock.mockResolvedValue({ id: "user_explicit999", emailAddresses: [
+      { emailAddress: VALID_BODY.email, verification: { status: "verified" } },
+    ] });
+    createManagedUserByTenantMock.mockResolvedValue({ ...CREATED_USER, userId: "user_explicit999" });
     const res = await POST(makeRequest({ ...VALID_BODY, userId: "user_explicit999" }));
-    const json = await res.json();
-
     expect(res.status).toBe(201);
-    expect(json.clerkSynced).toBe(true);
-    // No busca por email si ya tiene clerkUserId
+    expect((await res.json()).clerkSynced).toBe(true);
     expect(clerkGetUserListMock).not.toHaveBeenCalled();
     expect(clerkCreateInvitationMock).not.toHaveBeenCalled();
+    expect(relinkManagedUserIdByTenantMock).not.toHaveBeenCalled();
+    expect(createManagedUserByTenantMock).toHaveBeenCalledWith(expect.objectContaining({
+      payload: expect.objectContaining({ userId: "user_explicit999" }),
+    }));
   });
+
+  it("no permite a owner/admin elegir un ID existente", async () => {
+    const res = await POST(makeRequest({ ...VALID_BODY, userId: "user_foreign" }));
+    expect(res.status).toBe(403);
+    expect(clerkGetUserMock).not.toHaveBeenCalled();
+    expect(createManagedUserByTenantMock).not.toHaveBeenCalled();
+  });
+
+  it.each([
+    { id: "user_wrong", emailAddresses: [{ emailAddress: VALID_BODY.email, verification: { status: "verified" } }] },
+    { id: "user_exact", emailAddresses: [{ emailAddress: "foreign@example.com", verification: { status: "verified" } }] },
+    { id: "user_exact", emailAddresses: [{ emailAddress: VALID_BODY.email, verification: { status: "unverified" } }] },
+    { id: "user_exact", banned: true, emailAddresses: [{ emailAddress: VALID_BODY.email, verification: { status: "verified" } }] },
+    { id: "user_exact", locked: true, emailAddresses: [{ emailAddress: VALID_BODY.email, verification: { status: "verified" } }] },
+  ])("rechaza identidad no verificable o inhabilitada %j", async (identity) => {
+    getCurrentTenantContextMock.mockResolvedValue({ ...TENANT, isSuperAdmin: true, userRole: "superadmin" });
+    clerkGetUserMock.mockResolvedValue(identity);
+    const res = await POST(makeRequest({ ...VALID_BODY, userId: "user_exact" }));
+    expect(res.status).toBe(422);
+    expect(createManagedUserByTenantMock).not.toHaveBeenCalled();
+    expect(clerkUpdateUserMetadataMock).not.toHaveBeenCalled();
+    expect(sendInvitationEmailMock).not.toHaveBeenCalled();
+  });
+
+  it("si Clerk falla no crea una pertenencia ni envia correo", async () => {
+    clerkGetUserListMock.mockRejectedValue(new Error("provider unavailable"));
+    expect((await POST(makeRequest(VALID_BODY))).status).toBe(503);
+    expect(createManagedUserByTenantMock).not.toHaveBeenCalled();
+    expect(sendInvitationEmailMock).not.toHaveBeenCalled();
+  });
+
+  it("un ID ya registrado conserva pertenencia y metadata", async () => {
+    getCurrentTenantContextMock.mockResolvedValue({ ...TENANT, isSuperAdmin: true, userRole: "superadmin" });
+    clerkGetUserMock.mockResolvedValue({ id: "user_exact", emailAddresses: [
+      { emailAddress: VALID_BODY.email, verification: { status: "verified" } },
+    ] });
+    createManagedUserByTenantMock.mockResolvedValue(null);
+    expect((await POST(makeRequest({ ...VALID_BODY, userId: "user_exact" }))).status).toBe(409);
+    expect(clerkUpdateUserMetadataMock).not.toHaveBeenCalled();
+    expect(updateManagedUserByTenantMock).not.toHaveBeenCalled();
+    expect(deleteManagedUserByTenantMock).not.toHaveBeenCalled();
+    expect(sendInvitationEmailMock).not.toHaveBeenCalled();
+  });
+
 });
 
 // ---------------------------------------------------------------------------
