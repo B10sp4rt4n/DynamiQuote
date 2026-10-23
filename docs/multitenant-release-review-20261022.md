@@ -513,3 +513,52 @@ borrador. Faltan identidades pending/legacy, revisar el contacto de Salvador sin
 alterar su ID funcional, confirmar destino/código de Railway, respaldo de base,
 cierre/drenado de escritores, preflight de corte y aprobación final.
 Recordia sigue local_only, sin acuse externo ni custodia HotVault.
+
+## Railway: destino productivo y runtime comprobados
+
+La revisión de solo lectura del 23/10/2026 resolvió el destino que antes ocultaba
+OAuth. El panel permitió mostrar temporalmente DATABASE_URL, devolver únicamente
+host/base y volver a ocultarla. El endpoint corresponde a
+br-quiet-morning-ahkomhhi del proyecto Neon cool-resonance-22906937, base neondb.
+La consola conectó a la instancia b8c988d3-4bd2-4524-bf01-2da847ee3be9 del
+despliegue 1e21faa5-0be3-4ceb-9235-12eacd65c925 y confirmó el mismo host/base
+en su entorno real. No se abrió conexión SQL ni se probó un permiso de escritura.
+No se conservaron contraseña o cadena completa de conexión.
+
+El servicio fue publicado por railway up y no tiene repositorio conectado.
+Runtime sin RAILWAY_GIT_COMMIT_SHA ni directorio .git; build Next
+Ts24dU6Pr2C-bnMwpNZWi. Snapshot d7b4ebc5-4a68-4e44-a85a-ddd1dc4a6f4d.
+Logs de build conservan Next.js 16.2.4, Prisma Client 7.10.0 y digest de imagen
+cc3922b22bd165e32874192f4aa1a281d560296d748bf1cc02b5e13a81a06096.
+Estos identifican artefactos observados; no certifican un commit Git completo.
+
+Las huellas de package.json, proxy.ts, contexto y alta de usuarios difieren del
+candidato nuevo. La de proxy.ts coincide exactamente con el proxy de
+main/55760ab4, anterior al límite de mantenimiento; los otros tres archivos no
+coinciden con esa línea base. No atribuir por ello todo el build a main/55760ab4.
+El flag no está definido en el runtime y el proxy fuente empaquetado no incorpora
+la pausa nueva. No se fingerprintó por separado el proxy compilado. Cambiar el
+flag en Vercel no detiene esta instancia independiente de Railway.
+
+Métricas de 24 h muestran memoria distinta de cero; HTTP de siete días registra
+cero solicitudes y los logs DNS/red/runtime de la ventana consultada están
+vacíos. Es ausencia de registros, no prueba de inactividad o ausencia de trabajos
+de fondo. El panel mostró estados transitorios contradictorios y un aviso de
+incidencia de plataforma; la consola finalmente conectó. No se atribuye una
+causa al aviso ni se usa el estado transitorio para declarar detenido el servicio.
+
+Antes del corte: confirmar si alguien usa el dominio Railway o integraciones
+que lleguen a él; fijar el plan aprobado de parada/drenado del despliegue exacto,
+conservar snapshot/digest y comprobar que no quedan instancias o solicitudes
+iniciadas escribiendo. Eliminar un dominio por sí solo no detiene el proceso.
+No desactivar el servicio, rotar sus credenciales compartidas ni sustituirlo por
+un build antiguo por deducción. Una recuperación anterior a migraciones debe
+revalidar destino y artefacto; después del corte no reintroducir este runtime sin
+los controles nuevos aunque la plataforma indique canRollback=true.
+
+Evidencia: docs/evidence/crm-railway-writer-verification.json,
+crm-railway-runtime-observed.json y crm-railway-runtime.jpg. Sin stop/restart,
+redespliegue, variables cambiadas, migración, invitación, correo o factura.
+No cambió código de aplicación ni se repitieron las 502 pruebas anteriores.
+El destino queda resuelto; control/drenado del escritor, Git exacto, otros
+escritores, identidades y aprobación de corte permanecen abiertos.

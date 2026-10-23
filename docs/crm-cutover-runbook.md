@@ -12,9 +12,9 @@ permisos, interrupciones de servicios, correos, facturación ni publicación.
 | Notas y contexto | Otra empresa no abre la ficha; vendedor ve nota general y owner ambas; rol y propietario restaurados | Evidencia limitada al caso ficticio y rutas comprobadas |
 | Documentos históricos | Muestra PDF previa y 12 documentos reparados en copia | No certifica todos los documentos ni una moneda original NULL |
 | Emisor nuevo | Tres escenarios de integración y PROP-2026-0283 ficticia en navegador/PDF | No designa razón social ni perfil default por el usuario |
-| Identidad | Alta sin reasignación por correo; ID explícito verificado y exclusivo de superadmin; login real del superadmin | Validar proveedor para otros IDs; resolver 3 pendientes y superadmin legacy por ID exacto |
-| Otros escritores | Inventario de rutas, catálogo Neon y servicio Railway SUCCESS confirmado de nuevo | Confirmar conexión/código del servicio antiguo; inventario externo no cerrado |
-| Mantenimiento y recuperación | Pausa HTTP y reanudación probadas localmente en dev y build de producción; 384 archivos restaurados verificados | Ensayo remoto aislado con identidad real; respaldo de base y parada/drenado de todos los escritores |
+| Identidad | Cinco IDs encontrados por ID exacto en Clerk; login de Salvador probado; alta sin reasignación por correo | Resolver 3 pendientes y legacy; revisar contacto de Salvador; logins individuales restantes sin probar |
+| Otros escritores | Railway SUCCESS/instancia conectada; host/base del runtime coinciden con Neon productivo; snapshot, build y huellas capturados | Código Git exacto desconocido; controlar/parar y drenar Railway por separado; inventario externo no cerrado |
+| Mantenimiento y recuperación | Pausa y reanudación de dos rutas probadas en Preview con sesión real; preparación de fuente fija y HTTP local comprobados | Respaldo de base y parada/drenado de todos los escritores; sin restauración DB ni rollback de código del hosting probado |
 | Manifiestos | 7 comprobaciones sin discrepancias en producción/copia; control negativo detectado | Repetir en destino al corte, dentro de ventana sin escrituras |
 
 La muestra nueva guardó venta 100/costo 60 y usa emisor DynamiQuote sin logo
@@ -44,18 +44,22 @@ desenlaces sin fecha no se rellenan por suposición. No se importan datos QA.
 3. Confirmar qué atiende `cotiza-web` en Railway: servicio
    `7b8c668c-d093-42e0-a418-ce2ddc7c652d`, proyecto
    `1980096f-8e39-416b-8a12-45b5815af5a6`, entorno production
-   `79506dd6-a076-4104-911a-9167da50040d`. Está SUCCESS con despliegue antiguo y
-   variable DATABASE_URL; OAuth oculta su valor y no expone el commit fuente.
-   No asumir que está desconectado o que tiene los filtros actuales. No detenerlo
-   ni sustituir su configuración sin identificar su función y autorizar el cambio.
+   `79506dd6-a076-4104-911a-9167da50040d`. El despliegue
+   `1e21faa5-0be3-4ceb-9235-12eacd65c925` conserva una instancia conectada.
+   La inspección del runtime confirmó host/base de Neon productivo
+   `br-quiet-morning-ahkomhhi`/neondb. Fue publicado por CLI; no hay repo conectado
+   ni SHA Git verificable. Proxy empaquetado anterior a la pausa actual y cuatro
+   archivos distintos del candidato nuevo. No asumir que tiene sus controles.
+   Evidencia: `docs/evidence/crm-railway-writer-verification.json`. Confirmar
+   consumidores e integraciones y aprobar su parada/drenado durante el corte.
 4. Inventariar integraciones, scripts y puestos que conservan credenciales de
    base. El guard de `app.py` contiene ese entrypoint legacy, no llamadas directas
    a bibliotecas Python. Las FK protegen relaciones; no autorizan lecturas ni
    impiden a un escritor antiguo omitir el contrato AUP. RLS permanece desactivado.
 5. Usar el candidato de recuperación y la pausa HTTP descritos abajo. El ensayo
-   local no sustituye probar el despliegue aislado con identidad real, preparar
-   respaldo de base y comprobar la parada/drenado de otros escritores. No se ha
-   ensayado un rollback en producción.
+   remoto de dos rutas está completado con identidad real en Preview. Aún falta
+   preparar respaldo de base y comprobar parada/drenado de otros escritores.
+   No se ha ensayado un rollback en producción.
 6. Presentar versión, destino, impacto, procedimiento, responsables y evidencia;
    obtener la aprobación de liberación cuando todos los bloqueos estén cerrados.
 
@@ -282,3 +286,52 @@ borrador. Faltan identidades pending/legacy, revisar el contacto de Salvador sin
 alterar su ID funcional, confirmar destino/código de Railway, respaldo de base,
 cierre/drenado de escritores, preflight de corte y aprobación final.
 Recordia sigue local_only, sin acuse externo ni custodia HotVault.
+
+## Railway: destino productivo y runtime comprobados
+
+La revisión de solo lectura del 23/10/2026 resolvió el destino que antes ocultaba
+OAuth. El panel permitió mostrar temporalmente DATABASE_URL, devolver únicamente
+host/base y volver a ocultarla. El endpoint corresponde a
+br-quiet-morning-ahkomhhi del proyecto Neon cool-resonance-22906937, base neondb.
+La consola conectó a la instancia b8c988d3-4bd2-4524-bf01-2da847ee3be9 del
+despliegue 1e21faa5-0be3-4ceb-9235-12eacd65c925 y confirmó el mismo host/base
+en su entorno real. No se abrió conexión SQL ni se probó un permiso de escritura.
+No se conservaron contraseña o cadena completa de conexión.
+
+El servicio fue publicado por railway up y no tiene repositorio conectado.
+Runtime sin RAILWAY_GIT_COMMIT_SHA ni directorio .git; build Next
+Ts24dU6Pr2C-bnMwpNZWi. Snapshot d7b4ebc5-4a68-4e44-a85a-ddd1dc4a6f4d.
+Logs de build conservan Next.js 16.2.4, Prisma Client 7.10.0 y digest de imagen
+cc3922b22bd165e32874192f4aa1a281d560296d748bf1cc02b5e13a81a06096.
+Estos identifican artefactos observados; no certifican un commit Git completo.
+
+Las huellas de package.json, proxy.ts, contexto y alta de usuarios difieren del
+candidato nuevo. La de proxy.ts coincide exactamente con el proxy de
+main/55760ab4, anterior al límite de mantenimiento; los otros tres archivos no
+coinciden con esa línea base. No atribuir por ello todo el build a main/55760ab4.
+El flag no está definido en el runtime y el proxy fuente empaquetado no incorpora
+la pausa nueva. No se fingerprintó por separado el proxy compilado. Cambiar el
+flag en Vercel no detiene esta instancia independiente de Railway.
+
+Métricas de 24 h muestran memoria distinta de cero; HTTP de siete días registra
+cero solicitudes y los logs DNS/red/runtime de la ventana consultada están
+vacíos. Es ausencia de registros, no prueba de inactividad o ausencia de trabajos
+de fondo. El panel mostró estados transitorios contradictorios y un aviso de
+incidencia de plataforma; la consola finalmente conectó. No se atribuye una
+causa al aviso ni se usa el estado transitorio para declarar detenido el servicio.
+
+Antes del corte: confirmar si alguien usa el dominio Railway o integraciones
+que lleguen a él; fijar el plan aprobado de parada/drenado del despliegue exacto,
+conservar snapshot/digest y comprobar que no quedan instancias o solicitudes
+iniciadas escribiendo. Eliminar un dominio por sí solo no detiene el proceso.
+No desactivar el servicio, rotar sus credenciales compartidas ni sustituirlo por
+un build antiguo por deducción. Una recuperación anterior a migraciones debe
+revalidar destino y artefacto; después del corte no reintroducir este runtime sin
+los controles nuevos aunque la plataforma indique canRollback=true.
+
+Evidencia: docs/evidence/crm-railway-writer-verification.json,
+crm-railway-runtime-observed.json y crm-railway-runtime.jpg. Sin stop/restart,
+redespliegue, variables cambiadas, migración, invitación, correo o factura.
+No cambió código de aplicación ni se repitieron las 502 pruebas anteriores.
+El destino queda resuelto; control/drenado del escritor, Git exacto, otros
+escritores, identidades y aprobación de corte permanecen abiertos.

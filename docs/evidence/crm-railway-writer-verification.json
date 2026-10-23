@@ -1,0 +1,177 @@
+{
+  "schema_version": 1,
+  "recorded_at": "2026-10-23T05:20:06.253Z",
+  "scope": {
+    "projectId": "1980096f-8e39-416b-8a12-45b5815af5a6",
+    "environmentId": "79506dd6-a076-4104-911a-9167da50040d",
+    "serviceId": "7b8c668c-d093-42e0-a418-ce2ddc7c652d"
+  },
+  "read_only_inspection": true,
+  "service": {
+    "id": "7b8c668c-d093-42e0-a418-ce2ddc7c652d",
+    "name": "cotiza-web",
+    "state": "live"
+  },
+  "environment": {
+    "id": "79506dd6-a076-4104-911a-9167da50040d",
+    "name": "production"
+  },
+  "deployment": {
+    "id": "1e21faa5-0be3-4ceb-9235-12eacd65c925",
+    "status": "SUCCESS",
+    "createdAt": "2026-09-15T03:06:38.052Z",
+    "snapshotId": "d7b4ebc5-4a68-4e44-a85a-ddd1dc4a6f4d",
+    "regions": [
+      "us-west2"
+    ],
+    "canRollback": true
+  },
+  "source": {
+    "method": "Railway UI: Deployed via CLI railway up",
+    "connected_repo": false,
+    "git_commit": null,
+    "git_commit_verified": false,
+    "build_log_framework": "Next.js 16.2.4 (Turbopack)",
+    "build_log_prisma_client": "7.10.0",
+    "image_digest_from_build_log": "sha256:cc3922b22bd165e32874192f4aa1a281d560296d748bf1cc02b5e13a81a06096",
+    "image_config_digest_from_build_log": "sha256:2afafe1147a0b42c326e12cca95730245ef3aa86509afb23c6c1cdaf1dc21298",
+    "digest_proves_git_commit": false
+  },
+  "configured_database": {
+    "collection": "Authenticated Railway UI; DATABASE_URL revealed temporarily, only host/database returned; then masked again",
+    "host": "ep-falling-wind-ah1tb7pk-pooler.c-3.us-east-1.aws.neon.tech",
+    "database": "neondb",
+    "project_id": "cool-resonance-22906937",
+    "branch_id": "br-quiet-morning-ahkomhhi",
+    "endpoint_id": "ep-falling-wind-ah1tb7pk",
+    "branch_match": true,
+    "isolated_preview_branch": false,
+    "password_retained": false,
+    "connection_string_retained": false
+  },
+  "runtime_file": "crm-railway-runtime-observed.json",
+  "runtime_screenshot": "crm-railway-runtime.jpg",
+  "metrics": {
+    "hoursBack": 24,
+    "sampleRateSeconds": 3600,
+    "metrics": [
+      {
+        "measurement": "CPU_USAGE",
+        "current": 2.668611111111111e-06,
+        "average": 1.6212644444444444e-05,
+        "min": 2.668611111111111e-06,
+        "max": 2.2594444444444444e-05,
+        "sampleCount": 25
+      },
+      {
+        "measurement": "MEMORY_USAGE_GB",
+        "current": 0.159522816,
+        "average": 0.14601238667376285,
+        "min": 0.12880958859405942,
+        "max": 0.180842496,
+        "sampleCount": 25
+      },
+      {
+        "measurement": "NETWORK_RX_GB",
+        "current": 0,
+        "average": 0,
+        "min": 0,
+        "max": 0,
+        "sampleCount": 25
+      },
+      {
+        "measurement": "NETWORK_TX_GB",
+        "current": 0,
+        "average": 0,
+        "min": 0,
+        "max": 0,
+        "sampleCount": 25
+      }
+    ]
+  },
+  "http": {
+    "window": {
+      "hoursBack": 168,
+      "bucketCount": 0
+    },
+    "totals": {
+      "2xx": 0,
+      "3xx": 0,
+      "4xx": 0,
+      "5xx": 0,
+      "total": 0
+    }
+  },
+  "logs": {
+    "start": "2026-10-22T05:00:00Z",
+    "end": "2026-10-23T05:00:00Z",
+    "dns_count": 0,
+    "network_flow_count": 0,
+    "deploy_count": 0
+  },
+  "observation_limits": [
+    "Zero recorded traffic/logs does not demonstrate no writes, no consumers or no background jobs.",
+    "Actual SQL write permissions and commercial mutations were not tested.",
+    "No full Git commit or full source-tree equivalence certified.",
+    "Provider panel temporarily showed no running instances/no active deployment while API said SUCCESS/Online; later Console connected to the named instance. Platform outage banner observed; not asserted as cause.",
+    "No production changes, stop/restart/redeploy, variable edits, database connection/query/migration, invites, mail or invoices performed."
+  ],
+  "release_gate": {
+    "configured_destination": "resolved_production",
+    "running_destination": "verified_via_console",
+    "runtime_inventory": "snapshot/build ID/image digest and selected source hashes captured; exact Git commit unknown",
+    "writer_control": "open_must_stop_and_drain_independently_of_vercel",
+    "external_writer_inventory": "still_open",
+    "production_cutover_authorized": false
+  },
+  "staged_changes_before": null,
+  "source_comparison": [
+    {
+      "path": "package.json",
+      "runtime_sha256": "b28f12de987ae277de80530422a07ec28b4c772b408e8c72cc47ae0fd2970a88",
+      "candidate_sha256": "306a3251f263f3fadb0245701cf72806fb6354612362289a91a50cbbd08201ec",
+      "candidate_matches": false,
+      "main_baseline_sha256": "306a3251f263f3fadb0245701cf72806fb6354612362289a91a50cbbd08201ec",
+      "main_baseline_matches": false
+    },
+    {
+      "path": "proxy.ts",
+      "runtime_sha256": "eacc7736ee066a43b093bf0f3699c97e77a64ff1f9fdb68519d7ed7d4205e7b9",
+      "candidate_sha256": "b75a5665c01067b7af12524a3a9cfe5731f10ad9dd1e83ad76292b9884911cc4",
+      "candidate_matches": false,
+      "main_baseline_sha256": "eacc7736ee066a43b093bf0f3699c97e77a64ff1f9fdb68519d7ed7d4205e7b9",
+      "main_baseline_matches": true
+    },
+    {
+      "path": "lib/auth/tenant-context.ts",
+      "runtime_sha256": "894f1191f082aacb25e5d62e719392c68ee278a8beee65f813d9957dec7cbbd6",
+      "candidate_sha256": "595422666065e471e2f9dc6aceb8fcab6c3a6fa973b0182715853212bfe09bea",
+      "candidate_matches": false,
+      "main_baseline_sha256": "275218c471b7457d19369660b72236f09797eff8b53ed8a87ebc7979d3b049e6",
+      "main_baseline_matches": false
+    },
+    {
+      "path": "app/api/settings/users/route.ts",
+      "runtime_sha256": "009d2bb9196b16fed8424784afffbae4ad1cc9f060566452d35f7a35ccca429f",
+      "candidate_sha256": "bdc6c18f1300d01e77ee58111d81c3fab667511b4d02d702de021c1e5b1688f8",
+      "candidate_matches": false,
+      "main_baseline_sha256": "cd0316758bdd5a20bfe2ccc124a60e45268975e4f0aa109c79a934a3457d09ff",
+      "main_baseline_matches": false
+    }
+  ],
+  "maintenance": {
+    "runtime_flag_set": false,
+    "packaged_proxy_matches_pre_maintenance_main": true,
+    "packaged_proxy_contains_current_maintenance_boundary": false,
+    "basis": "Packaged proxy hash exactly matches main/55760ab4 proxy, which has no CRM_MAINTENANCE_MODE boundary. Compiled proxy was not separately fingerprinted. Vercel maintenance flag cannot stop this independent Railway process."
+  },
+  "evidence_sha256": {
+    "crm-railway-runtime-observed.json": "ab9ef2a18bb406cbed6ac2aa9b39860643a99d1aa9384146d2acee752f674c9d",
+    "crm-railway-runtime.jpg": "a9aa511b32e05bc5663bf1047b55a7b345eaca32f59fe46ea1094d3fd5d1cc8e"
+  },
+  "post_inspection_readback": {
+    "same_deployment": true,
+    "same_config": true,
+    "no_staged_changes": true
+  }
+}
