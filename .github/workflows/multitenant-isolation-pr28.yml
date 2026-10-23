@@ -45,6 +45,9 @@ jobs:
       - name: TypeScript compilation check
         run: ./cotiza-web/node_modules/.bin/tsc --noEmit --project cotiza-web/tsconfig.json
 
+      - name: Synthetic encrypted backup and restore safety checks
+        run: bash scripts/test_backup_neon_encrypted.sh
+
       - name: General Vitest suite (no external database)
         run: npm --prefix cotiza-web test -- --exclude validate-quote-lifecycle.e2e.test.ts
 
