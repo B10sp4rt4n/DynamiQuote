@@ -271,7 +271,9 @@ export default async function ClientDetailPage({ params }: ClientDetailPageProps
               <li className="rounded-lg border border-zinc-100 bg-zinc-50 px-3 py-2 text-sm text-zinc-700" key={interaction.interactionId}>
                 <p className="whitespace-pre-wrap text-zinc-900">{interaction.note}</p>
                 <p className="mt-1 text-xs text-zinc-500">
-                  {formatDate(interaction.createdAt)}
+                  {new Intl.DateTimeFormat("es-MX", {
+                    dateStyle: "medium", timeStyle: "short", timeZone: "America/Mexico_City",
+                  }).format(new Date(interaction.createdAt))}
                   {interaction.authorDisplayName ? ` · ${interaction.authorDisplayName}` : ""}
                   {interaction.opportunityNumber ? ` · ${interaction.opportunityNumber}` : ""}
                 </p>
