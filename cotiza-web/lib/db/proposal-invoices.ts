@@ -50,6 +50,7 @@ export async function saveProposalInvoiceDraftByTenant(
   tenantId: string,
   proposalId: string,
   draftId: string,
+  expectedDraftId: string | null,
 ): Promise<boolean> {
   const result = await prisma.proposals.updateMany({
     data: {
@@ -62,6 +63,9 @@ export async function saveProposalInvoiceDraftByTenant(
     where: {
       proposal_id: proposalId,
       tenant_id: tenantId,
+      // Compare-and-set the observed draft to prevent overwriting a concurrent winner.
+      // A losing request may leave an unlinked remote draft; it never changes the local reference.
+      invoice_draft_id: expectedDraftId,
       invoice_uuid: null,
       invoice_xml_base64: null,
       invoice_stamped_at: null,

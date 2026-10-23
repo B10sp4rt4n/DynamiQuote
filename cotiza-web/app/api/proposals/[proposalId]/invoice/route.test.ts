@@ -76,11 +76,17 @@ describe("no regenerar prefacturas timbradas", () => {
   it("si otra solicitud cambia el estado, no pisa el draftId local", async () => {
     mocks.saveDraft.mockResolvedValue(false);
     expect((await POST(request(), ctx)).status).toBe(409);
-    expect(mocks.saveDraft).toHaveBeenCalledWith("t1", "p1", "d2");
+    expect(mocks.saveDraft).toHaveBeenCalledWith("t1", "p1", "d2", "d1");
+  });
+
+  it("preserves null as the expected draft on initial creation", async () => {
+    mocks.getInvoice.mockResolvedValue({ status: null, draftId: null });
+    expect((await POST(request(), ctx)).status).toBe(201);
+    expect(mocks.saveDraft).toHaveBeenCalledWith("t1", "p1", "d2", null);
   });
 
   it("para nuevas prefacturas, conserva el flujo existente", async () => {
     expect((await POST(request(), ctx)).status).toBe(201);
-    expect(mocks.saveDraft).toHaveBeenCalledWith("t1", "p1", "d2");
+    expect(mocks.saveDraft).toHaveBeenCalledWith("t1", "p1", "d2", "d1");
   });
 });

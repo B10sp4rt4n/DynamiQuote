@@ -66,11 +66,21 @@ suite("Invoice safety against disposable PostgreSQL; fiscal provider simulated",
     try {
       expect((await read()).invoice_status).toBe("stamping");
       expect((await stamp(req(), ctx())).status).toBe(409);
-      expect(await service.saveProposalInvoiceDraftByTenant(tenant, proposalId, "draft-replacement")).toBe(false);
+      expect(await service.saveProposalInvoiceDraftByTenant(tenant, proposalId, "draft-replacement", "draft-original")).toBe(false);
       expect(remote.stamp).toHaveBeenCalledTimes(1);
     } finally { finish(); }
     expect((await first).status).toBe(200);
     expect(await read()).toMatchObject({ invoice_draft_id: "draft-original", invoice_status: "stamped", invoice_uuid: signed.uuid });
+  });
+
+  it("allows only one concurrent replacement of the same original draft", async () => {
+    const results = await Promise.all([
+      service.saveProposalInvoiceDraftByTenant(tenant, proposalId, "draft-a", "draft-original"),
+      service.saveProposalInvoiceDraftByTenant(tenant, proposalId, "draft-b", "draft-original"),
+    ]);
+    expect(results.filter(Boolean)).toHaveLength(1);
+    expect((await read()).invoice_draft_id).toBe(results[0] ? "draft-a" : "draft-b");
+    expect((await read()).invoice_status).toBe("draft");
   });
 
   it("keeps a timeout reserved and reconciles the original result without another stamp", async () => {
@@ -88,7 +98,7 @@ suite("Invoice safety against disposable PostgreSQL; fiscal provider simulated",
     await service.claimProposalInvoiceStampByTenant(tenant, proposalId, "draft-original");
     remote.state.mockResolvedValue({ stampStatus, uuid: null, xmlBase64: null });
     expect((await reconcile(req(), ctx())).status).toBe(409);
-    expect(await service.saveProposalInvoiceDraftByTenant(tenant, proposalId, "new-draft")).toBe(false);
+    expect(await service.saveProposalInvoiceDraftByTenant(tenant, proposalId, "new-draft", "draft-original")).toBe(false);
     expect((await read()).invoice_status).toBe("stamping");
     expect(remote.stamp).not.toHaveBeenCalled();
   });
@@ -97,7 +107,7 @@ suite("Invoice safety against disposable PostgreSQL; fiscal provider simulated",
     remote.stamp.mockResolvedValue({ ok: false, rejectionMessage: "simulated rejection" });
     expect((await stamp(req(), ctx())).status).toBe(422);
     expect((await read()).invoice_status).toBe("rejected");
-    expect(await service.saveProposalInvoiceDraftByTenant(tenant, proposalId, "corrected-draft")).toBe(true);
+    expect(await service.saveProposalInvoiceDraftByTenant(tenant, proposalId, "corrected-draft", "draft-original")).toBe(true);
     expect((await read()).invoice_draft_id).toBe("corrected-draft");
   });
 
@@ -130,7 +140,7 @@ suite("Invoice safety against disposable PostgreSQL; fiscal provider simulated",
   ])("preserves existing fiscal evidence even with an inconsistent draft status: %j", async evidence => {
     await db.proposals.update({ where: { proposal_id: proposalId }, data: evidence });
     const before = await read();
-    expect(await service.saveProposalInvoiceDraftByTenant(tenant, proposalId, "replacement")).toBe(false);
+    expect(await service.saveProposalInvoiceDraftByTenant(tenant, proposalId, "replacement", "draft-original")).toBe(false);
     expect(await service.claimProposalInvoiceStampByTenant(tenant, proposalId, "draft-original")).toBe(false);
     expect((await stamp(req(), ctx())).status).toBe(409);
     const payload = new Request("http://localhost/api/test", { method: "POST", headers: { "Content-Type": "application/json" }, body: JSON.stringify({

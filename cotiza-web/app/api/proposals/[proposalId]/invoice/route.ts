@@ -143,7 +143,7 @@ export async function POST(request: Request, context: RouteContext) {
       placeOfIssue,
     });
 
-    const saved = await saveProposalInvoiceDraftByTenant(tenant.id, proposalId, draft.id);
+    const saved = await saveProposalInvoiceDraftByTenant(tenant.id, proposalId, draft.id, invoice.draftId);
     if (!saved) {
       // El timbrado pudo iniciar mientras se creaba el borrador remoto.
       // Dejar el borrador remoto sin vincular, nunca sobrescribir el CFDI.
