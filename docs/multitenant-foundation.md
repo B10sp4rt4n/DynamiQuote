@@ -289,3 +289,69 @@ El recorrido de backend queda validado con datos ficticios. Sigue pendiente el
 recorrido en navegador con sesiones reales de dos tenants y vendedor, más las
 revisiones abiertas de fondo/legacy. El PR conserva el estado de borrador y no
 se aplicó esta corrección a producción ni se migró el CRM antiguo.
+
+## Evidencia en navegador con sesión real de superadmin
+
+El 22 octubre 2026, con el código `1216cfdd1a91e3a53eeb526a2134a31515708d28`,
+se abrió y verificó en navegador el despliegue Vercel
+`dpl_43WggZbKxFgd71oMY3KYByMuafsS`. La URL probada fue
+`https://dynami-quote-6rszs6t1c-salvador-ruiz-esparzas-projects.vercel.app`.
+La configuración conserva el override DATABASE_URL exclusivo de la rama
+`fix/multitenant-foundation` y la copia Neon `br-old-pond-ahe5jto3`.
+
+La sesión real mostró SynAppsSys y permitió las acciones de superadmin. Los
+cambios de contexto `sys → salsa` y `salsa → sys` quedaron registrados en la
+copia Neon a las 23:49:47 y 23:50:41 UTC, con el mismo ID Clerk que el usuario
+local activo de Salvador. Se recorrió el catálogo de SALSA (39 cuentas) y
+se restableció SynAppsSys. Un cliente observado en el catálogo de SALSA se
+intentó abrir directamente manteniendo el contexto SynAppsSys: la página
+mostró «Cliente no encontrado». La captura está en
+`docs/evidence/crm-cross-tenant-20261022.jpg`. Esto verifica el filtro de tenant
+con superadmin; no sustituye una sesión real de vendedor u owner.
+
+Se crearon exclusivamente en la copia aislada:
+
+- Cliente ficticio `PRUEBA CRM MULTITENANT 20261022 - NO COMERCIAL`.
+- Cotización `COT-0065`, guardado de una partida ficticia y versionado explícito
+  a v2. Ambas versiones conservan la oportunidad `OPP-0063` con ID
+  `0bcc5bb9-b546-47a1-8ed2-c268fcc20822` y el mismo cliente/tenant.
+- Propuesta `PROP-2026-0282`, ID `70ea5502-e2d5-4007-885b-781bbdd539e3`,
+  originada en v2. Se eligió MXN, se guardaron condiciones de prueba sin validez
+  comercial y se sometió a aprobación interna. La pantalla y PostgreSQL
+  confirman estado `approved`, costo 120, venta 200, utilidad 80 y margen 40%.
+- PDF y Excel descargados desde sus botones. Se verificaron archivos no
+  vacíos y firmas PDF/ZIP: 802168 y 18426 bytes respectivamente. La auditoría
+  registra dos eventos `document_issued`. No se validó aquí la diagramación
+  del PDF ni el contenido completo de las hojas. La espera inicial por un
+  evento de descarga de la pestaña padre agotó su plazo: los botones abren
+  una ventana, y los archivos sí llegaron al directorio compartido.
+
+No se enviaron correos ni se timbró, invitó o reasignó a usuarios reales.
+La propuesta ficticia permanece aprobada internamente, sin desenlace comercial
+ni fecha de cierre (`outcome` y `outcome_at` nulos). No se guardó ninguna tarea.
+
+### Límite de esta sesión de prueba
+
+Se abrió el modal de seguimiento, pero la carga de oportunidades no completó
+su recorrido porque venció el acceso temporal de Vercel. Una pestaña nueva
+abierta a esa ruta mostró el login de Vercel. No se atribuye por ello un
+defecto al servicio de oportunidades ni se declara validado el selector.
+
+La conexión de Vercel puede leer el despliegue; el helper de acceso protegido
+falla al consultar aliases (403). Una llamada directa para acceso temporal
+permitió inicialmente abrir Cotiza. La revisión automática rechazó después
+crear/renovar un enlace compartible de 30 minutos por el riesgo de acceso
+externo a un despliegue con datos internos. No se intentó sortear ese rechazo.
+La alternativa de login normal con GitHub avanzó hasta segundo factor; la
+solicitud segura del segundo factor se cerró sin completarse.
+
+Para continuar se requiere una sesión normal de Vercel con su segundo factor,
+o autorización explícita para un acceso temporal limitado a esta preview.
+Los enlaces/tokens de acceso, cookies y credenciales no forman parte de la
+evidencia. El estado original de empresa se dejó en SynAppsSys.
+
+Pendientes: guardar/completar seguimiento, cierre y reapertura en pantalla,
+comprobar las vistas 360/KPIs resultantes y probar sesiones reales distintas de
+owner/vendedor. Las pruebas automáticas de esas operaciones siguen documentadas
+arriba, pero no acreditan esos recorridos pendientes de navegador. Se conserva
+el PR en borrador, sin liberar a producción ni migrar el CRM anterior.
