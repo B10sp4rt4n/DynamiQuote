@@ -65,10 +65,30 @@ export async function GET() {
     ? await getAppUsersForSuperAdmin()
     : await getAppUsersByTenant(tenant.id);
 
+  // Only tenant managers may access coworkers' personal/contact data.
+  // Ordinary sellers retain an active, minimal directory for assignments,
+  // plus their own complete record. Never use this endpoint to change membership.
+  const canManageUsers = tenant.isSuperAdmin || tenant.userRole === "owner" || tenant.userRole === "admin";
+  const visibleUsers = canManageUsers
+    ? users
+    : users
+      .filter((user) => user.active || user.userId === tenant.userId)
+      .map((user) => user.userId === tenant.userId ? user : ({
+        active: user.active,
+        alias: user.alias,
+        firstName: user.firstName,
+        lastName: user.lastName,
+        role: user.role,
+        sellerCode: user.sellerCode,
+        tenantId: user.tenantId,
+        tenantName: user.tenantName,
+        userId: user.userId,
+      }));
+
   return NextResponse.json({
     canManageAllTenants: tenant.isSuperAdmin,
-    users,
-  });
+    users: visibleUsers,
+  }, { headers: { "Cache-Control": "private, no-store" } });
 }
 
 export async function POST(request: Request) {
