@@ -120,6 +120,11 @@ No ejecutar migrations, depuración o despliegue productivo por esta nota.
 
 ## Ejecución propuesta, únicamente después de aprobación
 
+La validación aislada de Digestor 074523e5 pasó 32 casos en PostgreSQL 17;
+25 comprobaciones dirigidas del cliente/rutas Cotiza también pasan. Ver
+docs/digestor-compatibility-20261023.md. No certifica respuesta PAC real,
+credenciales ni compatibilidad del runtime actualmente publicado.
+
 Antes de esta ejecución, validar y desplegar Digestor Fiscal compatible con
 GET /v1/billing/drafts/{draft_id}/stamp-result (PR #2 de digestor__fiscal aún
 borrador al verificar). El trabajo de Cotiza PR #5 ya está incorporado al
