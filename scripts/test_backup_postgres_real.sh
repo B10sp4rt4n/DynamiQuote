@@ -3,7 +3,9 @@
 # Needs GitHub Actions ubuntu-24.04 with the postgres:17 service mapped to port 55432.
 # Never connects to Neon or any external Postgres host.
 set -Eeuo pipefail
+trap 'code=$?; printf "Synthetic real-Postgres test failed at line %s (exit %s)\n" "$LINENO" "$code" >&2' ERR
 umask 077
+printf 'Real PostgreSQL fixture: initializing local-only test\n'
 [[ "$RUNNER_OS" == Linux && "$CI" == true ]] || { echo "Run only on GitHub hosted Linux CI" >&2; exit 2; }
 command -v docker >/dev/null || { echo "Docker required" >&2; exit 2; }
 command -v gpg >/dev/null || { echo "GPG required" >&2; exit 2; }
@@ -28,7 +30,9 @@ for client in pg_dump pg_restore psql; do
   ln -s pg-client-wrapper "$work/bin/$client"
 done
 export PATH="$work/bin:$PATH"
-[[ "$(pg_dump --version)" == *"PostgreSQL 17."* ]]
+pg_version="$(pg_dump --version)"
+printf 'Client version: %s\n' "$pg_version"
+[[ "$pg_version" == *"PostgreSQL 17."* ]] || { echo 'PostgreSQL 17 client required' >&2; exit 2; }
 for i in 1 2 3 4 5 6 7 8 9 10; do
   if psql --no-password --dbname=cotiza_source_fixture --command='SELECT 1' >/dev/null 2>&1; then break; fi
   sleep 1
