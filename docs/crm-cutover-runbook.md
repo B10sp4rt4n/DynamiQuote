@@ -86,6 +86,14 @@ No ejecutar migrations, depuración o despliegue productivo por esta nota.
 
 ## Preparación antes de solicitar la liberación
 
+La preparación actual está en docs/crm-release-preparation-20261023.md: fuente
+e122c48a restaurada (425 archivos), CI success, cuenta de Salvador activa y
+SHA desplegado de Digestor 9e251d76 atribuido por Railway. Siguen pendientes
+respaldo real de ambas bases, metadatos de almacenamiento fiscal y lista de
+operadores. La lectura Vercel más reciente devolvió 403; no se revalidó el alias.
+Los checkpoints anteriores de esta página son históricos, no fallback aprobado
+que permita omitir correcciones posteriores de privacidad, concurrencia o timbrado.
+
 1. Fijar SHA exacto de aplicación y hashes de los cuatro SQL de abajo. Identificar
    despliegue productivo, proyecto y rama de base por valores de conexión
    comparados de forma privada; no copiar credenciales al expediente.
