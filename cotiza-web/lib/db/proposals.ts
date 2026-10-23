@@ -535,28 +535,6 @@ async function resolvePreferredIssuerProfileByTenant(tenantId: string): Promise<
     };
   }
 
-  const globalDefault = await prisma.company_logos.findFirst({
-    orderBy: [{ uploaded_at: "desc" }],
-    select: {
-      company_name: true,
-      logo_id: true,
-      tenant_id: true,
-    },
-    where: {
-      is_default: true,
-      logo_type: "issuer",
-      tenant_id: null,
-    },
-  });
-
-  if (globalDefault) {
-    return {
-      companyName: globalDefault.company_name,
-      logoId: globalDefault.logo_id,
-      sourceTenantId: globalDefault.tenant_id,
-    };
-  }
-
   const tenantAny = await prisma.company_logos.findFirst({
     orderBy: [{ uploaded_at: "desc" }],
     select: {
@@ -578,28 +556,7 @@ async function resolvePreferredIssuerProfileByTenant(tenantId: string): Promise<
     };
   }
 
-  const globalAny = await prisma.company_logos.findFirst({
-    orderBy: [{ uploaded_at: "desc" }],
-    select: {
-      company_name: true,
-      logo_id: true,
-      tenant_id: true,
-    },
-    where: {
-      logo_type: "issuer",
-      tenant_id: null,
-    },
-  });
-
-  if (!globalAny) {
-    return null;
-  }
-
-  return {
-    companyName: globalAny.company_name,
-    logoId: globalAny.logo_id,
-    sourceTenantId: globalAny.tenant_id,
-  };
+  return null;
 }
 
 async function resolvePreferredIssuerLogoAssetByTenant(tenantId: string): Promise<{
@@ -614,7 +571,7 @@ async function resolvePreferredIssuerLogoAssetByTenant(tenantId: string): Promis
   const pickBest = async (where: {
     is_default?: boolean;
     logo_type: "issuer";
-    tenant_id: string | null;
+    tenant_id: string;
   }): Promise<{ logo_data: Uint8Array; logo_format: string } | null> => {
     const rows = await prisma.company_logos.findMany({
       orderBy: [{ uploaded_at: "desc" }],
@@ -642,10 +599,8 @@ async function resolvePreferredIssuerLogoAssetByTenant(tenantId: string): Promis
 
   const tenantDefault = await pickBest({ is_default: true, logo_type: "issuer", tenant_id: tenantId });
   const tenantAny = await pickBest({ logo_type: "issuer", tenant_id: tenantId });
-  const globalDefault = await pickBest({ is_default: true, logo_type: "issuer", tenant_id: null });
-  const globalAny = await pickBest({ logo_type: "issuer", tenant_id: null });
 
-  const candidates = [tenantDefault, tenantAny, globalDefault, globalAny].filter(
+  const candidates = [tenantDefault, tenantAny].filter(
     (value): value is { logo_data: Uint8Array; logo_format: string } => value !== null,
   );
 
@@ -1612,13 +1567,8 @@ export async function getProposalWorkflowByTenant(
                 return tenantLogo;
               }
 
-              return prisma.company_logos.findFirst({
-                select: { logo_data: true, logo_format: true },
-                where: {
-                  logo_id: issuerLogoId,
-                  tenant_id: null,
-                },
-              });
+              // Unassigned legacy assets are not shared tenant resources.
+              return null;
             })()
           : resolvePreferredIssuerLogoAssetByTenant(tenantId),
         latestFormal?.client_logo_id
@@ -1640,13 +1590,8 @@ export async function getProposalWorkflowByTenant(
                 return tenantLogo;
               }
 
-              return prisma.company_logos.findFirst({
-                select: { logo_data: true, logo_format: true },
-                where: {
-                  logo_id: clientLogoId,
-                  tenant_id: null,
-                },
-              });
+              // Unassigned legacy assets are not shared tenant resources.
+              return null;
             })()
           // A diferencia del emisor (siempre la misma empresa, tiene sentido
           // un logo "preferido" del tenant como default), el cliente cambia

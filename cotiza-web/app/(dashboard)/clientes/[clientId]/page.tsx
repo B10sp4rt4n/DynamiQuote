@@ -101,7 +101,7 @@ export default async function ClientDetailPage({ params }: ClientDetailPageProps
     getQuoteGroupsByClientForTenant(tenant.id, clientId, tenant.userId, canSeeAll),
     getClientProposalHistoryByTenant(tenant.id, clientId, tenant.userId, canSeeAll),
     getPendingTasksByClientForTenant(tenant.id, clientId, tenant.userId, canSeeAll),
-    listInteractionLogsForTenant(tenant.id, clientId),
+    listInteractionLogsForTenant(tenant.id, clientId, tenant.userId, canSeeAll),
   ]);
 
   return (

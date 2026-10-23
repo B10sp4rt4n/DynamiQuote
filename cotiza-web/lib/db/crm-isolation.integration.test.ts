@@ -14,6 +14,8 @@ const seller = "crm-seller-a", colleague = "crm-colleague-a", owner = "crm-owner
 let db: typeof import("./prisma").prisma;
 let clients: typeof import("@/app/api/clients/route");
 let clientOpportunities: typeof import("@/app/api/clients/[clientId]/opportunities/route");
+let interactions: typeof import("@/app/api/clients/[clientId]/interactions/route");
+let interaction: typeof import("@/app/api/clients/[clientId]/interactions/[interactionId]/route");
 let quotes: typeof import("@/app/api/quotes/route");
 let proposals: typeof import("@/app/api/proposals/route");
 let proposal: typeof import("@/app/api/proposals/[proposalId]/route");
@@ -51,6 +53,8 @@ suite("CRM workflow and authorization against disposable PostgreSQL", () => {
     ({ prisma: db } = await import("./prisma"));
     clients = await import("@/app/api/clients/route");
     clientOpportunities = await import("@/app/api/clients/[clientId]/opportunities/route");
+    interactions = await import("@/app/api/clients/[clientId]/interactions/route");
+    interaction = await import("@/app/api/clients/[clientId]/interactions/[interactionId]/route");
     quotes = await import("@/app/api/quotes/route");
     proposals = await import("@/app/api/proposals/route");
     proposal = await import("@/app/api/proposals/[proposalId]/route");
@@ -245,5 +249,88 @@ suite("CRM workflow and authorization against disposable PostgreSQL", () => {
     expect(result.status).toBe(201);
     const taskId = (await result.json()).taskId;
     expect((await task.PATCH(request(undefined, "PATCH"), { params: Promise.resolve({ taskId }) })).status).toBe(200);
+  });
+
+  it("does not delete another tenant's search entry when quotation folios coincide", async () => {
+    for (const tenantId of [a, b]) await db.quote.create({ data: {
+      quote_id: `${tenantId}-cache-quote`, tenantId, quote_group_id: "COT-SHARED-CACHE",
+      version: 1, status: "draft", createdAt: new Date(),
+    } });
+    await db.quote_search_index.create({ data: { quote_group_id: "COT-SHARED-CACHE",
+      latest_quote_id: `${b}-cache-quote`, latest_version: 1, created_at: new Date(), updated_at: new Date() } });
+    expect(await quoteService.deleteQuoteGroupByTenant(a, "COT-SHARED-CACHE", owner, true)).toBe("deleted");
+    expect((await db.quote_search_index.findUnique({ where: { quote_group_id: "COT-SHARED-CACHE" } }))?.latest_quote_id).toBe(`${b}-cache-quote`);
+  });
+
+  it("keeps deal notes private while allowing shared client notes", async () => {
+    asUser(a, seller);
+    const context = { params: Promise.resolve({ clientId: clientA }) };
+    expect((await interactions.POST(request({ note: "Shared client note" }), context)).status).toBe(201);
+    expect((await interactions.POST(request({ note: "Private deal note", opportunityId: opportunityA }), context)).status).toBe(201);
+    asUser(a, colleague);
+    const visible = await interactions.GET(request(undefined, "GET"), context);
+    expect((await visible.json()).interactions.map((n: { note: string }) => n.note)).toEqual(["Shared client note"]);
+    const before = await db.interaction_logs.count();
+    expect((await interactions.POST(request({ note: "Forged deal note", opportunityId: opportunityA, canSeeAll: true }), context)).status).toBe(404);
+    expect(await db.interaction_logs.count()).toBe(before);
+    asUser(a, owner, "owner");
+    expect((await (await interactions.GET(request(undefined, "GET"), context)).json()).interactions).toHaveLength(2);
+    expect((await interactions.POST(request({ note: "Owner deal note", opportunityId: opportunityA }), context)).status).toBe(201);
+    asUser(b, foreign, "owner");
+    expect((await (await interactions.GET(request(undefined, "GET"), context)).json()).interactions).toEqual([]);
+  });
+
+  it("limits note deletion to its author or owner and the addressed client", async () => {
+    const note = await db.interaction_logs.findFirstOrThrow({ where: { tenant_id: a, note: "Private deal note" } });
+    const context = (clientId = clientA) => ({ params: Promise.resolve({ clientId, interactionId: note.interaction_id }) });
+    asUser(a, colleague);
+    expect((await interaction.DELETE(request(undefined, "DELETE"), context())).status).toBe(403);
+    expect(await db.interaction_logs.count({ where: { interaction_id: note.interaction_id } })).toBe(1);
+    asUser(a, owner, "owner");
+    expect((await interaction.DELETE(request(undefined, "DELETE"), context(clientB))).status).toBe(404);
+    expect((await interaction.DELETE(request(undefined, "DELETE"), context())).status).toBe(200);
+  });
+
+  it("does not bind a global issuer profile to a new tenant proposal", async () => {
+    await db.company_logos.create({ data: { logo_id: "crm-global-issuer", logo_name: "Unassigned issuer",
+      logo_type: "issuer", company_name: "Private global company", logo_data: new Uint8Array([1,2,3]),
+      logo_format: "png", uploaded_at: new Date(), is_default: true, tenant_id: null } });
+    const created = await proposalService.createProposalFromQuoteByTenant(b, { quoteId: quoteB }, foreign, foreign);
+    expect(created).not.toBeNull();
+    const formal = await db.formal_proposals.findFirstOrThrow({ where: { proposal_id: created!.proposalId } });
+    expect(formal.issuer_logo_id).toBeNull();
+    expect(formal.issuer_company).toBe(b);
+  });
+
+  it("never renders issuer or client image bytes from unassigned global profiles", async () => {
+    await db.company_logos.create({ data: { logo_id: "crm-global-client", logo_name: "Unassigned client",
+      logo_type: "client", logo_data: new Uint8Array([4,5,6]), logo_format: "png", uploaded_at: new Date(), tenant_id: null } });
+    const formal = await db.formal_proposals.findFirstOrThrow({ where: { proposal_id: proposalA } });
+    await db.formal_proposals.update({ where: { proposal_doc_id: formal.proposal_doc_id },
+      data: { issuer_logo_id: "crm-global-issuer", client_logo_id: "crm-global-client" } });
+    const payload = await proposalService.getProposalWorkflowByTenant(a, proposalA, { includeLogoData: true });
+    expect(payload?.formal?.issuerLogoDataUrl).toBe("");
+    expect(payload?.formal?.clientLogoDataUrl).toBe("");
+    await db.formal_proposals.update({ where: { proposal_doc_id: formal.proposal_doc_id }, data: { issuer_logo_id: null } });
+    expect((await proposalService.getProposalWorkflowByTenant(a, proposalA, { includeLogoData: true }))?.formal?.issuerLogoDataUrl).toBe("");
+  });
+
+  it("retains tenant logos and refuses explicit logo IDs from another tenant", async () => {
+    for (const [id, tenantId, type] of [["crm-own-issuer", a, "issuer"], ["crm-own-client", a, "client"],
+      ["crm-foreign-issuer", b, "issuer"], ["crm-foreign-client", b, "client"]]) {
+      await db.company_logos.create({ data: { logo_id: id, logo_name: id, logo_type: type,
+        logo_data: new Uint8Array([7,8,9]), logo_format: "png", uploaded_at: new Date(), tenant_id: tenantId } });
+    }
+    const formal = await db.formal_proposals.findFirstOrThrow({ where: { proposal_id: proposalA } });
+    await db.formal_proposals.update({ where: { proposal_doc_id: formal.proposal_doc_id },
+      data: { issuer_logo_id: null, client_logo_id: "crm-own-client" } });
+    const own = await proposalService.getProposalWorkflowByTenant(a, proposalA, { includeLogoData: true });
+    expect(own?.formal?.issuerLogoDataUrl).toBe("data:image/png;base64,BwgJ");
+    expect(own?.formal?.clientLogoDataUrl).toBe("data:image/png;base64,BwgJ");
+    await db.formal_proposals.update({ where: { proposal_doc_id: formal.proposal_doc_id },
+      data: { issuer_logo_id: "crm-foreign-issuer", client_logo_id: "crm-foreign-client" } });
+    const foreign = await proposalService.getProposalWorkflowByTenant(a, proposalA, { includeLogoData: true });
+    expect(foreign?.formal?.issuerLogoDataUrl).toBe("");
+    expect(foreign?.formal?.clientLogoDataUrl).toBe("");
   });
 });

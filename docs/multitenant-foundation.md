@@ -578,3 +578,17 @@ el navegador: ese rechazo sin inserción está cubierto por el caso de regresió
 contra PostgreSQL local con los handlers reales. No se reejecutan pruebas de
 código por esta actualización exclusiva de evidencia. El PR sigue en borrador,
 sin autorización de fusión/despliegue de producción ni migración del CRM antiguo.
+
+
+## Revisión final y conciliación (22 octubre 2026, CDMX)
+
+La conciliación de solo lectura agregó 119 comprobaciones por rama y encontró
+legado sin asignación que impide declarar listo el despliegue. El informe
+actual es `docs/multitenant-release-review-20261022.md`; contiene resultados,
+correcciones posteriores de notas/logos/caché y límites de evidencia.
+
+La reparación exacta de 12 documentos está preparada y ensayada únicamente
+en PostgreSQL/PGlite local. No se aplicó a Neon. Los logos sin tenant necesitan
+copias por empresa y revisión de referencias antes de desplegar el código
+que elimina su fallback global. Las seis propuestas de default-tenant se
+conservan sin atribuirlas a una empresa real. El PR permanece en borrador.

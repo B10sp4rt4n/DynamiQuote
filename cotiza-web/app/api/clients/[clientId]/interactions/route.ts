@@ -19,7 +19,8 @@ export async function GET(_: Request, context: RouteContext) {
   }
 
   const { clientId } = await context.params;
-  const interactions = await listInteractionLogsForTenant(tenant.id, clientId);
+  const canSeeAll = tenant.isSuperAdmin || tenant.userRole === "owner" || tenant.userRole === "admin";
+  const interactions = await listInteractionLogsForTenant(tenant.id, clientId, tenant.userId, canSeeAll);
 
   return NextResponse.json({ interactions }, { status: 200 });
 }
@@ -58,11 +59,12 @@ export async function POST(request: Request, context: RouteContext) {
   }
 
   try {
+    const canSeeAll = tenant.isSuperAdmin || tenant.userRole === "owner" || tenant.userRole === "admin";
     const interaction = await createInteractionLogForTenant(tenant.id, clientId, {
       createdByUserId: tenant.userId,
       note: parsed.data.note,
       opportunityId: parsed.data.opportunityId,
-    });
+    }, canSeeAll);
 
     return NextResponse.json({ interaction }, { status: 201 });
   } catch (error) {

@@ -3,7 +3,7 @@ import "server-only";
 import { randomUUID } from "crypto";
 
 import { prisma } from "@/lib/db/prisma";
-import { assertClientOpportunityForTenant, TenantRelationError } from "@/lib/db/tenant-relations";
+import { assertClientOpportunityForTenant, assertOpportunityOwnerForTenant } from "@/lib/db/tenant-relations";
 
 export type PendingTask = {
   clientCompany: string;
@@ -25,16 +25,7 @@ export type CreateTaskInput = {
 
 export async function createTaskForTenant(tenantId: string, input: CreateTaskInput, canSeeAllOpportunities = false): Promise<string> {
   await assertClientOpportunityForTenant(tenantId, input.clientId, input.opportunityId);
-  if (input.opportunityId && !canSeeAllOpportunities) {
-    const opportunity = await prisma.opportunities.findFirst({
-      select: { opportunity_id: true },
-      where: {
-        opportunity_id: input.opportunityId, client_id: input.clientId, tenant_id: tenantId,
-        OR: [{ owner_user_id: input.createdByUserId }, { owner_user_id: null }],
-      },
-    });
-    if (!opportunity) throw new TenantRelationError();
-  }
+  await assertOpportunityOwnerForTenant(tenantId, input.clientId, input.opportunityId, input.createdByUserId, canSeeAllOpportunities);
   const taskId = randomUUID();
 
   await prisma.tasks.create({
