@@ -1,0 +1,609 @@
+{
+  "projectId": "cool-resonance-22906937",
+  "branchId": "br-old-pond-ahe5jto3",
+  "branchExpiresAt": "2026-10-23T20:25:00Z",
+  "productionBranchId": "br-quiet-morning-ahkomhhi",
+  "authorizationScope": "12 exact quote-to-document tenant repairs and audited per-tenant logo copies on isolated branch only; no production changes",
+  "beforeDocumentRepair": {
+    "checked_at": "2026-10-23T01:19:30.650Z",
+    "document_count": "282",
+    "documents_excluding_tenant_hash": "7a1a64edaa28750bf95dec8d5bab448e",
+    "original_global_assets_hash": "ebeac40dba515f56ac4667d4e3990d36",
+    "unassigned_proposals_hash": "dd90193d0853e462cd1cb04747d27b79"
+  },
+  "afterDocumentRepair": {
+    "checked_at": "2026-10-23T01:20:02.882Z",
+    "document_count": "282",
+    "documents_excluding_tenant_hash": "7a1a64edaa28750bf95dec8d5bab448e",
+    "original_global_assets_hash": "ebeac40dba515f56ac4667d4e3990d36",
+    "unassigned_proposals_hash": "dd90193d0853e462cd1cb04747d27b79"
+  },
+  "documentRepairByTenant": [
+    {
+      "tenant_id": "389b6cc1-2f8d-4fe4-bc3d-f50f92df3157",
+      "documents": "6"
+    },
+    {
+      "tenant_id": "b0e92d15-2e87-4c1a-93ac-3399bf8fe515",
+      "documents": "6"
+    }
+  ],
+  "beforeLogoRepair": {
+    "checked_at": "2026-10-23T01:24:09.583Z",
+    "documents": "282",
+    "documents_without_tenant": "0",
+    "logos": "81",
+    "global_logos": "50",
+    "document_content_hash": "c444bb668c047ede079bc6ca460d6e07",
+    "clients_excluding_logo_hash": "6bf4676d856b35f88e1b10c5b6bfb314",
+    "original_global_assets_hash": "ebeac40dba515f56ac4667d4e3990d36",
+    "quotes_hash": "1434e1c463f2b4b42da65778ed512944",
+    "proposals_hash": "9ead6b6ac371c43f060779ef98b461ca",
+    "opportunities_hash": "51e9f7702b4efefb67a4013ed057030c",
+    "unassigned_proposals_hash": "dd90193d0853e462cd1cb04747d27b79",
+    "unassigned_proposals": "6",
+    "repaired_documents": "12",
+    "document_audit_hash": "9c4a6f5753b528be921c84bce076c453"
+  },
+  "afterLogoRepair": {
+    "checked_at": "2026-10-23T01:24:37.140Z",
+    "documents": "282",
+    "documents_without_tenant": "0",
+    "logos": "126",
+    "global_logos": "50",
+    "document_content_hash": "c444bb668c047ede079bc6ca460d6e07",
+    "clients_excluding_logo_hash": "6bf4676d856b35f88e1b10c5b6bfb314",
+    "original_global_assets_hash": "ebeac40dba515f56ac4667d4e3990d36",
+    "quotes_hash": "1434e1c463f2b4b42da65778ed512944",
+    "proposals_hash": "9ead6b6ac371c43f060779ef98b461ca",
+    "opportunities_hash": "51e9f7702b4efefb67a4013ed057030c",
+    "unassigned_proposals_hash": "dd90193d0853e462cd1cb04747d27b79",
+    "unassigned_proposals": "6",
+    "repaired_documents": "12",
+    "document_audit_hash": "9c4a6f5753b528be921c84bce076c453"
+  },
+  "afterIdempotentRerun": {
+    "checked_at": "2026-10-23T01:24:49.263Z",
+    "documents": "282",
+    "documents_without_tenant": "0",
+    "logos": "126",
+    "global_logos": "50",
+    "document_content_hash": "c444bb668c047ede079bc6ca460d6e07",
+    "clients_excluding_logo_hash": "6bf4676d856b35f88e1b10c5b6bfb314",
+    "original_global_assets_hash": "ebeac40dba515f56ac4667d4e3990d36",
+    "quotes_hash": "1434e1c463f2b4b42da65778ed512944",
+    "proposals_hash": "9ead6b6ac371c43f060779ef98b461ca",
+    "opportunities_hash": "51e9f7702b4efefb67a4013ed057030c",
+    "unassigned_proposals_hash": "dd90193d0853e462cd1cb04747d27b79",
+    "unassigned_proposals": "6",
+    "repaired_documents": "12",
+    "document_audit_hash": "9c4a6f5753b528be921c84bce076c453"
+  },
+  "logoValidationFirstRun": {
+    "known_parent_global_refs": "0",
+    "known_parent_foreign_refs": "0",
+    "copy_audit_records": "45",
+    "reference_audit_records": "132",
+    "invalid_copies": "0",
+    "copy_audit_hash": "5295c1e9dc9c02230fa3d202032711fd",
+    "reference_audit_hash": "760aa70528760d91b5e090bc970bc281"
+  },
+  "logoValidationRerun": {
+    "known_parent_global_refs": "0",
+    "known_parent_foreign_refs": "0",
+    "copy_audit_records": "45",
+    "reference_audit_records": "132",
+    "invalid_copies": "0",
+    "copy_audit_hash": "5295c1e9dc9c02230fa3d202032711fd",
+    "reference_audit_hash": "760aa70528760d91b5e090bc970bc281"
+  },
+  "productionReadback": {
+    "checked_at": "2026-10-23T01:25:35.996Z",
+    "documents_without_tenant": "12",
+    "global_logos": "50",
+    "total_logos": "81",
+    "unassigned_proposals": "6",
+    "document_repair_audit": null,
+    "logo_copy_audit": null
+  },
+  "finalRoles": [
+    {
+      "user_id": "crm-role-peer-20261023",
+      "tenant_id": "389b6cc1-2f8d-4fe4-bc3d-f50f92df3157",
+      "role": "user",
+      "active": false
+    },
+    {
+      "user_id": "user_3D45SeGQqBoyBe8v3XvOu39QdWH",
+      "tenant_id": "389b6cc1-2f8d-4fe4-bc3d-f50f92df3157",
+      "role": "superadmin",
+      "active": true
+    }
+  ],
+  "finalReadinessAudit": [
+    {
+      "check_name": "app_users.rows",
+      "count": "10"
+    },
+    {
+      "check_name": "app_users.tenant_missing",
+      "count": "0"
+    },
+    {
+      "check_name": "app_users.tenant_unknown",
+      "count": "0"
+    },
+    {
+      "check_name": "client_contacts.client_id_invalid",
+      "count": "0"
+    },
+    {
+      "check_name": "client_contacts.rows",
+      "count": "0"
+    },
+    {
+      "check_name": "client_contacts.tenant_missing",
+      "count": "0"
+    },
+    {
+      "check_name": "client_contacts.tenant_unknown",
+      "count": "0"
+    },
+    {
+      "check_name": "clients.client_logo_id_foreign",
+      "count": "0"
+    },
+    {
+      "check_name": "clients.rows",
+      "count": "63"
+    },
+    {
+      "check_name": "clients.tenant_missing",
+      "count": "0"
+    },
+    {
+      "check_name": "clients.tenant_unknown",
+      "count": "0"
+    },
+    {
+      "check_name": "company_logos.rows",
+      "count": "126"
+    },
+    {
+      "check_name": "company_logos.tenant_missing",
+      "count": "50"
+    },
+    {
+      "check_name": "company_logos.tenant_unknown",
+      "count": "0"
+    },
+    {
+      "check_name": "formal_proposals.client_logo_id_foreign",
+      "count": "0"
+    },
+    {
+      "check_name": "formal_proposals.issuer_logo_id_foreign",
+      "count": "0"
+    },
+    {
+      "check_name": "formal_proposals.proposal_id_invalid",
+      "count": "0"
+    },
+    {
+      "check_name": "formal_proposals.quote_id_invalid",
+      "count": "0"
+    },
+    {
+      "check_name": "formal_proposals.rows",
+      "count": "282"
+    },
+    {
+      "check_name": "formal_proposals.tenant_missing",
+      "count": "0"
+    },
+    {
+      "check_name": "formal_proposals.tenant_unknown",
+      "count": "0"
+    },
+    {
+      "check_name": "import_files.quote_id_invalid",
+      "count": "0"
+    },
+    {
+      "check_name": "import_files.rows",
+      "count": "0"
+    },
+    {
+      "check_name": "import_files.tenant_missing",
+      "count": "0"
+    },
+    {
+      "check_name": "import_files.tenant_unknown",
+      "count": "0"
+    },
+    {
+      "check_name": "interaction_logs.author_foreign_non_superadmin",
+      "count": "0"
+    },
+    {
+      "check_name": "interaction_logs.author_unassigned",
+      "count": "0"
+    },
+    {
+      "check_name": "interaction_logs.author_unknown",
+      "count": "0"
+    },
+    {
+      "check_name": "interaction_logs.client_id_invalid",
+      "count": "0"
+    },
+    {
+      "check_name": "interaction_logs.opportunity_invalid",
+      "count": "0"
+    },
+    {
+      "check_name": "interaction_logs.rows",
+      "count": "0"
+    },
+    {
+      "check_name": "interaction_logs.tenant_missing",
+      "count": "0"
+    },
+    {
+      "check_name": "interaction_logs.tenant_unknown",
+      "count": "0"
+    },
+    {
+      "check_name": "opportunities.author_foreign_non_superadmin",
+      "count": "0"
+    },
+    {
+      "check_name": "opportunities.author_unassigned",
+      "count": "7"
+    },
+    {
+      "check_name": "opportunities.author_unknown",
+      "count": "2"
+    },
+    {
+      "check_name": "opportunities.client_id_invalid",
+      "count": "0"
+    },
+    {
+      "check_name": "opportunities.rows",
+      "count": "164"
+    },
+    {
+      "check_name": "opportunities.tenant_missing",
+      "count": "0"
+    },
+    {
+      "check_name": "opportunities.tenant_unknown",
+      "count": "0"
+    },
+    {
+      "check_name": "package_lines.package_id_invalid",
+      "count": "0"
+    },
+    {
+      "check_name": "package_lines.rows",
+      "count": "1"
+    },
+    {
+      "check_name": "package_lines.tenant_missing",
+      "count": "0"
+    },
+    {
+      "check_name": "package_lines.tenant_unknown",
+      "count": "0"
+    },
+    {
+      "check_name": "packages.rows",
+      "count": "1"
+    },
+    {
+      "check_name": "packages.tenant_missing",
+      "count": "0"
+    },
+    {
+      "check_name": "packages.tenant_unknown",
+      "count": "0"
+    },
+    {
+      "check_name": "project_expenses.proposal_id_invalid",
+      "count": "0"
+    },
+    {
+      "check_name": "project_expenses.rows",
+      "count": "0"
+    },
+    {
+      "check_name": "project_expenses.tenant_missing",
+      "count": "0"
+    },
+    {
+      "check_name": "project_expenses.tenant_unknown",
+      "count": "0"
+    },
+    {
+      "check_name": "proposal_approvals.proposal_id_invalid",
+      "count": "0"
+    },
+    {
+      "check_name": "proposal_approvals.rows",
+      "count": "44"
+    },
+    {
+      "check_name": "proposal_approvals.tenant_missing",
+      "count": "0"
+    },
+    {
+      "check_name": "proposal_approvals.tenant_unknown",
+      "count": "0"
+    },
+    {
+      "check_name": "proposal_audit_events.proposal_id_invalid",
+      "count": "0"
+    },
+    {
+      "check_name": "proposal_audit_events.rows",
+      "count": "202"
+    },
+    {
+      "check_name": "proposal_audit_events.tenant_missing",
+      "count": "0"
+    },
+    {
+      "check_name": "proposal_audit_events.tenant_unknown",
+      "count": "0"
+    },
+    {
+      "check_name": "proposal_derivations.base_proposal_id_invalid",
+      "count": "0"
+    },
+    {
+      "check_name": "proposal_derivations.derived_proposal_id_invalid",
+      "count": "0"
+    },
+    {
+      "check_name": "proposal_derivations.rows",
+      "count": "6"
+    },
+    {
+      "check_name": "proposal_derivations.tenant_missing",
+      "count": "0"
+    },
+    {
+      "check_name": "proposal_derivations.tenant_unknown",
+      "count": "0"
+    },
+    {
+      "check_name": "proposal_integrated_node.proposal_id_invalid",
+      "count": "0"
+    },
+    {
+      "check_name": "proposal_integrated_node.rows",
+      "count": "2"
+    },
+    {
+      "check_name": "proposal_integrated_node.tenant_missing",
+      "count": "0"
+    },
+    {
+      "check_name": "proposal_integrated_node.tenant_unknown",
+      "count": "2"
+    },
+    {
+      "check_name": "proposal_items.proposal_id_invalid",
+      "count": "0"
+    },
+    {
+      "check_name": "proposal_items.rows",
+      "count": "506"
+    },
+    {
+      "check_name": "proposal_items.tenant_missing",
+      "count": "0"
+    },
+    {
+      "check_name": "proposal_items.tenant_unknown",
+      "count": "2"
+    },
+    {
+      "check_name": "proposal_profitability_node.proposal_id_invalid",
+      "count": "0"
+    },
+    {
+      "check_name": "proposal_profitability_node.rows",
+      "count": "0"
+    },
+    {
+      "check_name": "proposal_profitability_node.tenant_missing",
+      "count": "0"
+    },
+    {
+      "check_name": "proposal_profitability_node.tenant_unknown",
+      "count": "0"
+    },
+    {
+      "check_name": "proposals.author_foreign_non_superadmin",
+      "count": "0"
+    },
+    {
+      "check_name": "proposals.author_unassigned",
+      "count": "18"
+    },
+    {
+      "check_name": "proposals.author_unknown",
+      "count": "0"
+    },
+    {
+      "check_name": "proposals.closed_without_date",
+      "count": "39"
+    },
+    {
+      "check_name": "proposals.legacy_no_opportunity",
+      "count": "18"
+    },
+    {
+      "check_name": "proposals.opportunity_id_invalid",
+      "count": "0"
+    },
+    {
+      "check_name": "proposals.origin_quote_cross_tenant",
+      "count": "0"
+    },
+    {
+      "check_name": "proposals.rows",
+      "count": "207"
+    },
+    {
+      "check_name": "proposals.tenant_missing",
+      "count": "0"
+    },
+    {
+      "check_name": "proposals.tenant_unknown",
+      "count": "6"
+    },
+    {
+      "check_name": "quotes.author_foreign_non_superadmin",
+      "count": "0"
+    },
+    {
+      "check_name": "quotes.author_unassigned",
+      "count": "121"
+    },
+    {
+      "check_name": "quotes.author_unknown",
+      "count": "11"
+    },
+    {
+      "check_name": "quotes.client_id_invalid",
+      "count": "0"
+    },
+    {
+      "check_name": "quotes.group_shared_across_tenants",
+      "count": "65"
+    },
+    {
+      "check_name": "quotes.legacy_no_opportunity",
+      "count": "129"
+    },
+    {
+      "check_name": "quotes.opportunity_client_mismatch",
+      "count": "0"
+    },
+    {
+      "check_name": "quotes.opportunity_id_invalid",
+      "count": "0"
+    },
+    {
+      "check_name": "quotes.parent_invalid",
+      "count": "0"
+    },
+    {
+      "check_name": "quotes.rows",
+      "count": "370"
+    },
+    {
+      "check_name": "quotes.tenant_missing",
+      "count": "0"
+    },
+    {
+      "check_name": "quotes.tenant_unknown",
+      "count": "0"
+    },
+    {
+      "check_name": "schema.crm_fk_validated",
+      "count": "13"
+    },
+    {
+      "check_name": "tasks.author_foreign_non_superadmin",
+      "count": "0"
+    },
+    {
+      "check_name": "tasks.author_unassigned",
+      "count": "0"
+    },
+    {
+      "check_name": "tasks.author_unknown",
+      "count": "0"
+    },
+    {
+      "check_name": "tasks.client_id_invalid",
+      "count": "0"
+    },
+    {
+      "check_name": "tasks.opportunity_invalid",
+      "count": "0"
+    },
+    {
+      "check_name": "tasks.rows",
+      "count": "3"
+    },
+    {
+      "check_name": "tasks.tenant_missing",
+      "count": "0"
+    },
+    {
+      "check_name": "tasks.tenant_unknown",
+      "count": "0"
+    },
+    {
+      "check_name": "tenant_capabilities.rows",
+      "count": "1"
+    },
+    {
+      "check_name": "tenant_capabilities.tenant_missing",
+      "count": "0"
+    },
+    {
+      "check_name": "tenant_capabilities.tenant_unknown",
+      "count": "0"
+    },
+    {
+      "check_name": "tenant_capability_events.rows",
+      "count": "3"
+    },
+    {
+      "check_name": "tenant_capability_events.tenant_missing",
+      "count": "0"
+    },
+    {
+      "check_name": "tenant_capability_events.tenant_unknown",
+      "count": "0"
+    },
+    {
+      "check_name": "tenant_margin_policies.rows",
+      "count": "2"
+    },
+    {
+      "check_name": "tenant_margin_policies.tenant_missing",
+      "count": "0"
+    },
+    {
+      "check_name": "tenant_margin_policies.tenant_unknown",
+      "count": "0"
+    },
+    {
+      "check_name": "users.active_clerk_shaped",
+      "count": "5"
+    },
+    {
+      "check_name": "users.active_legacy_non_clerk",
+      "count": "1"
+    },
+    {
+      "check_name": "users.active_pending",
+      "count": "3"
+    }
+  ],
+  "checks": {
+    "documentRepairRuns": 2,
+    "logoRepairRuns": 2,
+    "documentLocalTests": "PASS: 12 exact assignments; unlisted rows untouched; repeat unchanged; changed quote/document abort atomically",
+    "logoLocalTests": "PASS: two tenants sharing one source; client and both document logo fields; bytes/content/defaults/originals preserved; repeat unchanged; changed source/tenant/reference, ID collision, unlisted reference, conflicting audit all roll back",
+    "preservationHashesCompared": true,
+    "browserVisualCheckPending": true
+  }
+}

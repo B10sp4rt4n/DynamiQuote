@@ -592,3 +592,26 @@ en PostgreSQL/PGlite local. No se aplicó a Neon. Los logos sin tenant necesitan
 copias por empresa y revisión de referencias antes de desplegar el código
 que elimina su fallback global. Las seis propuestas de default-tenant se
 conservan sin atribuirlas a una empresa real. El PR permanece en borrador.
+# Ensayo de conciliación de documentos y logos — 22 octubre 2026, CDMX
+
+Actualización: reparación aplicada únicamente en `br-old-pond-ahe5jto3`;
+producción `br-quiet-morning-ahkomhhi` continúa sin cambios.
+
+- 12 documentos asignados por su cotización exacta: sys 6, salsa 6.
+- Tras resolver esos tenants se identificaron 132 referencias a 41 logos
+  globales; tres originales están compartidos. Se crearon 45 copias por tenant,
+  con 45 auditorías de copia y 132 auditorías de referencia.
+- Los 50 originales se conservan; cero referencias conocidas a un logo global
+  o de otra empresa y cero copias divergentes. Los defaults existentes no cambian.
+- Ambos scripts se ejecutaron dos veces sin duplicaciones ni cambios de auditoría.
+  Las huellas de contenido documental y entidades comerciales se conservaron.
+- Las seis propuestas `default-tenant` permanecen intactas y aisladas. El actor
+  real sigue como superadmin; el usuario de pruebas continúa inactivo.
+- Pasan las dos suites locales de reparación; se repitieron las 119 comprobaciones
+  SQL de la copia y siguen validadas las 13 FK multitenant.
+
+Ver `docs/multitenant-release-review-20261022.md` y
+`docs/evidence/legacy-reconciliation-rehearsal-20261022.json` para recuentos,
+huellas y límites. Falta comprobación visual en preview de logos históricos,
+emisor de nuevas propuestas y los últimos cambios de notas/caché. PR #28 sigue
+en borrador: no se fusionó ni se activó la integración en producción.

@@ -7,7 +7,8 @@ lectura tanto en producción `br-quiet-morning-ahkomhhi` como en la copia
 `br-old-pond-ahe5jto3`, proyecto Neon `cool-resonance-22906937`.
 El main consultado fue `55760ab4c4fa45ddf2c0f940694441ee129aefc6`.
 No se ejecutó reparación, DDL ni cambio de permisos/datos en producción.
-Los ensayos de reparación se ejecutaron exclusivamente en PGlite local desechable.
+Los ensayos de reparación se probaron primero en PGlite local desechable y
+después se aplicaron únicamente a la rama aislada `br-old-pond-ahe5jto3`.
 
 ## Datos comprobados
 
@@ -74,7 +75,7 @@ varias empresas. La estrategia propuesta es copiar por tenant a partir de sus
 referencias exactas, conservar el original y actualizar únicamente los vínculos
 de ese tenant. Los activos sin referencia permanecen aislados.
 
-## Reparación de documentos preparada
+## Reparación de documentos ensayada en Neon aislado
 
 `scripts/repair_legacy_formal_tenants.sql` contiene un manifiesto explícito
 de los 12 documentos y su cotización padre: 6 para sys, 6 para salsa.
@@ -92,7 +93,69 @@ El script:
 Se probó con `scripts/check_legacy_formal_repair.mjs`: 12 reparaciones,
 documento fuera del manifiesto sin cambios, segunda ejecución idéntica y
 rollback completo cuando diverge la cotización o la asignación existente.
-**El script sigue siendo una propuesta: no se ha aplicado a ninguna rama Neon.**
+Se ejecutó dos veces en la rama aislada: los 12 documentos quedaron asignados,
+con 12 registros de auditoría y sin duplicación en la segunda ejecución.
+Se conservaron los 282 documentos y el hash de todo su contenido excluyendo
+únicamente el campo tenant que se reparó. Producción conserva sus 12 tenants NULL.
+
+## Copia de logos ensayada en Neon aislado
+
+Después de reparar los documentos, las referencias con empresa conocida pasan
+de 119 a **132**. El manifiesto explícito identifica **41 originales**, de los
+cuales **3** se comparten entre empresas, y **45 pares original/tenant**.
+La diferencia respecto al primer inventario se debe a los documentos cuyo
+tenant antes era NULL. Las 132 referencias son campos de documentos formales;
+en este conjunto no hubo referencias globales desde clientes.
+
+`docs/evidence/legacy-logo-repair-manifest-20261022.json` fija cada referencia,
+tenant, original, ID de copia y huella del original completo. El generador offline
+`scripts/build_legacy_logo_repair.mjs` produce `scripts/repair_legacy_logo_tenants.sql`.
+La transacción verifica el manifiesto, bloquea los tres tipos de tabla implicados,
+crea las copias sin cambiar sus bytes/formato/metadatos históricos y actualiza
+únicamente los campos de referencia explícitos. Conserva los originales y los
+logos predeterminados existentes; las copias tienen `is_default=false`.
+Registra los 45 pares y las 132 referencias anteriores/nuevas en dos tablas
+de auditoría. Un conflicto cancela también las escrituras y la creación de auditoría.
+
+Se ejecutó dos veces en la rama aislada. Resultados:
+
+| Comprobación | Resultado |
+| --- | ---: |
+| Documentos sin tenant | 0 |
+| Documentos conservados | 282 |
+| Copias creadas / auditorías de copia | 45 / 45 |
+| Referencias reparadas / auditorías de referencia | 132 / 132 |
+| Referencias conocidas a logos globales o de otra empresa | 0 / 0 |
+| Copias con bytes, formato, empresa, tenant o default incorrectos | 0 |
+| Logos antes / después | 81 / 126 |
+| Originales globales conservados sin cambios | 50 |
+| Originales globales sin uso en el manifiesto | 9 |
+| Propuestas sin empresa válida conservadas | 6 |
+| Comprobaciones de la auditoría general repetidas | 119 |
+| Claves FK multitenant validadas en la copia | 13 |
+
+Las huellas de cotizaciones, propuestas, oportunidades, contenido documental,
+clientes excluyendo el campo de logo, originales globales y las seis propuestas
+sin empresa coinciden antes/después. Las huellas de las tres auditorías no
+cambian al repetir las transacciones. El usuario real conserva su rol superadmin
+y el usuario sintético permanece inactivo.
+
+`scripts/check_legacy_logo_repair.mjs` verifica en PostgreSQL/PGlite una imagen
+compartida entre dos tenants, los dos campos documentales y un cliente,
+preservación e idempotencia. Prueba rollback completo ante cambios de fuente,
+tenant o referencia, colisión de ID, referencia fuera de manifiesto y auditoría
+conflictiva. También verifica que el SQL generado coincida con el manifiesto real.
+
+Evidencia antes/después y lectura de producción:
+`docs/evidence/legacy-reconciliation-rehearsal-20261022.json`.
+Verificación reproducible: `scripts/verify_legacy_reconciliation.sql`.
+La lectura de producción confirma 12 documentos sin tenant, 81 logos y ausencia
+de las nuevas auditorías: **ninguna de estas reparaciones se aplicó a producción**.
+
+Las copias históricas no certifican una razón social ni designan un emisor
+predeterminado nuevo. Antes de la liberación se revisará también el emisor de
+nuevas propuestas: DynamiQuote no tenía logos propios antes de este ensayo,
+y la aplicación puede elegir un emisor propio no predeterminado cuando no hay default.
 
 ## Validación y límites
 
@@ -102,7 +165,8 @@ rollback completo cuando diverge la cotización o la asignación existente.
   ejecutados por separado. El E2E antiguo dependiente de DATABASE_URL se excluye.
 - TypeScript sin errores. ESLint sin errores; conserva un aviso preexistente
   por `hasNonTermsContentUpdate` en proposals.ts.
-- Ensayo de reparación local pasa, sin credenciales ni acceso a Neon.
+- Ambos ensayos locales pasan, sin credenciales ni acceso a Neon; ambos scripts
+  también se ejecutaron dos veces, de forma idempotente, en la rama aislada.
 - La evidencia previa de navegador corresponde al código probado en cada sección;
   las nuevas correcciones de notas/logos/caché aún requieren comprobación en preview.
 - RLS no se habilita. Las funciones Python directas y lectores externos no se
@@ -113,13 +177,15 @@ Auditoría reproducible de solo lectura: `scripts/audit_multitenant_readiness.sq
 
 ## Secuencia para continuar
 
-1. Ensayar el manifiesto documental y la copia de logos por tenant en la rama
-   aislada, conservando auditoría y recuentos antes/después.
+1. Comprobar en preview documentos históricos con las copias de logos y el
+   emisor de nuevas propuestas, notas privadas/compartidas, owner/vendedor y
+   descarga, sin correos ni facturación real. La ventana temporal de acceso
+   anterior terminó; este ensayo SQL no la renovó.
 2. Mantener las seis propuestas sin empresa y sus dependencias aisladas hasta
    confirmar su origen; no incorporarlas a SynAppsSys ni a SALSA por suposición.
-3. Comprobar en preview documentos con logos propios, notas privadas/compartidas,
-   owner/vendedor y descarga, sin correos ni facturación real.
-4. Revisar vínculos de usuarios y cerrar el inventario de escritores externos.
+3. Revisar vínculos de usuarios y cerrar el inventario de escritores externos.
+4. Refrescar manifiestos y comparar cambios de producción antes del corte; no
+   ejecutar el manifiesto de la copia contra datos que hayan divergido.
 5. Revisar y aprobar el cambio final. Solo entonces aplicar migraciones/conciliación
    a destino y desplegar de forma controlada, conservando las restricciones en un rollback.
 
