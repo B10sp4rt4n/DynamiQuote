@@ -444,3 +444,36 @@ anterior, no como repetición en esta continuación.
 Evidencia completa y bloqueos: `docs/evidence/crm-identity-release-followup.json`.
 El siguiente permiso necesario es el consentimiento concreto de GitHub/Clerk y
 los redespliegues aislados para pausar y reabrir; no es aprobación de producción.
+
+
+## Consulta real de Clerk completada tras autorización específica
+
+Se completó el consentimiento GitHub de B10sp4rt4n para Clerk con scopes
+read:user y user:email, después de autorización de Salvador referida a esos pasos.
+Un consentimiento antiguo dejó resultado incierto en callback; una pestaña nueva
+seguía mostrando sign-in. La nueva solicitud terminó en Inicio/SynAppsSys y el
+diagnóstico autenticado de la preview aee0b0d4 respondió el resultado real.
+
+Cinco IDs exactos existen en Clerk, ninguno reportado bloqueado/suspendido por
+esta consulta. Cuatro correos del CRM coinciden con correo verificado en Clerk.
+En Salvador no se verificó esa coincidencia; su ID y login sí funcionan. Se
+conservó sin alterar email/pertenencia. Los tres pending no tienen invitación
+pendiente asociada por ID+tenant exactos en la consulta completa; el legacy admin
+sigue sin vincular. Solo se prueba login individual de Salvador. No se enviaron
+invitaciones ni correos del CRM ni se reasignó cuenta alguna.
+
+La revisión automática volvió a rechazar el redespliegue por omisión de target,
+aun con prueba oficial de que esa omisión significa preview y listado de origen
+filtrado por preview/branch/SHA. No se usó staging ni production como sustituto.
+La variable de mantenimiento de preview/rama quedó off. La alternativa de
+inspeccionar un selector explícito Preview en Vercel quedó pendiente de su 2FA:
+la solicitud segura fue declinada, sin reintento ni acción de despliegue por UI.
+No se declara completada la prueba remota de pausa/recuperación.
+
+Lecturas finales: nueve pertenencias sin cambios y coincidentes entre producción
+y copia; metadatos de las 14 variables productivas iguales a la línea base. No
+hubo nuevo cambio de código ni repetición de las 502 pruebas previas. Evidencia
+actual y límites en docs/evidence/crm-identity-provider-verification.json,
+crm-identity-provider-observed.json y crm-identity-signed-in.jpg. El PR sigue
+borrador; falta resolver identidad pendiente/legacy, escritor antiguo, ensayo de
+mantenimiento/recuperación, respaldo y aprobación final de corte.

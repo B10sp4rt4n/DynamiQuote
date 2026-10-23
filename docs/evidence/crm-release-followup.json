@@ -1299,5 +1299,16 @@
     "maintenance_flag_final": "off; preview branch only",
     "blocked_by": "automatic approval review; exact OAuth consent and preview redeploy authorization required",
     "production_changed": false
+  },
+  "identity_provider_verification": {
+    "evidence": "crm-identity-provider-verification.json",
+    "authenticated_provider_audit_completed": true,
+    "exact_ids_found": 5,
+    "verified_local_email_matches": 4,
+    "pending": 3,
+    "legacy": 1,
+    "remote_pause_resume_completed": false,
+    "preview_maintenance_flag": "off",
+    "production_changed": false
   }
 }

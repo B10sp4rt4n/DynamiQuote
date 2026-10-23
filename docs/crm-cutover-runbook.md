@@ -206,3 +206,43 @@ Evidencia: `docs/evidence/crm-identity-release-followup.json`, manifiesto de fue
 Antes de continuar se necesita aprobación concreta del consentimiento OAuth y de
 los redespliegues de preview para pausar y reabrir. La producción sigue fuera del
 ensayo y el PR continúa en borrador.
+
+
+## Cierre posterior del consentimiento y consulta real de Clerk
+
+Salvador autorizó los dos pasos del requerimiento concreto mediante «adelante».
+El consentimiento OAuth de GitHub/Clerk quedó completado con una solicitud nueva.
+La pantalla Inicio de la preview aee0b0d4 confirmó sesión real, tenant SynAppsSys
+y un usuario habilitado de ese tenant. El diagnóstico autenticado de solo lectura
+respondió nueve filas: cinco IDs exactos encontrados en Clerk; cuatro correos
+locales coinciden con un correo verificado del proveedor. En salvador.ruiz esa
+coincidencia no se verificó; su sesión e ID exacto sí funcionaron. No inferir cuál
+correo difiere ni modificar el contacto o la vinculación por ese resultado.
+
+Los tres pending (ma.glz, e.hdz y ruben.arroyo) no tienen coincidencia de invitación
+pendiente por ID local y tenant exactos en la consulta completa. Esto no afirma
+que no exista otra invitación ajena o con otra metadata. El ID legacy admin no
+se buscó por correo y sigue sin vincular. No se comprobaron logins individuales
+de los otros cuatro usuarios ni se enviaron invitaciones/correos del CRM.
+
+El redespliegue aislado volvió a ser rechazado por revisión automática pese a la
+autorización. El motivo retenido es la omisión de un destino explícito, que el
+control considera insuficiente para garantizar preview. La referencia oficial
+https://vercel.com/docs/rest-api/deployments/create-a-new-deployment documenta la
+omisión como preview y la respuesta target=null como preview. El origen también
+se confirmó mediante listado filtrado por preview, branch y SHA; la revisión
+mantuvo el rechazo. No se cambió a production ni a un entorno staging distinto.
+Se restauró el flag a off tras cada intento; no se creó despliegue pausado.
+
+Se inició la alternativa de revisar el formulario de Vercel para seleccionar
+Preview explícitamente. El acceso seguro eligió GitHub, pero Vercel solicitó
+2FA de autenticador; la solicitud segura quedó declinada y no se repitió. No se
+capturaron códigos o tokens en el expediente ni se ejecutó un redespliegue por UI.
+Falta completar ese acceso para inspeccionar y ejecutar el mecanismo seguro.
+
+Las nueve pertenencias siguen idénticas entre producción/copia y sin cambios;
+los metadatos de las 14 variables con alcance productivo coinciden con la línea
+base. Evidencia: crm-identity-provider-verification.json y
+crm-identity-provider-observed.json; captura crm-identity-signed-in.jpg. Este
+cierre posterior resuelve el bloqueo OAuth anterior y conserva el del ensayo
+remoto. El historial anterior permanece como evidencia de su momento.
