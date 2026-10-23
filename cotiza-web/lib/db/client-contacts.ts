@@ -3,6 +3,7 @@ import "server-only";
 import { randomUUID } from "crypto";
 
 import { prisma } from "@/lib/db/prisma";
+import { assertClientOpportunityForTenant } from "@/lib/db/tenant-relations";
 
 export type ClientContact = {
   contactId: string;
@@ -45,6 +46,7 @@ export async function createClientContactForTenant(
   clientId: string,
   input: CreateClientContactInput,
 ): Promise<ClientContact> {
+  await assertClientOpportunityForTenant(tenantId, clientId);
   const contactId = randomUUID();
 
   const row = await prisma.client_contacts.create({

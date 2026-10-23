@@ -1,3 +1,4 @@
+import { isProposalVisibleToViewer } from "@/lib/db/proposals";
 import { NextResponse } from "next/server";
 
 import { getCurrentTenantContext } from "@/lib/auth/tenant-context";
@@ -21,6 +22,10 @@ export async function GET(_: Request, context: RouteContext) {
   }
 
   const { proposalId } = await context.params;
+  const canSeeAll = tenant.isSuperAdmin || tenant.userRole === "owner" || tenant.userRole === "admin";
+  if (!await isProposalVisibleToViewer(tenant.id, proposalId, tenant.userId, canSeeAll)) {
+    return NextResponse.json({ error: "Propuesta no encontrada" }, { status: 404 });
+  }
   const invoice = await getProposalInvoiceStatusByTenant(tenant.id, proposalId);
 
   if (!invoice?.draftId) {

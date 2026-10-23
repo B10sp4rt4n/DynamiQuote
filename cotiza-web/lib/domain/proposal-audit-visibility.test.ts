@@ -43,4 +43,12 @@ describe("proposal audit visibility", () => {
     const input = [event("future_private_event", { secret: "admin only" })];
     expect(projectProposalAuditTimeline(input, true)).toBe(input);
   });
+
+  it("preserves the computed integrity result while hiding the internal contract", () => {
+    const input = { ...event("outcome_changed", { toOutcome: "won", commercialAct: { actors: [{ actor_id: "private-id" }] } }),
+      integrity: "hash_mismatch" as const };
+    const output = projectProposalAuditTimeline([input], false);
+    expect(output[0].integrity).toBe("hash_mismatch");
+    expect(output[0].details).toEqual({ toOutcome: "won" });
+  });
 });

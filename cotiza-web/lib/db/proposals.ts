@@ -14,6 +14,7 @@ import {
   type ProposalApproverRole,
 } from "@/lib/db/proposal-approvals";
 import { prisma } from "@/lib/db/prisma";
+import { recordCommercialAct } from "@/lib/db/commercial-acts";
 import { NOT_DISCARDED_WHERE } from "@/lib/db/proposal-filters";
 import { closeDateInstant, earliestCommercialStart, isValidCloseDate, mexicoCalendarDate } from "@/lib/domain/commercial-close-date";
 import {
@@ -535,28 +536,6 @@ async function resolvePreferredIssuerProfileByTenant(tenantId: string): Promise<
     };
   }
 
-  const globalDefault = await prisma.company_logos.findFirst({
-    orderBy: [{ uploaded_at: "desc" }],
-    select: {
-      company_name: true,
-      logo_id: true,
-      tenant_id: true,
-    },
-    where: {
-      is_default: true,
-      logo_type: "issuer",
-      tenant_id: null,
-    },
-  });
-
-  if (globalDefault) {
-    return {
-      companyName: globalDefault.company_name,
-      logoId: globalDefault.logo_id,
-      sourceTenantId: globalDefault.tenant_id,
-    };
-  }
-
   const tenantAny = await prisma.company_logos.findFirst({
     orderBy: [{ uploaded_at: "desc" }],
     select: {
@@ -567,6 +546,9 @@ async function resolvePreferredIssuerProfileByTenant(tenantId: string): Promise<
     where: {
       logo_type: "issuer",
       tenant_id: tenantId,
+      // Reconciled assets preserve historical documents; they do not designate
+      // the issuer for new business unless explicitly marked as default.
+      NOT: { logo_id: { startsWith: "crm-legacy-logo:" } },
     },
   });
 
@@ -578,28 +560,7 @@ async function resolvePreferredIssuerProfileByTenant(tenantId: string): Promise<
     };
   }
 
-  const globalAny = await prisma.company_logos.findFirst({
-    orderBy: [{ uploaded_at: "desc" }],
-    select: {
-      company_name: true,
-      logo_id: true,
-      tenant_id: true,
-    },
-    where: {
-      logo_type: "issuer",
-      tenant_id: null,
-    },
-  });
-
-  if (!globalAny) {
-    return null;
-  }
-
-  return {
-    companyName: globalAny.company_name,
-    logoId: globalAny.logo_id,
-    sourceTenantId: globalAny.tenant_id,
-  };
+  return null;
 }
 
 async function resolvePreferredIssuerLogoAssetByTenant(tenantId: string): Promise<{
@@ -614,7 +575,7 @@ async function resolvePreferredIssuerLogoAssetByTenant(tenantId: string): Promis
   const pickBest = async (where: {
     is_default?: boolean;
     logo_type: "issuer";
-    tenant_id: string | null;
+    tenant_id: string;
   }): Promise<{ logo_data: Uint8Array; logo_format: string } | null> => {
     const rows = await prisma.company_logos.findMany({
       orderBy: [{ uploaded_at: "desc" }],
@@ -623,7 +584,10 @@ async function resolvePreferredIssuerLogoAssetByTenant(tenantId: string): Promis
         logo_format: true,
       },
       take: 20,
-      where,
+      where: {
+        ...where,
+        ...(where.is_default ? {} : { NOT: { logo_id: { startsWith: "crm-legacy-logo:" } } }),
+      },
     });
 
     const withBytes = rows.filter((row) => row.logo_data?.length > 0);
@@ -642,10 +606,8 @@ async function resolvePreferredIssuerLogoAssetByTenant(tenantId: string): Promis
 
   const tenantDefault = await pickBest({ is_default: true, logo_type: "issuer", tenant_id: tenantId });
   const tenantAny = await pickBest({ logo_type: "issuer", tenant_id: tenantId });
-  const globalDefault = await pickBest({ is_default: true, logo_type: "issuer", tenant_id: null });
-  const globalAny = await pickBest({ logo_type: "issuer", tenant_id: null });
 
-  const candidates = [tenantDefault, tenantAny, globalDefault, globalAny].filter(
+  const candidates = [tenantDefault, tenantAny].filter(
     (value): value is { logo_data: Uint8Array; logo_format: string } => value !== null,
   );
 
@@ -1505,6 +1467,7 @@ export async function getProposalWorkflowByTenant(
   const row = await prisma.proposals.findFirst({
     include: {
       formal_proposals: {
+        where: { tenant_id: tenantId },
         orderBy: [{ created_at: "desc" }, { proposal_doc_id: "desc" }],
         select: {
           client_logo_id: true,
@@ -1547,6 +1510,7 @@ export async function getProposalWorkflowByTenant(
           subtotal_price: true,
         },
         where: {
+          tenant_id: tenantId,
           status: {
             not: "deleted",
           },
@@ -1610,13 +1574,8 @@ export async function getProposalWorkflowByTenant(
                 return tenantLogo;
               }
 
-              return prisma.company_logos.findFirst({
-                select: { logo_data: true, logo_format: true },
-                where: {
-                  logo_id: issuerLogoId,
-                  tenant_id: null,
-                },
-              });
+              // Unassigned legacy assets are not shared tenant resources.
+              return null;
             })()
           : resolvePreferredIssuerLogoAssetByTenant(tenantId),
         latestFormal?.client_logo_id
@@ -1638,13 +1597,8 @@ export async function getProposalWorkflowByTenant(
                 return tenantLogo;
               }
 
-              return prisma.company_logos.findFirst({
-                select: { logo_data: true, logo_format: true },
-                where: {
-                  logo_id: clientLogoId,
-                  tenant_id: null,
-                },
-              });
+              // Unassigned legacy assets are not shared tenant resources.
+              return null;
             })()
           // A diferencia del emisor (siempre la misma empresa, tiene sentido
           // un logo "preferido" del tenant como default), el cliente cambia
@@ -1841,19 +1795,19 @@ export async function setProposalOutcomeByTenant(
       data: { outcome, outcome_at: outcomeAt },
       where: { proposal_id: proposalId },
     });
-    await tx.proposal_audit_events.create({
-      data: {
-        created_at: now,
-        event_hash: randomUUID(),
-        event_id: randomUUID(),
-        event_type: row.outcome === outcome ? "outcome_date_changed" : "outcome_changed",
-        payload: JSON.stringify({ actorUserId: actor.userId, fromOutcome: row.outcome, toOutcome: outcome,
+    await recordCommercialAct(tx, {
+        eventType: row.outcome === outcome ? "outcome_date_changed" : "outcome_changed",
+        actorUserId: actor.userId, actorRole: actor.userRole, canSeeAll,
+        proposalId, tenantId, opportunityId: row.opportunity_id,
+        action: row.outcome === outcome ? "close_date_corrected" : outcome === null ? "outcome_cleared" : "outcome_set",
+        before: { status: row.status, outcome: row.outcome, outcomeAt: row.outcome_at?.toISOString() ?? null },
+        after: { status: outcome === "won" && row.status === "sent" && actor.userId ? "approved" : row.status,
+          outcome, outcomeAt: outcomeAt?.toISOString() ?? null },
+        recordedAt: now.toISOString(), selectedCloseDate: dateInput.closedOn ?? null,
+        legacyPayload: { actorUserId: actor.userId, fromOutcome: row.outcome, toOutcome: outcome,
           previousOutcomeAt: row.outcome_at?.toISOString() ?? null, outcomeAt: outcomeAt?.toISOString() ?? null,
           selectedCloseDate: dateInput.closedOn ?? null, datePrecision: dateInput.closedOn ? "day" : "instant",
-          recordedAt: now.toISOString() }),
-        proposal_id: proposalId,
-        tenant_id: tenantId,
-      },
+          recordedAt: now.toISOString() },
     });
     if (outcome === "won" && row.status === "sent" && actor.userId) {
       await applyProposalStatusOnly(tx, { currentOutcome: outcome, nextStatus: "approved", proposalId });
@@ -1880,6 +1834,7 @@ export async function setProposalOutcomeByTenant(
 // acquired a row lock; an earlier read may have preceded another decision.
 async function clearCommercialOutcomeForStatus(
   tx: Prisma.TransactionClient, proposalId: string, nextStatus: ProposalStatus, actorUserId: string | null = null,
+  previousStatus: string | null = null, actorRole: string | null = null,
 ): Promise<void> {
   if (OUTCOME_DECISION_STATUSES.has(nextStatus)) return;
   const row = await tx.proposals.findUnique({ where: { proposal_id: proposalId } });
@@ -1887,14 +1842,16 @@ async function clearCommercialOutcomeForStatus(
   await tx.proposals.update({
     data: { outcome: null, outcome_at: null }, where: { proposal_id: proposalId },
   });
-  await tx.proposal_audit_events.create({
-    data: {
-      created_at: new Date(), event_hash: randomUUID(), event_id: randomUUID(),
-      event_type: "outcome_changed", proposal_id: proposalId, tenant_id: row.tenant_id,
-      payload: JSON.stringify({ actorUserId, fromOutcome: row.outcome, toOutcome: null,
+  const now = new Date();
+  await recordCommercialAct(tx, {
+      eventType: "outcome_changed", proposalId, tenantId: row.tenant_id,
+      opportunityId: row.opportunity_id, actorUserId, actorRole, canSeeAll: null,
+      action: "outcome_cleared", selectedCloseDate: null, recordedAt: now.toISOString(),
+      before: { status: previousStatus, outcome: row.outcome, outcomeAt: row.outcome_at?.toISOString() ?? null },
+      after: { status: nextStatus, outcome: null, outcomeAt: null },
+      legacyPayload: { actorUserId, fromOutcome: row.outcome, toOutcome: null,
         previousOutcomeAt: row.outcome_at?.toISOString() ?? null, outcomeAt: null,
-        trigger: "workflow_status", nextStatus }),
-    },
+        trigger: "workflow_status", nextStatus },
   });
 }
 
@@ -2085,6 +2042,7 @@ async function applyProposalStatusOnly(
 ): Promise<void> {
   const now = new Date();
   const shouldClose = terminalStatuses.includes(input.nextStatus);
+  const before = await tx.proposals.findUnique({ where: { proposal_id: input.proposalId }, select: { status: true } });
 
   await tx.proposals.update({
     data: {
@@ -2095,7 +2053,7 @@ async function applyProposalStatusOnly(
     where: { proposal_id: input.proposalId },
   });
 
-  await clearCommercialOutcomeForStatus(tx, input.proposalId, input.nextStatus, input.actorUserId);
+  await clearCommercialOutcomeForStatus(tx, input.proposalId, input.nextStatus, input.actorUserId, before?.status ?? null);
 
   await tx.formal_proposals.updateMany({
     data: { status: input.nextStatus, updated_at: now },
@@ -2430,6 +2388,11 @@ export async function updateProposalWorkflowByTenant(
   const shouldClose = terminalStatuses.includes(nextStatus);
 
   await prisma.$transaction(async (tx) => {
+    await tx.$queryRaw(Prisma.sql`SELECT proposal_id FROM proposals
+      WHERE proposal_id = ${proposalId} AND tenant_id = ${tenantId} FOR UPDATE`);
+    const commercialBefore = await tx.proposals.findFirst({
+      where: { proposal_id: proposalId, tenant_id: tenantId }, select: { status: true },
+    });
     await tx.proposals.update({
       data: {
         closed_at: shouldClose ? now : null,
@@ -2447,7 +2410,8 @@ export async function updateProposalWorkflowByTenant(
       },
     });
 
-    await clearCommercialOutcomeForStatus(tx, proposalId, nextStatus, actor?.userId ?? null);
+    await clearCommercialOutcomeForStatus(tx, proposalId, nextStatus, actor?.userId ?? null,
+      commercialBefore?.status ?? null, actor?.userRole ?? null);
 
     const termsToPersist = input.termsAndConditions;
     const issuerCompanyToPersist = input.issuerCompany;
@@ -2666,6 +2630,7 @@ export async function getProposalExcelPayloadByTenant(
   const row = await prisma.proposals.findFirst({
     include: {
       formal_proposals: {
+        where: { tenant_id: tenantId },
         orderBy: [{ created_at: "desc" }, { proposal_doc_id: "desc" }],
         select: {
           currency: true,
@@ -2691,6 +2656,7 @@ export async function getProposalExcelPayloadByTenant(
         take: 1,
       },
       proposal_items: {
+        where: { tenant_id: tenantId },
         orderBy: [{ item_number: "asc" }, { created_at: "asc" }],
         select: {
           component_type: true,

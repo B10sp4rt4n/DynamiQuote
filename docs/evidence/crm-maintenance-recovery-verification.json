@@ -1,0 +1,94 @@
+{
+  "schema_version": 1,
+  "recorded_at": "2026-10-23T03:53:54.472416+00:00",
+  "code_commit": "d65414698f56d94c57aba8d543a11749a3cc1753",
+  "code_tree": "af2fc5592398bd124c89017c8fbf76a2c2891c70",
+  "scope": "codigo y ensayos locales; produccion consultada solo mediante SELECT; Railway solo lectura",
+  "identity": {
+    "production_active_users": 9,
+    "clerk_shaped_ids": 5,
+    "pending_ids": 3,
+    "legacy_ids": 1,
+    "real_login_previously_verified": [
+      "salvador.ruiz"
+    ],
+    "clerk_provider_validation_completed": false,
+    "local_clerk_credentials_available": false,
+    "pending_aliases": [
+      "e.hdz",
+      "ma.glz",
+      "ruben.arroyo"
+    ],
+    "legacy_alias": "admin",
+    "onboarding_change": "Correo existente devuelve 409 antes de crear pertenencia o enviar correo. ID explicito exige superadmin, getUser por ID exacto, correo verificado, usuario no banned/locked; conflicto local no reasigna ni borra ni cambia metadata.",
+    "tests_provider": "Clerk simulado; no se llamo al proveedor ni se enviaron invitaciones durante QA",
+    "limits": "No certifica el resto de rutas de administracion, el webhook o todas las identidades; el resolver exacto sigue siendo la autoridad de acceso."
+  },
+  "railway": {
+    "project_id": "1980096f-8e39-416b-8a12-45b5815af5a6",
+    "environment_id": "79506dd6-a076-4104-911a-9167da50040d",
+    "service_id": "7b8c668c-d093-42e0-a418-ce2ddc7c652d",
+    "deployment_id": "1e21faa5-0be3-4ceb-9235-12eacd65c925",
+    "state": "SUCCESS",
+    "snapshot_id": "d7b4ebc5-4a68-4e44-a85a-ddd1dc4a6f4d",
+    "replicas": 1,
+    "region": "us-west2",
+    "staged": null,
+    "source_commit_exposed": false,
+    "database_destination_verified": false,
+    "changed": false
+  },
+  "maintenance": {
+    "flag": "CRM_MAINTENANCE_MODE",
+    "open_values": [
+      null,
+      "",
+      "off"
+    ],
+    "paused_values": "cualquier otro valor no vacio tras trim; valor recomendado paused",
+    "response": 503,
+    "retry_after_seconds": 300,
+    "cache_control": "no-store",
+    "boundary": "proxy de esta version Next; antes de Clerk, todos los metodos y rutas salvo _next/static, _next/image y favicon",
+    "activated_remotely": false,
+    "does_not_cover": [
+      "versiones antiguas y otros servicios",
+      "clientes SQL directos",
+      "trabajos en segundo plano",
+      "solicitudes que ya iniciaron antes de la pausa"
+    ],
+    "http_development_cases": 13,
+    "http_production_local_cases": 13,
+    "database_in_http_tests": "placeholder inaccesible; sin credenciales reales",
+    "clerk_in_http_tests": "deshabilitado"
+  },
+  "recovery": {
+    "source_files_restored_and_sha256_verified": 384,
+    "source_manifest": "crm-recovery-source-manifest.json",
+    "production_build": "passed, next build --webpack",
+    "dependency_source": "node_modules existentes compartidos por symlink; no npm ci desde cero",
+    "server_smoke": "next start del build restaurado, local",
+    "database_backup_included": false,
+    "remote_rollback_tested": false,
+    "restrictions": "Conservar resolver estricto, aislamiento, contrato AUP, FK, auditorias, copias y referencias. No usar build previo al aislamiento."
+  },
+  "validation": {
+    "general_tests_passed": 488,
+    "general_tests_skipped": 2,
+    "general_test_files": 51,
+    "targeted_tests_passed": 63,
+    "typescript": "passed",
+    "eslint_changed_ts_files": "passed",
+    "previous_db_integration_tests": 40,
+    "db_integration_rerun_this_change": false
+  },
+  "production_changes": false,
+  "emails_sent": false,
+  "remaining": [
+    "Validar identidades reales en Clerk sin vincular por suposicion",
+    "Confirmar codigo y destino de base de Railway y otros escritores",
+    "Ensayar mantenimiento/recuperacion en despliegue aislado con identidad real y preparar respaldo de base",
+    "Identificar y detener escritores externos, drenar operaciones antes del corte",
+    "Repetir preflight en ventana sin escrituras y obtener aprobacion final"
+  ]
+}

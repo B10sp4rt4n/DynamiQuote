@@ -4,6 +4,7 @@ import { randomUUID } from "crypto";
 import { Prisma } from "@prisma/client";
 
 import { prisma } from "@/lib/db/prisma";
+import { assertClientOpportunityForTenant } from "@/lib/db/tenant-relations";
 import { opportunityLifetimeDays } from "@/lib/domain/opportunity-lifetime";
 
 type PrismaClientOrTx = Prisma.TransactionClient | typeof prisma;
@@ -33,8 +34,8 @@ function toNumber(value: unknown): number {
 
 // Folio atomico/consecutivo por tenant, igual que COT-XXXX y PKG-XXXX (ver
 // CLAUDE.md "Convenciones de codigo").
-async function nextOpportunityNumber(tenantId: string): Promise<string> {
-  const rows = await prisma.opportunities.findMany({
+async function nextOpportunityNumber(tenantId: string, client: PrismaClientOrTx): Promise<string> {
+  const rows = await client.opportunities.findMany({
     select: { opportunity_number: true },
     where: {
       opportunity_number: { startsWith: "OPP-" },
@@ -60,8 +61,9 @@ export async function createOpportunityForTenant(
   input: { clientId: string | null; createdByUserId: string | null; title: string },
   client: PrismaClientOrTx = prisma,
 ): Promise<string> {
+  await assertClientOpportunityForTenant(tenantId, input.clientId, null, client);
   const opportunityId = randomUUID();
-  const opportunityNumber = await nextOpportunityNumber(tenantId);
+  const opportunityNumber = await nextOpportunityNumber(tenantId, client);
   const now = new Date();
 
   await client.opportunities.create({
@@ -265,10 +267,15 @@ async function attachDerivedStage(
 export async function getOpportunitiesByClientForTenant(
   tenantId: string,
   clientId: string,
+  viewerUserId: string | null = null,
+  canSeeAll = true,
 ): Promise<OpportunityWithStage[]> {
   const opportunities = await prisma.opportunities.findMany({
     orderBy: { created_at: "desc" },
-    where: { client_id: clientId, tenant_id: tenantId },
+    where: {
+      client_id: clientId, tenant_id: tenantId,
+      ...(canSeeAll ? {} : { OR: [{ owner_user_id: viewerUserId }, { owner_user_id: null }] }),
+    },
   });
 
   return attachDerivedStage(tenantId, opportunities);

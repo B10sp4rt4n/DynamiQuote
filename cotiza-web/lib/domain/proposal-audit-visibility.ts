@@ -36,6 +36,7 @@ export function projectProposalAuditTimeline(
     if (item.type === "document_blocked") {
       details.reason = "La propuesta no cumple los requisitos de emisión. Consulta al administrador.";
     }
-    return [{ actorName: item.actorName, createdAt: item.createdAt, details, id: item.id, type: item.type }];
+    return [{ actorName: item.actorName, createdAt: item.createdAt, details, id: item.id, type: item.type,
+      ...(item.integrity ? { integrity: item.integrity } : {}) }];
   });
 }

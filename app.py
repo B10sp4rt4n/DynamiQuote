@@ -497,6 +497,16 @@ PLAYBOOKS = {
 # DynamiQuote - Updated: 2026-02-09
 st.set_page_config(page_title="Quote Intelligence MVP", layout="wide")
 
+# The retired UI contains unscoped readers. Stop BEFORE setup, authentication,
+# migrations, reports or document reads if it is connected to a shared DB.
+from legacy_access import require_legacy_isolation, LegacyIsolationError
+try:
+    require_legacy_isolation(get_cursor, is_postgres())
+except LegacyIsolationError:
+    st.error("Esta versión anterior no está habilitada para esta base de datos. Abre Cotiza actual para continuar.")
+    st.stop()
+
+
 # =========================
 # Sistema de Autenticación
 # =========================

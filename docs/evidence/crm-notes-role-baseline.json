@@ -1,0 +1,26 @@
+{
+  "authorization": "Salvador autorizó expresamente cambios temporales de salvador.ruiz a vendedor/owner y reasignación de OPP-0063 a usuario ficticio, solo en br-old-pond-ahe5jto3, con restauración al terminar.",
+  "project_id": "cool-resonance-22906937",
+  "branch_id": "br-old-pond-ahe5jto3",
+  "baseline": {
+    "peer": {
+      "role": "user",
+      "active": false,
+      "user_id": "crm-role-peer-20261023",
+      "tenant_id": "389b6cc1-2f8d-4fe4-bc3d-f50f92df3157"
+    },
+    "actor": {
+      "role": "superadmin",
+      "active": true,
+      "user_id": "user_3D45SeGQqBoyBe8v3XvOu39QdWH",
+      "tenant_id": "389b6cc1-2f8d-4fe4-bc3d-f50f92df3157"
+    },
+    "checked_at": "2026-10-23T03:29:37.737275+00:00",
+    "opportunity": {
+      "client_id": "cmvk731b2000007kx3slteamq",
+      "tenant_id": "389b6cc1-2f8d-4fe4-bc3d-f50f92df3157",
+      "owner_user_id": "user_3D45SeGQqBoyBe8v3XvOu39QdWH",
+      "opportunity_id": "0bcc5bb9-b546-47a1-8ed2-c268fcc20822"
+    }
+  }
+}

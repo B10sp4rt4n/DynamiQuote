@@ -136,7 +136,7 @@ export async function getProposalAmountTimelineByTenant(
       SUM(COALESCE(pi.subtotal_price, 0)) AS proposed_amount,
       SUM(CASE WHEN p.status = 'approved' THEN COALESCE(pi.subtotal_price, 0) ELSE 0 END) AS approved_amount
     FROM proposals p
-    LEFT JOIN proposal_items pi ON pi.proposal_id = p.proposal_id AND pi.status != 'deleted'
+    LEFT JOIN proposal_items pi ON pi.proposal_id = p.proposal_id AND pi.tenant_id = p.tenant_id AND pi.status != 'deleted'
     WHERE p.tenant_id = ${tenantId}
       AND p.created_at >= ${monthsAgo(months)}
       ${scopeFilter}
@@ -234,7 +234,7 @@ export async function getProposalKpiSummaryByTenant(
       SUM(CASE WHEN p.outcome = 'won' THEN COALESCE(pi.subtotal_cost, 0) ELSE 0 END) AS won_cost,
       SUM(COALESCE(pi.subtotal_cost, 0)) AS total_cost
     FROM proposals p
-    LEFT JOIN proposal_items pi ON pi.proposal_id = p.proposal_id AND pi.status != 'deleted'
+    LEFT JOIN proposal_items pi ON pi.proposal_id = p.proposal_id AND pi.tenant_id = p.tenant_id AND pi.status != 'deleted'
     WHERE p.tenant_id = ${tenantId}
       ${scopeFilter}
   `);
@@ -314,8 +314,8 @@ export async function getSalesRepRankingByTenant(tenantId: string): Promise<Sale
       SUM(COALESCE(pi.subtotal_price, 0)) AS proposed_amount,
       SUM(CASE WHEN p.status = 'approved' THEN COALESCE(pi.subtotal_price, 0) ELSE 0 END) AS approved_amount
     FROM proposals p
-    LEFT JOIN proposal_items pi ON pi.proposal_id = p.proposal_id AND pi.status != 'deleted'
-    LEFT JOIN app_users au ON au.user_id = p.created_by_user_id
+    LEFT JOIN proposal_items pi ON pi.proposal_id = p.proposal_id AND pi.tenant_id = p.tenant_id AND pi.status != 'deleted'
+    LEFT JOIN app_users au ON au.user_id = p.created_by_user_id AND au.tenant_id = p.tenant_id
     WHERE p.tenant_id = ${tenantId}
       AND p.created_by_user_id IS NOT NULL
     GROUP BY p.created_by_user_id, au.first_name, au.last_name, au.alias
@@ -381,7 +381,7 @@ export async function getProposalMarginTimelineByTenant(
         SUM(COALESCE(pi.subtotal_price, 0)) AS amount,
         SUM(COALESCE(pi.subtotal_cost, 0)) AS cost
       FROM proposals p
-      LEFT JOIN proposal_items pi ON pi.proposal_id = p.proposal_id AND pi.status != 'deleted'
+      LEFT JOIN proposal_items pi ON pi.proposal_id = p.proposal_id AND pi.tenant_id = p.tenant_id AND pi.status != 'deleted'
       WHERE p.tenant_id = ${tenantId} ${scopeFilter}
       GROUP BY p.proposal_id
     ), activity AS (
@@ -465,7 +465,7 @@ export async function getProposalOutcomeTimelineByTenant(
       SELECT p.proposal_id, p.created_at, ${reportingDate} AS reporting_at, p.outcome,
         SUM(COALESCE(pi.subtotal_price, 0)) AS amount
       FROM proposals p
-      LEFT JOIN proposal_items pi ON pi.proposal_id = p.proposal_id AND pi.status != 'deleted'
+      LEFT JOIN proposal_items pi ON pi.proposal_id = p.proposal_id AND pi.tenant_id = p.tenant_id AND pi.status != 'deleted'
       WHERE p.tenant_id = ${tenantId} ${scopeFilter}
       GROUP BY p.proposal_id
     ), decisions AS (

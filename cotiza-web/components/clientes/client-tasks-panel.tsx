@@ -3,12 +3,7 @@
 import { useState } from "react";
 
 import type { ClientTask } from "@/lib/db/tasks";
-
-function formatDueDate(iso: string): string {
-  return new Intl.DateTimeFormat("es-MX", { day: "2-digit", month: "short", year: "numeric" }).format(
-    new Date(iso),
-  );
-}
+import { formatTaskDueDate } from "@/lib/domain/task-due-date";
 
 export function ClientTasksPanel({ tasks: initialTasks }: { tasks: ClientTask[] }) {
   const [tasks, setTasks] = useState(initialTasks);
@@ -51,7 +46,7 @@ export function ClientTasksPanel({ tasks: initialTasks }: { tasks: ClientTask[] 
             <p className="truncate text-sm font-medium text-zinc-900">{task.description}</p>
             <p className="text-xs text-zinc-500">
               {task.opportunityNumber ? `${task.opportunityNumber} · ` : ""}
-              vence {formatDueDate(task.dueDate)}
+              vence {formatTaskDueDate(task.dueDate)}
             </p>
           </div>
           <button

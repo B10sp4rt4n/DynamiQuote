@@ -1,0 +1,86 @@
+{
+  "schema_version": "1.0",
+  "authorization": "Salvador respondió sí a la autorización específica para cambiar temporalmente la cuenta salvador.ruiz a vendedor y owner y reasignar OPP-0063 al usuario ficticio, solo en la copia indicada, con restauración al terminar.",
+  "project_id": "cool-resonance-22906937",
+  "branch_id": "br-old-pond-ahe5jto3",
+  "preview": {
+    "url": "https://dynami-quote-ib3f9lihz-salvador-ruiz-esparzas-projects.vercel.app",
+    "application_commit": "11698a20ca45b20d7c0fa0980e03fc936a862c50"
+  },
+  "case": {
+    "client_id": "cmvk731b2000007kx3slteamq",
+    "opportunity_id": "0bcc5bb9-b546-47a1-8ed2-c268fcc20822",
+    "opportunity_number": "OPP-0063",
+    "private_note_id": "caff8f62-20c2-44c5-b0ac-e8fe122357e4",
+    "general_note_id": "bdbfe037-96f7-4faa-98f9-005e039b5e67"
+  },
+  "baseline": {
+    "peer": {
+      "role": "user",
+      "active": false,
+      "user_id": "crm-role-peer-20261023",
+      "tenant_id": "389b6cc1-2f8d-4fe4-bc3d-f50f92df3157"
+    },
+    "actor": {
+      "role": "superadmin",
+      "active": true,
+      "user_id": "user_3D45SeGQqBoyBe8v3XvOu39QdWH",
+      "tenant_id": "389b6cc1-2f8d-4fe4-bc3d-f50f92df3157"
+    },
+    "checked_at": "2026-10-23T03:29:37.737275+00:00",
+    "opportunity": {
+      "client_id": "cmvk731b2000007kx3slteamq",
+      "tenant_id": "389b6cc1-2f8d-4fe4-bc3d-f50f92df3157",
+      "owner_user_id": "user_3D45SeGQqBoyBe8v3XvOu39QdWH",
+      "opportunity_id": "0bcc5bb9-b546-47a1-8ed2-c268fcc20822"
+    }
+  },
+  "seller_state": {
+    "checked_at": "2026-10-23T03:31:00.867Z",
+    "user_id": "user_3D45SeGQqBoyBe8v3XvOu39QdWH",
+    "role": "user",
+    "tenant_id": "389b6cc1-2f8d-4fe4-bc3d-f50f92df3157",
+    "owner_user_id": "crm-role-peer-20261023",
+    "opportunity_id": "0bcc5bb9-b546-47a1-8ed2-c268fcc20822"
+  },
+  "owner_state": {
+    "user_id": "user_3D45SeGQqBoyBe8v3XvOu39QdWH",
+    "role": "owner",
+    "tenant_id": "389b6cc1-2f8d-4fe4-bc3d-f50f92df3157"
+  },
+  "browser_assertions": {
+    "seller": {
+      "generalVisible": true,
+      "privateCount": 0,
+      "hiddenOpportunity": true
+    },
+    "owner": {
+      "generalVisible": true,
+      "privateVisible": true,
+      "opportunityVisible": true
+    }
+  },
+  "restored_state": {
+    "checked_at": "2026-10-23T03:31:49.715Z",
+    "user_id": "user_3D45SeGQqBoyBe8v3XvOu39QdWH",
+    "role": "superadmin",
+    "tenant_id": "389b6cc1-2f8d-4fe4-bc3d-f50f92df3157",
+    "active": true,
+    "owner_user_id": "user_3D45SeGQqBoyBe8v3XvOu39QdWH",
+    "opportunity_id": "0bcc5bb9-b546-47a1-8ed2-c268fcc20822",
+    "peer_active": false,
+    "qa_notes": "2"
+  },
+  "restoration_verified": true,
+  "restored_browser_evidence": "Configuración de SynAppsSys volvió a mostrar selector de empresa y fila salvador.ruiz con role superadmin.",
+  "screenshots": [
+    "crm-notes-seller-verified.jpg",
+    "crm-notes-owner-verified.jpg"
+  ],
+  "limits": [
+    "Solo ficha 360 del cliente ficticio en SynAppsSys. No certifica todas las rutas, todos los roles, ni un vendedor sin ninguna propiedad sobre cotizaciones/propuestas.",
+    "Cotización y propuesta permanecieron visibles para el vendedor por su autoría propia; lo reasignado fue únicamente la oportunidad. No se atribuye al ensayo una ocultación de esos documentos.",
+    "No se modificó el usuario ficticio; siguió inactivo. No se tocaron datos o permisos de producción, no se enviaron correos ni se facturó.",
+    "Las dos notas se conservaron; no se crearon ni borraron notas durante este ensayo."
+  ]
+}

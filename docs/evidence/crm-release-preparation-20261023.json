@@ -1,0 +1,124 @@
+{
+  "schema_version": 1,
+  "recorded_at": "2026-10-23T16:14:33.702Z",
+  "status": "prepared_not_released",
+  "source": {
+    "crm": "e122c48a0c406ddebf6d6b955920639d78412172",
+    "crm_tree": "877540ae21d056fd1e288a37a2be19a45c30fcc1",
+    "crm_ci": {
+      "id": 39983511078,
+      "head_sha": "e122c48a0c406ddebf6d6b955920639d78412172",
+      "status": "completed",
+      "conclusion": "success",
+      "url": "https://github.com/B10sp4rt4n/DynamiQuote/actions/runs/39983511078"
+    },
+    "fiscal_validated_code": "074523e5d6647f8b4b92d34a590b13525d966d91",
+    "fiscal_docs_before_preparation": "dbb32977ad44e94734df3a599f827378efea6fa0",
+    "crm_source_restored_files": 425,
+    "approved_production_fallback": false
+  },
+  "neon": {
+    "project_id": "cool-resonance-22906937",
+    "branch_id": "br-quiet-morning-ahkomhhi",
+    "database_name": "neondb",
+    "history_retention_seconds": 21600,
+    "postgres_version": 17,
+    "snapshots": 0,
+    "snapshot_schedule": [],
+    "production_readonly_counts": [
+      {
+        "checked_at": "2026-10-23T16:11:05.513Z",
+        "database_name": "neondb",
+        "database_bytes": "41762816",
+        "other_client_sessions": "0",
+        "uncertain_invoice_count": "0",
+        "fiscal_evidence_count": "1"
+      }
+    ],
+    "validation_branch": [
+      {
+        "id": "br-old-pond-ahe5jto3",
+        "expires_at": "2026-10-23T20:25:00Z",
+        "not_a_production_backup": true
+      }
+    ]
+  },
+  "operator_proposal": {
+    "scope": "Salvador only, proposed not approved; no membership changes",
+    "current_database_membership": [
+      {
+        "user_id": "user_3D45SeGQqBoyBe8v3XvOu39QdWH",
+        "alias": "salvador.ruiz",
+        "role": "superadmin",
+        "active": true,
+        "tenant_id": "389b6cc1-2f8d-4fe4-bc3d-f50f92df3157",
+        "tenant_slug": "sys",
+        "tenant_active": true
+      }
+    ],
+    "prior_login_evidence": "docs/evidence/crm-identity-provider-verification.json",
+    "fresh_login_performed": false,
+    "additional_users_verified": false
+  },
+  "fiscal_runtime": {
+    "project_id": "911f84ed-a4df-40ec-a122-f77d26da261c",
+    "deployment_id": "fced17d8-aa0b-4ca1-a1c5-692c138de8e5",
+    "status": "SUCCESS",
+    "attributed_commit": "9e251d761a23dccc554c11ba0a22274fd4f8e269",
+    "database_type_or_location": "unknown; OAuth returns variable names only",
+    "database_value_read": false,
+    "mounted_volumes_observed": 0,
+    "mounted_volumes_limit": "does not prove SQLite or ephemeral data; DB may be remote",
+    "outgoing_project_webhooks": 0,
+    "lifespan_config_procfile_diff_from_deployed_commit": false,
+    "inspection_script": "B10sp4rt4n/digestor__fiscal scripts/inspect_release_storage.py",
+    "inspection_executed_in_production": false,
+    "inspection_local_checks": "synthetic PostgreSQL and SQLite metadata; no DB connection; no username/password in output"
+  },
+  "old_cotiza_writer": {
+    "deployment": "1e21faa5-0be3-4ceb-9235-12eacd65c925",
+    "status": "SUCCESS",
+    "replicas": 1,
+    "staged": null,
+    "stopped": false,
+    "external_consumer_inventory_complete": false
+  },
+  "vercel": {
+    "latest_access_attempt": "403 forbidden for team_wCPRqvRGXWpRT4eUvfAz38jF",
+    "resource": "dynami-quote.vercel.app",
+    "scope": "salvador-ruiz-esparzas-projects",
+    "authorization_helper_tool_available": false,
+    "current_alias_not_reverified": true,
+    "last_verified_production": {
+      "deployment": "dpl_GvKryAuSHx1QQe22MNAUymSiUKwG",
+      "sha": "55760ab4c4fa45ddf2c0f940694441ee129aefc6"
+    }
+  },
+  "backup_execution": {
+    "performed": false,
+    "pg_dump_available": false,
+    "pg_restore_available": false,
+    "psql_available": false,
+    "gpg_available": true,
+    "approved_destination_configured": false,
+    "approved_recovery_key_selected": false,
+    "private_database_export_created": false,
+    "reason": "No trusted persistent recovery destination/key or operator workstation selected; no database clients in this runtime"
+  },
+  "remaining": [
+    "Inspect actual fiscal storage metadata via authorized operator or approved browser fallback; independently back up and rehearse recovery of the fiscal DB",
+    "Perform CRM production backup/restore from trusted operator workstation and private approved storage",
+    "Confirm actual launch operators; Salvador-only remains a proposal",
+    "Restore Vercel team visibility through the provider authorization flow",
+    "Close external writer inventory/drain, prior real redacted PAC response review, final preflight and release approval"
+  ],
+  "mutations": {
+    "production_database": false,
+    "provider_requests": false,
+    "deployment": false,
+    "variables": false,
+    "services_stopped": false,
+    "invitations_or_mail": false,
+    "new_services_or_paid_snapshots": false
+  }
+}

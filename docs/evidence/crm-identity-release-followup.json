@@ -1,0 +1,116 @@
+{
+  "schema_version": 1,
+  "recorded_at": "2026-10-23T04:12:42.724124+00:00",
+  "code_commit": "aee0b0d4962cc98f076b29474a3796abf5b5516a",
+  "code_tree": "2037573c2a9f901d7f2ee69913c8daa9eb17fe92",
+  "diagnostic": {
+    "route": "GET /api/settings/users/identity-audit",
+    "authorization": "exact local superadmin; no authenticated context 401, other role 403",
+    "semantics": "Reads Clerk by exact user ID. Pending invitation match requires exact local ID and tenant metadata. Never relinks by email. No invitations, tokens, metadata writes, emails or membership mutations. No-store response omits email values.",
+    "limits": "At most 500 active local users and first 100 pending invitations; incomplete invitation page explicitly marked. Does not prove individual login or ownership when provider access is unavailable."
+  },
+  "preview": {
+    "id": "dpl_64rTpxKfpNXFJAixGoL6WK3bMsbd",
+    "url": "https://dynami-quote-qm4qoemp8-salvador-ruiz-esparzas-projects.vercel.app",
+    "state": "READY",
+    "target": "preview",
+    "sha": "aee0b0d4962cc98f076b29474a3796abf5b5516a",
+    "database_branch": "br-old-pond-ahe5jto3",
+    "database_scope_comparison": "Vercel branch DATABASE_URL compared privately with Neon connection: host, database and role match; no credentials copied",
+    "unauthenticated_browser_result": {
+      "error": "No autorizado"
+    },
+    "authenticated_provider_audit_completed": false
+  },
+  "membership_read_only_comparison": {
+    "production_branch": "br-quiet-morning-ahkomhhi",
+    "copy_branch": "br-old-pond-ahe5jto3",
+    "production_active": 9,
+    "copy_active": 9,
+    "fields_compared": [
+      "user_id",
+      "alias",
+      "role",
+      "tenant_id",
+      "lower(trim(email))"
+    ],
+    "production_copy_equal": true,
+    "production_unchanged_after_review": true,
+    "copy_unchanged_after_review": true,
+    "raw_email_values_not_saved": true
+  },
+  "railway_read_only_diagnosis": {
+    "deployment_id": "1e21faa5-0be3-4ceb-9235-12eacd65c925",
+    "state": "SUCCESS",
+    "repo": null,
+    "branch": null,
+    "commitHash": null,
+    "sourceImage": null,
+    "startCommand": null,
+    "diagnosis": null,
+    "database_destination_verified": false,
+    "changed": false
+  },
+  "maintenance_attempt": {
+    "flag_id": "OWA5fIjioDiLgMQV",
+    "target": [
+      "preview"
+    ],
+    "git_branch": "fix/multitenant-foundation",
+    "created_value": "paused",
+    "final_value": "off",
+    "production_flag_created": false,
+    "redeploy_executed": false,
+    "paused_remote_build_observed": false,
+    "remote_pause_resume_test_completed": false,
+    "latest_deployment_after_attempt": "dpl_64rTpxKfpNXFJAixGoL6WK3bMsbd",
+    "production_env_metadata_compared": 14,
+    "production_env_metadata_equal": true
+  },
+  "approval_blocks": [
+    {
+      "action": "GitHub Authorize clerk",
+      "account": "B10sp4rt4n",
+      "application": "Clerk Development & Staging Instances",
+      "scopes": [
+        "read:user",
+        "user:email"
+      ],
+      "status": "rejected_by_automatic_approval_review",
+      "reason": "La acción concede a Clerk acceso persistente al perfil y correos de GitHub mediante OAuth; aunque sirve para validar identidades, el consentimiento y esos permisos concretos no están autorizados explícitamente por el usuario en el registro confiable.",
+      "consequence": "No se completo login en nueva preview ni consulta autenticada al proveedor.",
+      "screenshot": "crm-oauth-consent-pending.jpg"
+    },
+    {
+      "action": "Vercel redeploy of isolated preview",
+      "status": "rejected_by_automatic_approval_review",
+      "reason_available": false,
+      "detail": "Tool returned non-JSON rejection beginning This actio; parsing failed before raw result was retained. Do not infer the stated reason. Deployment was not created, and scoped maintenance flag was restored to off.",
+      "earlier_request_error": "Explicit target preview was rejected by API with 400; target permits production, staging or custom environment, so preview requires omitted target."
+    }
+  ],
+  "validation": {
+    "new_tests_passed": 14,
+    "all_general_tests_passed": 502,
+    "all_general_tests_skipped": 2,
+    "all_general_test_files": 52,
+    "typescript": "passed",
+    "eslint_new_route_and_test": "passed",
+    "new_recovery_source_files_restored_verified": 391,
+    "new_recovery_source_manifest": "crm-identity-recovery-source-manifest.json",
+    "new_recovery_source_local_commit": "d82b5da74c837a821f1e963281cfea8a1513ead7",
+    "new_recovery_source_tree_matches_remote": true,
+    "new_source_remote_build": "READY",
+    "new_source_authenticated_smoke": "blocked on OAuth consent"
+  },
+  "production_changed": false,
+  "emails_sent": false,
+  "identities_modified": false,
+  "remaining": [
+    "Approval for exact GitHub OAuth consent and isolated preview redeploys",
+    "Authenticated exact-ID Clerk audit",
+    "Remote pause and resume/recovery rehearsal",
+    "Confirm Railway destination/code and other writers",
+    "Prepare base backup, repeat preflight during drained maintenance window, obtain cutover approval"
+  ]
+}

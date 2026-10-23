@@ -1,0 +1,30 @@
+{
+  "algorithm": "SHA-256",
+  "authorization": "Review only; not permission to run production SQL.",
+  "files": [
+    {
+      "path": "cotiza-web/prisma/manual/20261022_multitenant_foundation.sql",
+      "sha256": "0c55d3c6919a1579a98aa7c4e770066bd13ca9124c85bb057f5034de75354a50"
+    },
+    {
+      "path": "cotiza-web/prisma/manual/20261022_multitenant_documents.sql",
+      "sha256": "4a7349bb26eaa0471379e6d750da565c1f71cee65718fa307cb15a3852e4d571"
+    },
+    {
+      "path": "scripts/repair_legacy_formal_tenants.sql",
+      "sha256": "4b32e0bb52220034110bf111b1ce30256caf64de6883a16ec5b7c12ae7d158e0"
+    },
+    {
+      "path": "scripts/repair_legacy_logo_tenants.sql",
+      "sha256": "5dc0408771198b7031a83f8324e0d2699ab3fc1cf1ed6ab6d651e020f2ddd626"
+    },
+    {
+      "path": "scripts/preflight_crm_cutover.sql",
+      "sha256": "accec9c7d7186ebe24f7ce171f8c21a6996b40238412467e72a6d2c861e298d6"
+    },
+    {
+      "path": "docs/evidence/legacy-logo-repair-manifest-20261022.json",
+      "sha256": "c6712603e6ed0ba052cafc1909d5c9c5a9438a12130a30656e14ad0dac069151"
+    }
+  ]
+}

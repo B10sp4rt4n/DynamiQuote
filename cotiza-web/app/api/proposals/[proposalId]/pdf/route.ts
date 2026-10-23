@@ -3,7 +3,7 @@ import { NextResponse } from "next/server";
 
 import { getCurrentTenantContext } from "@/lib/auth/tenant-context";
 import { recordProposalAuditEvent } from "@/lib/db/proposal-audit";
-import { consumeProposalIssuanceForce, getProposalWorkflowByTenant } from "@/lib/db/proposals";
+import { consumeProposalIssuanceForce, getProposalWorkflowByTenant, isProposalVisibleToViewer } from "@/lib/db/proposals";
 import { getTenantProfileByTenant } from "@/lib/db/tenants";
 import { resolveProposalIssuanceGate } from "@/lib/domain/proposal-issuance-gate";
 import { ProposalPdfDocument } from "@/lib/pdf/proposal-document";
@@ -42,6 +42,10 @@ export async function GET(request: Request, context: RouteContext) {
   }
 
   const { proposalId } = await context.params;
+  const canSeeAll = tenant.isSuperAdmin || tenant.userRole === "owner" || tenant.userRole === "admin";
+  if (!await isProposalVisibleToViewer(tenant.id, proposalId, tenant.userId, canSeeAll)) {
+    return NextResponse.json({ error: "Propuesta no encontrada" }, { status: 404 });
+  }
   const rateLimit = enforceRateLimit(`pdf:download:${tenant.id}:${proposalId}`, 30, 60_000);
 
   if (!rateLimit.allowed) {

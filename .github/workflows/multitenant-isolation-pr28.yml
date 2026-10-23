@@ -1,0 +1,91 @@
+name: Multitenant isolation (PR 28)
+
+# Only this PR branch. No production environment, no repository secrets,
+# no provider APIs, and no billed larger/self-hosted runners.
+on:
+  push:
+    branches:
+      - fix/multitenant-foundation
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+concurrency:
+  group: multitenant-isolation-${{ github.ref }}
+  cancel-in-progress: true
+
+jobs:
+  isolation:
+    name: TS, unit and disposable PostgreSQL
+    runs-on: ubuntu-24.04
+    timeout-minutes: 25
+    env:
+      # Never use a real DATABASE_URL. The integration harness independently
+      # creates a loopback-only PGlite socket with synthetic tenants.
+      DATABASE_URL: postgresql://unused:unused@127.0.0.1:1/unused
+      NEXT_TELEMETRY_DISABLED: "1"
+    steps:
+      - name: Check out the exact PR commit
+        uses: actions/checkout@11bd71901bbe5b1630ceea73d27597364c9af683 # v4.2.2
+        with:
+          persist-credentials: false
+
+      - name: Node 22
+        uses: actions/setup-node@49933ea5288caeca8642d1e84afbd3f7d6820020 # v4.4.0
+        with:
+          node-version: "22"
+
+      - name: Install existing locked dependencies
+        run: npm ci --no-audit --no-fund
+
+      - name: Generate workspace Prisma client
+        run: npm --prefix cotiza-web run db:generate
+
+      - name: TypeScript compilation check
+        run: ./cotiza-web/node_modules/.bin/tsc --noEmit --project cotiza-web/tsconfig.json
+
+      - name: Synthetic encrypted backup and restore safety checks
+        run: bash scripts/test_backup_neon_encrypted.sh
+
+      - name: General Vitest suite (no external database)
+        run: npm --prefix cotiza-web test -- --exclude validate-quote-lifecycle.e2e.test.ts
+
+      - name: Install isolated test database modules outside repository
+        run: |
+          npm install --prefix "$RUNNER_TEMP/cotiza-pg-review" --no-audit --no-fund --save-exact \
+            @electric-sql/pglite@0.5.11 @electric-sql/pglite-socket@0.2.14
+          echo "PGLITE_MODULE=$RUNNER_TEMP/cotiza-pg-review/node_modules/@electric-sql/pglite/dist/index.js" >> "$GITHUB_ENV"
+          echo "PGLITE_SOCKET_MODULE=$RUNNER_TEMP/cotiza-pg-review/node_modules/@electric-sql/pglite-socket/dist/index.js" >> "$GITHUB_ENV"
+
+      - name: PostgreSQL constraints, safe writes and rollback on synthetic data
+        run: node scripts/check_multitenant_migration.mjs
+
+      - name: Handler, Prisma and fiscal-concurrency integration in disposable database
+        run: node scripts/check_crm_isolation.mjs
+
+  backup-real-postgres:
+    name: Encrypted backup/restore with REAL disposable PostgreSQL 17
+    runs-on: ubuntu-24.04
+    timeout-minutes: 15
+    services:
+      postgres:
+        image: postgres:17
+        env:
+          POSTGRES_USER: cotiza_ci
+          POSTGRES_PASSWORD: cotiza-ci-fixture-only
+          POSTGRES_DB: cotiza_source_fixture
+        ports:
+          - 55432:5432
+        options: >-
+          --health-cmd "pg_isready -U cotiza_ci -d cotiza_source_fixture"
+          --health-interval 5s
+          --health-timeout 5s
+          --health-retries 10
+    steps:
+      - name: Read the exact PR commit
+        uses: actions/checkout@11bd71901bbe5b1630ceea73d27597364c9af683 # v4.2.2
+        with:
+          persist-credentials: false
+      - name: Encrypt and restore fictional data via actual Postgres client tools
+        run: bash scripts/test_backup_postgres_real.sh

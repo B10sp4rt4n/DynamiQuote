@@ -3,6 +3,7 @@ import { beforeEach, describe, expect, it, vi } from "vitest";
 const mocks = vi.hoisted(() => ({
   tenant: vi.fn(),
   proposal: vi.fn(),
+  visible: vi.fn(),
   excel: vi.fn(),
   audit: vi.fn(),
   consume: vi.fn(),
@@ -16,6 +17,7 @@ const mocks = vi.hoisted(() => ({
 vi.mock("@/lib/auth/tenant-context", () => ({ getCurrentTenantContext: mocks.tenant }));
 vi.mock("@/lib/db/proposals", () => ({
   getProposalWorkflowByTenant: mocks.proposal,
+  isProposalVisibleToViewer: mocks.visible,
   getProposalExcelPayloadByTenant: mocks.excel,
   consumeProposalIssuanceForce: mocks.consume,
   importProposalItemsByTenant: vi.fn(),
@@ -40,6 +42,7 @@ const request = (method: string) => new Request("http://localhost/api/proposals/
 describe.each([["PDF", pdf], ["Excel", xlsx]] as const)("%s metadata vs download", (_format, route) => {
   beforeEach(() => {
     vi.resetAllMocks();
+    mocks.visible.mockResolvedValue(true);
     mocks.tenant.mockResolvedValue({ id: "tenant-1", name: "Empresa", userId: "user-1" });
     const proposal = {
       proposalId: "proposal-1", status: "approved", formal: { proposalNumber: "PROP-1" },
@@ -50,6 +53,15 @@ describe.each([["PDF", pdf], ["Excel", xlsx]] as const)("%s metadata vs download
     mocks.gate.mockReturnValue({ kind: "allowed", forced: false, watermark: false });
     mocks.rateLimit.mockReturnValue({ allowed: true });
     mocks.render.mockResolvedValue(Buffer.from("%PDF-1.7"));
+  });
+
+  it("denies another seller's document for HEAD and GET before loading or issuing", async () => {
+    mocks.visible.mockResolvedValue(false);
+    expect((await route.HEAD(request("HEAD"), context())).status).toBe(404);
+    expect((await route.GET(request("GET"), context())).status).toBe(404);
+    expect(mocks.proposal).not.toHaveBeenCalled(); expect(mocks.excel).not.toHaveBeenCalled();
+    expect(mocks.render).not.toHaveBeenCalled(); expect(mocks.audit).not.toHaveBeenCalled();
+    expect(mocks.consume).not.toHaveBeenCalled();
   });
 
   it("HEAD then GET creates one audit event and consumes a forced authorization only on GET", async () => {

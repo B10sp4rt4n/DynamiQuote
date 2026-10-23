@@ -11,7 +11,7 @@ import {
   getProposalInvoiceStatusByTenant,
   saveProposalInvoiceDraftByTenant,
 } from "@/lib/db/proposal-invoices";
-import { getProposalWorkflowByTenant } from "@/lib/db/proposals";
+import { getProposalWorkflowByTenant, isProposalVisibleToViewer } from "@/lib/db/proposals";
 import { getTenantProfileByTenant } from "@/lib/db/tenants";
 import { createProposalInvoiceSchema } from "@/lib/validations/proposal-invoice";
 
@@ -30,6 +30,10 @@ export async function GET(_: Request, context: RouteContext) {
   }
 
   const { proposalId } = await context.params;
+  const canSeeAll = tenant.isSuperAdmin || tenant.userRole === "owner" || tenant.userRole === "admin";
+  if (!await isProposalVisibleToViewer(tenant.id, proposalId, tenant.userId, canSeeAll)) {
+    return NextResponse.json({ error: "Propuesta no encontrada" }, { status: 404 });
+  }
   const [invoice, clientFiscalData] = await Promise.all([
     getProposalInvoiceStatusByTenant(tenant.id, proposalId),
     getClientFiscalDataForProposalByTenant(tenant.id, proposalId),
@@ -53,9 +57,26 @@ export async function POST(request: Request, context: RouteContext) {
   }
 
   const { proposalId } = await context.params;
+  const canSeeAll = tenant.isSuperAdmin || tenant.userRole === "owner" || tenant.userRole === "admin";
+  if (!await isProposalVisibleToViewer(tenant.id, proposalId, tenant.userId, canSeeAll)) {
+    return NextResponse.json({ error: "Propuesta no encontrada" }, { status: 404 });
+  }
   const parsed = createProposalInvoiceSchema.safeParse(await request.json().catch(() => null));
   if (!parsed.success) {
     return NextResponse.json({ error: parsed.error.issues[0]?.message ?? "Payload invalido" }, { status: 422 });
+  }
+
+  // Bloquear tambien del lado del servidor: la UI no es barrera fiscal.
+  const invoice = await getProposalInvoiceStatusByTenant(tenant.id, proposalId);
+  if (!invoice) {
+    return NextResponse.json({ error: "Propuesta no encontrada" }, { status: 404 });
+  }
+  if (invoice.status === "stamped" || invoice.status === "stamping" ||
+      invoice.uuid || invoice.xmlBase64 || invoice.stampedAt) {
+    return NextResponse.json(
+      { error: "La factura ya esta timbrada o tiene un timbrado pendiente de conciliacion. No se puede regenerar la prefactura." },
+      { status: 409 },
+    );
   }
 
   const proposal = await getProposalWorkflowByTenant(tenant.id, proposalId);
@@ -122,7 +143,15 @@ export async function POST(request: Request, context: RouteContext) {
       placeOfIssue,
     });
 
-    await saveProposalInvoiceDraftByTenant(tenant.id, proposalId, draft.id);
+    const saved = await saveProposalInvoiceDraftByTenant(tenant.id, proposalId, draft.id, invoice.draftId);
+    if (!saved) {
+      // El timbrado pudo iniciar mientras se creaba el borrador remoto.
+      // Dejar el borrador remoto sin vincular, nunca sobrescribir el CFDI.
+      return NextResponse.json(
+        { error: "La factura cambio de estado mientras se generaba la prefactura. Actualiza la pagina." },
+        { status: 409 },
+      );
+    }
 
     if (input.saveToClient) {
       const clientFiscalData = await getClientFiscalDataForProposalByTenant(tenant.id, proposalId);

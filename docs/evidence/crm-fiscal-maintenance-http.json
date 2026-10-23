@@ -1,0 +1,91 @@
+{
+  "target": "loopback-only",
+  "database": "unreachable placeholder",
+  "clerk": "disabled",
+  "results": [
+    {
+      "mode": "paused",
+      "method": "GET",
+      "route": "/clientes/qa",
+      "status": 503
+    },
+    {
+      "mode": "paused",
+      "method": "HEAD",
+      "route": "/propuestas/qa/pdf",
+      "status": 503
+    },
+    {
+      "mode": "paused",
+      "method": "GET",
+      "route": "/api/settings/test-email",
+      "status": 503
+    },
+    {
+      "mode": "paused",
+      "method": "POST",
+      "route": "/api/webhooks/clerk",
+      "status": 503
+    },
+    {
+      "mode": "paused",
+      "method": "POST",
+      "route": "/api/quotes",
+      "status": 503
+    },
+    {
+      "mode": "paused",
+      "method": "PUT",
+      "route": "/api/proposals/qa",
+      "status": 503
+    },
+    {
+      "mode": "paused",
+      "method": "PATCH",
+      "route": "/api/settings/users/qa",
+      "status": 503
+    },
+    {
+      "mode": "paused",
+      "method": "DELETE",
+      "route": "/api/quotes/qa",
+      "status": 503
+    },
+    {
+      "mode": "paused",
+      "method": "POST",
+      "route": "/clientes/qa",
+      "status": 503
+    },
+    {
+      "mode": "paused",
+      "method": "GET",
+      "route": "/api/exports/report.xlsx",
+      "status": 503
+    },
+    {
+      "mode": "paused",
+      "method": "GET",
+      "route": "/clientes/report.csv",
+      "status": 503
+    },
+    {
+      "mode": "paused",
+      "method": "POST",
+      "route": "/api/proposals/qa/invoice/reconcile",
+      "status": 503
+    },
+    {
+      "mode": "off",
+      "method": "POST",
+      "route": "/api/quotes",
+      "status": 401
+    },
+    {
+      "mode": "off",
+      "method": "GET",
+      "route": "/api/webhooks/clerk",
+      "status": 200
+    }
+  ]
+}
