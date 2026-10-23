@@ -99,6 +99,14 @@
       "signed_webhook_call": false
     },
     {
+      "path": "cotiza-web/app/api/proposals/[proposalId]/invoice/reconcile/route.ts",
+      "methods": [
+        "POST"
+      ],
+      "tenant_context_call": true,
+      "signed_webhook_call": false
+    },
+    {
       "path": "cotiza-web/app/api/proposals/[proposalId]/invoice/route.ts",
       "methods": [
         "POST"
@@ -307,7 +315,7 @@
       "methods": [
         "POST"
       ],
-      "tenant_context_call": false,
+      "tenant_context_call": true,
       "signed_webhook_call": true
     }
   ]

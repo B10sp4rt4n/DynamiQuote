@@ -4,6 +4,12 @@ Estado: preparado para revisión; **no autorizado para ejecución productiva**.
 El PR #28 sigue en borrador. Este documento no autoriza migraciones, cambios de
 permisos, interrupciones de servicios, correos, facturación ni publicación.
 
+Acceso habitual aclarado por Salvador: https://dynami-quote.vercel.app/cotizaciones.
+La API Vercel lo resolvió a producción/main/55760ab4, deployment
+dpl_GvKryAuSHx1QQe22MNAUymSiUKwG. Se retira la inferencia conversacional de que
+trabajaba en Railway. El plan conserva su enlace y mantiene abierto el inventario
+de otros consumidores del servicio antiguo.
+
 ## Criterio de salida
 
 | Frente | Evidencia existente | Condición restante |
@@ -13,6 +19,7 @@ permisos, interrupciones de servicios, correos, facturación ni publicación.
 | Documentos históricos | Muestra PDF previa y 12 documentos reparados en copia | No certifica todos los documentos ni una moneda original NULL |
 | Emisor nuevo | Tres escenarios de integración y PROP-2026-0283 ficticia en navegador/PDF | No designa razón social ni perfil default por el usuario |
 | Identidad | Cinco IDs encontrados por ID exacto en Clerk; login vigente de superadmin probado; alta sin reasignación por correo | Aprobar lista de usuarios que operarán al lanzamiento, verificar solo sus IDs/logins/roles; mantener pendientes y legacy sin vincular ni darles acceso |
+| Facturación | Reserva, bloqueo de resultado incierto y conciliación incorporados; evidencia histórica del checkpoint f3683dc8 en crm-fiscal-validation-f3683dc8.md y CI posterior en el PR | Validar/desplegar Digestor compatible antes del corte; no se probó timbrado remoto real |
 | Otros escritores | Railway SUCCESS/instancia conectada; host/base del runtime coinciden con Neon productivo; snapshot, build y huellas capturados | Código Git exacto desconocido; controlar/parar y drenar Railway por separado; inventario externo no cerrado |
 | Mantenimiento y recuperación | Pausa y reanudación de dos rutas probadas en Preview con sesión real; preparación de fuente fija y HTTP local comprobados | Respaldo de base y parada/drenado de todos los escritores; sin restauración DB ni rollback de código del hosting probado |
 | Manifiestos | 7 comprobaciones sin discrepancias en producción/copia; control negativo detectado | Repetir en destino al corte, dentro de ventana sin escrituras |
@@ -113,6 +120,15 @@ No ejecutar migrations, depuración o despliegue productivo por esta nota.
 
 ## Ejecución propuesta, únicamente después de aprobación
 
+Antes de esta ejecución, validar y desplegar Digestor Fiscal compatible con
+GET /v1/billing/drafts/{draft_id}/stamp-result (PR #2 de digestor__fiscal aún
+borrador al verificar). El trabajo de Cotiza PR #5 ya está incorporado al
+candidato CRM con autorización por vendedor y conservación de evidencia fiscal;
+no fusionar ese PR por separado sin conciliar sus cambios. Esta revisión no
+fusionó ni desplegó esos PR originales. La evidencia de f3683dc8 es histórica:
+no volver a ese checkpoint omitiendo los arreglos de privacidad/concurrencia
+posteriores. Ver docs/crm-fiscal-validation-f3683dc8.md.
+
 1. Establecer una ventana de mantenimiento con todos los escritores identificados
    detenidos mediante su procedimiento aprobado. Esta versión incorpora
    `CRM_MAINTENANCE_MODE=paused` para cerrar el tráfico HTTP antes de los handlers,
@@ -126,6 +142,10 @@ No ejecutar migrations, depuración o despliegue productivo por esta nota.
    `scripts/preflight_crm_cutover.sql`. Todos los siete contadores de discrepancia
    de preflight deben ser cero. Si cambian fuente, tenant, documento o referencia,
    detener el corte y regenerar/revisar el manifiesto; no forzar la reparación.
+   Ejecutar además scripts/audit_invoice_rollout.sql y revisar estados fiscales
+   desconocidos, stamping pendiente o evidencia incoherente. No borrar ni
+   rellenar UUID/XML por suposición. Son controles adicionales, no sustituyen
+   los siete contadores del preflight CRM.
 4. Con conexión directa al destino verificado y parada ante cualquier error,
    aplicar en este orden, respetando cada BEGIN/COMMIT del archivo:
    - `cotiza-web/prisma/manual/20261022_multitenant_foundation.sql`.
