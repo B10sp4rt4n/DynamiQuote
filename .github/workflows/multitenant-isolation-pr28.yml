@@ -63,3 +63,29 @@ jobs:
 
       - name: Handler, Prisma and fiscal-concurrency integration in disposable database
         run: node scripts/check_crm_isolation.mjs
+
+  backup-real-postgres:
+    name: Encrypted backup/restore with REAL disposable PostgreSQL 17
+    runs-on: ubuntu-24.04
+    timeout-minutes: 15
+    services:
+      postgres:
+        image: postgres:17
+        env:
+          POSTGRES_USER: cotiza_ci
+          POSTGRES_PASSWORD: cotiza-ci-fixture-only
+          POSTGRES_DB: cotiza_source_fixture
+        ports:
+          - 55432:5432
+        options: >-
+          --health-cmd "pg_isready -U cotiza_ci -d cotiza_source_fixture"
+          --health-interval 5s
+          --health-timeout 5s
+          --health-retries 10
+    steps:
+      - name: Read the exact PR commit
+        uses: actions/checkout@11bd71901bbe5b1630ceea73d27597364c9af683 # v4.2.2
+        with:
+          persist-credentials: false
+      - name: Encrypt and restore fictional data via actual Postgres client tools
+        run: bash scripts/test_backup_postgres_real.sh
