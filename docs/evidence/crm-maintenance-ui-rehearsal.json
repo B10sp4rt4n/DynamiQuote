@@ -1,0 +1,85 @@
+{
+  "schema_version": 1,
+  "recorded_at": "2026-10-23T04:59:00.971330+00:00",
+  "status": "completed_preview_pause_resume",
+  "authorized_scope": "preview only, fix/multitenant-foundation, isolated Neon br-old-pond-ahe5jto3",
+  "ui_account": "b10sp4rt4n",
+  "ui_team": "salvador-ruiz-esparzas-projects",
+  "ui_project": "dynami-quote",
+  "source_deployment": "dpl_64rTpxKfpNXFJAixGoL6WK3bMsbd",
+  "source_sha": "aee0b0d4962cc98f076b29474a3796abf5b5516a",
+  "source_branch": "fix/multitenant-foundation",
+  "explicit_environment_selector": "Preview",
+  "ui_target_evidence": "crm-preview-redeploy-target.jpg",
+  "paused_deployment": "dpl_5pBjtHaXSQn5YpWHVEpB4rbx2mNf",
+  "paused_origin": "https://dynami-quote-djzvhq9gt-salvador-ruiz-esparzas-projects.vercel.app",
+  "pause_result": {
+    "deployment_ready": true,
+    "browser_GET_routes": [
+      "/api/settings/users/identity-audit",
+      "/inicio"
+    ],
+    "observed_code": "CRM_MAINTENANCE",
+    "observed_message": "CRM temporalmente en mantenimiento. Intenta nuevamente mas tarde.",
+    "http_status_measured": false,
+    "numeric_503_basis": "Source and prior local HTTP checks; browser observation retained response body only."
+  },
+  "resume_result": {
+    "deployment_ready": true,
+    "maintenance_flag": "off",
+    "browser_GET_inicio": "authenticated SynAppsSys rendered; one enabled tenant user",
+    "browser_GET_identity_audit": "read_only true; nine users; checked_at 2026-10-23T04:58:09.475Z",
+    "individual_login_tested": "salvador.ruiz only",
+    "http_numeric_status_measured": false
+  },
+  "production_released": false,
+  "authentication": "Vercel 2FA secure request returned submission_failed; explicit navigation to retained deployment then confirmed account b10sp4rt4n and authenticated deployment details. No credentials retained.",
+  "resume_deployment": "dpl_FRWsmsRs25yTCFqTwTPJEzLP9hGE",
+  "resume_origin": "https://dynami-quote-4j7ccback-salvador-ruiz-esparzas-projects.vercel.app",
+  "environment_check": {
+    "production_envs_unchanged": true,
+    "production_env_count": 14,
+    "maintenance": {
+      "id": "OWA5fIjioDiLgMQV",
+      "key": "CRM_MAINTENANCE_MODE",
+      "value": "off",
+      "target": [
+        "preview"
+      ],
+      "gitBranch": "fix/multitenant-foundation"
+    }
+  },
+  "membership_check": {
+    "production_count": 9,
+    "copy_count": 9,
+    "production_unchanged": true,
+    "copy_unchanged": true,
+    "both_equal": true
+  },
+  "production_deployment": "dpl_GvKryAuSHx1QQe22MNAUymSiUKwG",
+  "production_sha": "55760ab4c4fa45ddf2c0f940694441ee129aefc6",
+  "production_branch": "main",
+  "resume_deployment_ready": true,
+  "evidence_files": [
+    "crm-preview-redeploy-target.jpg",
+    "crm-maintenance-paused.jpg",
+    "crm-maintenance-resumed.jpg",
+    "crm-maintenance-resumed-audit.json"
+  ],
+  "limitations": [
+    "Same pinned code redeployed with changed preview branch environment; not a hosting code rollback.",
+    "Only GET /inicio and GET /api/settings/users/identity-audit exercised in remote pause/resume; other methods covered by prior local HTTP tests.",
+    "No database restore or stop of direct SQL, Railway, background or in-flight writers tested.",
+    "No production cutover, migrations, mail, invitations, invoice stamping or account relinking.",
+    "Recordia local_only; no external receipt or HotVault custody."
+  ],
+  "prior_blocks": "Automatic review rejected connector deployments because request omitted explicit target. UI alternative explicitly selected Preview with exact branch/source; no connector create_deployment retry used.",
+  "runtime_code_changed": false,
+  "tests": "No tests rerun for documentation/evidence-only continuation. Prior 502 general tests passed; two skipped.",
+  "evidence_sha256": {
+    "crm-preview-redeploy-target.jpg": "44d0d382c60451127e5c1c6fad8d2eb8fd121e23129d1b8f928093b226a11a02",
+    "crm-maintenance-paused.jpg": "c18c0ec61807396d3b5170e6315cb309ce63e789671742f15f2c3f9d5148ddc0",
+    "crm-maintenance-resumed.jpg": "7ac4022864cf6fb4779cb0744edef2fd4ce44fce64c626f5cbee8c69773f634d",
+    "crm-maintenance-resumed-audit.json": "b9d61c468267735201a8202f7f247830be4a62fa0265873bad24f7f7a5abe87d"
+  }
+}

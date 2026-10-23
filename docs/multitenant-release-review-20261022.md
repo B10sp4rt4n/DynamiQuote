@@ -477,3 +477,39 @@ actual y límites en docs/evidence/crm-identity-provider-verification.json,
 crm-identity-provider-observed.json y crm-identity-signed-in.jpg. El PR sigue
 borrador; falta resolver identidad pendiente/legacy, escritor antiguo, ensayo de
 mantenimiento/recuperación, respaldo y aprobación final de corte.
+
+## Ensayo remoto de pausa y reanudación completado por UI
+
+Tras la solicitud posterior de ayuda de Salvador se completó el acceso seguro
+de Vercel. El formulario seleccionó Preview explícitamente para la misma rama
+fix/multitenant-foundation y fuente aee0b0d4, conectada a la copia Neon
+br-old-pond-ahe5jto3. Esto resolvió la ambigüedad de destino que había rechazado
+la revisión automática de la API; no se repitió aquella llamada con target omitido.
+
+Con CRM_MAINTENANCE_MODE=paused, dpl_5pBjtHaXSQn5YpWHVEpB4rbx2mNf quedó
+READY y el navegador mostró CRM_MAINTENANCE en GET /inicio y GET
+/api/settings/users/identity-audit. No se midió el código HTTP numérico remoto;
+el 503 está comprobado en fuente y pruebas HTTP locales anteriores.
+
+Se restauró el flag exclusivamente preview/rama a off y se redesplegó la misma
+fuente mediante el selector Preview. dpl_FRWsmsRs25yTCFqTwTPJEzLP9hGE quedó
+READY. El login GitHub/Clerk con los permisos existentes terminó en Inicio de
+SynAppsSys con sesión real y un usuario habilitado. El diagnóstico autenticado
+volvió a responder read_only=true y nueve usuarios a las 04:58:09.475Z del
+23 de octubre de 2026. Conserva los pendientes de identidad anteriores.
+
+Producción conserva dpl_GvKryAuSHx1QQe22MNAUymSiUKwG/main/55760ab4;
+los metadatos de sus 14 variables siguen iguales. Las nueve pertenencias,
+incluido el correo normalizado comparado privadamente, están intactas e iguales
+en ambas bases. No se cambió código ni se repitieron las 502 pruebas.
+El ensayo acredita el ciclo HTTP de esas dos rutas y redespliegue de fuente fija;
+no restaura base, no certifica rollback de código del hosting ni detiene
+escritores externos o solicitudes en curso.
+
+Evidencia: docs/evidence/crm-maintenance-ui-rehearsal.json y las capturas/consulta
+referidas en su manifiesto. Este cierre posterior resuelve el bloqueo de 2FA y
+el ensayo remoto documentados antes, conservando su historia. El PR permanece
+borrador. Faltan identidades pending/legacy, revisar el contacto de Salvador sin
+alterar su ID funcional, confirmar destino/código de Railway, respaldo de base,
+cierre/drenado de escritores, preflight de corte y aprobación final.
+Recordia sigue local_only, sin acuse externo ni custodia HotVault.
