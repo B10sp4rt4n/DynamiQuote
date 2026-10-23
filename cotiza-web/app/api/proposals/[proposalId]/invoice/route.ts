@@ -58,6 +58,18 @@ export async function POST(request: Request, context: RouteContext) {
     return NextResponse.json({ error: parsed.error.issues[0]?.message ?? "Payload invalido" }, { status: 422 });
   }
 
+  // Bloquear tambien del lado del servidor: la UI no es barrera fiscal.
+  const invoice = await getProposalInvoiceStatusByTenant(tenant.id, proposalId);
+  if (!invoice) {
+    return NextResponse.json({ error: "Propuesta no encontrada" }, { status: 404 });
+  }
+  if (invoice.status === "stamped" || invoice.status === "stamping") {
+    return NextResponse.json(
+      { error: "La factura ya esta timbrada o tiene un timbrado pendiente de conciliacion. No se puede regenerar la prefactura." },
+      { status: 409 },
+    );
+  }
+
   const proposal = await getProposalWorkflowByTenant(tenant.id, proposalId);
   if (!proposal) {
     return NextResponse.json({ error: "Propuesta no encontrada" }, { status: 404 });
@@ -122,7 +134,15 @@ export async function POST(request: Request, context: RouteContext) {
       placeOfIssue,
     });
 
-    await saveProposalInvoiceDraftByTenant(tenant.id, proposalId, draft.id);
+    const saved = await saveProposalInvoiceDraftByTenant(tenant.id, proposalId, draft.id);
+    if (!saved) {
+      // El timbrado pudo iniciar mientras se creaba el borrador remoto.
+      // Dejar el borrador remoto sin vincular, nunca sobrescribir el CFDI.
+      return NextResponse.json(
+        { error: "La factura cambio de estado mientras se generaba la prefactura. Actualiza la pagina." },
+        { status: 409 },
+      );
+    }
 
     if (input.saveToClient) {
       const clientFiscalData = await getClientFiscalDataForProposalByTenant(tenant.id, proposalId);
