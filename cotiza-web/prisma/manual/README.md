@@ -104,3 +104,35 @@ Validar primero en una copia de producción, comparar conteos/importes y el hash
 de los campos originales; ejecutar dos veces para comprobar idempotencia. La
 etiqueta es compatible con el código anterior; aplicar antes del despliegue
 del código que la consume. No hay DDL ni dependencias nuevas.
+
+# Depuración histórica de descargas (22 de octubre de 2026)
+
+`20261022_archive_duplicate_download_events.sql` se aplicó por instrucción de
+Salvador tras corregir el fallback HEAD en el PR #18. Se revisó la tabla completa
+de auditoría (todos los tenants y fechas): 11 pares aislados con payload completo
+idéntico, mismo actor/propuesta/tenant, sin eventos intermedios y separados por
+1.143 a 3.347 segundos. Se excluyen emisiones forzadas, grupos de tres o más,
+peticiones con método HTTP registrado y eventos posteriores al despliegue de la
+corrección. La clasificación histórica es inferida: no había método HTTP en los
+eventos originales. No es una regla de deduplicación para descargas futuras.
+
+El script conserva el evento posterior y mueve el anterior, con todos sus campos
+originales, a `proposal_audit_events_dedup_archive`. El archivo incluye el lote,
+motivo, fecha y referencia al evento conservado. La aplicación sigue leyendo la
+tabla activa sin requerir cambios ni un despliegue nuevo. La tabla de archivo es
+operativa y no se consulta desde Prisma. No ejecutar `db push` para gestionarla.
+
+Resultado productivo: 176 eventos activos antes; 165 después y 11 recuperables en
+el archivo (10 de SynAppsSys en 6 propuestas; 1 de Soluciones Alemanas de Limpieza
+en 1 propuesta). No quedaron pares con payload idéntico separados por hasta 10
+segundos. Los hashes de propuestas, cotizaciones y oportunidades no cambiaron.
+La unión del historial activo y el archivo conserva exactamente el hash original
+de los 176 registros. La propuesta PROP-2026-0243 pasó de 11 a 8 entradas visibles,
+conservando también la descarga de verificación posterior al despliegue.
+
+Validación previa en rama aislada: ejecutar la limpieza dos veces (la segunda no
+modifica registros), comprobar los 11 eventos conservados y sus payloads, restaurar
+con `20261022_restore_duplicate_download_events.sql` y verificar que los 176
+registros recuperan exactamente el hash original. El rollback no borra el archivo.
+La limpieza aborta ante un alcance distinto de los 11 pares revisados; nunca debe
+ampliarse el umbral o quitarse esa aserción para forzar una ejecución.
