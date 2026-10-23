@@ -39,8 +39,11 @@ jobs:
       - name: Install existing locked dependencies
         run: npm ci --no-audit --no-fund
 
+      - name: Generate workspace Prisma client
+        run: npm --prefix cotiza-web run db:generate
+
       - name: TypeScript compilation check
-        run: ./node_modules/.bin/tsc --noEmit --project cotiza-web/tsconfig.json
+        run: ./cotiza-web/node_modules/.bin/tsc --noEmit --project cotiza-web/tsconfig.json
 
       - name: General Vitest suite (no external database)
         run: npm --prefix cotiza-web test -- --exclude validate-quote-lifecycle.e2e.test.ts

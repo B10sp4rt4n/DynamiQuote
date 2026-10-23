@@ -1,5 +1,5 @@
 // Disposable local PostgreSQL exercise. Never connects to the application's DB.
-import { readFileSync } from 'node:fs';
+import { existsSync, readFileSync } from 'node:fs';
 import { spawn, spawnSync } from 'node:child_process';
 import { fileURLToPath } from 'node:url';
 import path from 'node:path';
@@ -9,13 +9,22 @@ if (!process.env.PGLITE_MODULE || !process.env.PGLITE_SOCKET_MODULE) {
 }
 const root = fileURLToPath(new URL('../', import.meta.url));
 const web = path.join(root, 'cotiza-web');
+// npm workspaces may install CLI packages under cotiza-web/node_modules rather
+// than the repository root. Resolve both layouts without changing dependencies.
+function resolveCli(packageName, subpath) {
+  for (const modules of [path.join(web, 'node_modules'), path.join(root, 'node_modules')]) {
+    const candidate = path.join(modules, packageName, subpath);
+    if (existsSync(candidate)) return candidate;
+  }
+  throw new Error(`Cannot locate ${packageName}/${subpath} in the installed workspace`);
+}
 const { PGlite } = await import(process.env.PGLITE_MODULE);
 const { PGLiteSocketServer } = await import(process.env.PGLITE_SOCKET_MODULE);
 const db = await PGlite.create();
 let server;
 try {
   const schema = spawnSync(process.execPath, [
-    path.join(root, 'node_modules/prisma/build/index.js'), 'migrate', 'diff',
+    resolveCli('prisma', 'build/index.js'), 'migrate', 'diff',
     '--from-empty', '--to-schema', 'prisma/schema.prisma', '--script',
   ], { cwd: web, encoding: 'utf8', env: { ...process.env, DATABASE_URL: 'postgresql://test:test@127.0.0.1/unused' } });
   if (schema.status !== 0) throw new Error(schema.stderr || 'Cannot generate disposable schema');
@@ -31,7 +40,7 @@ try {
   const connection = `postgresql://postgres:postgres@${server.getServerConn()}/postgres`;
   console.log('Disposable database ready on loopback; schema and multitenant constraints applied.');
   const child = spawn(process.execPath, [
-    path.join(root, 'node_modules/vitest/vitest.mjs'), 'run',
+    resolveCli('vitest', 'vitest.mjs'), 'run',
     'lib/db/crm-isolation.integration.test.ts',
     'lib/db/opportunity-lifecycle.integration.test.ts',
     'lib/db/proposal-invoices.integration.test.ts',
