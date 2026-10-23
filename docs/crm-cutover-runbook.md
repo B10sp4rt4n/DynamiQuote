@@ -168,3 +168,41 @@ resuelve por sí sola las cuentas actuales ni certifica otros flujos de usuarios
 Evidencia adicional: `docs/evidence/crm-maintenance-recovery-verification.json`,
 `crm-maintenance-development-http.json`, `crm-recovery-production-http.json` y
 `crm-recovery-build.log`. Repetición HTTP local: `node scripts/check_crm_maintenance.mjs`.
+
+
+## Diagnóstico de identidad preparado; permisos pendientes
+
+Código remoto `aee0b0d4962cc98f076b29474a3796abf5b5516a`, árbol
+`2037573c2a9f901d7f2ee69913c8daa9eb17fe92`. Preview
+`dpl_64rTpxKfpNXFJAixGoL6WK3bMsbd` READY, conectada a la misma copia aislada
+por comparación privada de host/base/rol. `GET /api/settings/users/identity-audit`
+requiere superadmin local exacto y solo consulta al proveedor. No expone correos
+ni cambia identidades; distingue IDs encontrados, ausentes, bloqueados, legacy y
+pendientes. Las invitaciones se relacionan por ID local y tenant exactos; una
+página incompleta queda señalada. No prueba login individual ni concede acceso.
+
+Las nueve cuentas activas coinciden entre producción/copia en ID, alias, rol,
+tenant y correo normalizado. Se repitió la lectura al final: ambas permanecen
+intactas. La ruta remota respondió `No autorizado` sin sesión. No se completó la
+consulta autenticada: la revisión automática rechazó pulsar Authorize clerk para
+B10sp4rt4n, aplicación Clerk Development & Staging Instances, scopes read:user y
+user:email. El motivo fue falta de autorización explícita verificable de esos
+permisos de perfil y correos. El consentimiento queda preparado para revisión;
+no se usó otro método como rodeo.
+
+Se creó CRM_MAINTENANCE_MODE solo en preview y rama fix/multitenant-foundation.
+No llegó a ejecutarse el redespliegue: la API rechazó target=preview (400; se omite
+ese campo para preview), y el intento corregido fue rechazado por revisión
+automática. Su motivo no quedó recuperable en el resultado retenido. La variable
+se devolvió a `off`; el deployment anterior sigue READY. Las 14 variables con
+alcance production conservan sus metadatos de ID, tipo, destino y actualización.
+No hay prueba de pausa/reanudación remota y no se declara recuperación del hosting.
+
+La nueva fuente se restauró de commit fijo y verificó 391 archivos; Vercel compiló
+el mismo árbol. Pasan 14 pruebas nuevas, 502 generales y TypeScript/ESLint del
+cambio. No se repitieron los 40 casos DB previos al no cambiar sus servicios.
+Evidencia: `docs/evidence/crm-identity-release-followup.json`, manifiesto de fuente
+`crm-identity-recovery-source-manifest.json` y `crm-oauth-consent-pending.jpg`.
+Antes de continuar se necesita aprobación concreta del consentimiento OAuth y de
+los redespliegues de preview para pausar y reabrir. La producción sigue fuera del
+ensayo y el PR continúa en borrador.

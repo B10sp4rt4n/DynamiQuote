@@ -410,3 +410,37 @@ Código remoto d65414698f56d94c57aba8d543a11749a3cc1753, árbol
 El PR sigue borrador y producción no se modificó. Se conserva el historial de
 pendientes anterior; mantenimiento/recuperación quedan probados localmente y
 pendientes en el despliegue aislado antes de solicitar el corte.
+
+
+## Continuación: diagnóstico Clerk listo y bloqueo de aprobación
+
+El diagnóstico de solo lectura para superadmin se publicó en la preview aislada
+READY aee0b0d4. Verifica por ID exacto y conserva pendientes/legacy sin vincular.
+Cinco IDs con formato Clerk no se convierten en cinco identidades verificadas:
+el acceso autenticado al diagnóstico quedó bloqueado por el consentimiento
+OAuth. GitHub muestra Clerk Development & Staging Instances, cuenta B10sp4rt4n,
+permisos read:user y user:email. La revisión automática rechazó completar ese
+consentimiento por falta de autorización explícita verificable. La ruta sin
+sesión respondió No autorizado. No se enviaron correos ni se alteraron usuarios.
+
+Nueve cuentas activas de producción y copia coinciden en todos los campos de la
+comparación de pertenencia; la comprobación final confirma que siguen intactas.
+El diagnóstico Railway de solo lectura vuelve a mostrar SUCCESS sin repo, branch,
+commitHash, imagen o destino de base verificables. No se modificó el servicio.
+
+El ensayo remoto de mantenimiento no se completó: después de corregir un error
+400 de la API por target=preview, la revisión automática rechazó crear el
+redespliegue. El motivo exacto no se retuvo al intentar parsear un rechazo de texto
+como JSON. No se repitió ni se buscó un rodeo. La variable que se había creado
+exclusivamente para preview/rama se restauró a off, y la preview anterior permanece
+READY. Metadatos de las 14 variables productivas sin cambios. No se declara
+pausa remota ni rollback de proveedor probado.
+
+Se restauró la nueva fuente (391 archivos verificados) y Vercel compiló el mismo
+árbol 2037573c2a9f901d7f2ee69913c8daa9eb17fe92. Validación: 14 pruebas nuevas;
+502 generales aprobadas y dos omitidas en 52 archivos; TypeScript y ESLint de
+los archivos nuevos pasan. Los 40 casos DB previos permanecen como evidencia
+anterior, no como repetición en esta continuación.
+Evidencia completa y bloqueos: `docs/evidence/crm-identity-release-followup.json`.
+El siguiente permiso necesario es el consentimiento concreto de GitHub/Clerk y
+los redespliegues aislados para pausar y reabrir; no es aprobación de producción.

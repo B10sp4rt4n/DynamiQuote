@@ -1289,5 +1289,15 @@
     "remote_rollback_tested": false,
     "identity_provider_validation_completed": false,
     "production_changed": false
+  },
+  "identity_provider_followup": {
+    "evidence": "crm-identity-release-followup.json",
+    "code_commit": "aee0b0d4962cc98f076b29474a3796abf5b5516a",
+    "preview_ready": true,
+    "provider_audit_completed": false,
+    "remote_pause_rehearsal_completed": false,
+    "maintenance_flag_final": "off; preview branch only",
+    "blocked_by": "automatic approval review; exact OAuth consent and preview redeploy authorization required",
+    "production_changed": false
   }
 }
