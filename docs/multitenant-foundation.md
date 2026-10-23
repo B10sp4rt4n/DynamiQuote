@@ -62,10 +62,11 @@ ni clientes de otro tenant. Un contacto o cliente no se copia al cambiar tenant.
 ## Pendiente para declarar completado el aislamiento de toda la plataforma
 
 Este PR establece la base y corrige bloqueos; no certifica todo el sistema.
-Faltan la conciliación de datos reales, prueba con Clerk real, revisión completa
-de descargas/PDF/XLSX, reportes/KPIs, procesos de fondo y rutas legacy Python.
-Confirmar las reglas de visibilidad por vendedor en la vista 360: varias lecturas
-actuales usan alcance de tenant, distinto de alcance por propietario.
+Faltan la conciliación de datos reales y la revisión completa de notas
+históricas, procesos de fondo y funciones legacy Python. Las comprobaciones
+posteriores de Clerk real, documentos, reportes/KPIs y visibilidad por vendedor
+en la ficha 360 están registradas cronológicamente abajo; no certifican rutas
+ni reglas de negocio ajenas a los casos probados.
 No integrar ni migrar el CRM anterior hasta cerrar esa evidencia.
 
 RLS no se activa en este cambio. Evaluarlo con rol de aplicación sin BYPASSRLS,
@@ -517,3 +518,63 @@ Validación de esta corrección:
 
 El perfil vendedor todavía no tiene evidencia de navegador autenticado.
 No se levantó el bloqueo de liberación ni se integró el CRM antiguo.
+
+
+## Prueba de vendedor autorizada y completada en navegador
+
+Después de la autorización específica de Salvador, se comprobó el commit
+`b17f55665a8f8d030440c6fbb80a93c249c90b41` en el despliegue READY
+`dpl_7FhN8LNBAtn4giqNioZDLW4HT4vr`, URL
+`https://dynami-quote-jy15u7jd6-salvador-ruiz-esparzas-projects.vercel.app`.
+El acceso temporal permaneció dentro de la ventana de 60 minutos previamente
+autorizada. GitHub/Clerk autenticó la misma identidad real de Salvador.
+
+En la copia Neon `br-old-pond-ahe5jto3`, su rol local pasó temporalmente de
+superadmin a user a las `2026-10-23T00:47:15.420Z`. No se cambió Clerk ni se
+inició sesión con credenciales de otra persona. Se validó el rol aplicado a
+una sesión Clerk real, no la simultaneidad de dos usuarios reales distintos.
+
+| Comprobación | Resultado observado |
+| --- | --- |
+| Operación propia en ficha 360 | Una oportunidad, una cotización y una propuesta; importe 200 y margen 40 % |
+| Enlace directo a propuesta propia | Detalle de PROP-2026-0282 disponible |
+| Seguimiento propio | Selector incluyó OPP-0063; tarea guardada y marcada hecha |
+| Operación asignada al vendedor ficticio | Ficha 360 con cero oportunidades, cotizaciones y propuestas |
+| Enlace directo a propuesta ajena | «Propuesta no encontrada» |
+| PDF y XLSX de propuesta ajena | Ambos respondieron con JSON «Propuesta no encontrada» |
+| API del selector con oportunidad ajena | Respuesta `{ "opportunities": [] }` |
+| Cliente de otra empresa | «Cliente no encontrado» |
+| Configuración como vendedor | Sin administración de usuarios/tenant; política de márgenes y guardado deshabilitados |
+| KPIs como vendedor con operación ajena | «Mi desempeño», 85 propuestas |
+| KPIs después de restaurar superadmin y propiedad | «KPIs del equipo», 86 propuestas |
+
+Las dos versiones de COT-0065, PROP-2026-0282 y OPP-0063 se asignaron
+transitoriamente al propietario ficticio e inactivo `crm-role-peer-20261023`
+para los casos de rechazo, igual que en la prueba owner. Antes de esa
+asignación se creó desde el navegador, con rol vendedor, la tarea
+`PRUEBA ROL VENDEDOR 20261023 - NO CONTACTAR`, ID
+`e09bf9b9-d890-4c2f-8d27-bbc414783a9b`. Conservó el cliente/opportunity/tenant
+esperados, vencimiento 23 octubre y autor de la sesión. PostgreSQL confirmó
+su finalización a las `2026-10-23T00:48:15.131Z`.
+
+Capturas del mismo recorrido:
+
+- `docs/evidence/crm-seller-own-20261023.jpg`: acceso permitido a operación propia.
+- `docs/evidence/crm-seller-task-20261023.jpg`: tarea propia ligada a OPP-0063.
+- `docs/evidence/crm-seller-peer-hidden-20261023.jpg`: operación ajena oculta.
+
+Se restauraron en una transacción el rol superadmin, tenant original y todos
+los propietarios originales de los fixtures a las
+`2026-10-23T00:49:47.287Z`. La respuesta de PostgreSQL devolvió los IDs y
+valores restaurados; una recarga de la sesión mostró de nuevo KPIs de equipo
+con 86 propuestas. La propuesta sigue en draft con desenlace/fecha de cierre
+NULL; ambas tareas ficticias están completadas. El usuario ficticio permanece
+inactivo, sin correo ni acceso Clerk. Producción no participó en esta prueba.
+
+Esta comprobación resuelve el pendiente anterior de navegador para el rol
+vendedor y comprueba la corrección de alcance de la ficha 360/selector sobre
+el código b17f5566. No se generó una petición manual de escritura forjada desde
+el navegador: ese rechazo sin inserción está cubierto por el caso de regresión
+contra PostgreSQL local con los handlers reales. No se reejecutan pruebas de
+código por esta actualización exclusiva de evidencia. El PR sigue en borrador,
+sin autorización de fusión/despliegue de producción ni migración del CRM antiguo.
