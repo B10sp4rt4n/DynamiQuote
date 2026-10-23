@@ -12,7 +12,7 @@ permisos, interrupciones de servicios, correos, facturación ni publicación.
 | Notas y contexto | Otra empresa no abre la ficha; vendedor ve nota general y owner ambas; rol y propietario restaurados | Evidencia limitada al caso ficticio y rutas comprobadas |
 | Documentos históricos | Muestra PDF previa y 12 documentos reparados en copia | No certifica todos los documentos ni una moneda original NULL |
 | Emisor nuevo | Tres escenarios de integración y PROP-2026-0283 ficticia en navegador/PDF | No designa razón social ni perfil default por el usuario |
-| Identidad | Cinco IDs encontrados por ID exacto en Clerk; login de Salvador probado; alta sin reasignación por correo | Resolver 3 pendientes y legacy; revisar contacto de Salvador; logins individuales restantes sin probar |
+| Identidad | Cinco IDs encontrados por ID exacto en Clerk; login vigente de superadmin probado; alta sin reasignación por correo | Aprobar lista de usuarios que operarán al lanzamiento, verificar solo sus IDs/logins/roles; mantener pendientes y legacy sin vincular ni darles acceso |
 | Otros escritores | Railway SUCCESS/instancia conectada; host/base del runtime coinciden con Neon productivo; snapshot, build y huellas capturados | Código Git exacto desconocido; controlar/parar y drenar Railway por separado; inventario externo no cerrado |
 | Mantenimiento y recuperación | Pausa y reanudación de dos rutas probadas en Preview con sesión real; preparación de fuente fija y HTTP local comprobados | Respaldo de base y parada/drenado de todos los escritores; sin restauración DB ni rollback de código del hosting probado |
 | Manifiestos | 7 comprobaciones sin discrepancias en producción/copia; control negativo detectado | Repetir en destino al corte, dentro de ventana sin escrituras |
@@ -32,15 +32,63 @@ No convertir una condición pendiente en aprobación implícita. Las seis
 propuestas `default-tenant` y sus dependencias permanecen aisladas. Los 39
 desenlaces sin fecha no se rellenan por suposición. No se importan datos QA.
 
+## Alcance simplificado: usuarios actuales vs. datos de prueba
+
+Decisión de negocio confirmada el 23 de octubre de 2026: no invertir esfuerzo
+en reconciliar o migrar cuentas e información **identificadas y aprobadas como
+prueba**. Conservarlas aisladas mientras no haya una aprobación separada para
+eliminación. Esta regla no autoriza borrar documentos, facturas o registros
+comerciales de producción que no estén clasificados individualmente.
+
+Lectura SQL **solo de metadatos y contadores** del 23/10/2026, sin escribir datos:
+- 9 filas activas de `app_users`: 5 IDs con formato Clerk; 3 IDs `pending_*`
+  y 1 ID legacy. El formato no certifica sesión real de cada persona.
+- 12 documentos históricos con `formal_proposals.tenant_id IS NULL`; **2**
+  registran `delivered_at` o `delivery_hash`. No asumir que son borrables.
+- 1 propuesta con `invoice_uuid` o estado `stamped` en el tenant SynAppsSys
+  (`sys`). Conservar comprobante y XML, sin timbrar ni regenerar.
+- 42 propuestas ganadas de tenants válidos (5 sys, 37 salsa); su carácter de
+  prueba/comercial debe establecerse por procedencia, no por el estado o edad.
+- 0 solicitudes HTTP observadas durante siete días en Railway, pero el servicio
+  continúa `SUCCESS` con **1 réplica** y memoria en uso; no demuestra ausencia
+  de clientes SQL directos, procesos en curso o consumidores ocultos.
+
+La lista de usuarios de lanzamiento debe aprobarse a partir de identidades
+verificadas y acceso comercial vigente. Las cuentas de prueba no deben aparecer
+en esa lista ni migrarse al CRM. Antes de ampliar el acceso, verificar login
+real de cada usuario **incluido**, su empresa y la denegación cruzada. No usar
+identificación inferida ni correo como sustituto del ID Clerk.
+
+La conciliación de documentos y logos ya ensayada sigue siendo una opción
+segura para preservar operación histórica; no ejecutarla solo para rescatar
+datos de prueba innecesarios. Si se plantea omitir alguna reparación, se
+requiere evidenciar que no afecta documentos comerciales o fiscales y que el
+código nuevo los mantiene inaccesibles hasta su clasificación. No suprimir
+las 13 claves ni asumir que una FK con valores NULL protege esos documentos.
+
+Pruebas de código reproducibles para `4f0f442`:
+https://github.com/B10sp4rt4n/DynamiQuote/actions/runs/39953644283
+`tsc`, Prisma, 544 pruebas generales aprobadas, 51 de integración con
+PostgreSQL desechable y 12 escrituras cruzadas rechazadas. La validación no
+reemplaza ensayo de usuarios reales, respaldo ni drenado de escritores.
+
+Para el corte siguen exigidos: clasificación previa, inventario de escritores
+externos, aislamiento y drenado de Railway, respaldo/punto de recuperación
+ensayado, repetición de preflight en destino y autorización final explícita.
+No ejecutar migrations, depuración o despliegue productivo por esta nota.
+
 ## Preparación antes de solicitar la liberación
 
 1. Fijar SHA exacto de aplicación y hashes de los cuatro SQL de abajo. Identificar
    despliegue productivo, proyecto y rama de base por valores de conexión
    comparados de forma privada; no copiar credenciales al expediente.
-2. Resolver y probar las identidades habilitadas. Los tres `pending_*` actuales
-   son `e.hdz` en fumicontrol, `ma.glz` y `ruben.arroyo` en salsa. El alias `admin`
-   de DynamiQuote usa un ID legacy distinto del superadmin real. No fusionarlos.
-   Reenviar acceso genera correo y requiere autorización independiente.
+2. Definir explícitamente los operadores reales que se habilitarán desde el
+   primer día y probar **sus** sesiones Clerk por ID exacto, tenant y rol.
+   Los tres `pending_*` y el ID administrativo legacy no necesitan recuperarse
+   cuando se confirmen como pruebas excluidas; siguen sin vincularse, sin
+   invitaciones ni facultades nuevas. No fusionar por nombre, alias o correo.
+   Excluir una cuenta del alcance **no** es autorizar su borrado, y una fila
+   `app_users.active=true` no acredita por sí misma que sea un operador real.
 3. Confirmar qué atiende `cotiza-web` en Railway: servicio
    `7b8c668c-d093-42e0-a418-ce2ddc7c652d`, proyecto
    `1980096f-8e39-416b-8a12-45b5815af5a6`, entorno production
