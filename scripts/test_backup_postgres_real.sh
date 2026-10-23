@@ -32,7 +32,7 @@ done
 export PATH="$work/bin:$PATH"
 pg_version="$(pg_dump --version)"
 printf 'Client version: %s\n' "$pg_version"
-[[ "$pg_version" == *"PostgreSQL 17."* ]] || { echo 'PostgreSQL 17 client required' >&2; exit 2; }
+[[ "$pg_version" == *"PostgreSQL) 17."* ]] || { echo 'PostgreSQL 17 client required' >&2; exit 2; }
 for i in 1 2 3 4 5 6 7 8 9 10; do
   if psql --no-password --dbname=cotiza_source_fixture --command='SELECT 1' >/dev/null 2>&1; then break; fi
   sleep 1
