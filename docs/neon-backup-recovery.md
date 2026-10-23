@@ -121,6 +121,29 @@ poolers, destino no vacío, nombre inseguro y manipulación del archivo.
 La suite PostgreSQL del PR #28 es independiente y ya se ejecuta
 contra PGlite desechable para aislamientos comerciales.
 
+## Validación adicional PostgreSQL real (23/10/2026)
+
+La prueba independiente `scripts/test_backup_postgres_real.sh` agrega
+**PostgreSQL 17 auténtico en un contenedor desechable**, distinto del
+ensayo simulado con ejecutables de prueba. GitHub Actions:
+https://github.com/B10sp4rt4n/DynamiQuote/actions/runs/39969533840
+
+- **PASS:** `pg_dump` del PostgreSQL 17 desechable, cifrado GPG por
+  tubería, comprobación SHA-256 y tabla de contenidos `pg_restore --list`.
+- **PASS:** función real `restore-test` del procedimiento de Cotiza,
+  hacia una segunda base local vacía, `pg_restore --single-transaction`
+  y recuperación de 2 tenants, 2 cotizaciones, 2 propuestas y 2 documentos
+  formales con datos **completamente ficticios**.
+- **PASS:** preservación de un UUID y una huella de entrega *ficticios*,
+  rechazo de referencia a tenant inexistente por FK y rechazo de un segundo
+  restore en el mismo destino no vacío.
+- **PASS:** la suite del PR, incluidos los controles multitenant, se ejecutó
+  en otro job. La ejecución no importa datos reales, no utiliza credenciales
+  productivas ni crea snapshots Neon.
+- Esta prueba **no** valida la conexión Neon del comando `backup`, los
+  roles/productivos ni la restauración del volumen real de datos y CFDI.
+  El archivo real y su recuperación independiente continúan pendientes.
+
 ## Condición de liberación
 
 Railway se mantiene encendido hasta comprobar un archivo real y
