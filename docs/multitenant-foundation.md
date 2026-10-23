@@ -327,8 +327,10 @@ Se crearon exclusivamente en la copia aislada:
   una ventana, y los archivos sí llegaron al directorio compartido.
 
 No se enviaron correos ni se timbró, invitó o reasignó a usuarios reales.
-La propuesta ficticia permanece aprobada internamente, sin desenlace comercial
-ni fecha de cierre (`outcome` y `outcome_at` nulos). No se guardó ninguna tarea.
+Al terminar este primer recorrido, la propuesta ficticia permanecía aprobada
+internamente, sin desenlace comercial ni fecha de cierre (`outcome` y
+`outcome_at` nulos). En ese momento aún no se había guardado ninguna tarea.
+La continuación documentada abajo completa esas comprobaciones.
 
 ### Límite de esta sesión de prueba
 
@@ -355,3 +357,90 @@ comprobar las vistas 360/KPIs resultantes y probar sesiones reales distintas de
 owner/vendedor. Las pruebas automáticas de esas operaciones siguen documentadas
 arriba, pero no acreditan esos recorridos pendientes de navegador. Se conserva
 el PR en borrador, sin liberar a producción ni migrar el CRM anterior.
+
+
+## Continuación autorizada: seguimiento, cierre, KPIs y reapertura
+
+El 23 octubre 2026 UTC, Salvador autorizó explícitamente 60 minutos de acceso
+para la preview aislada. La renovación se completó usando la conexión Vercel
+existente, sin desactivar la protección general del proyecto. La compilación
+con la corrección de fecha se comprobó dentro de la misma ventana autorizada;
+no se extendió el acceso a producción. No se registran enlaces secretos.
+
+### Seguimiento y corrección de fecha
+
+En la sesión real de superadmin se creó la tarea ficticia
+`PRUEBA CRM 20261022 - validar seguimiento, sin contactar`, ID
+`2e59dfb4-fbca-413e-8f37-caed900edf5f`, desde el catálogo de clientes.
+El selector mostró exclusivamente la oportunidad abierta del cliente de prueba
+`OPP-0063`; se guardó con ese cliente, oportunidad y tenant SynAppsSys. PostgreSQL
+confirmó `due_date = 2026-10-23`.
+
+La prueba detectó que Inicio y la ficha 360 mostraban el día anterior:
+Prisma serializa la columna PostgreSQL DATE a medianoche UTC y los componentes
+la convertían a la zona local del navegador. Se agregó un formateador específico
+para días de vencimiento y se compartió entre ambas pantallas. La corrección no
+cambia las fechas almacenadas ni las fechas de cierre comercial.
+
+Validación del commit `5a802b97b02537ae8edba888d1289130169488fb`:
+
+- Ocho pruebas pasan: tres casos de vencimiento ejecutados con zonas CDMX,
+  UTC y Tokio, incluidos límites de año, más cinco pruebas existentes de cierre.
+- TypeScript y ESLint de los cuatro archivos modificados terminan sin errores.
+- La revisión React de los dos componentes conserva hooks, controles y flujo
+  de finalización; el formateador no agrega dependencias ni consultas.
+- Vercel confirmó READY para `dpl_HntnTnRr6hKcAqNwfXVscGRVo4Yz`, preview de
+  la misma rama con el override de base aislada existente.
+- Se inició sesión real mediante GitHub/Clerk en esa compilación y se verificó
+  `vence 23 oct 2026` tanto en Inicio como en la ficha 360. Evidencia:
+  `docs/evidence/crm-task-due-date-20261023.jpg`.
+- Desde la ficha 360 se marcó hecha la tarea. PostgreSQL confirma
+  `completed_at = 2026-10-23T00:19:45.320Z`, conservando los vínculos originales.
+  La pantalla muestra «Sin tareas pendientes para este cliente». Captura:
+  `docs/evidence/crm-task-completed-20261023.jpg`.
+
+### Cierre comercial y reversión de KPIs
+
+Sobre la propuesta ficticia `PROP-2026-0282`, se eligió «Marcar como ganada» y
+se confirmó explícitamente el 22 octubre 2026, fecha de CDMX. La copia Neon
+registró `outcome = won`, `outcome_at = 2026-10-22T06:00:00Z` y auditoría con
+actor, fecha elegida y momento del registro. La ficha 360 mostró oportunidad
+Ganada, fecha de cierre 22 octubre y 0 días al cierre.
+
+| Momento | Revenue ganado | Margen de ganadas en pesos |
+| --- | ---: | ---: |
+| Antes del cierre ficticio | 832325.58 | 146310.33 |
+| Con la propuesta ganada | 832525.58 | 146390.33 |
+| Después de quitar el desenlace | 832325.58 | 146310.33 |
+
+Los importes corresponden exclusivamente a la copia de validación. El incremento
+fue exactamente venta 200 y utilidad 80. La tabla mensual mostró el cierre en
+octubre; las demás propuestas y su referencia histórica no se modificaron.
+Al usar «Quitar etiqueta», la fecha de cierre volvió a NULL, los KPIs regresaron
+a su valor previo y la ficha 360 volvió a mostrar la oportunidad Abierta. Esta
+primera prueba acredita reapertura del desenlace comercial.
+
+Los dos eventos `outcome_changed` quedaron en auditoría a las
+`2026-10-23T00:13:58.395Z` y `2026-10-23T00:14:46.834Z`, respectivamente,
+con el mismo actor Clerk de la sesión real. La segunda entrada conserva el
+cierre anterior y registra su eliminación. Al terminar ese primer ciclo, la propuesta permanecía aprobada internamente,
+con `outcome` y `outcome_at` NULL; la tarea estaba completada.
+
+También se probó el botón «Reabrir a borrador» en la compilación corregida. Se
+volvió a marcar ganada la propuesta ficticia y se abrió el editor. La reapertura
+cambió `status` de approved a draft, eliminó el desenlace y la fecha de cierre,
+habilitó de nuevo las partidas y retiró las decisiones de aprobación activas.
+El evento `outcome_changed` de `2026-10-23T00:21:29.512Z` registra
+`trigger = workflow_status`, `nextStatus = draft`, el actor y la fecha anterior.
+Los KPIs conservaron los valores originales de revenue/margen y la ficha 360
+mostró oportunidad Abierta, propuesta Borrador y ninguna tarea pendiente.
+Estado final de la propuesta: draft, con `outcome` y `outcome_at` NULL. Captura:
+`docs/evidence/crm-workflow-reopened-20261023.jpg`.
+
+El recorrido cliente → cotización/versiones → propuesta/documentos →
+seguimiento → cierre → KPIs → reapertura tiene evidencia de navegador y datos
+con superadmin en la copia aislada. Queda pendiente probar sesiones reales de
+owner y vendedor, incluida la visibilidad comercial entre vendedores del mismo
+tenant. La suite de backend documentada
+arriba cubre esas reglas con contexto suministrado por el harness. Se conserva
+el PR en borrador; esta evidencia no autoriza liberación ni migración a producción.
