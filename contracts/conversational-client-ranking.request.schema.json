@@ -1,0 +1,28 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "title": "Solicitud propuesta de ranking comercial conversacional v0.1",
+  "description": "Solo parametros de consulta. Identidad, tenant, habilitacion y alcance se resuelven fuera del payload por autorizacion. El servidor valida fechas reales y start_date < end_date_exclusive.",
+  "type": "object",
+  "additionalProperties": false,
+  "required": ["schema_version", "operation", "metric", "period", "currency", "tax_basis", "date_policy", "top_n", "presentation"],
+  "properties": {
+    "schema_version": { "const": "0.1" },
+    "operation": { "const": "client_ranking" },
+    "metric": { "enum": ["won_revenue", "won_gross_profit"] },
+    "period": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["start_date", "end_date_exclusive", "timezone"],
+      "properties": {
+        "start_date": { "type": "string", "format": "date" },
+        "end_date_exclusive": { "type": "string", "format": "date" },
+        "timezone": { "const": "America/Mexico_City" }
+      }
+    },
+    "currency": { "type": "string", "pattern": "^[A-Z]{3}$", "description": "Una moneda reconocida por el sistema origen; el formato de tres letras no valida por si solo el catalogo." },
+    "tax_basis": { "const": "before_vat" },
+    "date_policy": { "enum": ["recorded_close_only", "recorded_close_or_audited_legacy_reference"] },
+    "top_n": { "type": "integer", "minimum": 1, "maximum": 4 },
+    "presentation": { "enum": ["pie", "bar", "table"], "description": "Preferencia sujeta a elegibilidad: pie solo con total positivo y filas no negativas; incluir Otros." }
+  }
+}
