@@ -1,21 +1,27 @@
 {
   "recordia_manifest_version": "1.0",
   "status": "prepared_for_custody",
-  "created_at_utc": "2026-10-26T02:28:45.555912Z",
+  "created_at_utc": "2026-10-26T02:39:03.293514Z",
   "hash_algorithm": "sha256",
-  "entry_count": 2,
+  "entry_count": 3,
   "entries": [
     {
+      "logical_path": "docs/crm-fiscal-recovery-plan-20261025.md",
+      "size_bytes": 9967,
+      "sha256": "9a5c7c2e6ee34f9180d056d924cd3d6017bee246b4aa6245b17db7d2612c8d51",
+      "modified_at_utc": "2026-10-26T02:36:30.968600Z"
+    },
+    {
       "logical_path": "docs/crm-g0-audit-20261025.md",
-      "size_bytes": 15750,
-      "sha256": "645ad8112b08f01e008fff9fad6163a277f7b5fabc4965fe11abb77d55c90e3b",
-      "modified_at_utc": "2026-10-26T02:27:59.806485Z"
+      "size_bytes": 17809,
+      "sha256": "9e075d5282800709926e20bcc1a388200fac6dd2ac268a67b09364135628c6c7",
+      "modified_at_utc": "2026-10-26T02:38:17.191549Z"
     },
     {
       "logical_path": "docs/evidence/crm-g0-audit-20261025.json",
-      "size_bytes": 56427,
-      "sha256": "3d9bde62f655a6c8df8d666b12a09387d744cb1655385bb39997b1b577c3586e",
-      "modified_at_utc": "2026-10-26T02:27:59.431783Z"
+      "size_bytes": 68622,
+      "sha256": "02c1a7a77f9069e59bf5c4b1b6f505f9d41853abc435b3307785d5714b9df8d3",
+      "modified_at_utc": "2026-10-26T02:39:03.255875Z"
     }
   ]
 }

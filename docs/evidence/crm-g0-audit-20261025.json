@@ -462,6 +462,119 @@
         "branch_reactivated": false,
         "limits": "Metadata confirms a named archived branch, not its current binding to Digestor, content, usable backup or data loss. No SQL, compute activation, restore or backup performed."
       }
+    },
+    {
+      "source_id": "src-fiscal-service-domain-status",
+      "source_type": "api_record",
+      "title": "Dominio configurado y estado efectivo del servicio fiscal identificado",
+      "author_or_origin": "Railway API",
+      "retrieved_at_utc": "2026-10-26T02:32:08.858Z",
+      "locator": "list_domains and environment_status for Railway project 911f84ed-a4df-40ec-a122-f77d26da261c / production f8cd837c-8769-46c8-9f1f-c84fbbdc7cdc / service ef6c5593-5099-48e0-9da5-b78bcd66a845",
+      "access_scope": "authorized_source",
+      "integrity_status": "not_verified",
+      "observed": {
+        "service_id": "ef6c5593-5099-48e0-9da5-b78bcd66a845",
+        "domain": "digestorfiscal-production.up.railway.app",
+        "target_port": 8080,
+        "service_state": "offline",
+        "active_deployments": [],
+        "pending_work": [],
+        "http_request_performed": false,
+        "limits": "Configured domain and platform-reported offline state are scoped to this identified service/environment. They do not reveal the sensitive Cotiza base URL, prove a DB binding, establish global outage or validate HTTP/application behavior."
+      }
+    },
+    {
+      "source_id": "src-recovery-endpoint-metadata",
+      "source_type": "api_record",
+      "title": "Endpoints directos y nombres de bases para los dos perfiles de recuperación",
+      "author_or_origin": "Neon API metadata",
+      "retrieved_at_utc": "2026-10-26T02:37:01.538Z",
+      "locator": "list_branch_computes and list_postgres_databases for CRM production and Fiscal_Context production",
+      "access_scope": "authorized_source",
+      "integrity_status": "not_verified",
+      "observed": {
+        "crm": {
+          "project_id": "cool-resonance-22906937",
+          "branch_id": "br-quiet-morning-ahkomhhi",
+          "endpoint_id": "ep-falling-wind-ah1tb7pk",
+          "host": "ep-falling-wind-ah1tb7pk.c-3.us-east-1.aws.neon.tech",
+          "pooled_host": "ep-falling-wind-ah1tb7pk-pooler.c-3.us-east-1.aws.neon.tech",
+          "compute_state": "idle",
+          "database_names": [
+            "neondb"
+          ]
+        },
+        "fiscal": {
+          "project_id": "dry-unit-51861475",
+          "branch_id": "br-jolly-credit-amrmuf99",
+          "endpoint_id": "ep-crimson-sun-amjpdtcq",
+          "host": "ep-crimson-sun-amjpdtcq.c-5.us-east-1.aws.neon.tech",
+          "pooled_host": "ep-crimson-sun-amjpdtcq-pooler.c-5.us-east-1.aws.neon.tech",
+          "compute_state": "idle",
+          "database_names": [
+            "neondb"
+          ],
+          "runtime_binding": "historical_reference_not_revalidated"
+        },
+        "database_connection_attempted": false,
+        "limits": "Provider catalog metadata only, without passwords or SQL. Equal database names neondb do not imply shared storage. idle/archived metadata does not prove availability for a dump or data loss."
+      }
+    },
+    {
+      "source_id": "src-backup-tool-profile",
+      "source_type": "file",
+      "title": "Contrato y límites de la herramienta existente de recuperación CRM",
+      "author_or_origin": "B10sp4rt4n/DynamiQuote repository source",
+      "version": "694dedb523957945e6b3740d8f84e0305e3b2f58",
+      "locator": "https://github.com/B10sp4rt4n/DynamiQuote/blob/694dedb523957945e6b3740d8f84e0305e3b2f58/scripts/backup_neon_encrypted.sh",
+      "access_scope": "authorized_source",
+      "integrity_status": "not_verified",
+      "observed": {
+        "verification_requires": [
+          "tenants",
+          "quotes",
+          "proposals",
+          "formal_proposals"
+        ],
+        "backup_source_database": "neondb",
+        "restore_local_only": true,
+        "fiscal_profile_present": false,
+        "limits": "Static source inspection only. The existing CRM table checks cannot certify a fiscal archive. No runtime tool, release gate or deployed dependency changed."
+      }
+    },
+    {
+      "source_id": "src-fiscal-recovery-models",
+      "source_type": "file",
+      "title": "Tablas y precedencia de configuración fiscal revisadas para el plan",
+      "author_or_origin": "B10sp4rt4n/digestor__fiscal repository source",
+      "version": "38f064a706461a9fcbad541bd9e421e2f73545da",
+      "locator": "https://github.com/B10sp4rt4n/digestor__fiscal/tree/38f064a706461a9fcbad541bd9e421e2f73545da/app/models",
+      "access_scope": "authorized_source",
+      "integrity_status": "not_verified",
+      "observed": {
+        "files_reviewed": [
+          "app/models/commercial.py",
+          "app/models/evento.py",
+          "app/models/user.py",
+          "app/models/document_job.py",
+          "app/models/document_sync_event.py",
+          "app/models/audit_log.py",
+          "app/core/config.py"
+        ],
+        "minimum_recovery_relations": [
+          "billing_draft",
+          "billing_draft_item",
+          "product_catalog",
+          "evento_facturacion",
+          "app_user",
+          "document_jobs",
+          "document_sync_events",
+          "audit_logs"
+        ],
+        "config_precedence": "(DATABASE_URL or DB_URL).strip()",
+        "upload_dir_requires_separate_inventory": true,
+        "limits": "Source model names and defaults are not live schema inspection or proof of effective runtime settings. Full backup must include actual schema and external files; this is not an export filter."
+      }
     }
   ],
   "events": [
@@ -809,6 +922,79 @@
       "source_refs": [
         "src-fiscal-neon-metadata"
       ]
+    },
+    {
+      "recordia_version": "1.0",
+      "event_id": "evt-fiscal-domain-offline-observed",
+      "case_id": "case-crm-g0-20261025",
+      "event_type": "recovery.preparation_observed",
+      "recorded_at_utc": "2026-10-26T02:38:16.844086Z",
+      "actors": [
+        {
+          "actor_id": "audit-codex",
+          "role": "observer_readonly",
+          "identity_status": "declared"
+        }
+      ],
+      "subject": {
+        "entity_id": "crm-fiscal-recovery-plan",
+        "entity_type": "recovery_preparation"
+      },
+      "action_or_state": "Configured domain digestorfiscal-production.up.railway.app identified; service reports offline and no active deployments",
+      "epistemic_class": "observed_fact",
+      "support_status": "supported",
+      "source_refs": [
+        "src-fiscal-service-domain-status"
+      ]
+    },
+    {
+      "recordia_version": "1.0",
+      "event_id": "evt-two-recovery-destinations-catalogued",
+      "case_id": "case-crm-g0-20261025",
+      "event_type": "recovery.preparation_observed",
+      "recorded_at_utc": "2026-10-26T02:38:16.844086Z",
+      "actors": [
+        {
+          "actor_id": "audit-codex",
+          "role": "observer_readonly",
+          "identity_status": "declared"
+        }
+      ],
+      "subject": {
+        "entity_id": "crm-fiscal-recovery-plan",
+        "entity_type": "recovery_preparation"
+      },
+      "action_or_state": "Two distinct Neon endpoints and databases named neondb catalogued through metadata only",
+      "epistemic_class": "observed_fact",
+      "support_status": "supported",
+      "source_refs": [
+        "src-recovery-endpoint-metadata"
+      ]
+    },
+    {
+      "recordia_version": "1.0",
+      "event_id": "evt-recovery-plan-prepared",
+      "case_id": "case-crm-g0-20261025",
+      "event_type": "recovery.preparation_observed",
+      "recorded_at_utc": "2026-10-26T02:38:16.844086Z",
+      "actors": [
+        {
+          "actor_id": "audit-codex",
+          "role": "observer_readonly",
+          "identity_status": "declared"
+        }
+      ],
+      "subject": {
+        "entity_id": "crm-fiscal-recovery-plan",
+        "entity_type": "recovery_preparation"
+      },
+      "action_or_state": "Separate CRM and fiscal recovery plan prepared; existing CRM archive checks do not certify fiscal backup",
+      "epistemic_class": "observed_fact",
+      "support_status": "supported",
+      "source_refs": [
+        "src-backup-tool-profile",
+        "src-fiscal-recovery-models"
+      ]
     }
   ],
   "evidence": [
@@ -1052,6 +1238,54 @@
       "limitations": [
         "Metadata confirms a named archived branch, not its current binding to Digestor, content, usable backup or data loss. No SQL, compute activation, restore or backup performed."
       ]
+    },
+    {
+      "evidence_id": "evd-src-fiscal-service-domain-status",
+      "source_id": "src-fiscal-service-domain-status",
+      "proposition": "Dominio configurado y estado efectivo del servicio fiscal identificado",
+      "relation": "supports",
+      "support_status": "supported",
+      "integrity_status": "not_verified",
+      "verification_method": "Provider catalog/status reads or pinned repository source review; no DB connection",
+      "limitations": [
+        "Configured domain and platform-reported offline state are scoped to this identified service/environment. They do not reveal the sensitive Cotiza base URL, prove a DB binding, establish global outage or validate HTTP/application behavior."
+      ]
+    },
+    {
+      "evidence_id": "evd-src-recovery-endpoint-metadata",
+      "source_id": "src-recovery-endpoint-metadata",
+      "proposition": "Endpoints directos y nombres de bases para los dos perfiles de recuperación",
+      "relation": "supports",
+      "support_status": "supported",
+      "integrity_status": "not_verified",
+      "verification_method": "Provider catalog/status reads or pinned repository source review; no DB connection",
+      "limitations": [
+        "Provider catalog metadata only, without passwords or SQL. Equal database names neondb do not imply shared storage. idle/archived metadata does not prove availability for a dump or data loss."
+      ]
+    },
+    {
+      "evidence_id": "evd-src-backup-tool-profile",
+      "source_id": "src-backup-tool-profile",
+      "proposition": "Contrato y límites de la herramienta existente de recuperación CRM",
+      "relation": "supports",
+      "support_status": "supported",
+      "integrity_status": "not_verified",
+      "verification_method": "Provider catalog/status reads or pinned repository source review; no DB connection",
+      "limitations": [
+        "Static source inspection only. The existing CRM table checks cannot certify a fiscal archive. No runtime tool, release gate or deployed dependency changed."
+      ]
+    },
+    {
+      "evidence_id": "evd-src-fiscal-recovery-models",
+      "source_id": "src-fiscal-recovery-models",
+      "proposition": "Tablas y precedencia de configuración fiscal revisadas para el plan",
+      "relation": "supports",
+      "support_status": "supported",
+      "integrity_status": "not_verified",
+      "verification_method": "Provider catalog/status reads or pinned repository source review; no DB connection",
+      "limitations": [
+        "Source model names and defaults are not live schema inspection or proof of effective runtime settings. Full backup must include actual schema and external files; this is not an export filter."
+      ]
     }
   ],
   "inferences": [
@@ -1131,9 +1365,10 @@
         "src-vercel-auth",
         "src-vercel-access-recovered",
         "src-vercel-production-current",
-        "src-vercel-fiscal-url-redacted"
+        "src-vercel-fiscal-url-redacted",
+        "src-fiscal-service-domain-status"
       ],
-      "next_evidence": "Acceso Vercel y alias Cotiza resueltos. Identificar la URL/host y runtime fiscal reales mediante una fuente operativa autorizada; luego backend y recuperación. No pedir otra autorización de equipo mientras el acceso siga vigente.",
+      "next_evidence": "Servicio fiscal identificado con dominio configurado y estado offline. Comparar host efectivo de DIGESTOR_FISCAL_BASE_URL y host/base efectivos del servicio, sin revelar credenciales, iniciar runtime o cambiar variables.",
       "release_condition_changed": false
     },
     {
@@ -1144,9 +1379,11 @@
         "src-prev-release",
         "src-railway-fiscal",
         "src-prior-fiscal-storage-reference",
-        "src-fiscal-neon-metadata"
+        "src-fiscal-neon-metadata",
+        "src-recovery-endpoint-metadata",
+        "src-fiscal-recovery-models"
       ],
-      "next_evidence": "Candidato histórico identificado: Fiscal_Context/production en estado archived. Revalidar vínculo con el runtime fiscal actual y preparar recuperación sin asumir datos perdidos ni reactivar ramas.",
+      "next_evidence": "Comparar host/base efectivos de DATABASE_URL o DB_URL según precedencia contra Fiscal_Context/neondb. El servicio está offline; la lectura debe ser de configuración sin arranque.",
       "release_condition_changed": false
     },
     {
@@ -1156,9 +1393,11 @@
       "source_refs": [
         "src-neon",
         "src-prev-release",
-        "src-fiscal-neon-metadata"
+        "src-fiscal-neon-metadata",
+        "src-backup-tool-profile",
+        "src-fiscal-recovery-models"
       ],
-      "next_evidence": "Elegir equipo/almacén privado y custodio de clave; aportar copia consistente cifrada y restore verificado de CRM y fiscal.",
+      "next_evidence": "Plan separado preparado en docs/crm-fiscal-recovery-plan-20261025.md. Pendientes equipo/almacén/clave, perfil fiscal validado, vínculo efectivo y autorización concreta para cualquier backup/activación; nada ejecutado.",
       "release_condition_changed": false
     },
     {
@@ -1221,8 +1460,8 @@
   "gaps": [
     {
       "gap_id": "gap-G0-TOPOLOGY",
-      "statement": "Destino fiscal por identificar; Vercel y alias Cotiza ya comprobados",
-      "needed_evidence": "Host/URL público del servicio fiscal y vínculo con su runtime/almacenamiento actuales; no credenciales.",
+      "statement": "Servicio fiscal Railway y dominio identificados, offline; faltan comparaciones de configuración efectiva",
+      "needed_evidence": "Igualdad o diferencia del host fiscal efectivo de Cotiza y comparación del host/base efectivos del servicio con Fiscal_Context/neondb; solo metadatos, sin credenciales o arranque.",
       "source_refs": [
         "src-vercel",
         "src-railway-cotiza",
@@ -1230,13 +1469,14 @@
         "src-vercel-auth",
         "src-vercel-access-recovered",
         "src-vercel-production-current",
-        "src-vercel-fiscal-url-redacted"
+        "src-vercel-fiscal-url-redacted",
+        "src-fiscal-service-domain-status"
       ]
     },
     {
       "gap_id": "gap-G0-FISCAL-STORAGE",
       "statement": "Backend y persistencia de la base fiscal",
-      "needed_evidence": "Vínculo comprobado del servicio fiscal actual con Fiscal_Context u otro backend; recuperación propia y estado de acceso del backend, sin reactivar ni conectar bases en esta auditoría.",
+      "needed_evidence": "Comparación de hostname/base configurados del servicio offline con endpoint ep-crimson-sun-amjpdtcq y base neondb del candidato histórico, sin conectar SQL ni reactivar recursos.",
       "source_refs": [
         "src-prev-release",
         "src-railway-fiscal",
@@ -1247,7 +1487,7 @@
     {
       "gap_id": "gap-G0-RECOVERY",
       "statement": "Recuperación independiente de ambas bases",
-      "needed_evidence": "Elegir equipo/almacén privado y custodio de clave; aportar copia consistente cifrada y restore verificado de CRM y fiscal.",
+      "needed_evidence": "Plan independiente preparado; faltan vínculo de configuración, equipo y almacén privados, clave/custodia, perfil fiscal validado y ensayo real de backup/restore bajo autorización específica.",
       "source_refs": [
         "src-neon",
         "src-prev-release"
@@ -1342,7 +1582,7 @@
     "production_sha": "55760ab4c4fa45ddf2c0f940694441ee129aefc6",
     "production_branch": "main",
     "crm_candidate_deployed": false,
-    "digestor_runtime_location": "unknown",
+    "digestor_runtime_location": "identified_railway_service_offline_current_cotiza_url_binding_unverified",
     "fiscal_storage_backend": "historical_reference_to_neon_postgresql_not_currently_bound_to_runtime",
     "source_refs": [
       "src-vercel-access-recovered",
@@ -1360,6 +1600,35 @@
         "src-prior-fiscal-storage-reference",
         "src-fiscal-neon-metadata"
       ]
+    },
+    "digestor_service": {
+      "project_id": "911f84ed-a4df-40ec-a122-f77d26da261c",
+      "environment_id": "f8cd837c-8769-46c8-9f1f-c84fbbdc7cdc",
+      "service_id": "ef6c5593-5099-48e0-9da5-b78bcd66a845",
+      "configured_domain": "digestorfiscal-production.up.railway.app",
+      "state": "offline",
+      "active_deployments": [],
+      "source_refs": [
+        "src-fiscal-service-domain-status"
+      ]
     }
+  },
+  "recovery_preparation": {
+    "plan": "docs/crm-fiscal-recovery-plan-20261025.md",
+    "state": "prepared_not_executed",
+    "profiles": [
+      "crm",
+      "fiscal"
+    ],
+    "existing_crm_tool_unchanged": true,
+    "existing_crm_tool_validates_fiscal": false,
+    "real_backups_created": false,
+    "real_restores_performed": false,
+    "workstation_selected": false,
+    "private_storage_selected": false,
+    "recovery_key_selected": false,
+    "sql_connection_performed": false,
+    "reactivation_performed": false,
+    "binding_inspection_needed": "Only host and database name from approved configuration inspection; no passwords or full connection strings"
   }
 }
