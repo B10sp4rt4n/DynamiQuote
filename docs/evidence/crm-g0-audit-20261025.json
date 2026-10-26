@@ -305,6 +305,32 @@
         "file_manifest_sha256": "1bfd2166842532bdc32362916d1ee4130ad4e602741a2674941129a3b47bfd4f",
         "reproduction_script": "scripts/prepare_crm_recovery.mjs"
       }
+    },
+    {
+      "source_id": "src-vercel-auth",
+      "source_type": "api_record",
+      "title": "Recuperación oficial de permiso de equipo y diagnóstico de conexión",
+      "author_or_origin": "Vercel API",
+      "retrieved_at_utc": "2026-10-26T02:09:12.203097Z",
+      "locator": "authorize_team_access and list_teams on the same connection used by src-vercel",
+      "access_scope": "authorized_source",
+      "integrity_status": "not_verified",
+      "observed": {
+        "team_id": "team_wCPRqvRGXWpRT4eUvfAz38jF",
+        "authorize_team_access": {
+          "status": 404,
+          "code": "not_found",
+          "message": "Team not found"
+        },
+        "list_teams": {
+          "teams": [],
+          "pagination_count": 0
+        },
+        "consent_link_created": false,
+        "connection_profile_email": "salvador.ruizesparza.mx@gmail.com",
+        "alternate_connection_attempted": false,
+        "limits": "Does not establish that the team was deleted or that the application is down. Correct account/team context must be established before further access."
+      }
     }
   ],
   "events": [
@@ -498,6 +524,31 @@
         "src-source-recovery"
       ],
       "notes": "No productive backup or rollback approval inferred."
+    },
+    {
+      "recordia_version": "1.0",
+      "event_id": "evt-vercel-auth-blocked",
+      "case_id": "case-crm-g0-20261025",
+      "event_type": "access.authorization_failed",
+      "recorded_at_utc": "2026-10-26T02:09:12.203097Z",
+      "actors": [
+        {
+          "actor_id": "audit-codex",
+          "role": "observer",
+          "identity_status": "declared"
+        }
+      ],
+      "subject": {
+        "entity_id": "DynamiQuote-Vercel-team",
+        "entity_type": "hosting_access"
+      },
+      "action_or_state": "Official team-consent helper returned 404; same connection team inventory was empty; no link generated",
+      "epistemic_class": "observed_fact",
+      "support_status": "supported",
+      "source_refs": [
+        "src-vercel",
+        "src-vercel-auth"
+      ]
     }
   ],
   "evidence": [
@@ -657,6 +708,18 @@
       "limitations": [
         "No dependencies, build, database backup or production rollback included."
       ]
+    },
+    {
+      "evidence_id": "evd-vercel-auth",
+      "source_id": "src-vercel-auth",
+      "proposition": "No official consent link could be produced for the supplied team on the consulted connection",
+      "relation": "supports",
+      "support_status": "supported",
+      "integrity_status": "not_verified",
+      "verification_method": "Provider authorize_team_access and list_teams reads",
+      "limitations": [
+        "A different owner, account context, team state or provider grant may explain the result; not resolved."
+      ]
     }
   ],
   "inferences": [
@@ -716,9 +779,10 @@
       "source_refs": [
         "src-vercel",
         "src-railway-cotiza",
-        "src-railway-fiscal"
+        "src-railway-fiscal",
+        "src-vercel-auth"
       ],
-      "next_evidence": "Autorizar lectura del equipo Vercel en la misma conexión; fijar deployment, SHA, entorno y destino Digestor actuales.",
+      "next_evidence": "Confirmar cuenta/conexión y equipo correctos. Luego usar consentimiento oficial y fijar deployment, SHA, entorno y destino Digestor actuales.",
       "release_condition_changed": false
     },
     {
@@ -804,11 +868,12 @@
     {
       "gap_id": "gap-G0-TOPOLOGY",
       "statement": "Destino real de Cotiza/Digestor y dependencias",
-      "needed_evidence": "Autorizar lectura del equipo Vercel en la misma conexión; fijar deployment, SHA, entorno y destino Digestor actuales.",
+      "needed_evidence": "Confirmar cuenta/conexión y equipo correctos; autorización oficial antes de consultar runtime/alias.",
       "source_refs": [
         "src-vercel",
         "src-railway-cotiza",
-        "src-railway-fiscal"
+        "src-railway-fiscal",
+        "src-vercel-auth"
       ]
     },
     {
