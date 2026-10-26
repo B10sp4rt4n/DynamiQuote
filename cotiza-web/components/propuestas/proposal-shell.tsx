@@ -376,6 +376,7 @@ export function ProposalShell({
   // campos "seguros" (terminos, datos de contacto) no dependen de esto.
   const canEditContent = selectedStatus === "draft";
   const marginAllowsFinalAuthorization = selectedProposal?.marginEvaluation?.canAuthorizeFinal ?? true;
+  const isSelectedMarginBlocked = selectedStatus !== "approved" && !marginAllowsFinalAuthorization;
   const issuanceGate = useMemo(
     () =>
       resolveProposalIssuanceGate({
@@ -1350,12 +1351,12 @@ export function ProposalShell({
   // ventana de un solo uso para que el vendedor dueño de la propuesta la
   // ejecute el mismo (B2) -- el targetUserId real lo deriva el servidor,
   // aqui solo se manda un valor no vacio para senializar el modo.
-  async function handleMarginOverride(mode: "direct" | "grant") {
+  async function handleMarginOverride(mode: "direct" | "grant", reasonInput = overrideReason) {
     if (!selectedProposal) {
       return;
     }
 
-    const reason = overrideReason.trim();
+    const reason = reasonInput.trim();
 
     if (!reason) {
       setOverrideStatus("error");
@@ -1392,10 +1393,11 @@ export function ProposalShell({
 
       setOverrideStatus("success");
       setOverrideReason("");
+      setApprovalReason("");
       setOverrideMessage(
         mode === "grant"
-          ? "Ventana habilitada para el vendedor de esta propuesta."
-          : "Override ejecutado. La propuesta quedo aprobada.",
+          ? "Permiso habilitado. La propuesta sigue pendiente hasta que el vendedor complete el desbloqueo. También puedes autorizar la excepción directamente."
+          : "Excepción de margen autorizada. La propuesta quedó desbloqueada.",
       );
     } catch (error) {
       setOverrideStatus("error");
@@ -1432,7 +1434,7 @@ export function ProposalShell({
       }
 
       setExecuteOverrideStatus("success");
-      setExecuteOverrideMessage("Override ejecutado. La propuesta quedo aprobada.");
+      setExecuteOverrideMessage("Excepción de margen aplicada. La propuesta quedó desbloqueada.");
     } catch (error) {
       setExecuteOverrideStatus("error");
       setExecuteOverrideMessage(error instanceof Error ? error.message : "Error interno al ejecutar el override");
@@ -2090,7 +2092,7 @@ export function ProposalShell({
                   margen -- visible solo a Owner/Superadmin. Bloqueo total reutiliza
                   el mismo mecanismo que "Rechazar" en Aprobaciones formales (mismo
                   motivo compartido); Override tiene las dos sub-opciones B1/B2. */}
-              {!marginAllowsFinalAuthorization && canForceIssuance ? (
+              {isSelectedMarginBlocked && canForceIssuance ? (
                 <div className="rounded-lg border border-amber-200 bg-amber-50 px-3 py-3 text-sm text-amber-900">
                   <p className="font-semibold">Propuesta bloqueada por politica de margen.</p>
                   <p className="mt-1 text-xs leading-5 text-amber-800">
@@ -2099,47 +2101,47 @@ export function ProposalShell({
 
                   {selectedHasOpenMarginOverrideWindow ? (
                     <p className="mt-2 text-xs font-medium text-amber-800">
-                      Ya hay una ventana de override pendiente de consumir para esta propuesta.
+                      El vendedor tiene permiso para desbloquear esta propuesta, pero todavía no lo ha ejecutado.
+                      Puedes completar la autorización directamente con un motivo.
                     </p>
-                  ) : (
-                    <div className="mt-3 grid gap-2">
-                      <input
-                        className="w-full rounded-lg border border-amber-300 bg-white px-3 py-2 text-sm text-zinc-800"
-                        onChange={(event) => setOverrideReason(event.target.value)}
-                        placeholder="Motivo (obligatorio)"
-                        value={overrideReason}
-                      />
-                      <div className="flex flex-wrap gap-2">
-                        <button
-                          className="rounded-lg border border-rose-300 bg-rose-50 px-3 py-1.5 text-xs font-semibold text-rose-700 transition hover:bg-rose-100 disabled:cursor-not-allowed disabled:opacity-60"
-                          disabled={approvalPending || !overrideReason.trim()}
-                          onClick={() => {
-                            setApprovalReason(overrideReason);
-                            void handleApprovalDecision("rejected");
-                          }}
-                          type="button"
-                        >
-                          Bloqueo total (rechazar)
-                        </button>
-                        <button
-                          className="rounded-lg border border-amber-400 bg-white px-3 py-1.5 text-xs font-semibold text-amber-800 transition hover:bg-amber-100 disabled:cursor-not-allowed disabled:opacity-60"
-                          disabled={overrideStatus === "pending"}
-                          onClick={() => { void handleMarginOverride("direct"); }}
-                          type="button"
-                        >
-                          {overrideStatus === "pending" ? "Ejecutando..." : "Forzar override ahora"}
-                        </button>
-                        <button
-                          className="rounded-lg border border-amber-400 bg-white px-3 py-1.5 text-xs font-semibold text-amber-800 transition hover:bg-amber-100 disabled:cursor-not-allowed disabled:opacity-60"
-                          disabled={overrideStatus === "pending"}
-                          onClick={() => { void handleMarginOverride("grant"); }}
-                          type="button"
-                        >
-                          Habilitar para el vendedor
-                        </button>
-                      </div>
+                  ) : null}
+                  <div className="mt-3 grid gap-2">
+                    <input
+                      className="w-full rounded-lg border border-amber-300 bg-white px-3 py-2 text-sm text-zinc-800"
+                      onChange={(event) => setOverrideReason(event.target.value)}
+                      placeholder="Motivo (obligatorio)"
+                      value={overrideReason}
+                    />
+                    <div className="flex flex-wrap gap-2">
+                      <button
+                        className="rounded-lg border border-rose-300 bg-rose-50 px-3 py-1.5 text-xs font-semibold text-rose-700 transition hover:bg-rose-100 disabled:cursor-not-allowed disabled:opacity-60"
+                        disabled={approvalPending || !overrideReason.trim()}
+                        onClick={() => {
+                          setApprovalReason(overrideReason);
+                          void handleApprovalDecision("rejected");
+                        }}
+                        type="button"
+                      >
+                        Bloqueo total (rechazar)
+                      </button>
+                      <button
+                        className="rounded-lg border border-amber-400 bg-white px-3 py-1.5 text-xs font-semibold text-amber-800 transition hover:bg-amber-100 disabled:cursor-not-allowed disabled:opacity-60"
+                        disabled={overrideStatus === "pending" || !overrideReason.trim()}
+                        onClick={() => { void handleMarginOverride("direct"); }}
+                        type="button"
+                      >
+                        {overrideStatus === "pending" ? "Autorizando..." : "Autorizar excepción y desbloquear"}
+                      </button>
+                      <button
+                        className="rounded-lg border border-amber-400 bg-white px-3 py-1.5 text-xs font-semibold text-amber-800 transition hover:bg-amber-100 disabled:cursor-not-allowed disabled:opacity-60"
+                        disabled={overrideStatus === "pending" || !overrideReason.trim() || selectedHasOpenMarginOverrideWindow}
+                        onClick={() => { void handleMarginOverride("grant"); }}
+                        type="button"
+                      >
+                        {selectedHasOpenMarginOverrideWindow ? "Permiso al vendedor pendiente" : "Permitir al vendedor desbloquear"}
+                      </button>
                     </div>
-                  )}
+                  </div>
 
                   {overrideMessage ? (
                     <p
@@ -2159,10 +2161,10 @@ export function ProposalShell({
                   vuelve a false). */}
               {selectedIsPendingOverrideTarget ? (
                 <div className="rounded-lg border border-sky-200 bg-sky-50 px-3 py-3 text-sm text-sky-900">
-                  <p className="font-semibold">Tienes una ventana de override habilitada.</p>
+                  <p className="font-semibold">Tienes permiso para desbloquear esta propuesta.</p>
                   <p className="mt-1 text-xs leading-5 text-sky-800">
-                    Un Owner o Superadmin te autorizo a forzar esta propuesta pese al margen fuera de
-                    politica. Es de un solo uso.
+                    Un Owner o Superadmin autorizó una excepción al margen. Completa el desbloqueo
+                    para que la propuesta quede autorizada. El permiso es de un solo uso.
                   </p>
                   <button
                     className="mt-2 rounded-lg border border-sky-400 bg-white px-3 py-1.5 text-xs font-semibold text-sky-800 transition hover:bg-sky-100 disabled:cursor-not-allowed disabled:opacity-60"
@@ -2170,7 +2172,7 @@ export function ProposalShell({
                     onClick={() => { void handleExecuteOverride(); }}
                     type="button"
                   >
-                    {executeOverrideStatus === "pending" ? "Ejecutando..." : "Ejecutar override"}
+                    {executeOverrideStatus === "pending" ? "Desbloqueando..." : "Completar desbloqueo autorizado"}
                   </button>
                   {executeOverrideMessage ? (
                     <p
@@ -2249,7 +2251,9 @@ export function ProposalShell({
                 <div className="rounded-lg border border-rose-200 bg-rose-50 px-3 py-3 text-sm text-rose-900">
                   <p className="font-semibold">Esta propuesta sigue bloqueada por margen.</p>
                   <p className="mt-1 text-xs leading-5 text-rose-800">
-                    Ajusta costo o precio en las partidas y luego guarda cambios para recalcular el margen.
+                    {selectedHasOpenMarginOverrideWindow
+                      ? "La excepción está pendiente de ejecución por el vendedor. Un Owner o Superadmin también puede autorizarla directamente."
+                      : "Puedes ajustar costo o precio al reabrir a borrador, o solicitar que un Owner o Superadmin autorice una excepción con motivo."}
                   </p>
                   <p className="mt-2 text-xs font-medium text-rose-700">
                     Margen actual {selectedProposal.marginEvaluation.averageMarginPct.toFixed(2)}% · mínimo requerido {selectedProposal.marginEvaluation.minMarginPct.toFixed(2)}% · faltan {(selectedProposal.marginEvaluation.minMarginPct - selectedProposal.marginEvaluation.averageMarginPct).toFixed(2)} puntos.
@@ -2322,24 +2326,30 @@ export function ProposalShell({
                 ) : (
                   <>
                     <p className="mt-2 text-sm text-zinc-700">
-                      {approvalGate?.canAuthorizeFinal
+                      {selectedStatus === "approved"
+                        ? "La propuesta está autorizada."
+                        : approvalGate?.canAuthorizeFinal && isSelectedMarginBlocked
+                        ? "Las aprobaciones formales están registradas, pero falta ejecutar la excepción de margen para desbloquear la propuesta."
+                        : approvalGate?.canAuthorizeFinal
                         ? "La propuesta cumple aprobaciones requeridas para autorizacion final."
                         : `Roles faltantes: ${formatMissingApprovalRoles(approvalGate?.missingRoles ?? ["owner"])}`}
                     </p>
-                    <div className="mt-3 grid gap-2 md:grid-cols-[1fr_auto_auto]">
+                    <div className="mt-3 flex flex-wrap gap-2">
                       <input
                         className="w-full rounded-lg border border-zinc-300 bg-white px-3 py-2 text-sm text-zinc-800"
                         onChange={(event) => setApprovalReason(event.target.value)}
-                        placeholder="Motivo (obligatorio para rechazar)"
+                        placeholder={isSelectedMarginBlocked && canForceIssuance ? "Motivo de excepción (obligatorio)" : "Motivo (obligatorio para rechazar)"}
                         value={approvalReason}
                       />
                       <button
                         className="rounded-lg border border-emerald-300 bg-emerald-50 px-3 py-2 text-sm font-medium text-emerald-700 hover:bg-emerald-100 disabled:opacity-60"
-                        disabled={approvalPending}
-                        onClick={() => handleApprovalDecision("approved")}
+                        disabled={approvalPending || overrideStatus === "pending" || (isSelectedMarginBlocked && canForceIssuance && !approvalReason.trim())}
+                        onClick={() => isSelectedMarginBlocked && canForceIssuance
+                          ? handleMarginOverride("direct", approvalReason)
+                          : handleApprovalDecision("approved")}
                         type="button"
                       >
-                        Aprobar
+                        {isSelectedMarginBlocked && canForceIssuance ? "Autorizar excepción y desbloquear" : "Aprobar"}
                       </button>
                       <button
                         className="rounded-lg border border-rose-300 bg-rose-50 px-3 py-2 text-sm font-medium text-rose-700 hover:bg-rose-100 disabled:opacity-60"
