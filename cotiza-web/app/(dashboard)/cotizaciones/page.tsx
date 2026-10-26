@@ -1,12 +1,14 @@
 import { QuoteShell } from "@/components/cotizador/quote-shell";
 import { isTenantCapabilityEnabled, THREATDOWN_PDF_IMPORT } from "@/lib/db/tenant-capabilities";
 import { getCurrentTenantContext } from "@/lib/auth/tenant-context";
-import { getQuoteGroupsSummaryByTenant } from "@/lib/db/quotes";
+import { getQuoteGroupsSummaryByTenant, getQuoteVersionSummaryByTenant } from "@/lib/db/quotes";
 import { getActiveTenants } from "@/lib/db/tenants";
 
 export const dynamic = "force-dynamic";
 
-export default async function QuotesPage() {
+export default async function QuotesPage({ searchParams }: {
+  searchParams: Promise<{ quoteId?: string | string[] }>;
+}) {
   const tenant = await getCurrentTenantContext();
 
   if (!tenant) {
@@ -18,9 +20,12 @@ export default async function QuotesPage() {
   }
 
   const canSeeAll = tenant.isSuperAdmin || tenant.userRole === "owner" || tenant.userRole === "admin";
-  const [items, threatDownImportEnabled] = await Promise.all([
+  const query = await searchParams;
+  const quoteId = typeof query.quoteId === "string" ? query.quoteId : null;
+  const [items, threatDownImportEnabled, requestedQuote] = await Promise.all([
     getQuoteGroupsSummaryByTenant(tenant.id, 12, tenant.userId, canSeeAll),
     isTenantCapabilityEnabled(tenant.id, THREATDOWN_PDF_IMPORT),
+    quoteId ? getQuoteVersionSummaryByTenant(tenant.id, quoteId, tenant.userId, canSeeAll) : null,
   ]);
   const canSwitchTenant = tenant.isSuperAdmin;
   const tenantOptions = canSwitchTenant
@@ -33,6 +38,7 @@ export default async function QuotesPage() {
       canSwitchTenant={canSwitchTenant}
       currentTenantSlug={tenant.slug}
       items={items}
+      requestedQuote={requestedQuote}
       tenantName={tenant.name}
       tenantOptions={tenantOptions}
     />

@@ -27,6 +27,7 @@ type QuoteShellProps = {
   canSwitchTenant?: boolean;
   currentTenantSlug: string;
   items: QuoteGroupSummary[];
+  requestedQuote?: QuoteGroupSummary | null;
   tenantName: string;
   tenantOptions: TenantOption[];
 };
@@ -78,6 +79,7 @@ export function QuoteShell({
   canSwitchTenant = false,
   currentTenantSlug,
   items,
+  requestedQuote = null,
   tenantName,
   tenantOptions,
 }: QuoteShellProps) {
@@ -85,7 +87,23 @@ export function QuoteShell({
   const pathname = usePathname();
   const searchParams = useSearchParams();
   const [quoteItems, setQuoteItems] = useState<QuoteGroupSummary[]>(() => sortQuotes(items));
-  const [activeQuoteId, setActiveQuoteId] = useState<string | null>(items[0]?.quoteId ?? null);
+  const [activeQuoteId, setActiveQuoteId] = useState<string | null>(requestedQuote?.quoteId ?? items[0]?.quoteId ?? null);
+  const [selectedVersion, setSelectedVersion] = useState<QuoteGroupSummary | null>(null);
+  // The list stays one row per group; the editor also accepts the exact version
+  // selected in history or resolved by the server from the URL.
+  const editorQuotes = useMemo(() => {
+    const byId = new Map(quoteItems.map((quote) => [quote.quoteId, quote]));
+    for (const quote of [selectedVersion, requestedQuote]) {
+      if (quote && !byId.has(quote.quoteId)) byId.set(quote.quoteId, quote);
+    }
+    return [...byId.values()];
+  }, [quoteItems, selectedVersion, requestedQuote]);
+  const activeQuoteGroupId = editorQuotes.find((quote) => quote.quoteId === activeQuoteId)?.quoteGroupId;
+
+  function handleSelectedQuoteChange(quoteId: string, quote?: QuoteGroupSummary) {
+    if (quote) setSelectedVersion(quote);
+    setActiveQuoteId(quoteId);
+  }
   const lastHandledQuoteIdFromQueryRef = useRef<string | null>(null);
   const [isQuotesPanelOpen, setIsQuotesPanelOpen] = useState(false);
   const [quoteSearch, setQuoteSearch] = useState("");
@@ -132,7 +150,11 @@ export function QuoteShell({
       }
 
       setQuoteItems((prev) => prev.filter((quote) => quote.quoteGroupId !== item.quoteGroupId));
-      setActiveQuoteId((prev) => (prev === item.quoteId ? null : prev));
+      if (activeQuoteGroupId === item.quoteGroupId) {
+        setSelectedVersion(null);
+        setActiveQuoteId(null);
+        router.refresh();
+      }
     } catch (err) {
       setDeleteError(err instanceof Error ? err.message : "Error desconocido");
     } finally {
@@ -182,7 +204,6 @@ export function QuoteShell({
       setImportMessage(null);
     }, 4000);
     return () => clearTimeout(timer);
-  // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [importStatus]);
 
   useEffect(() => {
@@ -193,10 +214,10 @@ export function QuoteShell({
     }
 
     lastHandledQuoteIdFromQueryRef.current = nextQuoteId;
-    const validQuoteId = resolveSelectedQuoteId(quoteItems, nextQuoteId);
+    const validQuoteId = resolveSelectedQuoteId(editorQuotes, nextQuoteId);
 
     setActiveQuoteId((current) => (current === validQuoteId ? current : validQuoteId));
-  }, [quoteItems, searchParams]);
+  }, [editorQuotes, searchParams]);
 
   useEffect(() => {
     const nextSearch = searchParams.get("q") ?? "";
@@ -299,7 +320,7 @@ export function QuoteShell({
   }, [pathname, quoteSort, router, searchParams]);
 
   useEffect(() => {
-    if (quoteItems.length === 0) {
+    if (editorQuotes.length === 0) {
       if (activeQuoteId !== null) {
         // eslint-disable-next-line react-hooks/set-state-in-effect
         setActiveQuoteId(null);
@@ -307,15 +328,14 @@ export function QuoteShell({
       return;
     }
 
-    const selectedExists = activeQuoteId ? quoteItems.some((item) => item.quoteId === activeQuoteId) : false;
+    const selectedExists = activeQuoteId ? editorQuotes.some((item) => item.quoteId === activeQuoteId) : false;
 
     if (!selectedExists) {
       // Solo corrige cuando la cotización ya no existe en el dataset completo.
       // No debe depender del filtro de búsqueda, para no "rebotar" la selección.
-      // eslint-disable-next-line react-hooks/set-state-in-effect
-      setActiveQuoteId(quoteItems[0].quoteId);
+      setActiveQuoteId(editorQuotes[0].quoteId);
     }
-  }, [activeQuoteId, quoteItems]);
+  }, [activeQuoteId, editorQuotes]);
 
   // Buscar clientes con debounce al escribir en el campo de cliente
   useEffect(() => {
@@ -390,6 +410,7 @@ export function QuoteShell({
   }
 
   function handleQuoteVersionSaved(savedQuote: QuoteVersionSaved) {
+    setSelectedVersion(savedQuote);
     setQuoteItems((current) => {
       const updatedItem: QuoteGroupSummary = {
         avgMargin: savedQuote.avgMargin,
@@ -404,6 +425,11 @@ export function QuoteShell({
         version: savedQuote.version,
         versionCount: savedQuote.versionCount,
       };
+
+      const latest = current.find((item) => item.quoteGroupId === savedQuote.quoteGroupId);
+      if (latest && latest.version > savedQuote.version) {
+        return current.map((item) => item === latest ? { ...item, versionCount: savedQuote.versionCount } : item);
+      }
 
       const withoutGroup = current.filter((item) => item.quoteGroupId !== savedQuote.quoteGroupId);
 
@@ -505,7 +531,7 @@ export function QuoteShell({
       setImportFile(null);
 
       // Actualización optimista: muestra la nueva versión en la lista sin esperar al servidor
-      const currentEntry = quoteItems.find((q) => q.quoteId === activeQuoteId);
+      const currentEntry = editorQuotes.find((q) => q.quoteId === activeQuoteId);
       if (data.quoteId && currentEntry) {
         const optimisticEntry: QuoteGroupSummary = {
           avgMargin: currentEntry.avgMargin,
@@ -517,7 +543,7 @@ export function QuoteShell({
           quoteId: data.quoteId,
           status: "draft",
           totalRevenue: null,
-          version: currentEntry.version + 1,
+          version: Math.max(currentEntry.version, ...quoteItems.filter((q) => q.quoteGroupId === currentEntry.quoteGroupId).map((q) => q.version)) + 1,
           versionCount: currentEntry.versionCount + 1,
         };
         setQuoteItems((prev) =>
@@ -757,7 +783,7 @@ export function QuoteShell({
                 <tbody className="divide-y divide-zinc-200 bg-white">
                   {filteredQuoteItems.map((item) => (
                     <tr
-                      className={activeQuoteId === item.quoteId ? "bg-emerald-50/60" : "hover:bg-zinc-50"}
+                      className={activeQuoteGroupId === item.quoteGroupId ? "bg-emerald-50/60" : "hover:bg-zinc-50"}
                       key={item.quoteId}
                       onClick={() => setActiveQuoteId(item.quoteId)}
                     >
@@ -811,13 +837,13 @@ export function QuoteShell({
           </div>
         ) : null}
       </div>
-      {quoteItems.length > 0 ? (
+      {editorQuotes.length > 0 ? (
         <QuoteLineEditor
           threatDownImportEnabled={threatDownImportEnabled}
           forcedSelectedQuoteId={activeQuoteId}
-          onSelectedQuoteChange={setActiveQuoteId}
+          onSelectedQuoteChange={handleSelectedQuoteChange}
           onQuoteVersionSaved={handleQuoteVersionSaved}
-          quotes={quoteItems}
+          quotes={editorQuotes}
         />
       ) : null}
       {activeQuoteId ? (
