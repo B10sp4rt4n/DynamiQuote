@@ -1,5 +1,6 @@
 import { afterAll, beforeAll, describe, expect, it, vi } from "vitest";
 import { readFileSync } from "node:fs";
+import { COMMERCIAL_HASH_PREFIX, commercialPayloadHash, verifyCommercialPayload } from "@/lib/domain/commercial-act";
 
 vi.mock("server-only", () => ({}));
 
@@ -218,5 +219,94 @@ suite("commercial dates against disposable Postgres", () => {
     expect(row.outcome_at).toBeNull();
     expect(row.outcome).toBeNull();
     expect((await opportunities.getOpportunityPipelineByTenant("lifecycle-a")).find(row => row.opportunityId === "calendar-opp")?.createdAt).toBe("2026-07-01T23:00:00.000Z");
+  });
+
+  it("records a linked, hash-verifiable contract for decisions, date corrections and reopening", async () => {
+    const rows = await db.proposal_audit_events.findMany({ where: { proposal_id: "calendar-proposal",
+      event_type: { in: ["outcome_changed", "outcome_date_changed"] } } });
+    const acts = rows.map(row => ({ row, payload: JSON.parse(row.payload!) }))
+      .sort((left, right) => left.payload.commercialAct.sequence - right.payload.commercialAct.sequence);
+    expect(acts).toHaveLength(3);
+    expect(acts.map(({ row, payload }) => verifyCommercialPayload(payload, row.event_hash)))
+      .toEqual(["hash_verified", "hash_verified", "hash_verified"]);
+    const [correction, decision, reopening] = acts;
+    expect(correction.payload.commercialAct).toMatchObject({ tenant_id: "lifecycle-a", opportunity_id: "calendar-opp",
+      commercial_effective_time: { selected_date: "2026-09-01", basis: "user_declared", precision: "day" },
+      state_before: { outcome: "won", outcomeAt: null },
+      memory: { status: "local_only", external_recordia_ref: null, custody_status: "not_requested" },
+    });
+    expect(correction.payload.commercialAct.recorded_at_utc).toBe(correction.row.created_at.toISOString());
+    expect(decision.payload.commercialAct).toMatchObject({ sequence: 2,
+      previous_content_hash_sha256: correction.row.event_hash.slice(COMMERCIAL_HASH_PREFIX.length),
+      relations: [{ predicate: "supersedes", target_id: correction.row.event_id }] });
+    expect(reopening.payload.commercialAct).toMatchObject({ sequence: 3,
+      state_before: { status: "approved", outcome: "lost" }, state_after: { status: "draft", outcome: null, outcomeAt: null },
+      relations: [{ predicate: "revokes", target_id: decision.row.event_id }] });
+    const { getProposalAuditTimelineByTenant } = await import("./proposal-audit");
+    const timeline = await getProposalAuditTimelineByTenant("lifecycle-a", "calendar-proposal");
+    expect(timeline.filter(event => event.integrity === "hash_verified")).toHaveLength(3);
+    expect(await getProposalAuditTimelineByTenant("lifecycle-b", "calendar-proposal")).toEqual([]);
+  });
+
+  it("rolls back a decision when audit persistence fails, preserving the prior state", async () => {
+    await db.proposals.create({ data: { proposal_id: "memory-reopen", tenant_id: "lifecycle-a", status: "approved",
+      outcome: "won", outcome_at: new Date("2026-08-01T06:00:00Z"), created_at: new Date("2026-02-01"),
+      created_by: actor.userId, created_by_user_id: actor.userId } });
+    await db.$executeRawUnsafe(`CREATE FUNCTION fail_commercial_act_fixture() RETURNS trigger LANGUAGE plpgsql AS $$
+      BEGIN IF NEW.proposal_id IN ('calendar-proposal','memory-reopen') AND NEW.event_type='outcome_changed' THEN
+        RAISE EXCEPTION 'fixture audit failure'; END IF; RETURN NEW; END $$`);
+    await db.$executeRawUnsafe(`CREATE TRIGGER fail_commercial_act_fixture BEFORE INSERT ON proposal_audit_events
+      FOR EACH ROW EXECUTE FUNCTION fail_commercial_act_fixture()`);
+    const before = await db.proposals.findUniqueOrThrow({ where: { proposal_id: "calendar-proposal" } });
+    const count = await db.proposal_audit_events.count({ where: { proposal_id: before.proposal_id } });
+    try {
+      await expect(proposals.setProposalOutcomeByTenant("lifecycle-a", before.proposal_id, "discarded", actor, true))
+        .rejects.toThrow();
+      expect(await db.proposals.findUniqueOrThrow({ where: { proposal_id: before.proposal_id } })).toEqual(before);
+      expect(await db.proposal_audit_events.count({ where: { proposal_id: before.proposal_id } })).toBe(count);
+      const beforeReopen = await db.proposals.findUniqueOrThrow({ where: { proposal_id: "memory-reopen" } });
+      await expect(proposals.updateProposalWorkflowByTenant("lifecycle-a", "memory-reopen", { status: "draft" }, actor))
+        .rejects.toThrow();
+      expect(await db.proposals.findUniqueOrThrow({ where: { proposal_id: "memory-reopen" } })).toEqual(beforeReopen);
+    } finally {
+      await db.$executeRawUnsafe("DROP TRIGGER fail_commercial_act_fixture ON proposal_audit_events");
+      await db.$executeRawUnsafe("DROP FUNCTION fail_commercial_act_fixture()");
+    }
+  });
+
+  it("detects modified recorded content and refuses to extend a damaged commercial history", async () => {
+    const event = await db.proposal_audit_events.findFirstOrThrow({ where: { proposal_id: "calendar-proposal",
+      event_type: "outcome_date_changed" } });
+    const original = event.payload!;
+    await db.proposal_audit_events.update({ where: { event_id: event.event_id },
+      data: { payload: JSON.stringify({ ...JSON.parse(original), toOutcome: "forged" }) } });
+    const before = await db.proposals.findUniqueOrThrow({ where: { proposal_id: "calendar-proposal" } });
+    try {
+      const { getProposalAuditTimelineByTenant } = await import("./proposal-audit");
+      expect((await getProposalAuditTimelineByTenant("lifecycle-a", before.proposal_id))
+        .find(item => item.id === event.event_id)?.integrity).toBe("hash_mismatch");
+      await expect(proposals.setProposalOutcomeByTenant("lifecycle-a", before.proposal_id, "discarded", actor, true))
+        .rejects.toThrow("verificación de integridad");
+      expect(await db.proposals.findUniqueOrThrow({ where: { proposal_id: before.proposal_id } })).toEqual(before);
+    } finally {
+      await db.proposal_audit_events.update({ where: { event_id: event.event_id }, data: { payload: original } });
+    }
+    expect(commercialPayloadHash(JSON.parse(original))).toBe(event.event_hash);
+  });
+
+  it("serializes concurrent retries into one decision and one recorded act", async () => {
+    await db.proposals.create({ data: { proposal_id: "memory-concurrent", tenant_id: "lifecycle-a", status: "approved",
+      created_at: new Date("2026-02-01"), created_by: actor.userId, created_by_user_id: actor.userId } });
+    const results = await Promise.all([
+      proposals.setProposalOutcomeByTenant("lifecycle-a", "memory-concurrent", "won", actor, true,
+        { closedOn: "2026-08-20", expectedOutcome: null }),
+      proposals.setProposalOutcomeByTenant("lifecycle-a", "memory-concurrent", "won", actor, true,
+        { closedOn: "2026-08-20", expectedOutcome: null }),
+    ]);
+    expect(results.sort()).toEqual(["conflict", "updated"]);
+    expect(await db.proposal_audit_events.count({ where: { proposal_id: "memory-concurrent", event_type: "outcome_changed" } })).toBe(1);
+    const row = await db.proposals.findUniqueOrThrow({ where: { proposal_id: "memory-concurrent" } });
+    expect(row.outcome).toBe("won");
+    expect(row.outcome_at?.toISOString()).toBe("2026-08-20T06:00:00.000Z");
   });
 });

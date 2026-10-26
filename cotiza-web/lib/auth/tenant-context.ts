@@ -1,6 +1,6 @@
 import "server-only";
 
-import { auth, clerkClient } from "@clerk/nextjs/server";
+import { auth } from "@clerk/nextjs/server";
 import { cookies } from "next/headers";
 
 import { hasClerkCredentials } from "@/lib/auth/clerk";
@@ -20,617 +20,66 @@ export type TenantContext = BootstrapTenant & {
   userId: string | null;
 };
 
-type ResolvedTenant = {
-  id: string;
-  name: string;
-  slug: string;
-};
+const SUPER_ADMIN_ROLES = new Set(["superadmin", "super_admin", "platform_admin", "root"]);
 
-type ClerkClaimRecord = Record<string, unknown>;
-
-type TenantClaims = {
-  email?: string | null;
-  first_name?: string | null;
-  metadata?: ClerkClaimRecord;
-  name?: string | null;
-  publicMetadata?: ClerkClaimRecord;
-  last_name?: string | null;
-  unsafeMetadata?: ClerkClaimRecord;
-  org_slug?: string | null;
-};
-
-const TENANT_OVERRIDE_COOKIE = "tenant_override_slug";
-const DEV_CLERK_SESSION_COOKIE = "dev_clerk_client_session";
-const DEV_CLERK_USER_ID_COOKIE = "dev_clerk_user_id";
-const DEV_CLERK_TENANT_ID_COOKIE = "dev_clerk_tenant_id";
-const DEV_CLERK_TENANT_SLUG_COOKIE = "dev_clerk_tenant_slug";
-const DEV_CLERK_EMAIL_ALIAS_COOKIE = "dev_clerk_email_alias";
-const DEV_CLERK_FIRST_NAME_COOKIE = "dev_clerk_first_name";
-const DEV_CLERK_LAST_NAME_COOKIE = "dev_clerk_last_name";
-const SUPER_ADMIN_ROLES = new Set<string>(["superadmin", "super_admin", "platform_admin", "root"]);
-
-async function resolveBootstrapTenantContext(
-  tenantOverrideSlug: string | null,
-): Promise<TenantContext | null> {
-  const tenant =
-    (tenantOverrideSlug
-      ? await resolveTenantByReference({ tenantId: null, tenantSlug: tenantOverrideSlug })
-      : null) ?? (await getBootstrapTenant());
-
-  return tenant
-    ? {
-        accessScope: "tenant",
-        ...tenant,
-        authMode: "bootstrap",
-        isSuperAdmin: false,
-        subtenantKey: null,
-        // En modo bootstrap no hay identidad Clerk, pero sí debe existir un actor técnico
-        // para operar políticas/aprobaciones durante desarrollo y demos.
-        userRole: "owner",
-        userDisplayName: "Bootstrap Admin",
-        userId: `bootstrap:${tenant.id}`,
-      }
-    : null;
+function normalizeRole(value: string): AppUserRole {
+  const role = value.trim().toLowerCase();
+  if (SUPER_ADMIN_ROLES.has(role)) return "superadmin";
+  return role === "owner" || role === "admin" ? role : "user";
 }
 
-async function resolveDevelopmentTenantContextFromCookies(
-  cookieStore: Awaited<ReturnType<typeof cookies>>,
-  tenantOverrideSlug: string | null,
-): Promise<TenantContext | null> {
-  const userId = readString(cookieStore.get(DEV_CLERK_USER_ID_COOKIE)?.value);
-  const tenantId = readString(cookieStore.get(DEV_CLERK_TENANT_ID_COOKIE)?.value);
-  const tenantSlug = readString(cookieStore.get(DEV_CLERK_TENANT_SLUG_COOKIE)?.value);
-  const emailAlias = readString(cookieStore.get(DEV_CLERK_EMAIL_ALIAS_COOKIE)?.value)?.toLowerCase() ?? null;
-  const firstName = readString(cookieStore.get(DEV_CLERK_FIRST_NAME_COOKIE)?.value);
-  const lastName = readString(cookieStore.get(DEV_CLERK_LAST_NAME_COOKIE)?.value);
-
-  let appUser = userId
-    ? await prisma.app_users.findUnique({
-        select: {
-          active: true,
-          alias: true,
-          first_name: true,
-          last_name: true,
-          role: true,
-          tenant_id: true,
-          user_id: true,
-        },
-        where: {
-          user_id: userId,
-        },
-      })
-    : null;
-
-  if (!appUser && emailAlias) {
-    appUser = await prisma.app_users.findFirst({
-      orderBy: [{ created_at: "asc" }],
-      select: {
-        active: true,
-        alias: true,
-        first_name: true,
-        last_name: true,
-        role: true,
-        tenant_id: true,
-        user_id: true,
-      },
-      where: {
-        active: true,
-        alias: emailAlias,
-      },
-    });
-  }
-
-  if (!appUser && firstName && lastName) {
-    const candidates = await prisma.app_users.findMany({
-      select: {
-        active: true,
-        alias: true,
-        first_name: true,
-        last_name: true,
-        role: true,
-        tenant_id: true,
-        user_id: true,
-      },
-      where: {
-        active: true,
-        ...(tenantId
-          ? {
-              tenant_id: tenantId,
-            }
-          : {}),
-      },
-      take: 200,
-    });
-
-    appUser =
-      candidates.find(
-        (candidate) =>
-          namesLookEquivalent(firstName, candidate.first_name) && namesLookEquivalent(lastName, candidate.last_name),
-      ) ?? null;
-  }
-
-  const userRole = normalizeRole(appUser?.role);
-  const isSuperAdmin = userRole === "superadmin";
-  const shouldUseOverride = Boolean(tenantOverrideSlug) && (isSuperAdmin || process.env.NODE_ENV !== "production");
-  const fallbackTenantId = tenantId ?? appUser?.tenant_id ?? null;
-
-  const tenant =
-    (shouldUseOverride
-      ? await resolveTenantByReference({ tenantId: null, tenantSlug: tenantOverrideSlug ?? null })
-      : null) ??
-    (await resolveTenantByReference({ tenantId: fallbackTenantId, tenantSlug })) ??
-    (process.env["DEFAULT_TENANT_SLUG"] ? await getBootstrapTenant() : null);
-
-  if (!tenant) {
-    return null;
-  }
-
-  const isCrossTenantContext = !isSuperAdmin && Boolean(appUser?.tenant_id) && appUser?.tenant_id !== tenant.id;
-
-  if (isCrossTenantContext) {
-    return null;
-  }
-
-  const userDisplayName =
-    [appUser?.first_name ?? firstName, appUser?.last_name ?? lastName]
-      .filter((value) => typeof value === "string" && value.trim().length > 0)
-      .join(" ")
-      .trim() ||
-    appUser?.alias ||
-    emailAlias;
-
-  return {
-    accessScope: isSuperAdmin ? "global" : "subtenant",
-    authMode: "clerk",
-    id: tenant.id,
-    isSuperAdmin,
-    name: tenant.name,
-    slug: tenant.slug,
-    subtenantKey: userId ? `${tenant.id}:${userId}` : tenant.id,
-    userDisplayName: userDisplayName || null,
-    userId,
-    userRole,
-  };
-}
-
-function normalizeIdentityToken(value: string | null | undefined): string {
-  return (value ?? "")
-    .normalize("NFD")
-    .replace(/[\u0300-\u036f]/g, "")
-    .toLowerCase()
-    .replace(/[^a-z0-9]/g, "");
-}
-
-function namesLookEquivalent(a: string | null, b: string | null): boolean {
-  const left = normalizeIdentityToken(a);
-  const right = normalizeIdentityToken(b);
-
-  if (!left || !right) {
-    return false;
-  }
-
-  return left === right || left.startsWith(right) || right.startsWith(left);
-}
-
-function readString(value: unknown): string | null {
-  return typeof value === "string" && value.trim().length > 0 ? value.trim() : null;
-}
-
-function extractTenantReference(claims: unknown): { tenantId: string | null; tenantSlug: string | null } {
-  const typedClaims = (claims ?? {}) as TenantClaims;
-
-  return {
-    tenantId:
-      readString(typedClaims.metadata?.tenantId) ??
-      readString(typedClaims.publicMetadata?.tenantId) ??
-      readString(typedClaims.unsafeMetadata?.tenantId),
-    tenantSlug:
-      readString(typedClaims.metadata?.tenantSlug) ??
-      readString(typedClaims.publicMetadata?.tenantSlug) ??
-      readString(typedClaims.unsafeMetadata?.tenantSlug) ??
-      readString(typedClaims.org_slug),
-  };
-}
-
-function extractUserDisplayName(claims: unknown): string | null {
-  const typedClaims = (claims ?? {}) as TenantClaims;
-
-  const first = readString(typedClaims.first_name);
-  const last = readString(typedClaims.last_name);
-  const fromParts = [first, last].filter(Boolean).join(" ").trim();
-
-  return (
-    readString(typedClaims.name) ??
-    (fromParts.length > 0 ? fromParts : null) ??
-    readString(typedClaims.email)
-  );
-}
-
-function extractUserIdentity(claims: unknown): {
-  emailAlias: string | null;
-  firstName: string | null;
-  lastName: string | null;
-} {
-  const typedClaims = (claims ?? {}) as TenantClaims;
-  const email = readString(typedClaims.email)?.toLowerCase() ?? null;
-  const emailAlias = email?.split("@")[0] ?? null;
-
-  return {
-    emailAlias,
-    firstName: readString(typedClaims.first_name),
-    lastName: readString(typedClaims.last_name),
-  };
-}
-
-function looksLikeOpaqueId(value: string | null): boolean {
-  if (!value) {
-    return false;
-  }
-
-  return /^(ser|user|sess|org)_[A-Za-z0-9]+$/.test(value.trim());
-}
-
-function normalizeRole(value: string | null | undefined): AppUserRole {
-  const role = value?.trim().toLowerCase();
-
-  if (role && SUPER_ADMIN_ROLES.has(role)) {
-    return "superadmin";
-  }
-
-  if (role === "owner") {
-    return "owner";
-  }
-
-  if (role === "admin") {
-    return "admin";
-  }
-
-  return "user";
-}
-
-function extractRoleFromClaims(claims: unknown): AppUserRole {
-  const typedClaims = (claims ?? {}) as TenantClaims;
-  const role =
-    readString(typedClaims.metadata?.role) ??
-    readString(typedClaims.publicMetadata?.role) ??
-    readString(typedClaims.unsafeMetadata?.role);
-
-  return normalizeRole(role);
-}
-
-async function resolveTenantByReference(reference: {
-  tenantId: string | null;
-  tenantSlug: string | null;
-}): Promise<ResolvedTenant | null> {
-  if (reference.tenantId) {
-    const tenant = await prisma.tenant.findFirst({
-      where: {
-        active: true,
-        tenant_id: reference.tenantId,
-      },
-      select: {
-        tenant_id: true,
-        name: true,
-        slug: true,
-      },
-    });
-
-    return tenant
-      ? {
-          id: tenant.tenant_id,
-          name: tenant.name,
-          slug: tenant.slug,
-        }
-      : null;
-  }
-
-  if (reference.tenantSlug) {
-    const tenant = await prisma.tenant.findFirst({
-      where: {
-        active: true,
-        slug: reference.tenantSlug,
-      },
-      select: {
-        tenant_id: true,
-        name: true,
-        slug: true,
-      },
-    });
-
-    return tenant
-      ? {
-          id: tenant.tenant_id,
-          name: tenant.name,
-          slug: tenant.slug,
-        }
-      : null;
-  }
-
-  return null;
-}
-
+// Clerk proves identity. The exact, active app_users row grants membership
+// and role. Claims, unsafeMetadata, names and email aliases grant no access.
 export async function getCurrentTenantContext(): Promise<TenantContext | null> {
-  const cookieStore = await cookies();
-  const tenantOverrideSlug = readString(cookieStore.get(TENANT_OVERRIDE_COOKIE)?.value);
-  const hasDevClientSession =
-    process.env.NODE_ENV === "development" &&
-    cookieStore.get(DEV_CLERK_SESSION_COOKIE)?.value === "1";
+  const store = await cookies();
+  const override = store.get("tenant_override_slug")?.value.trim() || null;
 
   if (!hasClerkCredentials()) {
-    return resolveBootstrapTenantContext(tenantOverrideSlug);
-  }
-
-  const { sessionClaims, userId } = await auth();
-
-  if (!userId) {
-    if (hasDevClientSession) {
-      return resolveDevelopmentTenantContextFromCookies(cookieStore, tenantOverrideSlug);
-    }
-
-    return null;
-  }
-
-  const { tenantId, tenantSlug } = extractTenantReference(sessionClaims);
-  const claimDisplayName = extractUserDisplayName(sessionClaims);
-  let identity = extractUserIdentity(sessionClaims);
-
-  if (!identity.emailAlias || !identity.firstName || !identity.lastName) {
-    try {
-      const client = await clerkClient();
-      const clerkUser = await client.users.getUser(userId);
-      const primaryEmail = clerkUser.emailAddresses.find(
-        (item) => item.id === clerkUser.primaryEmailAddressId,
-      )?.emailAddress;
-      const emailAlias = primaryEmail?.split("@")[0]?.trim().toLowerCase() ?? null;
-
-      identity = {
-        emailAlias: identity.emailAlias ?? emailAlias,
-        firstName: identity.firstName ?? readString(clerkUser.firstName),
-        lastName: identity.lastName ?? readString(clerkUser.lastName),
-      };
-    } catch {
-      // Si Clerk no responde, seguimos con claims para no romper autenticacion.
-    }
-  }
-
-  let appUser = await prisma.app_users.findUnique({
-    select: {
-      alias: true,
-      first_name: true,
-      last_name: true,
-      role: true,
-      tenant_id: true,
-      user_id: true,
-      active: true,
-    },
-    where: {
-      user_id: userId,
-    },
-  });
-
-  // Fallback robusto: comparar identidad normalizada dentro del tenant para reconciliar Clerk con app_users.
-  const fallbackCandidates =
-    appUser || (!identity.emailAlias && !(identity.firstName && identity.lastName))
-      ? []
-      : await prisma.app_users.findMany({
-          select: {
-            active: true,
-            alias: true,
-            first_name: true,
-            last_name: true,
-            role: true,
-            tenant_id: true,
-            user_id: true,
-          },
-          where: {
-            active: true,
-            ...(tenantId
-              ? {
-                  tenant_id: tenantId,
-                }
-              : {}),
-          },
-          take: 300,
-        });
-
-  if (!appUser && fallbackCandidates.length > 0) {
-    const roleWeight = (role: string): number => {
-      const normalized = normalizeRole(role);
-      if (normalized === "superadmin") return 100;
-      if (normalized === "owner") return 80;
-      if (normalized === "admin") return 60;
-      return 20;
+    // An absent secret must never turn a deployed app into an anonymous owner.
+    if (process.env.NODE_ENV !== "development" || process.env.ALLOW_BOOTSTRAP_AUTH !== "true") return null;
+    const bootstrap = await getBootstrapTenant();
+    if (!bootstrap) return null;
+    const active = await prisma.tenant.findFirst({ where: { tenant_id: bootstrap.id, active: true } });
+    if (!active) return null;
+    return {
+      ...bootstrap, accessScope: "tenant", authMode: "bootstrap", isSuperAdmin: false,
+      subtenantKey: null, userRole: "owner", userDisplayName: "Bootstrap Admin",
+      userId: `bootstrap:${bootstrap.id}`,
     };
-
-    const identityAlias = normalizeIdentityToken(identity.emailAlias);
-    const identityFirst = normalizeIdentityToken(identity.firstName);
-    const identityLast = normalizeIdentityToken(identity.lastName);
-
-    const scored = fallbackCandidates
-      .map((candidate) => {
-        const alias = normalizeIdentityToken(candidate.alias);
-        const first = normalizeIdentityToken(candidate.first_name);
-        const last = normalizeIdentityToken(candidate.last_name);
-
-        let score = 0;
-
-        if (identityAlias && alias === identityAlias) {
-          score += 120;
-        } else if (identityAlias && alias && (alias.startsWith(identityAlias) || identityAlias.startsWith(alias))) {
-          score += 85;
-        }
-
-        if (identityFirst && first && identityFirst === first) {
-          score += 35;
-        }
-
-        if (identityLast && last && identityLast === last) {
-          score += 35;
-        }
-
-        if (
-          namesLookEquivalent(identity.firstName, candidate.first_name) &&
-          namesLookEquivalent(identity.lastName, candidate.last_name)
-        ) {
-          score += 40;
-        }
-
-        if (identityAlias && first && last && identityAlias.includes(first) && identityAlias.includes(last.slice(0, 5))) {
-          score += 20;
-        }
-
-        score += roleWeight(candidate.role) / 10;
-
-        return { candidate, score };
-      })
-      .filter((entry) => entry.score > 0)
-      .sort((a, b) => b.score - a.score);
-
-    const best = scored[0] ?? null;
-    const second = scored[1] ?? null;
-    const minScore = tenantId ? 70 : 95;
-    const unambiguous = !best ? false : !second || best.score - second.score >= 15;
-
-    appUser = best && best.score >= minScore && unambiguous ? best.candidate : null;
-
-    if (appUser && appUser.user_id !== userId) {
-      try {
-        await prisma.app_users.update({
-          where: { user_id: appUser.user_id },
-          data: { user_id: userId },
-        });
-        appUser.user_id = userId;
-      } catch {
-        // no-op: no bloqueamos autenticacion por falla de sync
-      }
-    }
   }
 
-  if (!appUser) {
-    const superAdminCandidates = await prisma.app_users.findMany({
-      select: {
-        active: true,
-        alias: true,
-        first_name: true,
-        last_name: true,
-        role: true,
-        tenant_id: true,
-        user_id: true,
-      },
-      where: {
-        active: true,
-        role: {
-          in: ["superadmin", "super_admin", "platform_admin", "root"],
-        },
-      },
-    });
+  const session = await auth();
+  // Explicitly opt-in local browser harness. Disabled in production/previews.
+  const devUserId = process.env.NODE_ENV === "development" && process.env.ALLOW_DEV_COOKIE_AUTH === "true" &&
+    store.get("dev_clerk_client_session")?.value === "1"
+    ? store.get("dev_clerk_user_id")?.value : null;
+  const userId = session.userId || devUserId;
+  if (!userId) return null;
 
-    const identityAlias = normalizeIdentityToken(identity.emailAlias);
-    const identityFirst = normalizeIdentityToken(identity.firstName);
+  const user = await prisma.app_users.findUnique({
+    where: { user_id: userId },
+    select: { user_id: true, active: true, alias: true, first_name: true, last_name: true, role: true, tenant_id: true },
+  });
+  if (!user?.active) return null;
 
-    const rescued = superAdminCandidates.find((candidate) => {
-      const candidateAlias = normalizeIdentityToken(candidate.alias);
-      const candidateFirst = normalizeIdentityToken(candidate.first_name);
-
-      const aliasMatch = Boolean(identityAlias) && identityAlias === candidateAlias;
-      const firstMatch = Boolean(identityFirst) && identityFirst === candidateFirst;
-      const lastMatch = namesLookEquivalent(identity.lastName, candidate.last_name);
-
-      return aliasMatch || (firstMatch && lastMatch);
-    });
-
-    if (rescued) {
-      appUser = rescued;
-    }
-  }
-
-  const userRole = appUser ? normalizeRole(appUser.role) : extractRoleFromClaims(sessionClaims);
+  const userRole = normalizeRole(user.role);
   const isSuperAdmin = userRole === "superadmin";
-
-  if (appUser && hasClerkCredentials()) {
-    try {
-      const client = await clerkClient();
-      const clerkUser = await client.users.getUser(userId);
-      const clerkRoleMetadata = (clerkUser.publicMetadata?.role as string) || null;
-
-      if (clerkRoleMetadata !== appUser.role) {
-        await client.users.updateUserMetadata(userId, {
-          publicMetadata: {
-            role: appUser.role,
-            tenantId: appUser.tenant_id,
-          },
-        });
-      }
-    } catch {
-      // no-op: no bloqueamos autenticacion por falla de sync con Clerk
-    }
-  }
-
-  const shouldUseOverride = Boolean(tenantOverrideSlug) && (isSuperAdmin || process.env.NODE_ENV !== "production");
-
-  const fallbackTenantId = appUser?.tenant_id ?? null;
-
-  const tenant =
-    (shouldUseOverride
-      ? await resolveTenantByReference({ tenantId: null, tenantSlug: tenantOverrideSlug ?? null })
-      : null) ??
-    (await resolveTenantByReference({ tenantId: tenantId ?? fallbackTenantId, tenantSlug })) ??
-    (process.env["DEFAULT_TENANT_SLUG"] ? await getBootstrapTenant() : null);
-
-  if (!tenant) {
-    return null;
-  }
-
-  const isCrossTenantContext = !isSuperAdmin && Boolean(appUser?.tenant_id) && appUser?.tenant_id !== tenant.id;
-
-  if (isCrossTenantContext) {
-    return null;
-  }
-
-  const appUserDisplayName = [appUser?.first_name, appUser?.last_name]
-    .filter((value) => typeof value === "string" && value.trim().length > 0)
-    .join(" ")
-    .trim();
-
-  let userDisplayName =
-    appUserDisplayName ||
-    (appUser?.alias && appUser.alias.trim().length > 0 ? appUser.alias.trim() : null) ||
-    claimDisplayName;
-
-  if (!userDisplayName || looksLikeOpaqueId(userDisplayName)) {
-    try {
-      const client = await clerkClient();
-      const clerkUser = await client.users.getUser(userId);
-      const fullName = [clerkUser.firstName, clerkUser.lastName]
-        .filter((value) => typeof value === "string" && value.trim().length > 0)
-        .join(" ")
-        .trim();
-
-      if (fullName.length > 0) {
-        userDisplayName = fullName;
-      }
-    } catch {
-      // Si Clerk falla, mantenemos fallback local sin romper el flujo.
-    }
-  }
-
-  if (looksLikeOpaqueId(userDisplayName)) {
-    userDisplayName = null;
-  }
-
-  const accessScope: AccessScope = isSuperAdmin ? "global" : "subtenant";
-  const subtenantKey = isSuperAdmin ? `superadmin:${userId}` : `${tenant.id}:${userId}`;
+  // Non-superadmins cannot override even in development. No bootstrap or
+  // session-claim fallback for an absent/inactive membership.
+  const reference = isSuperAdmin && override
+    ? { slug: override } : user.tenant_id ? { tenant_id: user.tenant_id } : null;
+  if (!reference) return null;
+  const tenant = await prisma.tenant.findFirst({
+    where: { ...reference, active: true },
+    select: { tenant_id: true, name: true, slug: true },
+  });
+  if (!tenant) return null;
 
   return {
-    accessScope,
-    authMode: "clerk",
-    id: tenant.id,
-    isSuperAdmin,
-    name: tenant.name,
-    slug: tenant.slug,
-    subtenantKey,
-    userRole,
-    userDisplayName,
-    userId,
+    id: tenant.tenant_id, name: tenant.name, slug: tenant.slug,
+    accessScope: isSuperAdmin ? "global" : "subtenant", authMode: "clerk", isSuperAdmin,
+    subtenantKey: isSuperAdmin ? `superadmin:${userId}` : `${tenant.tenant_id}:${userId}`,
+    userRole, userId,
+    userDisplayName: [user.first_name, user.last_name].filter(Boolean).join(" ").trim() || user.alias,
   };
 }

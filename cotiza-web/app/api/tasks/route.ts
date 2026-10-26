@@ -1,3 +1,4 @@
+import { TenantRelationError } from "@/lib/db/tenant-relations";
 import { NextResponse } from "next/server";
 
 import { getCurrentTenantContext } from "@/lib/auth/tenant-context";
@@ -38,13 +39,19 @@ export async function POST(request: Request) {
     return NextResponse.json({ error: "Cliente no encontrado" }, { status: 404 });
   }
 
-  const taskId = await createTaskForTenant(tenant.id, {
-    clientId: parsed.data.clientId,
-    createdByUserId: tenant.userId,
-    description: parsed.data.description,
-    dueDate: parsed.data.dueDate,
-    opportunityId: parsed.data.opportunityId,
-  });
+  try {
+    const canSeeAll = tenant.isSuperAdmin || tenant.userRole === "owner" || tenant.userRole === "admin";
+    const taskId = await createTaskForTenant(tenant.id, {
+      clientId: parsed.data.clientId,
+      createdByUserId: tenant.userId,
+      description: parsed.data.description,
+      dueDate: parsed.data.dueDate,
+      opportunityId: parsed.data.opportunityId,
+    }, canSeeAll);
 
-  return NextResponse.json({ taskId }, { status: 201 });
+    return NextResponse.json({ taskId }, { status: 201 });
+  } catch (error) {
+    if (error instanceof TenantRelationError) return NextResponse.json({ error: error.message }, { status: 404 });
+    throw error;
+  }
 }

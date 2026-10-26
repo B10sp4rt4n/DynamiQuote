@@ -37,6 +37,10 @@ function closeDateLabel(value: unknown): string {
 }
 
 function describe(item: ProposalAuditTimelineItem): { detail: string | null; title: string; tone: Tone } {
+  if (item.integrity === "hash_mismatch") {
+    return { title: "Registro pendiente de revisión", tone: "warn",
+      detail: "El contenido no coincide con la huella guardada. Solicita una revisión antes de usar este registro como respaldo." };
+  }
   const d = item.details;
 
   switch (item.type) {
@@ -151,6 +155,7 @@ export function ProposalAuditPanel({ items }: { items: ProposalAuditTimelineItem
                   <p className="text-xs text-zinc-500">
                     {formatWhen(item.createdAt)}
                     {item.actorName ? ` · ${item.actorName}` : ""}
+                    {item.integrity === "hash_verified" ? " · Registro local: contenido verificado" : ""}
                   </p>
                 </div>
               </li>

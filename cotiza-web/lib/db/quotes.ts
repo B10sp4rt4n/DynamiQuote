@@ -180,7 +180,7 @@ export async function deleteQuoteGroupByTenant(
 
   await prisma.$transaction([
     prisma.quote_lines.deleteMany({ where: { quote_id: { in: quoteIds } } }),
-    prisma.quote_search_index.deleteMany({ where: { quote_group_id: quoteGroupId } }),
+    prisma.quote_search_index.deleteMany({ where: { quote_group_id: quoteGroupId, latest_quote_id: { in: quoteIds } } }),
     prisma.quote.deleteMany({ where: { quote_id: { in: quoteIds } } }),
   ]);
 

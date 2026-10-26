@@ -2,7 +2,8 @@ import { NextResponse } from "next/server";
 
 import { getCurrentTenantContext } from "@/lib/auth/tenant-context";
 import { prisma } from "@/lib/db/prisma";
-import { createProposalFromQuoteByTenant, getProposalListPageByTenant } from "@/lib/db/proposals";
+import { isQuoteVisibleToViewer } from "@/lib/db/quotes";
+import { createProposalFromQuoteByTenant, getProposalListPageByTenant, isProposalVisibleToViewer } from "@/lib/db/proposals";
 import {
   normalizeBlockedMarginFilter,
   normalizeProposalOutcomeFilter,
@@ -129,6 +130,23 @@ export async function POST(request: Request) {
 
     if (!parsed.success) {
       return NextResponse.json({ error: "Payload invalido para crear propuesta" }, { status: 422 });
+    }
+
+    const canSeeAll = tenant.isSuperAdmin || tenant.userRole === "owner" || tenant.userRole === "admin";
+    if (!await isQuoteVisibleToViewer(tenant.id, parsed.data.quoteId, tenant.userId, canSeeAll)) {
+      return NextResponse.json({ error: "Cotizacion no encontrada" }, { status: 404 });
+    }
+
+    // A replay returns an existing proposal. Authorizing the source quote
+    // alone must not expose a proposal owned by someone else or backfill it.
+    if (!canSeeAll) {
+      const existing = await prisma.proposals.findFirst({
+        where: { tenant_id: tenant.id, origin: parsed.data.quoteId },
+        select: { proposal_id: true },
+      });
+      if (existing && !await isProposalVisibleToViewer(tenant.id, existing.proposal_id, tenant.userId, false)) {
+        return NextResponse.json({ error: "Propuesta no encontrada" }, { status: 404 });
+      }
     }
 
     const actorName = await resolveActorName(tenant.id, tenant.userId, tenant.userDisplayName);

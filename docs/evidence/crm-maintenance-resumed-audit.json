@@ -1,0 +1,95 @@
+{
+  "checked_at": "2026-10-23T04:58:09.475Z",
+  "read_only": true,
+  "identity_proof": "provider_lookup_by_exact_id; does_not_prove_user_login",
+  "invitations_complete": true,
+  "users": [
+    {
+      "user_id": "f4e5ba4c-88c6-4f12-9a45-2d4d4b3125d1",
+      "alias": "admin",
+      "role": "superadmin",
+      "tenant_id": "7ee39632-74ea-4fee-a3cb-c028e87cecfc",
+      "tenant_slug": "dynamiquote",
+      "status": "legacy_local_id",
+      "provider_lookup": "not_attempted"
+    },
+    {
+      "user_id": "pending_339b6542-e483-4dee-91d1-88c42d466831",
+      "alias": "ma.glz",
+      "role": "owner",
+      "tenant_id": "b0e92d15-2e87-4c1a-93ac-3399bf8fe515",
+      "tenant_slug": "salsa",
+      "status": "pending_local_id",
+      "invitation_matches": 0,
+      "invitation_email_matches_local": false,
+      "invitation_search_complete": true
+    },
+    {
+      "user_id": "pending_65719ce2-838d-4b8e-b295-72fce8869474",
+      "alias": "e.hdz",
+      "role": "owner",
+      "tenant_id": "90359a46-4e6b-43fb-b5df-802609281b9b",
+      "tenant_slug": "fumicontrol",
+      "status": "pending_local_id",
+      "invitation_matches": 0,
+      "invitation_email_matches_local": false,
+      "invitation_search_complete": true
+    },
+    {
+      "user_id": "pending_89e0cba4-f2e6-4330-8887-6395002749bd",
+      "alias": "ruben.arroyo",
+      "role": "user",
+      "tenant_id": "b0e92d15-2e87-4c1a-93ac-3399bf8fe515",
+      "tenant_slug": "salsa",
+      "status": "pending_local_id",
+      "invitation_matches": 0,
+      "invitation_email_matches_local": false,
+      "invitation_search_complete": true
+    },
+    {
+      "user_id": "user_3D45SeGQqBoyBe8v3XvOu39QdWH",
+      "alias": "salvador.ruiz",
+      "role": "superadmin",
+      "tenant_id": "389b6cc1-2f8d-4fe4-bc3d-f50f92df3157",
+      "tenant_slug": "sys",
+      "status": "exact_id_found",
+      "verified_email_matches_local": false
+    },
+    {
+      "user_id": "user_3DXveMfWJpspfGVISJaaHEUWLFV",
+      "alias": "joss.glz",
+      "role": "admin",
+      "tenant_id": "b0e92d15-2e87-4c1a-93ac-3399bf8fe515",
+      "tenant_slug": "salsa",
+      "status": "exact_id_found",
+      "verified_email_matches_local": true
+    },
+    {
+      "user_id": "user_3Dd6Dfifo7p6DLhgFrpWhMmFS21",
+      "alias": "andy.glz",
+      "role": "owner",
+      "tenant_id": "b0e92d15-2e87-4c1a-93ac-3399bf8fe515",
+      "tenant_slug": "salsa",
+      "status": "exact_id_found",
+      "verified_email_matches_local": true
+    },
+    {
+      "user_id": "user_3E5mNQxuPyIYPNRHPCunlLkxeUg",
+      "alias": "eli.villegas",
+      "role": "user",
+      "tenant_id": "b0e92d15-2e87-4c1a-93ac-3399bf8fe515",
+      "tenant_slug": "salsa",
+      "status": "exact_id_found",
+      "verified_email_matches_local": true
+    },
+    {
+      "user_id": "user_3EEfHYmOgYPWBIg52y4HwhXJ0Ah",
+      "alias": "andres.lopez",
+      "role": "user",
+      "tenant_id": "b0e92d15-2e87-4c1a-93ac-3399bf8fe515",
+      "tenant_slug": "salsa",
+      "status": "exact_id_found",
+      "verified_email_matches_local": true
+    }
+  ]
+}

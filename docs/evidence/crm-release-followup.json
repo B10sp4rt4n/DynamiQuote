@@ -1,0 +1,1314 @@
+{
+  "schema_version": "1.0",
+  "code_before_review": "8eb7a0d7f7430fc5bf0ac59c8cb9e5b3264f31ea",
+  "code_timezone_fix": "11698a20ca45b20d7c0fa0980e03fc936a862c50",
+  "scope": "Revisión previa a liberación. Producción solo lectura; sin merge, deploy productivo, correo ni facturación.",
+  "production": {
+    "branch_id": "br-quiet-morning-ahkomhhi",
+    "checks": [
+      {
+        "check_name": "app_users.rows",
+        "count": "9"
+      },
+      {
+        "check_name": "app_users.tenant_missing",
+        "count": "0"
+      },
+      {
+        "check_name": "app_users.tenant_unknown",
+        "count": "0"
+      },
+      {
+        "check_name": "client_contacts.client_id_invalid",
+        "count": "0"
+      },
+      {
+        "check_name": "client_contacts.rows",
+        "count": "0"
+      },
+      {
+        "check_name": "client_contacts.tenant_missing",
+        "count": "0"
+      },
+      {
+        "check_name": "client_contacts.tenant_unknown",
+        "count": "0"
+      },
+      {
+        "check_name": "clients.client_logo_id_foreign",
+        "count": "0"
+      },
+      {
+        "check_name": "clients.rows",
+        "count": "62"
+      },
+      {
+        "check_name": "clients.tenant_missing",
+        "count": "0"
+      },
+      {
+        "check_name": "clients.tenant_unknown",
+        "count": "0"
+      },
+      {
+        "check_name": "company_logos.rows",
+        "count": "81"
+      },
+      {
+        "check_name": "company_logos.tenant_missing",
+        "count": "50"
+      },
+      {
+        "check_name": "company_logos.tenant_unknown",
+        "count": "0"
+      },
+      {
+        "check_name": "formal_proposals.client_logo_id_foreign",
+        "count": "0"
+      },
+      {
+        "check_name": "formal_proposals.issuer_logo_id_foreign",
+        "count": "0"
+      },
+      {
+        "check_name": "formal_proposals.proposal_id_invalid",
+        "count": "0"
+      },
+      {
+        "check_name": "formal_proposals.quote_id_invalid",
+        "count": "12"
+      },
+      {
+        "check_name": "formal_proposals.rows",
+        "count": "281"
+      },
+      {
+        "check_name": "formal_proposals.tenant_missing",
+        "count": "12"
+      },
+      {
+        "check_name": "formal_proposals.tenant_unknown",
+        "count": "0"
+      },
+      {
+        "check_name": "import_files.quote_id_invalid",
+        "count": "0"
+      },
+      {
+        "check_name": "import_files.rows",
+        "count": "0"
+      },
+      {
+        "check_name": "import_files.tenant_missing",
+        "count": "0"
+      },
+      {
+        "check_name": "import_files.tenant_unknown",
+        "count": "0"
+      },
+      {
+        "check_name": "interaction_logs.author_foreign_non_superadmin",
+        "count": "0"
+      },
+      {
+        "check_name": "interaction_logs.author_unassigned",
+        "count": "0"
+      },
+      {
+        "check_name": "interaction_logs.author_unknown",
+        "count": "0"
+      },
+      {
+        "check_name": "interaction_logs.client_id_invalid",
+        "count": "0"
+      },
+      {
+        "check_name": "interaction_logs.opportunity_invalid",
+        "count": "0"
+      },
+      {
+        "check_name": "interaction_logs.rows",
+        "count": "0"
+      },
+      {
+        "check_name": "interaction_logs.tenant_missing",
+        "count": "0"
+      },
+      {
+        "check_name": "interaction_logs.tenant_unknown",
+        "count": "0"
+      },
+      {
+        "check_name": "opportunities.author_foreign_non_superadmin",
+        "count": "0"
+      },
+      {
+        "check_name": "opportunities.author_unassigned",
+        "count": "7"
+      },
+      {
+        "check_name": "opportunities.author_unknown",
+        "count": "2"
+      },
+      {
+        "check_name": "opportunities.client_id_invalid",
+        "count": "0"
+      },
+      {
+        "check_name": "opportunities.rows",
+        "count": "163"
+      },
+      {
+        "check_name": "opportunities.tenant_missing",
+        "count": "0"
+      },
+      {
+        "check_name": "opportunities.tenant_unknown",
+        "count": "0"
+      },
+      {
+        "check_name": "package_lines.package_id_invalid",
+        "count": "0"
+      },
+      {
+        "check_name": "package_lines.rows",
+        "count": "1"
+      },
+      {
+        "check_name": "package_lines.tenant_missing",
+        "count": "0"
+      },
+      {
+        "check_name": "package_lines.tenant_unknown",
+        "count": "0"
+      },
+      {
+        "check_name": "packages.rows",
+        "count": "1"
+      },
+      {
+        "check_name": "packages.tenant_missing",
+        "count": "0"
+      },
+      {
+        "check_name": "packages.tenant_unknown",
+        "count": "0"
+      },
+      {
+        "check_name": "project_expenses.proposal_id_invalid",
+        "count": "0"
+      },
+      {
+        "check_name": "project_expenses.rows",
+        "count": "0"
+      },
+      {
+        "check_name": "project_expenses.tenant_missing",
+        "count": "0"
+      },
+      {
+        "check_name": "project_expenses.tenant_unknown",
+        "count": "0"
+      },
+      {
+        "check_name": "proposal_approvals.proposal_id_invalid",
+        "count": "0"
+      },
+      {
+        "check_name": "proposal_approvals.rows",
+        "count": "44"
+      },
+      {
+        "check_name": "proposal_approvals.tenant_missing",
+        "count": "0"
+      },
+      {
+        "check_name": "proposal_approvals.tenant_unknown",
+        "count": "0"
+      },
+      {
+        "check_name": "proposal_audit_events.proposal_id_invalid",
+        "count": "0"
+      },
+      {
+        "check_name": "proposal_audit_events.rows",
+        "count": "194"
+      },
+      {
+        "check_name": "proposal_audit_events.tenant_missing",
+        "count": "0"
+      },
+      {
+        "check_name": "proposal_audit_events.tenant_unknown",
+        "count": "0"
+      },
+      {
+        "check_name": "proposal_derivations.base_proposal_id_invalid",
+        "count": "0"
+      },
+      {
+        "check_name": "proposal_derivations.derived_proposal_id_invalid",
+        "count": "0"
+      },
+      {
+        "check_name": "proposal_derivations.rows",
+        "count": "6"
+      },
+      {
+        "check_name": "proposal_derivations.tenant_missing",
+        "count": "0"
+      },
+      {
+        "check_name": "proposal_derivations.tenant_unknown",
+        "count": "0"
+      },
+      {
+        "check_name": "proposal_integrated_node.proposal_id_invalid",
+        "count": "0"
+      },
+      {
+        "check_name": "proposal_integrated_node.rows",
+        "count": "2"
+      },
+      {
+        "check_name": "proposal_integrated_node.tenant_missing",
+        "count": "0"
+      },
+      {
+        "check_name": "proposal_integrated_node.tenant_unknown",
+        "count": "2"
+      },
+      {
+        "check_name": "proposal_items.proposal_id_invalid",
+        "count": "0"
+      },
+      {
+        "check_name": "proposal_items.rows",
+        "count": "505"
+      },
+      {
+        "check_name": "proposal_items.tenant_missing",
+        "count": "0"
+      },
+      {
+        "check_name": "proposal_items.tenant_unknown",
+        "count": "2"
+      },
+      {
+        "check_name": "proposal_profitability_node.proposal_id_invalid",
+        "count": "0"
+      },
+      {
+        "check_name": "proposal_profitability_node.rows",
+        "count": "0"
+      },
+      {
+        "check_name": "proposal_profitability_node.tenant_missing",
+        "count": "0"
+      },
+      {
+        "check_name": "proposal_profitability_node.tenant_unknown",
+        "count": "0"
+      },
+      {
+        "check_name": "proposals.author_foreign_non_superadmin",
+        "count": "0"
+      },
+      {
+        "check_name": "proposals.author_unassigned",
+        "count": "18"
+      },
+      {
+        "check_name": "proposals.author_unknown",
+        "count": "0"
+      },
+      {
+        "check_name": "proposals.closed_without_date",
+        "count": "39"
+      },
+      {
+        "check_name": "proposals.legacy_no_opportunity",
+        "count": "18"
+      },
+      {
+        "check_name": "proposals.opportunity_id_invalid",
+        "count": "0"
+      },
+      {
+        "check_name": "proposals.origin_quote_cross_tenant",
+        "count": "0"
+      },
+      {
+        "check_name": "proposals.rows",
+        "count": "206"
+      },
+      {
+        "check_name": "proposals.tenant_missing",
+        "count": "0"
+      },
+      {
+        "check_name": "proposals.tenant_unknown",
+        "count": "6"
+      },
+      {
+        "check_name": "quotes.author_foreign_non_superadmin",
+        "count": "0"
+      },
+      {
+        "check_name": "quotes.author_unassigned",
+        "count": "121"
+      },
+      {
+        "check_name": "quotes.author_unknown",
+        "count": "11"
+      },
+      {
+        "check_name": "quotes.client_id_invalid",
+        "count": "0"
+      },
+      {
+        "check_name": "quotes.group_shared_across_tenants",
+        "count": "64"
+      },
+      {
+        "check_name": "quotes.legacy_no_opportunity",
+        "count": "129"
+      },
+      {
+        "check_name": "quotes.opportunity_client_mismatch",
+        "count": "0"
+      },
+      {
+        "check_name": "quotes.opportunity_id_invalid",
+        "count": "0"
+      },
+      {
+        "check_name": "quotes.parent_invalid",
+        "count": "0"
+      },
+      {
+        "check_name": "quotes.rows",
+        "count": "368"
+      },
+      {
+        "check_name": "quotes.tenant_missing",
+        "count": "0"
+      },
+      {
+        "check_name": "quotes.tenant_unknown",
+        "count": "0"
+      },
+      {
+        "check_name": "schema.crm_fk_validated",
+        "count": "0"
+      },
+      {
+        "check_name": "tasks.author_foreign_non_superadmin",
+        "count": "0"
+      },
+      {
+        "check_name": "tasks.author_unassigned",
+        "count": "0"
+      },
+      {
+        "check_name": "tasks.author_unknown",
+        "count": "0"
+      },
+      {
+        "check_name": "tasks.client_id_invalid",
+        "count": "0"
+      },
+      {
+        "check_name": "tasks.opportunity_invalid",
+        "count": "0"
+      },
+      {
+        "check_name": "tasks.rows",
+        "count": "1"
+      },
+      {
+        "check_name": "tasks.tenant_missing",
+        "count": "0"
+      },
+      {
+        "check_name": "tasks.tenant_unknown",
+        "count": "0"
+      },
+      {
+        "check_name": "tenant_capabilities.rows",
+        "count": "1"
+      },
+      {
+        "check_name": "tenant_capabilities.tenant_missing",
+        "count": "0"
+      },
+      {
+        "check_name": "tenant_capabilities.tenant_unknown",
+        "count": "0"
+      },
+      {
+        "check_name": "tenant_capability_events.rows",
+        "count": "3"
+      },
+      {
+        "check_name": "tenant_capability_events.tenant_missing",
+        "count": "0"
+      },
+      {
+        "check_name": "tenant_capability_events.tenant_unknown",
+        "count": "0"
+      },
+      {
+        "check_name": "tenant_margin_policies.rows",
+        "count": "2"
+      },
+      {
+        "check_name": "tenant_margin_policies.tenant_missing",
+        "count": "0"
+      },
+      {
+        "check_name": "tenant_margin_policies.tenant_unknown",
+        "count": "0"
+      },
+      {
+        "check_name": "users.active_clerk_shaped",
+        "count": "5"
+      },
+      {
+        "check_name": "users.active_legacy_non_clerk",
+        "count": "1"
+      },
+      {
+        "check_name": "users.active_pending",
+        "count": "3"
+      }
+    ],
+    "manifest_preflight": [
+      {
+        "checked_at": "2026-10-23T02:55:56.942Z",
+        "check_name": "formal_manifest.mismatch",
+        "violations": "0"
+      },
+      {
+        "checked_at": "2026-10-23T02:55:56.942Z",
+        "check_name": "formal_null.unlisted",
+        "violations": "0"
+      },
+      {
+        "checked_at": "2026-10-23T02:55:56.942Z",
+        "check_name": "global_logo_references.unlisted",
+        "violations": "0"
+      },
+      {
+        "checked_at": "2026-10-23T02:55:56.942Z",
+        "check_name": "known_parent_foreign_logo.mismatch",
+        "violations": "0"
+      },
+      {
+        "checked_at": "2026-10-23T02:55:56.942Z",
+        "check_name": "logo_copies.mismatch",
+        "violations": "0"
+      },
+      {
+        "checked_at": "2026-10-23T02:55:56.942Z",
+        "check_name": "logo_references.mismatch",
+        "violations": "0"
+      },
+      {
+        "checked_at": "2026-10-23T02:55:56.942Z",
+        "check_name": "logo_sources.mismatch",
+        "violations": "0"
+      }
+    ]
+  },
+  "isolated": {
+    "branch_id": "br-old-pond-ahe5jto3",
+    "checks_before_browser_notes": [
+      {
+        "check_name": "app_users.rows",
+        "count": "10"
+      },
+      {
+        "check_name": "app_users.tenant_missing",
+        "count": "0"
+      },
+      {
+        "check_name": "app_users.tenant_unknown",
+        "count": "0"
+      },
+      {
+        "check_name": "client_contacts.client_id_invalid",
+        "count": "0"
+      },
+      {
+        "check_name": "client_contacts.rows",
+        "count": "0"
+      },
+      {
+        "check_name": "client_contacts.tenant_missing",
+        "count": "0"
+      },
+      {
+        "check_name": "client_contacts.tenant_unknown",
+        "count": "0"
+      },
+      {
+        "check_name": "clients.client_logo_id_foreign",
+        "count": "0"
+      },
+      {
+        "check_name": "clients.rows",
+        "count": "63"
+      },
+      {
+        "check_name": "clients.tenant_missing",
+        "count": "0"
+      },
+      {
+        "check_name": "clients.tenant_unknown",
+        "count": "0"
+      },
+      {
+        "check_name": "company_logos.rows",
+        "count": "126"
+      },
+      {
+        "check_name": "company_logos.tenant_missing",
+        "count": "50"
+      },
+      {
+        "check_name": "company_logos.tenant_unknown",
+        "count": "0"
+      },
+      {
+        "check_name": "formal_proposals.client_logo_id_foreign",
+        "count": "0"
+      },
+      {
+        "check_name": "formal_proposals.issuer_logo_id_foreign",
+        "count": "0"
+      },
+      {
+        "check_name": "formal_proposals.proposal_id_invalid",
+        "count": "0"
+      },
+      {
+        "check_name": "formal_proposals.quote_id_invalid",
+        "count": "0"
+      },
+      {
+        "check_name": "formal_proposals.rows",
+        "count": "282"
+      },
+      {
+        "check_name": "formal_proposals.tenant_missing",
+        "count": "0"
+      },
+      {
+        "check_name": "formal_proposals.tenant_unknown",
+        "count": "0"
+      },
+      {
+        "check_name": "import_files.quote_id_invalid",
+        "count": "0"
+      },
+      {
+        "check_name": "import_files.rows",
+        "count": "0"
+      },
+      {
+        "check_name": "import_files.tenant_missing",
+        "count": "0"
+      },
+      {
+        "check_name": "import_files.tenant_unknown",
+        "count": "0"
+      },
+      {
+        "check_name": "interaction_logs.author_foreign_non_superadmin",
+        "count": "0"
+      },
+      {
+        "check_name": "interaction_logs.author_unassigned",
+        "count": "0"
+      },
+      {
+        "check_name": "interaction_logs.author_unknown",
+        "count": "0"
+      },
+      {
+        "check_name": "interaction_logs.client_id_invalid",
+        "count": "0"
+      },
+      {
+        "check_name": "interaction_logs.opportunity_invalid",
+        "count": "0"
+      },
+      {
+        "check_name": "interaction_logs.rows",
+        "count": "0"
+      },
+      {
+        "check_name": "interaction_logs.tenant_missing",
+        "count": "0"
+      },
+      {
+        "check_name": "interaction_logs.tenant_unknown",
+        "count": "0"
+      },
+      {
+        "check_name": "opportunities.author_foreign_non_superadmin",
+        "count": "0"
+      },
+      {
+        "check_name": "opportunities.author_unassigned",
+        "count": "7"
+      },
+      {
+        "check_name": "opportunities.author_unknown",
+        "count": "2"
+      },
+      {
+        "check_name": "opportunities.client_id_invalid",
+        "count": "0"
+      },
+      {
+        "check_name": "opportunities.rows",
+        "count": "164"
+      },
+      {
+        "check_name": "opportunities.tenant_missing",
+        "count": "0"
+      },
+      {
+        "check_name": "opportunities.tenant_unknown",
+        "count": "0"
+      },
+      {
+        "check_name": "package_lines.package_id_invalid",
+        "count": "0"
+      },
+      {
+        "check_name": "package_lines.rows",
+        "count": "1"
+      },
+      {
+        "check_name": "package_lines.tenant_missing",
+        "count": "0"
+      },
+      {
+        "check_name": "package_lines.tenant_unknown",
+        "count": "0"
+      },
+      {
+        "check_name": "packages.rows",
+        "count": "1"
+      },
+      {
+        "check_name": "packages.tenant_missing",
+        "count": "0"
+      },
+      {
+        "check_name": "packages.tenant_unknown",
+        "count": "0"
+      },
+      {
+        "check_name": "project_expenses.proposal_id_invalid",
+        "count": "0"
+      },
+      {
+        "check_name": "project_expenses.rows",
+        "count": "0"
+      },
+      {
+        "check_name": "project_expenses.tenant_missing",
+        "count": "0"
+      },
+      {
+        "check_name": "project_expenses.tenant_unknown",
+        "count": "0"
+      },
+      {
+        "check_name": "proposal_approvals.proposal_id_invalid",
+        "count": "0"
+      },
+      {
+        "check_name": "proposal_approvals.rows",
+        "count": "43"
+      },
+      {
+        "check_name": "proposal_approvals.tenant_missing",
+        "count": "0"
+      },
+      {
+        "check_name": "proposal_approvals.tenant_unknown",
+        "count": "0"
+      },
+      {
+        "check_name": "proposal_audit_events.proposal_id_invalid",
+        "count": "0"
+      },
+      {
+        "check_name": "proposal_audit_events.rows",
+        "count": "207"
+      },
+      {
+        "check_name": "proposal_audit_events.tenant_missing",
+        "count": "0"
+      },
+      {
+        "check_name": "proposal_audit_events.tenant_unknown",
+        "count": "0"
+      },
+      {
+        "check_name": "proposal_derivations.base_proposal_id_invalid",
+        "count": "0"
+      },
+      {
+        "check_name": "proposal_derivations.derived_proposal_id_invalid",
+        "count": "0"
+      },
+      {
+        "check_name": "proposal_derivations.rows",
+        "count": "6"
+      },
+      {
+        "check_name": "proposal_derivations.tenant_missing",
+        "count": "0"
+      },
+      {
+        "check_name": "proposal_derivations.tenant_unknown",
+        "count": "0"
+      },
+      {
+        "check_name": "proposal_integrated_node.proposal_id_invalid",
+        "count": "0"
+      },
+      {
+        "check_name": "proposal_integrated_node.rows",
+        "count": "2"
+      },
+      {
+        "check_name": "proposal_integrated_node.tenant_missing",
+        "count": "0"
+      },
+      {
+        "check_name": "proposal_integrated_node.tenant_unknown",
+        "count": "2"
+      },
+      {
+        "check_name": "proposal_items.proposal_id_invalid",
+        "count": "0"
+      },
+      {
+        "check_name": "proposal_items.rows",
+        "count": "506"
+      },
+      {
+        "check_name": "proposal_items.tenant_missing",
+        "count": "0"
+      },
+      {
+        "check_name": "proposal_items.tenant_unknown",
+        "count": "2"
+      },
+      {
+        "check_name": "proposal_profitability_node.proposal_id_invalid",
+        "count": "0"
+      },
+      {
+        "check_name": "proposal_profitability_node.rows",
+        "count": "0"
+      },
+      {
+        "check_name": "proposal_profitability_node.tenant_missing",
+        "count": "0"
+      },
+      {
+        "check_name": "proposal_profitability_node.tenant_unknown",
+        "count": "0"
+      },
+      {
+        "check_name": "proposals.author_foreign_non_superadmin",
+        "count": "0"
+      },
+      {
+        "check_name": "proposals.author_unassigned",
+        "count": "18"
+      },
+      {
+        "check_name": "proposals.author_unknown",
+        "count": "0"
+      },
+      {
+        "check_name": "proposals.closed_without_date",
+        "count": "39"
+      },
+      {
+        "check_name": "proposals.legacy_no_opportunity",
+        "count": "18"
+      },
+      {
+        "check_name": "proposals.opportunity_id_invalid",
+        "count": "0"
+      },
+      {
+        "check_name": "proposals.origin_quote_cross_tenant",
+        "count": "0"
+      },
+      {
+        "check_name": "proposals.rows",
+        "count": "207"
+      },
+      {
+        "check_name": "proposals.tenant_missing",
+        "count": "0"
+      },
+      {
+        "check_name": "proposals.tenant_unknown",
+        "count": "6"
+      },
+      {
+        "check_name": "quotes.author_foreign_non_superadmin",
+        "count": "0"
+      },
+      {
+        "check_name": "quotes.author_unassigned",
+        "count": "121"
+      },
+      {
+        "check_name": "quotes.author_unknown",
+        "count": "11"
+      },
+      {
+        "check_name": "quotes.client_id_invalid",
+        "count": "0"
+      },
+      {
+        "check_name": "quotes.group_shared_across_tenants",
+        "count": "65"
+      },
+      {
+        "check_name": "quotes.legacy_no_opportunity",
+        "count": "129"
+      },
+      {
+        "check_name": "quotes.opportunity_client_mismatch",
+        "count": "0"
+      },
+      {
+        "check_name": "quotes.opportunity_id_invalid",
+        "count": "0"
+      },
+      {
+        "check_name": "quotes.parent_invalid",
+        "count": "0"
+      },
+      {
+        "check_name": "quotes.rows",
+        "count": "370"
+      },
+      {
+        "check_name": "quotes.tenant_missing",
+        "count": "0"
+      },
+      {
+        "check_name": "quotes.tenant_unknown",
+        "count": "0"
+      },
+      {
+        "check_name": "schema.crm_fk_validated",
+        "count": "13"
+      },
+      {
+        "check_name": "tasks.author_foreign_non_superadmin",
+        "count": "0"
+      },
+      {
+        "check_name": "tasks.author_unassigned",
+        "count": "0"
+      },
+      {
+        "check_name": "tasks.author_unknown",
+        "count": "0"
+      },
+      {
+        "check_name": "tasks.client_id_invalid",
+        "count": "0"
+      },
+      {
+        "check_name": "tasks.opportunity_invalid",
+        "count": "0"
+      },
+      {
+        "check_name": "tasks.rows",
+        "count": "3"
+      },
+      {
+        "check_name": "tasks.tenant_missing",
+        "count": "0"
+      },
+      {
+        "check_name": "tasks.tenant_unknown",
+        "count": "0"
+      },
+      {
+        "check_name": "tenant_capabilities.rows",
+        "count": "1"
+      },
+      {
+        "check_name": "tenant_capabilities.tenant_missing",
+        "count": "0"
+      },
+      {
+        "check_name": "tenant_capabilities.tenant_unknown",
+        "count": "0"
+      },
+      {
+        "check_name": "tenant_capability_events.rows",
+        "count": "3"
+      },
+      {
+        "check_name": "tenant_capability_events.tenant_missing",
+        "count": "0"
+      },
+      {
+        "check_name": "tenant_capability_events.tenant_unknown",
+        "count": "0"
+      },
+      {
+        "check_name": "tenant_margin_policies.rows",
+        "count": "2"
+      },
+      {
+        "check_name": "tenant_margin_policies.tenant_missing",
+        "count": "0"
+      },
+      {
+        "check_name": "tenant_margin_policies.tenant_unknown",
+        "count": "0"
+      },
+      {
+        "check_name": "users.active_clerk_shaped",
+        "count": "5"
+      },
+      {
+        "check_name": "users.active_legacy_non_clerk",
+        "count": "1"
+      },
+      {
+        "check_name": "users.active_pending",
+        "count": "3"
+      }
+    ],
+    "manifest_preflight": [
+      {
+        "checked_at": "2026-10-23T02:55:51.632Z",
+        "check_name": "formal_manifest.mismatch",
+        "violations": "0"
+      },
+      {
+        "checked_at": "2026-10-23T02:55:51.632Z",
+        "check_name": "formal_null.unlisted",
+        "violations": "0"
+      },
+      {
+        "checked_at": "2026-10-23T02:55:51.632Z",
+        "check_name": "global_logo_references.unlisted",
+        "violations": "0"
+      },
+      {
+        "checked_at": "2026-10-23T02:55:51.632Z",
+        "check_name": "known_parent_foreign_logo.mismatch",
+        "violations": "0"
+      },
+      {
+        "checked_at": "2026-10-23T02:55:51.632Z",
+        "check_name": "logo_copies.mismatch",
+        "violations": "0"
+      },
+      {
+        "checked_at": "2026-10-23T02:55:51.632Z",
+        "check_name": "logo_references.mismatch",
+        "violations": "0"
+      },
+      {
+        "checked_at": "2026-10-23T02:55:51.632Z",
+        "check_name": "logo_sources.mismatch",
+        "violations": "0"
+      }
+    ]
+  },
+  "negative_manifest_check": {
+    "method": "Misma consulta SELECT con hash fuente deliberadamente distinto; sin modificar datos ni archivo canónico.",
+    "result": [
+      {
+        "checked_at": "2026-10-23T02:56:36.062Z",
+        "check_name": "logo_sources.mismatch",
+        "violations": "2"
+      }
+    ]
+  },
+  "identity": {
+    "active_clerk_shaped": 5,
+    "existence_in_clerk_not_inferred": true,
+    "pending_aliases": [
+      {
+        "alias": "e.hdz",
+        "tenant": "fumicontrol",
+        "role": "owner"
+      },
+      {
+        "alias": "ma.glz",
+        "tenant": "salsa",
+        "role": "owner"
+      },
+      {
+        "alias": "ruben.arroyo",
+        "tenant": "salsa",
+        "role": "user"
+      }
+    ],
+    "legacy_alias": "admin",
+    "legacy_tenant": "dynamiquote",
+    "legacy_role": "superadmin",
+    "action": "Sin vinculación, activación, invitación ni modificación. Resolver por ID exacto e identidad verificada; no por nombre o correo."
+  },
+  "writer_inventory": {
+    "railway": {
+      "service": {
+        "id": "7b8c668c-d093-42e0-a418-ce2ddc7c652d",
+        "name": "cotiza-web",
+        "state": "live"
+      },
+      "environment": {
+        "id": "79506dd6-a076-4104-911a-9167da50040d",
+        "name": "production"
+      },
+      "staged": null,
+      "config": {
+        "networking": {
+          "serviceDomains": {
+            "cotiza-web-production.up.railway.app": {}
+          }
+        },
+        "build": {
+          "builder": "RAILPACK",
+          "buildEnvironment": "V3"
+        },
+        "deploy": {
+          "useLegacyStacker": false,
+          "ipv6EgressEnabled": false,
+          "runtime": "V2",
+          "multiRegionConfig": {
+            "us-west2": {
+              "numReplicas": 1
+            }
+          }
+        }
+      },
+      "stagedChanges": [],
+      "variableNames": [
+        "ALLOW_CLERK_TEST_KEYS",
+        "APP_ENV",
+        "CLERK_SECRET_KEY",
+        "DATABASE_URL",
+        "DEFAULT_TENANT_SLUG",
+        "NEXT_PUBLIC_APP_URL",
+        "NEXT_PUBLIC_CLERK_PUBLISHABLE_KEY",
+        "TIMBRACFDI_SOAP_URL",
+        "TIMBRACFDI_USE_SOAP"
+      ],
+      "volumes": [],
+      "domains": {
+        "serviceDomains": [
+          {
+            "id": "b1589a08-e5e9-44c6-9e3b-7deea9ccdcdd",
+            "domain": "cotiza-web-production.up.railway.app",
+            "targetPort": null
+          }
+        ],
+        "customDomains": []
+      },
+      "tcpProxies": [],
+      "latestDeployment": {
+        "id": "1e21faa5-0be3-4ceb-9235-12eacd65c925",
+        "status": "SUCCESS",
+        "createdAt": "2026-09-15T03:06:38.052Z",
+        "url": null
+      },
+      "tracing": {
+        "tracingEnabled": false,
+        "autoInstrumentationEnabled": false,
+        "autoInstrumentationActive": false
+      }
+    },
+    "railway_deployments": [
+      {
+        "id": "1e21faa5-0be3-4ceb-9235-12eacd65c925",
+        "status": "SUCCESS",
+        "createdAt": "2026-09-15T03:06:38.052Z",
+        "meta": {
+          "reason": "redeploy"
+        }
+      },
+      {
+        "id": "c702624a-0ce4-4b4a-b030-8473ee118fcf",
+        "status": "REMOVED",
+        "createdAt": "2026-07-30T15:00:37.529Z",
+        "meta": {
+          "reason": "deploy"
+        }
+      }
+    ],
+    "railway_connection_verified": false,
+    "railway_reason": "OAuth solo muestra nombres de variables. DATABASE_URL existe; destino y versión fuente no comprobados. Logs DNS/HTTP vacíos no acreditan inactividad.",
+    "neon": {
+      "checked_at": "2026-10-23T02:58:07.081862+00:00",
+      "connections": [
+        {
+          "application_name": "pgbouncer",
+          "usename": "neondb_owner",
+          "state": "active",
+          "count": 1
+        }
+      ],
+      "public_functions": [],
+      "user_triggers": 0,
+      "scheduler_extensions": [],
+      "limit": "Instantánea de catálogo y conexiones; no inventario completo de clientes con credenciales."
+    },
+    "routes_inventory": "crm-writer-route-inventory.json"
+  },
+  "browser_observations": [
+    "Dos notas QA creadas desde la interfaz en el cliente ficticio cmvk731b2000007kx3slteamq, una general y otra ligada a OPP-0063.",
+    "Ficha 360 mostró ambas con superadmin. Al cambiar a DynamiQuote mediante selector, la misma URL respondió Cliente no encontrado sin notas.",
+    "Cambio temporal de rol a user y de propietario de OPP-0063 fue rechazado por revisión automática. Consulta posterior confirmó rol superadmin y propietario original; no se aplicó el cambio.",
+    "Primer guardado de partidas en COT-0023 ficticia falló dos veces con mensaje genérico. Consulta confirmó importe 0 y partida inicial intacta; causa remota aún no identificada.",
+    "Una reproducción adicional del POST de cotización libre y PUT de primera partida pasó en PostgreSQL/PGlite local, incluyendo rechazo de otro tenant.",
+    "Con una nueva sesión Clerk/GitHub y preview 11698a20, el mismo guardado respondió Borrador v1 actualizado correctamente. SQL confirmó venta 100, costo 60 y margen 40. La lógica de guardado no cambió; no se atribuye causa al fallo anterior.",
+    "PROP-2026-0283 creada desde COT-0023 en DynamiQuote: issuer_company DynamiQuote, issuer_logo_id NULL. MXN y condiciones ficticias seleccionadas expresamente para QA.",
+    "PDF de 2 páginas descargado; waitForEvent agotó su espera, pero el archivo apareció en el directorio sincronizado. pdfinfo, extracción de texto y render de ambas páginas confirmaron emisor, receptor ficticio, marca BORRADOR, subtotal 100 y total con IVA 116. No contiene logo histórico ajeno.",
+    "Ficha 360 de nueva preview confirmó 22 oct 2026, 8:50 p.m. para ambas notas, alineada con edición. El instante UTC de base no cambió.",
+    "Sesión de preview corregida restablecida a SynAppsSys. La sesión anterior no confirmó restauración; no se usa como evidencia de contexto final.",
+    "Tras autorización específica de Salvador se completó el ensayo vendedor/owner de notas. Se restauraron rol superadmin y propietario original de OPP-0063; peer siguió inactivo y permanecieron las dos notas. Los estados anteriores de pendiente/rechazo se conservan como historia de la revisión."
+  ],
+  "checks": {
+    "integration_local": 40,
+    "typescript": "passed after integration-test addition",
+    "eslint": "Página 360 sin errores; client-shell conserva error previo react-hooks/set-state-in-effect en sincronización de logos. El único cambio allí añade timeZone.",
+    "production_writes": 0
+  },
+  "pending": [
+    "Vincular tres pendientes y decidir tratamiento de superadmin legacy con identidades comprobadas.",
+    "Confirmar destino y versión del servicio Railway y cualquier escritor externo.",
+    "Preparar y ensayar artefacto de recuperación seguro y mecanismo de mantenimiento antes de pedir el corte productivo.",
+    "Corregir aparte o aceptar expresamente el error ESLint preexistente de client-shell; no se ocultó con un disable."
+  ],
+  "preview": {
+    "id": "dpl_DmHRcyoHrNbVkqu8YneHHaTLAxKT",
+    "url": "https://dynami-quote-ib3f9lihz-salvador-ruiz-esparzas-projects.vercel.app",
+    "sha": "11698a20ca45b20d7c0fa0980e03fc936a862c50",
+    "state": "READY",
+    "clerk_login_verified": true
+  },
+  "final_state": {
+    "actor": {
+      "role": "superadmin",
+      "active": true,
+      "tenant_id": "389b6cc1-2f8d-4fe4-bc3d-f50f92df3157"
+    },
+    "notes": [
+      {
+        "created_at": "2026-10-23T02:50:15.636",
+        "interaction_id": "bdbfe037-96f7-4faa-98f9-005e039b5e67",
+        "opportunity_id": null
+      },
+      {
+        "created_at": "2026-10-23T02:50:42.247",
+        "interaction_id": "caff8f62-20c2-44c5-b0ac-e8fe122357e4",
+        "opportunity_id": "0bcc5bb9-b546-47a1-8ed2-c268fcc20822"
+      }
+    ],
+    "checked_at": "2026-10-23T03:22:23.953998+00:00",
+    "copy_audits": 45,
+    "sys_proposal": {
+      "status": "draft",
+      "outcome": null,
+      "outcome_at": null
+    },
+    "issuer_proposal": {
+      "terms": "Prueba técnica en entorno aislado. Sin validez comercial. No contactar, enviar ni facturar.",
+      "status": "draft",
+      "outcome": null,
+      "currency": "MXN",
+      "proposal_id": "b7e66ffb-b1cd-48df-9817-5aa51358cfaf",
+      "issuer_company": "DynamiQuote",
+      "issuer_logo_id": null
+    },
+    "reference_audits": 132,
+    "opportunity_owner": "user_3D45SeGQqBoyBe8v3XvOu39QdWH",
+    "unknown_proposals": 6
+  },
+  "issuer_fixture_sql": [
+    {
+      "quote_id": "21eb65fc-bf25-4478-a585-79e21f8f608d",
+      "tenant_id": "7ee39632-74ea-4fee-a3cb-c028e87cecfc",
+      "total_revenue": "100.00",
+      "total_cost": "60.00",
+      "avg_margin": "40.00",
+      "sku": "QA-EMISOR",
+      "cost_unit": "60.00",
+      "final_price_unit": "100.00",
+      "proposal_id": "b7e66ffb-b1cd-48df-9817-5aa51358cfaf",
+      "status": "draft",
+      "issuer_company": "DynamiQuote",
+      "issuer_logo_id": null,
+      "currency": null
+    }
+  ],
+  "artifacts": [
+    "crm-notes-before-timezone.jpg",
+    "crm-notes-cross-tenant.jpg",
+    "crm-notes-timezone-verified.jpg",
+    "crm-notes-qa-review.jpg",
+    "crm-issuer-dynamiquote-verified.jpg",
+    "crm-issuer-dynamiquote-qa.pdf"
+  ],
+  "notes_role_verification": {
+    "status": "completed_with_explicit_authorization",
+    "evidence": "crm-notes-role-verification.json",
+    "seller": "General visible; privada de oportunidad ajena ausente del DOM",
+    "owner": "General y privada visibles",
+    "restored": "superadmin y propietario original confirmados por SQL y contexto de pantalla"
+  },
+  "maintenance_recovery_followup": {
+    "evidence": "crm-maintenance-recovery-verification.json",
+    "code_commit": "d65414698f56d94c57aba8d543a11749a3cc1753",
+    "local_status": "source restored, production build and HTTP pause/resume passed",
+    "remote_rollback_tested": false,
+    "identity_provider_validation_completed": false,
+    "production_changed": false
+  },
+  "identity_provider_followup": {
+    "evidence": "crm-identity-release-followup.json",
+    "code_commit": "aee0b0d4962cc98f076b29474a3796abf5b5516a",
+    "preview_ready": true,
+    "provider_audit_completed": false,
+    "remote_pause_rehearsal_completed": false,
+    "maintenance_flag_final": "off; preview branch only",
+    "blocked_by": "automatic approval review; exact OAuth consent and preview redeploy authorization required",
+    "production_changed": false
+  },
+  "identity_provider_verification": {
+    "evidence": "crm-identity-provider-verification.json",
+    "authenticated_provider_audit_completed": true,
+    "exact_ids_found": 5,
+    "verified_local_email_matches": 4,
+    "pending": 3,
+    "legacy": 1,
+    "remote_pause_resume_completed": false,
+    "preview_maintenance_flag": "off",
+    "production_changed": false
+  }
+}

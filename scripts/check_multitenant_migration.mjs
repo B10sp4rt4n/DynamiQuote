@@ -1,0 +1,53 @@
+// Optional isolated test dependency; no application runtime dependency.
+const { PGlite } = await import(process.env.PGLITE_MODULE ?? '@electric-sql/pglite');
+import { readFileSync } from 'node:fs';
+import assert from 'node:assert/strict';
+const db = new PGlite();
+await db.exec(`
+CREATE TABLE tenants(tenant_id text PRIMARY KEY);
+CREATE TABLE clients(client_id text PRIMARY KEY, tenant_id text NOT NULL);
+CREATE TABLE opportunities(opportunity_id text PRIMARY KEY, tenant_id text NOT NULL, client_id text);
+CREATE TABLE client_contacts(contact_id text PRIMARY KEY, tenant_id text NOT NULL, client_id text NOT NULL);
+CREATE TABLE tasks(task_id text PRIMARY KEY, tenant_id text NOT NULL, client_id text NOT NULL, opportunity_id text);
+CREATE TABLE interaction_logs(interaction_id text PRIMARY KEY, tenant_id text NOT NULL, client_id text NOT NULL, opportunity_id text);
+CREATE TABLE quotes(quote_id text PRIMARY KEY, tenant_id text, client_id text, opportunity_id text);
+CREATE TABLE proposals(proposal_id text PRIMARY KEY, tenant_id text NOT NULL, opportunity_id text);
+CREATE TABLE proposal_items(item_id text PRIMARY KEY, tenant_id text NOT NULL, proposal_id text NOT NULL);
+CREATE TABLE formal_proposals(proposal_doc_id text PRIMARY KEY, tenant_id text, proposal_id text);
+CREATE TABLE proposal_audit_events(event_id text PRIMARY KEY, tenant_id text NOT NULL, proposal_id text NOT NULL);
+INSERT INTO tenants VALUES('a'),('b');
+INSERT INTO clients VALUES('ca','a'),('ca2','a'),('cb','b');
+INSERT INTO opportunities VALUES('oa','a','ca'),('ob','b','cb');
+`);
+const sql=readFileSync(new URL('../cotiza-web/prisma/manual/20261022_multitenant_foundation.sql', import.meta.url),'utf8');
+await db.exec(sql); await db.exec(sql);
+const docSql=readFileSync(new URL('../cotiza-web/prisma/manual/20261022_multitenant_documents.sql', import.meta.url),'utf8');
+await db.exec(docSql); await db.exec(docSql);
+await db.exec("INSERT INTO proposals VALUES('pa','a','oa'); INSERT INTO proposal_items VALUES('valid-item','a','pa'); INSERT INTO formal_proposals VALUES('valid-document','a','pa')");
+let count=0;
+async function rejects(sql) { await assert.rejects(db.exec(sql), e=>e.code==='23503'); count++; }
+await db.exec("INSERT INTO tasks VALUES('valid','a','ca','oa'); INSERT INTO tasks VALUES('no-opp','a','ca',NULL)");
+await rejects("INSERT INTO tasks VALUES('foreign','a','ca','ob')");
+await rejects("INSERT INTO tasks VALUES('wrong-client','a','ca2','oa')");
+await rejects("INSERT INTO client_contacts VALUES('foreign','a','cb')");
+await rejects("INSERT INTO interaction_logs VALUES('foreign','a','ca','ob')");
+await rejects("INSERT INTO opportunities VALUES('foreign','a','cb')");
+await rejects("INSERT INTO quotes VALUES('foreign','a','cb',NULL)");
+await rejects("INSERT INTO quotes VALUES('foreign','a','ca','ob')");
+await rejects("INSERT INTO proposals VALUES('foreign','a','ob')");
+await rejects("INSERT INTO proposal_items VALUES('foreign-item','b','pa')");
+await rejects("INSERT INTO formal_proposals VALUES('foreign-doc','b','pa')");
+await rejects("INSERT INTO proposal_audit_events VALUES('foreign-audit','b','pa')");
+await rejects("UPDATE opportunities SET tenant_id='b' WHERE opportunity_id='oa'");
+await db.exec("INSERT INTO tenant_context_events(event_id,actor_user_id,from_tenant_id,to_tenant_id) VALUES('audit','admin','a','b')");
+assert.equal((await db.query('SELECT count(*)::int AS n FROM tenant_context_events')).rows[0].n,1);
+console.log(`PostgreSQL migration applied twice; valid writes and audit accepted; ${count} cross-tenant/client writes rejected.`);
+await db.close();
+// Dirty historical references must reject and roll back the entire migration.
+const dirty=new PGlite();
+await dirty.exec(`CREATE TABLE tenants(tenant_id text PRIMARY KEY); CREATE TABLE clients(client_id text PRIMARY KEY,tenant_id text); CREATE TABLE opportunities(opportunity_id text PRIMARY KEY,tenant_id text,client_id text); CREATE TABLE client_contacts(contact_id text PRIMARY KEY,tenant_id text,client_id text); CREATE TABLE tasks(task_id text PRIMARY KEY,tenant_id text,client_id text,opportunity_id text); CREATE TABLE interaction_logs(interaction_id text PRIMARY KEY,tenant_id text,client_id text,opportunity_id text); CREATE TABLE quotes(quote_id text PRIMARY KEY,tenant_id text,client_id text,opportunity_id text); CREATE TABLE proposals(proposal_id text PRIMARY KEY,tenant_id text,opportunity_id text); INSERT INTO tenants VALUES('a'),('b'); INSERT INTO clients VALUES('cb','b'); INSERT INTO opportunities VALUES('bad','a','cb');`);
+await assert.rejects(dirty.exec(sql)); await dirty.exec('ROLLBACK');
+assert.equal((await dirty.query("SELECT to_regclass('tenant_context_events') AS name")).rows[0].name,null);
+assert.equal((await dirty.query('SELECT count(*)::int AS n FROM opportunities')).rows[0].n,1);
+console.log('Historical inconsistency rejected; DDL rolled back and original record preserved.');
+await dirty.close();

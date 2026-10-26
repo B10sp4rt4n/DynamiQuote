@@ -1,0 +1,39 @@
+{
+  "observed_at": "2026-10-23T05:18:23.683Z",
+  "instance": "b8c988d3-4bd2-4524-bf01-2da847ee3be9",
+  "deployment": "1e21faa5-0be3-4ceb-9235-12eacd65c925",
+  "runtime": {
+    "database": {
+      "host": "ep-falling-wind-ah1tb7pk-pooler.c-3.us-east-1.aws.neon.tech",
+      "database": "/neondb"
+    },
+    "build_id": "Ts24dU6Pr2C-bnMwpNZWi",
+    "git_sha": null,
+    "maintenance_set": false,
+    "start_is_next_start": true,
+    "git_directory": false
+  },
+  "file_hashes": [
+    {
+      "sha256": "b28f12de987ae277de80530422a07ec28b4c772b408e8c72cc47ae0fd2970a88",
+      "path": "package.json"
+    },
+    {
+      "sha256": "eacc7736ee066a43b093bf0f3699c97e77a64ff1f9fdb68519d7ed7d4205e7b9",
+      "path": "proxy.ts"
+    },
+    {
+      "sha256": "894f1191f082aacb25e5d62e719392c68ee278a8beee65f813d9957dec7cbbd6",
+      "path": "lib/auth/tenant-context.ts"
+    },
+    {
+      "sha256": "009d2bb9196b16fed8424784afffbae4ad1cc9f060566452d35f7a35ccca429f",
+      "path": "app/api/settings/users/route.ts"
+    },
+    {
+      "sha256": "f409c1928aefd692cbd236fafac0d1aeb37b414ab7e17ec9170a15b159d1b2d3",
+      "path": ".next/BUILD_ID"
+    }
+  ],
+  "collection": "read-only pwd, node metadata, sha256sum through authenticated Railway Console; no SQL connection or secret output"
+}

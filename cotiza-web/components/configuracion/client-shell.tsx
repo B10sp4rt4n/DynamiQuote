@@ -1291,6 +1291,7 @@ export function ClientShell({ clientLogos, initialClients }: ClientShellProps) {
                             {new Date(interaction.createdAt).toLocaleString("es-MX", {
                               dateStyle: "medium",
                               timeStyle: "short",
+                              timeZone: "America/Mexico_City",
                             })}
                             {interaction.authorDisplayName ? ` · ${interaction.authorDisplayName}` : ""}
                             {interaction.opportunityNumber ? ` · ${interaction.opportunityNumber}` : ""}

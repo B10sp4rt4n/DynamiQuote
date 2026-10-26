@@ -1,0 +1,192 @@
+{
+  "schema_version": "1.0",
+  "purpose": "QA de memoria comercial local AUP/Recordia, sin valor comercial",
+  "code_commit": "25bdc4420089230f7a81a9073ca5d373ff54aaa4",
+  "preview_url": "https://dynami-quote-4thhthgc6-salvador-ruiz-esparzas-projects.vercel.app",
+  "neon_project": "cool-resonance-22906937",
+  "neon_branch": "br-old-pond-ahe5jto3",
+  "proposal_id": "70ea5502-e2d5-4007-885b-781bbdd539e3",
+  "tenant_id": "389b6cc1-2f8d-4fe4-bc3d-f50f92df3157",
+  "observations": [
+    "Clerk/GitHub completado con autorización explícita de Salvador; sesión SynAppsSys superadmin.",
+    "Aprobación interna automática por margen 40%; sin enviar correo.",
+    "Cierre como ganada con fecha comercial 2026-10-22 y registro UTC independiente.",
+    "Guardar de nuevo la misma fecha no añadió un acto; permaneció sequence 1.",
+    "Reapertura a borrador añadió sequence 2, revokes al acto 1 y su hash previo.",
+    "La interfaz mostró Registro local: contenido verificado para ambos actos.",
+    "Consulta de lectura confirmó estado final draft, outcome NULL y outcome_at NULL."
+  ],
+  "limitations": [
+    "No se ensayó una fecha distinta en navegador: la oportunidad nació el mismo día comercial permitido; corrección de fecha cubierta en integración local.",
+    "Solo verificación local del contenido. No firma, WORM, acuse externo de Recordia ni custodia HotVault.",
+    "No certifica aceptación del cliente, historia legacy, ni todos los escritores externos.",
+    "Sin cambios de producción, envío de correos, facturación ni merge."
+  ],
+  "screenshots": [
+    "crm-aup-won-verified.jpg",
+    "crm-aup-restored.jpg"
+  ],
+  "acts": [
+    {
+      "event_id": "149921da-5675-4ffa-96ed-9d8afe0674ca",
+      "event_type": "outcome_changed",
+      "event_hash": "aup1:sha256:42e05bf1512aee56fdd961f9b37b7399179b52f76191412b514ce1fc39dee068",
+      "commercial_act": {
+        "actors": [
+          {
+            "role": "superadmin",
+            "actor_id": "user_3D45SeGQqBoyBe8v3XvOu39QdWH",
+            "identity_status": "declared"
+          }
+        ],
+        "memory": {
+          "status": "local_only",
+          "legacy_refs": [],
+          "custody_status": "not_requested",
+          "external_recordia_ref": null
+        },
+        "case_id": "cotiza:389b6cc1-2f8d-4fe4-bc3d-f50f92df3157:opportunity:0bcc5bb9-b546-47a1-8ed2-c268fcc20822",
+        "subject": {
+          "entity_id": "70ea5502-e2d5-4007-885b-781bbdd539e3",
+          "entity_type": "proposal"
+        },
+        "event_id": "149921da-5675-4ffa-96ed-9d8afe0674ca",
+        "sequence": 1,
+        "relations": [
+          {
+            "predicate": "follows",
+            "target_id": "2cb6c20f-b242-4416-a11b-9a16c42d4221"
+          }
+        ],
+        "tenant_id": "389b6cc1-2f8d-4fe4-bc3d-f50f92df3157",
+        "source_refs": [
+          "cotiza:389b6cc1-2f8d-4fe4-bc3d-f50f92df3157:proposal:70ea5502-e2d5-4007-885b-781bbdd539e3",
+          "cotiza:389b6cc1-2f8d-4fe4-bc3d-f50f92df3157:opportunity:0bcc5bb9-b546-47a1-8ed2-c268fcc20822"
+        ],
+        "state_after": {
+          "status": "approved",
+          "outcome": "won",
+          "outcomeAt": "2026-10-22T06:00:00.000Z"
+        },
+        "state_before": {
+          "status": "approved",
+          "outcome": null,
+          "outcomeAt": null
+        },
+        "evidence_refs": [],
+        "rule_snapshot": {
+          "rule": "cotiza.commercial-outcome/v1",
+          "can_see_all": true,
+          "resulting_status": "approved",
+          "allowed_decision_statuses": [
+            "sent",
+            "approved"
+          ]
+        },
+        "support_scope": "application_state_transition_only",
+        "opportunity_id": "0bcc5bb9-b546-47a1-8ed2-c268fcc20822",
+        "support_status": "supported",
+        "action_or_state": "commercial.outcome_set",
+        "epistemic_class": "decision",
+        "occurred_at_utc": "2026-10-23T02:37:50.597Z",
+        "recorded_at_utc": "2026-10-23T02:37:50.597Z",
+        "contract_version": "1.0",
+        "recordia_version": "1.0",
+        "policy_or_rule_refs": [
+          "cotiza.commercial-outcome/v1"
+        ],
+        "commercial_effective_time": {
+          "basis": "user_declared",
+          "value": "2026-10-22T06:00:00.000Z",
+          "precision": "day",
+          "selected_date": "2026-10-22"
+        },
+        "previous_content_hash_sha256": null
+      }
+    },
+    {
+      "event_id": "e8857faa-731f-4be2-8cac-ba5915e36a17",
+      "event_type": "outcome_changed",
+      "event_hash": "aup1:sha256:fe9b30cc2a838754307ec8d320ba26062dc6ff8c801e027ccd4069e004455da8",
+      "commercial_act": {
+        "actors": [
+          {
+            "role": "superadmin",
+            "actor_id": "user_3D45SeGQqBoyBe8v3XvOu39QdWH",
+            "identity_status": "declared"
+          }
+        ],
+        "memory": {
+          "status": "local_only",
+          "legacy_refs": [],
+          "custody_status": "not_requested",
+          "external_recordia_ref": null
+        },
+        "case_id": "cotiza:389b6cc1-2f8d-4fe4-bc3d-f50f92df3157:opportunity:0bcc5bb9-b546-47a1-8ed2-c268fcc20822",
+        "subject": {
+          "entity_id": "70ea5502-e2d5-4007-885b-781bbdd539e3",
+          "entity_type": "proposal"
+        },
+        "event_id": "e8857faa-731f-4be2-8cac-ba5915e36a17",
+        "sequence": 2,
+        "relations": [
+          {
+            "predicate": "revokes",
+            "target_id": "149921da-5675-4ffa-96ed-9d8afe0674ca"
+          }
+        ],
+        "tenant_id": "389b6cc1-2f8d-4fe4-bc3d-f50f92df3157",
+        "source_refs": [
+          "cotiza:389b6cc1-2f8d-4fe4-bc3d-f50f92df3157:proposal:70ea5502-e2d5-4007-885b-781bbdd539e3",
+          "cotiza:389b6cc1-2f8d-4fe4-bc3d-f50f92df3157:opportunity:0bcc5bb9-b546-47a1-8ed2-c268fcc20822"
+        ],
+        "state_after": {
+          "status": "draft",
+          "outcome": null,
+          "outcomeAt": null
+        },
+        "state_before": {
+          "status": "approved",
+          "outcome": "won",
+          "outcomeAt": "2026-10-22T06:00:00.000Z"
+        },
+        "evidence_refs": [],
+        "rule_snapshot": {
+          "rule": "cotiza.proposal-workflow/v1",
+          "can_see_all": null,
+          "resulting_status": "draft",
+          "allowed_decision_statuses": [
+            "sent",
+            "approved"
+          ]
+        },
+        "support_scope": "application_state_transition_only",
+        "opportunity_id": "0bcc5bb9-b546-47a1-8ed2-c268fcc20822",
+        "support_status": "supported",
+        "action_or_state": "commercial.outcome_cleared",
+        "epistemic_class": "decision",
+        "occurred_at_utc": "2026-10-23T02:38:52.377Z",
+        "recorded_at_utc": "2026-10-23T02:38:52.377Z",
+        "contract_version": "1.0",
+        "recordia_version": "1.0",
+        "policy_or_rule_refs": [
+          "cotiza.proposal-workflow/v1"
+        ],
+        "commercial_effective_time": {
+          "basis": "not_assigned",
+          "value": null,
+          "precision": "unknown",
+          "selected_date": null
+        },
+        "previous_content_hash_sha256": "42e05bf1512aee56fdd961f9b37b7399179b52f76191412b514ce1fc39dee068"
+      }
+    }
+  ],
+  "final_state": {
+    "proposal_id": "70ea5502-e2d5-4007-885b-781bbdd539e3",
+    "tenant_id": "389b6cc1-2f8d-4fe4-bc3d-f50f92df3157",
+    "status": "draft",
+    "outcome": null,
+    "outcome_at": null
+  }
+}

@@ -1,0 +1,101 @@
+npm warn Unknown env config "http-proxy". This will stop working in the next major version of npm.
+
+> cotiza-web@0.1.0 build
+> prisma generate && next build --webpack
+
+Loaded Prisma config from prisma.config.ts.
+
+Prisma schema loaded from prisma/schema.prisma.
+
+✔ Generated Prisma Client (v7.10.1) to ./../../../../workspace/scratch/ea48e1405215/DynamiQuote/node_modules/@prisma/client in 355ms
+
+Start by importing your Prisma Client (See: https://pris.ly/d/importing-client)
+
+
+▲ Next.js 16.2.4 (webpack)
+- Experiments (use with caution):
+  · serverActions
+
+  Creating an optimized production build ...
+✓ Compiled successfully in 23.0s
+  Running TypeScript ...
+  Finished TypeScript in 9.1s ...
+  Collecting page data using 8 workers ...
+  Generating static pages using 8 workers (0/23) ...
+  Generating static pages using 8 workers (5/23) 
+  Generating static pages using 8 workers (11/23) 
+  Generating static pages using 8 workers (17/23) 
+✓ Generating static pages using 8 workers (23/23) in 217ms
+  Finalizing page optimization ...
+  Collecting build traces ...
+
+Route (app)
+┌ ○ /
+├ ○ /_not-found
+├ ƒ /api/clients
+├ ƒ /api/clients/[clientId]
+├ ƒ /api/clients/[clientId]/contacts
+├ ƒ /api/clients/[clientId]/contacts/[contactId]
+├ ƒ /api/clients/[clientId]/interactions
+├ ƒ /api/clients/[clientId]/interactions/[interactionId]
+├ ƒ /api/clients/[clientId]/opportunities
+├ ƒ /api/clients/fiscal-validation
+├ ƒ /api/context/tenant
+├ ƒ /api/health
+├ ƒ /api/packages
+├ ƒ /api/packages/[packageId]
+├ ƒ /api/packages/from-quote
+├ ƒ /api/proposals
+├ ƒ /api/proposals/[proposalId]
+├ ƒ /api/proposals/[proposalId]/approvals
+├ ƒ /api/proposals/[proposalId]/invoice
+├ ƒ /api/proposals/[proposalId]/invoice/pdf
+├ ƒ /api/proposals/[proposalId]/invoice/preview
+├ ƒ /api/proposals/[proposalId]/invoice/stamp
+├ ƒ /api/proposals/[proposalId]/override
+├ ƒ /api/proposals/[proposalId]/override/execute
+├ ƒ /api/proposals/[proposalId]/pdf
+├ ƒ /api/proposals/[proposalId]/send-email
+├ ƒ /api/proposals/[proposalId]/xlsx
+├ ƒ /api/proposals/expiring-alerts
+├ ƒ /api/proposals/kpis/pdf
+├ ƒ /api/quotes
+├ ƒ /api/quotes/[quoteId]
+├ ƒ /api/quotes/[quoteId]/import
+├ ƒ /api/quotes/[quoteId]/import-threatdown
+├ ƒ /api/quotes/[quoteId]/lines
+├ ƒ /api/quotes/[quoteId]/versions
+├ ƒ /api/quotes/import-template
+├ ƒ /api/settings/issuer-profiles
+├ ƒ /api/settings/issuer-profiles/[logoId]
+├ ƒ /api/settings/margin-policy
+├ ƒ /api/settings/tenant-capabilities
+├ ƒ /api/settings/tenant-profile
+├ ƒ /api/settings/tenants
+├ ƒ /api/settings/test-email
+├ ƒ /api/settings/users
+├ ƒ /api/settings/users/[userId]
+├ ƒ /api/settings/users/[userId]/resend-access
+├ ƒ /api/tasks
+├ ƒ /api/tasks/[taskId]
+├ ƒ /api/webhooks/clerk
+├ ƒ /clientes
+├ ƒ /clientes/[clientId]
+├ ƒ /configuracion
+├ ƒ /configuracion/clientes
+├ ƒ /cotizaciones
+├ ƒ /inicio
+├ ƒ /paquetes
+├ ƒ /pipeline
+├ ƒ /propuestas
+├ ƒ /propuestas/[proposalId]
+├ ƒ /propuestas/kpis
+├ ƒ /sign-in/[[...sign-in]]
+└ ƒ /sign-up/[[...sign-up]]
+
+
+ƒ Proxy (Middleware)
+
+○  (Static)   prerendered as static content
+ƒ  (Dynamic)  server-rendered on demand
+

@@ -15,7 +15,8 @@ export async function GET(_: Request, context: RouteContext) {
   }
 
   const { clientId } = await context.params;
-  const opportunities = await getOpenOpportunitiesByClientForTenant(tenant.id, clientId);
+  const canSeeAll = tenant.isSuperAdmin || tenant.userRole === "owner" || tenant.userRole === "admin";
+  const opportunities = await getOpenOpportunitiesByClientForTenant(tenant.id, clientId, tenant.userId, canSeeAll);
 
   return NextResponse.json({ opportunities }, { status: 200 });
 }

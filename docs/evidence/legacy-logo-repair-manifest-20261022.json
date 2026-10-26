@@ -1,0 +1,1381 @@
+{
+  "version": 1,
+  "projectId": "cool-resonance-22906937",
+  "branchId": "br-old-pond-ahe5jto3",
+  "capturedAfterFormalRepair": true,
+  "copies": [
+    {
+      "sourceLogoId": "0f2c2057-5aae-434c-906a-a2013c35a528",
+      "tenantId": "389b6cc1-2f8d-4fe4-bc3d-f50f92df3157",
+      "copyLogoId": "crm-legacy-logo:389b6cc1-2f8d-4fe4-bc3d-f50f92df3157:0f2c2057-5aae-434c-906a-a2013c35a528",
+      "sourceHash": "626fd01ce0791ad968549e53da09a6bb",
+      "bytes": 199933
+    },
+    {
+      "sourceLogoId": "52e3d239-9e0b-4789-ad87-86d4a357e8d6",
+      "tenantId": "389b6cc1-2f8d-4fe4-bc3d-f50f92df3157",
+      "copyLogoId": "crm-legacy-logo:389b6cc1-2f8d-4fe4-bc3d-f50f92df3157:52e3d239-9e0b-4789-ad87-86d4a357e8d6",
+      "sourceHash": "4c2694e0909dd44f576effc279917df4",
+      "bytes": 250
+    },
+    {
+      "sourceLogoId": "0f2c2057-5aae-434c-906a-a2013c35a528",
+      "tenantId": "7ee39632-74ea-4fee-a3cb-c028e87cecfc",
+      "copyLogoId": "crm-legacy-logo:7ee39632-74ea-4fee-a3cb-c028e87cecfc:0f2c2057-5aae-434c-906a-a2013c35a528",
+      "sourceHash": "626fd01ce0791ad968549e53da09a6bb",
+      "bytes": 199933
+    },
+    {
+      "sourceLogoId": "12a062f9-8883-44e6-8ffb-c5b9be3b5d5f",
+      "tenantId": "7ee39632-74ea-4fee-a3cb-c028e87cecfc",
+      "copyLogoId": "crm-legacy-logo:7ee39632-74ea-4fee-a3cb-c028e87cecfc:12a062f9-8883-44e6-8ffb-c5b9be3b5d5f",
+      "sourceHash": "98711eb49eb1b30cafd887c6c449f775",
+      "bytes": 26351
+    },
+    {
+      "sourceLogoId": "12dfafa6-b49b-4a38-b45e-95cd115bcb0b",
+      "tenantId": "7ee39632-74ea-4fee-a3cb-c028e87cecfc",
+      "copyLogoId": "crm-legacy-logo:7ee39632-74ea-4fee-a3cb-c028e87cecfc:12dfafa6-b49b-4a38-b45e-95cd115bcb0b",
+      "sourceHash": "2af841c6d295419f10dbe80b86d87e36",
+      "bytes": 26351
+    },
+    {
+      "sourceLogoId": "13e95e78-2b45-4c13-a978-f1edf0955746",
+      "tenantId": "7ee39632-74ea-4fee-a3cb-c028e87cecfc",
+      "copyLogoId": "crm-legacy-logo:7ee39632-74ea-4fee-a3cb-c028e87cecfc:13e95e78-2b45-4c13-a978-f1edf0955746",
+      "sourceHash": "efd87ec3707991e8c43bf5dc38e54656",
+      "bytes": 23875
+    },
+    {
+      "sourceLogoId": "14d87492-239a-4cee-9352-c06491d0094a",
+      "tenantId": "7ee39632-74ea-4fee-a3cb-c028e87cecfc",
+      "copyLogoId": "crm-legacy-logo:7ee39632-74ea-4fee-a3cb-c028e87cecfc:14d87492-239a-4cee-9352-c06491d0094a",
+      "sourceHash": "021529fc06b29191349c180ab4aacf69",
+      "bytes": 48421
+    },
+    {
+      "sourceLogoId": "17a98a3b-cf6f-4542-a411-a36bfb4cea46",
+      "tenantId": "7ee39632-74ea-4fee-a3cb-c028e87cecfc",
+      "copyLogoId": "crm-legacy-logo:7ee39632-74ea-4fee-a3cb-c028e87cecfc:17a98a3b-cf6f-4542-a411-a36bfb4cea46",
+      "sourceHash": "6df437661f44be7e6dd92ae6aa8a5b36",
+      "bytes": 20777
+    },
+    {
+      "sourceLogoId": "19e3c64d-099c-4b8d-838c-f6a5e4433d43",
+      "tenantId": "7ee39632-74ea-4fee-a3cb-c028e87cecfc",
+      "copyLogoId": "crm-legacy-logo:7ee39632-74ea-4fee-a3cb-c028e87cecfc:19e3c64d-099c-4b8d-838c-f6a5e4433d43",
+      "sourceHash": "c5eae0c2fa9e7dad4c4cb5d61a4c4850",
+      "bytes": 24808
+    },
+    {
+      "sourceLogoId": "24a03057-fe39-4dc2-97f5-026a14f3cadb",
+      "tenantId": "7ee39632-74ea-4fee-a3cb-c028e87cecfc",
+      "copyLogoId": "crm-legacy-logo:7ee39632-74ea-4fee-a3cb-c028e87cecfc:24a03057-fe39-4dc2-97f5-026a14f3cadb",
+      "sourceHash": "e1b145344167ddeaaa458e5e006e0184",
+      "bytes": 6942
+    },
+    {
+      "sourceLogoId": "24db1f00-e2d3-44f0-804d-a5c471be4ee4",
+      "tenantId": "7ee39632-74ea-4fee-a3cb-c028e87cecfc",
+      "copyLogoId": "crm-legacy-logo:7ee39632-74ea-4fee-a3cb-c028e87cecfc:24db1f00-e2d3-44f0-804d-a5c471be4ee4",
+      "sourceHash": "3767d69b7904eaea4dfa5c9c26922d53",
+      "bytes": 18746
+    },
+    {
+      "sourceLogoId": "2a9dfb5d-39ea-4f57-96b4-6889ba3abc16",
+      "tenantId": "7ee39632-74ea-4fee-a3cb-c028e87cecfc",
+      "copyLogoId": "crm-legacy-logo:7ee39632-74ea-4fee-a3cb-c028e87cecfc:2a9dfb5d-39ea-4f57-96b4-6889ba3abc16",
+      "sourceHash": "9d6ca75a321df8399782679521d5eeb4",
+      "bytes": 35919
+    },
+    {
+      "sourceLogoId": "347c244d-04bd-4a73-92f6-dd85c5bf2ed7",
+      "tenantId": "7ee39632-74ea-4fee-a3cb-c028e87cecfc",
+      "copyLogoId": "crm-legacy-logo:7ee39632-74ea-4fee-a3cb-c028e87cecfc:347c244d-04bd-4a73-92f6-dd85c5bf2ed7",
+      "sourceHash": "e5b46161c5d459c428f65432c376240b",
+      "bytes": 23875
+    },
+    {
+      "sourceLogoId": "35e4af9c-c7f8-429d-9061-3219eccc88ee",
+      "tenantId": "7ee39632-74ea-4fee-a3cb-c028e87cecfc",
+      "copyLogoId": "crm-legacy-logo:7ee39632-74ea-4fee-a3cb-c028e87cecfc:35e4af9c-c7f8-429d-9061-3219eccc88ee",
+      "sourceHash": "90b086a40fdb4e3a3f0b424d89469260",
+      "bytes": 11661
+    },
+    {
+      "sourceLogoId": "3b0ba0e4-8d85-4057-8e74-60e1d929c70a",
+      "tenantId": "7ee39632-74ea-4fee-a3cb-c028e87cecfc",
+      "copyLogoId": "crm-legacy-logo:7ee39632-74ea-4fee-a3cb-c028e87cecfc:3b0ba0e4-8d85-4057-8e74-60e1d929c70a",
+      "sourceHash": "5a8f25773fa69e69fa48cac1ab926490",
+      "bytes": 23352
+    },
+    {
+      "sourceLogoId": "44e62792-350a-45c4-b041-2095c2a015e8",
+      "tenantId": "7ee39632-74ea-4fee-a3cb-c028e87cecfc",
+      "copyLogoId": "crm-legacy-logo:7ee39632-74ea-4fee-a3cb-c028e87cecfc:44e62792-350a-45c4-b041-2095c2a015e8",
+      "sourceHash": "6af89029690d02c8970ef171f6cc89a6",
+      "bytes": 48421
+    },
+    {
+      "sourceLogoId": "47a6f43c-4fcd-4800-8c5d-62661745fe81",
+      "tenantId": "7ee39632-74ea-4fee-a3cb-c028e87cecfc",
+      "copyLogoId": "crm-legacy-logo:7ee39632-74ea-4fee-a3cb-c028e87cecfc:47a6f43c-4fcd-4800-8c5d-62661745fe81",
+      "sourceHash": "ac81e92bdefddc24e6598a21d6194367",
+      "bytes": 34378
+    },
+    {
+      "sourceLogoId": "4f64c340-57c5-40d0-8a09-63a18e245c17",
+      "tenantId": "7ee39632-74ea-4fee-a3cb-c028e87cecfc",
+      "copyLogoId": "crm-legacy-logo:7ee39632-74ea-4fee-a3cb-c028e87cecfc:4f64c340-57c5-40d0-8a09-63a18e245c17",
+      "sourceHash": "aa66db213a34d4460468b7da1197d98d",
+      "bytes": 199933
+    },
+    {
+      "sourceLogoId": "52e3d239-9e0b-4789-ad87-86d4a357e8d6",
+      "tenantId": "7ee39632-74ea-4fee-a3cb-c028e87cecfc",
+      "copyLogoId": "crm-legacy-logo:7ee39632-74ea-4fee-a3cb-c028e87cecfc:52e3d239-9e0b-4789-ad87-86d4a357e8d6",
+      "sourceHash": "4c2694e0909dd44f576effc279917df4",
+      "bytes": 250
+    },
+    {
+      "sourceLogoId": "533d715d-17ab-467b-97a0-9f3be808228b",
+      "tenantId": "7ee39632-74ea-4fee-a3cb-c028e87cecfc",
+      "copyLogoId": "crm-legacy-logo:7ee39632-74ea-4fee-a3cb-c028e87cecfc:533d715d-17ab-467b-97a0-9f3be808228b",
+      "sourceHash": "e5c2045437891a41ae6f1a7d5be8ff18",
+      "bytes": 26351
+    },
+    {
+      "sourceLogoId": "53c268f2-179b-42eb-bf9f-e7b5fd690fbf",
+      "tenantId": "7ee39632-74ea-4fee-a3cb-c028e87cecfc",
+      "copyLogoId": "crm-legacy-logo:7ee39632-74ea-4fee-a3cb-c028e87cecfc:53c268f2-179b-42eb-bf9f-e7b5fd690fbf",
+      "sourceHash": "f48df11031ae63f24806fdaf3d4d5402",
+      "bytes": 6942
+    },
+    {
+      "sourceLogoId": "5c3da1d4-93ee-4c0d-b9cd-060edf61ae34",
+      "tenantId": "7ee39632-74ea-4fee-a3cb-c028e87cecfc",
+      "copyLogoId": "crm-legacy-logo:7ee39632-74ea-4fee-a3cb-c028e87cecfc:5c3da1d4-93ee-4c0d-b9cd-060edf61ae34",
+      "sourceHash": "c3f53ba519a520cbaeca26f14d4b9ce0",
+      "bytes": 6942
+    },
+    {
+      "sourceLogoId": "65bcc8b9-b6bf-4db1-88a6-ac4de81906f6",
+      "tenantId": "7ee39632-74ea-4fee-a3cb-c028e87cecfc",
+      "copyLogoId": "crm-legacy-logo:7ee39632-74ea-4fee-a3cb-c028e87cecfc:65bcc8b9-b6bf-4db1-88a6-ac4de81906f6",
+      "sourceHash": "07a06edce27f00164bcf2ea9176ff637",
+      "bytes": 12086
+    },
+    {
+      "sourceLogoId": "67427bfb-cea2-4fa4-892e-5144feb91896",
+      "tenantId": "7ee39632-74ea-4fee-a3cb-c028e87cecfc",
+      "copyLogoId": "crm-legacy-logo:7ee39632-74ea-4fee-a3cb-c028e87cecfc:67427bfb-cea2-4fa4-892e-5144feb91896",
+      "sourceHash": "7d2762bc0023990fab7e1fac55147aa7",
+      "bytes": 6942
+    },
+    {
+      "sourceLogoId": "6cceb151-4963-4ced-a656-f678f50f851e",
+      "tenantId": "7ee39632-74ea-4fee-a3cb-c028e87cecfc",
+      "copyLogoId": "crm-legacy-logo:7ee39632-74ea-4fee-a3cb-c028e87cecfc:6cceb151-4963-4ced-a656-f678f50f851e",
+      "sourceHash": "c38ebcfb4c6a21a3bb166af9f49dd49a",
+      "bytes": 21275
+    },
+    {
+      "sourceLogoId": "6ee2f5aa-ad7f-4fc9-8270-408550735e2f",
+      "tenantId": "7ee39632-74ea-4fee-a3cb-c028e87cecfc",
+      "copyLogoId": "crm-legacy-logo:7ee39632-74ea-4fee-a3cb-c028e87cecfc:6ee2f5aa-ad7f-4fc9-8270-408550735e2f",
+      "sourceHash": "b47e3bbd04c429125e74e3a6a90ce783",
+      "bytes": 26351
+    },
+    {
+      "sourceLogoId": "741be125-3b36-4b97-aa9b-6d4302c8e5c0",
+      "tenantId": "7ee39632-74ea-4fee-a3cb-c028e87cecfc",
+      "copyLogoId": "crm-legacy-logo:7ee39632-74ea-4fee-a3cb-c028e87cecfc:741be125-3b36-4b97-aa9b-6d4302c8e5c0",
+      "sourceHash": "caa5afa8ca558938048c78977311f044",
+      "bytes": 24771
+    },
+    {
+      "sourceLogoId": "818ff950-f764-4441-8a50-0ebd7ff8485a",
+      "tenantId": "7ee39632-74ea-4fee-a3cb-c028e87cecfc",
+      "copyLogoId": "crm-legacy-logo:7ee39632-74ea-4fee-a3cb-c028e87cecfc:818ff950-f764-4441-8a50-0ebd7ff8485a",
+      "sourceHash": "20af8f5837c2dab8e831d7975fd0e81c",
+      "bytes": 667084
+    },
+    {
+      "sourceLogoId": "9438f8b0-7460-428f-ab71-3006a7012677",
+      "tenantId": "7ee39632-74ea-4fee-a3cb-c028e87cecfc",
+      "copyLogoId": "crm-legacy-logo:7ee39632-74ea-4fee-a3cb-c028e87cecfc:9438f8b0-7460-428f-ab71-3006a7012677",
+      "sourceHash": "fed0b7c2befd7ee7106d0b9fe7c472cf",
+      "bytes": 34378
+    },
+    {
+      "sourceLogoId": "9adc72c0-a814-4a4e-898d-2be5ae57c015",
+      "tenantId": "7ee39632-74ea-4fee-a3cb-c028e87cecfc",
+      "copyLogoId": "crm-legacy-logo:7ee39632-74ea-4fee-a3cb-c028e87cecfc:9adc72c0-a814-4a4e-898d-2be5ae57c015",
+      "sourceHash": "044bf56b7f1b98bfbbf360f73bb37569",
+      "bytes": 23352
+    },
+    {
+      "sourceLogoId": "b868ba42-b408-4433-a338-b7bb1a3f2edc",
+      "tenantId": "7ee39632-74ea-4fee-a3cb-c028e87cecfc",
+      "copyLogoId": "crm-legacy-logo:7ee39632-74ea-4fee-a3cb-c028e87cecfc:b868ba42-b408-4433-a338-b7bb1a3f2edc",
+      "sourceHash": "32d1ef616ec4663285a679da259bee87",
+      "bytes": 34378
+    },
+    {
+      "sourceLogoId": "bb53483c-93c2-4a8c-b249-ddaabc78181f",
+      "tenantId": "7ee39632-74ea-4fee-a3cb-c028e87cecfc",
+      "copyLogoId": "crm-legacy-logo:7ee39632-74ea-4fee-a3cb-c028e87cecfc:bb53483c-93c2-4a8c-b249-ddaabc78181f",
+      "sourceHash": "5f3f54ee0dcf011c26a868faa7747010",
+      "bytes": 21275
+    },
+    {
+      "sourceLogoId": "bc7674ce-d1a7-42ed-abcc-f2f079bf34de",
+      "tenantId": "7ee39632-74ea-4fee-a3cb-c028e87cecfc",
+      "copyLogoId": "crm-legacy-logo:7ee39632-74ea-4fee-a3cb-c028e87cecfc:bc7674ce-d1a7-42ed-abcc-f2f079bf34de",
+      "sourceHash": "66c6d406dab223f39bae46dd15d51f47",
+      "bytes": 8863
+    },
+    {
+      "sourceLogoId": "c2106764-d553-4da5-b9bd-d0ca9ce1e4a5",
+      "tenantId": "7ee39632-74ea-4fee-a3cb-c028e87cecfc",
+      "copyLogoId": "crm-legacy-logo:7ee39632-74ea-4fee-a3cb-c028e87cecfc:c2106764-d553-4da5-b9bd-d0ca9ce1e4a5",
+      "sourceHash": "9d05342cefbfdcc2a02038b2dc49df2b",
+      "bytes": 48340
+    },
+    {
+      "sourceLogoId": "c6223261-d6ad-4fb8-a067-a39171b6b541",
+      "tenantId": "7ee39632-74ea-4fee-a3cb-c028e87cecfc",
+      "copyLogoId": "crm-legacy-logo:7ee39632-74ea-4fee-a3cb-c028e87cecfc:c6223261-d6ad-4fb8-a067-a39171b6b541",
+      "sourceHash": "88f75b399ce04ad41c9adaf2ea6931cd",
+      "bytes": 26351
+    },
+    {
+      "sourceLogoId": "c9418e5d-a540-4610-bd91-954a6344e61b",
+      "tenantId": "7ee39632-74ea-4fee-a3cb-c028e87cecfc",
+      "copyLogoId": "crm-legacy-logo:7ee39632-74ea-4fee-a3cb-c028e87cecfc:c9418e5d-a540-4610-bd91-954a6344e61b",
+      "sourceHash": "b0a0c3f99e9adf805a60c76697ed9e6b",
+      "bytes": 48340
+    },
+    {
+      "sourceLogoId": "e237f09e-0ae6-402f-9b6d-ad1e56d790cb",
+      "tenantId": "7ee39632-74ea-4fee-a3cb-c028e87cecfc",
+      "copyLogoId": "crm-legacy-logo:7ee39632-74ea-4fee-a3cb-c028e87cecfc:e237f09e-0ae6-402f-9b6d-ad1e56d790cb",
+      "sourceHash": "734567a3250b177461a58b43e290bc7d",
+      "bytes": 9001
+    },
+    {
+      "sourceLogoId": "f035d609-9551-40d0-9edc-d9a83b4b6ed6",
+      "tenantId": "7ee39632-74ea-4fee-a3cb-c028e87cecfc",
+      "copyLogoId": "crm-legacy-logo:7ee39632-74ea-4fee-a3cb-c028e87cecfc:f035d609-9551-40d0-9edc-d9a83b4b6ed6",
+      "sourceHash": "04b2b9f22696cc2afa7bb289e8a8c10a",
+      "bytes": 6942
+    },
+    {
+      "sourceLogoId": "f1a4e491-ed03-4992-8056-7c8353ec044f",
+      "tenantId": "7ee39632-74ea-4fee-a3cb-c028e87cecfc",
+      "copyLogoId": "crm-legacy-logo:7ee39632-74ea-4fee-a3cb-c028e87cecfc:f1a4e491-ed03-4992-8056-7c8353ec044f",
+      "sourceHash": "e269c7e8520a28d304c861cf211a3dfc",
+      "bytes": 48340
+    },
+    {
+      "sourceLogoId": "f740b66a-e31c-4cbf-9f06-9a5165432623",
+      "tenantId": "7ee39632-74ea-4fee-a3cb-c028e87cecfc",
+      "copyLogoId": "crm-legacy-logo:7ee39632-74ea-4fee-a3cb-c028e87cecfc:f740b66a-e31c-4cbf-9f06-9a5165432623",
+      "sourceHash": "8eaeca63f321e4af8334b860be31a903",
+      "bytes": 30856
+    },
+    {
+      "sourceLogoId": "f9034eb3-214e-42f1-b6bb-49e8edbe86ac",
+      "tenantId": "7ee39632-74ea-4fee-a3cb-c028e87cecfc",
+      "copyLogoId": "crm-legacy-logo:7ee39632-74ea-4fee-a3cb-c028e87cecfc:f9034eb3-214e-42f1-b6bb-49e8edbe86ac",
+      "sourceHash": "d96e73229ebf6c529e3e174b85ef3ff0",
+      "bytes": 9001
+    },
+    {
+      "sourceLogoId": "52e3d239-9e0b-4789-ad87-86d4a357e8d6",
+      "tenantId": "b0e92d15-2e87-4c1a-93ac-3399bf8fe515",
+      "copyLogoId": "crm-legacy-logo:b0e92d15-2e87-4c1a-93ac-3399bf8fe515:52e3d239-9e0b-4789-ad87-86d4a357e8d6",
+      "sourceHash": "4c2694e0909dd44f576effc279917df4",
+      "bytes": 250
+    },
+    {
+      "sourceLogoId": "b149275b-3d2f-4cdf-91a9-2e226d9214d3",
+      "tenantId": "b0e92d15-2e87-4c1a-93ac-3399bf8fe515",
+      "copyLogoId": "crm-legacy-logo:b0e92d15-2e87-4c1a-93ac-3399bf8fe515:b149275b-3d2f-4cdf-91a9-2e226d9214d3",
+      "sourceHash": "07705c7ab745bbed7b6ea62637c73b2d",
+      "bytes": 11763
+    },
+    {
+      "sourceLogoId": "bc7674ce-d1a7-42ed-abcc-f2f079bf34de",
+      "tenantId": "b0e92d15-2e87-4c1a-93ac-3399bf8fe515",
+      "copyLogoId": "crm-legacy-logo:b0e92d15-2e87-4c1a-93ac-3399bf8fe515:bc7674ce-d1a7-42ed-abcc-f2f079bf34de",
+      "sourceHash": "66c6d406dab223f39bae46dd15d51f47",
+      "bytes": 8863
+    },
+    {
+      "sourceLogoId": "ef8a58f1-326d-43b9-8fef-7113a1199ad4",
+      "tenantId": "b0e92d15-2e87-4c1a-93ac-3399bf8fe515",
+      "copyLogoId": "crm-legacy-logo:b0e92d15-2e87-4c1a-93ac-3399bf8fe515:ef8a58f1-326d-43b9-8fef-7113a1199ad4",
+      "sourceHash": "35e223f512afea93c97ee680b0b2386f",
+      "bytes": 3677
+    }
+  ],
+  "references": [
+    {
+      "parentTable": "formal_proposals",
+      "parentId": "00a40d13-126c-4b58-b5d5-9ff177884c95",
+      "field": "client_logo_id",
+      "tenantId": "7ee39632-74ea-4fee-a3cb-c028e87cecfc",
+      "sourceLogoId": "741be125-3b36-4b97-aa9b-6d4302c8e5c0",
+      "copyLogoId": "crm-legacy-logo:7ee39632-74ea-4fee-a3cb-c028e87cecfc:741be125-3b36-4b97-aa9b-6d4302c8e5c0"
+    },
+    {
+      "parentTable": "formal_proposals",
+      "parentId": "00a40d13-126c-4b58-b5d5-9ff177884c95",
+      "field": "issuer_logo_id",
+      "tenantId": "7ee39632-74ea-4fee-a3cb-c028e87cecfc",
+      "sourceLogoId": "0f2c2057-5aae-434c-906a-a2013c35a528",
+      "copyLogoId": "crm-legacy-logo:7ee39632-74ea-4fee-a3cb-c028e87cecfc:0f2c2057-5aae-434c-906a-a2013c35a528"
+    },
+    {
+      "parentTable": "formal_proposals",
+      "parentId": "06ee3b29-b009-4d71-a310-ca74288ab255",
+      "field": "client_logo_id",
+      "tenantId": "7ee39632-74ea-4fee-a3cb-c028e87cecfc",
+      "sourceLogoId": "741be125-3b36-4b97-aa9b-6d4302c8e5c0",
+      "copyLogoId": "crm-legacy-logo:7ee39632-74ea-4fee-a3cb-c028e87cecfc:741be125-3b36-4b97-aa9b-6d4302c8e5c0"
+    },
+    {
+      "parentTable": "formal_proposals",
+      "parentId": "06ee3b29-b009-4d71-a310-ca74288ab255",
+      "field": "issuer_logo_id",
+      "tenantId": "7ee39632-74ea-4fee-a3cb-c028e87cecfc",
+      "sourceLogoId": "0f2c2057-5aae-434c-906a-a2013c35a528",
+      "copyLogoId": "crm-legacy-logo:7ee39632-74ea-4fee-a3cb-c028e87cecfc:0f2c2057-5aae-434c-906a-a2013c35a528"
+    },
+    {
+      "parentTable": "formal_proposals",
+      "parentId": "077d9fcd-c1a6-4de1-a281-6017c975404f",
+      "field": "client_logo_id",
+      "tenantId": "7ee39632-74ea-4fee-a3cb-c028e87cecfc",
+      "sourceLogoId": "c6223261-d6ad-4fb8-a067-a39171b6b541",
+      "copyLogoId": "crm-legacy-logo:7ee39632-74ea-4fee-a3cb-c028e87cecfc:c6223261-d6ad-4fb8-a067-a39171b6b541"
+    },
+    {
+      "parentTable": "formal_proposals",
+      "parentId": "077d9fcd-c1a6-4de1-a281-6017c975404f",
+      "field": "issuer_logo_id",
+      "tenantId": "7ee39632-74ea-4fee-a3cb-c028e87cecfc",
+      "sourceLogoId": "0f2c2057-5aae-434c-906a-a2013c35a528",
+      "copyLogoId": "crm-legacy-logo:7ee39632-74ea-4fee-a3cb-c028e87cecfc:0f2c2057-5aae-434c-906a-a2013c35a528"
+    },
+    {
+      "parentTable": "formal_proposals",
+      "parentId": "0b0c2578-e6b2-47b9-94b9-412c4364d5db",
+      "field": "client_logo_id",
+      "tenantId": "7ee39632-74ea-4fee-a3cb-c028e87cecfc",
+      "sourceLogoId": "741be125-3b36-4b97-aa9b-6d4302c8e5c0",
+      "copyLogoId": "crm-legacy-logo:7ee39632-74ea-4fee-a3cb-c028e87cecfc:741be125-3b36-4b97-aa9b-6d4302c8e5c0"
+    },
+    {
+      "parentTable": "formal_proposals",
+      "parentId": "0b0c2578-e6b2-47b9-94b9-412c4364d5db",
+      "field": "issuer_logo_id",
+      "tenantId": "7ee39632-74ea-4fee-a3cb-c028e87cecfc",
+      "sourceLogoId": "0f2c2057-5aae-434c-906a-a2013c35a528",
+      "copyLogoId": "crm-legacy-logo:7ee39632-74ea-4fee-a3cb-c028e87cecfc:0f2c2057-5aae-434c-906a-a2013c35a528"
+    },
+    {
+      "parentTable": "formal_proposals",
+      "parentId": "0de87d8f-b7cd-4715-8443-cec07f63303b",
+      "field": "client_logo_id",
+      "tenantId": "7ee39632-74ea-4fee-a3cb-c028e87cecfc",
+      "sourceLogoId": "9adc72c0-a814-4a4e-898d-2be5ae57c015",
+      "copyLogoId": "crm-legacy-logo:7ee39632-74ea-4fee-a3cb-c028e87cecfc:9adc72c0-a814-4a4e-898d-2be5ae57c015"
+    },
+    {
+      "parentTable": "formal_proposals",
+      "parentId": "0de87d8f-b7cd-4715-8443-cec07f63303b",
+      "field": "issuer_logo_id",
+      "tenantId": "7ee39632-74ea-4fee-a3cb-c028e87cecfc",
+      "sourceLogoId": "0f2c2057-5aae-434c-906a-a2013c35a528",
+      "copyLogoId": "crm-legacy-logo:7ee39632-74ea-4fee-a3cb-c028e87cecfc:0f2c2057-5aae-434c-906a-a2013c35a528"
+    },
+    {
+      "parentTable": "formal_proposals",
+      "parentId": "0e5c5092-565d-499e-b273-aae4c90c3d97",
+      "field": "issuer_logo_id",
+      "tenantId": "7ee39632-74ea-4fee-a3cb-c028e87cecfc",
+      "sourceLogoId": "0f2c2057-5aae-434c-906a-a2013c35a528",
+      "copyLogoId": "crm-legacy-logo:7ee39632-74ea-4fee-a3cb-c028e87cecfc:0f2c2057-5aae-434c-906a-a2013c35a528"
+    },
+    {
+      "parentTable": "formal_proposals",
+      "parentId": "10f723ee-e0a0-4f1f-849d-b23ac02a774a",
+      "field": "client_logo_id",
+      "tenantId": "7ee39632-74ea-4fee-a3cb-c028e87cecfc",
+      "sourceLogoId": "b868ba42-b408-4433-a338-b7bb1a3f2edc",
+      "copyLogoId": "crm-legacy-logo:7ee39632-74ea-4fee-a3cb-c028e87cecfc:b868ba42-b408-4433-a338-b7bb1a3f2edc"
+    },
+    {
+      "parentTable": "formal_proposals",
+      "parentId": "10f723ee-e0a0-4f1f-849d-b23ac02a774a",
+      "field": "issuer_logo_id",
+      "tenantId": "7ee39632-74ea-4fee-a3cb-c028e87cecfc",
+      "sourceLogoId": "0f2c2057-5aae-434c-906a-a2013c35a528",
+      "copyLogoId": "crm-legacy-logo:7ee39632-74ea-4fee-a3cb-c028e87cecfc:0f2c2057-5aae-434c-906a-a2013c35a528"
+    },
+    {
+      "parentTable": "formal_proposals",
+      "parentId": "155067ad-a45f-432a-8aca-d0114056c637",
+      "field": "client_logo_id",
+      "tenantId": "7ee39632-74ea-4fee-a3cb-c028e87cecfc",
+      "sourceLogoId": "f9034eb3-214e-42f1-b6bb-49e8edbe86ac",
+      "copyLogoId": "crm-legacy-logo:7ee39632-74ea-4fee-a3cb-c028e87cecfc:f9034eb3-214e-42f1-b6bb-49e8edbe86ac"
+    },
+    {
+      "parentTable": "formal_proposals",
+      "parentId": "155067ad-a45f-432a-8aca-d0114056c637",
+      "field": "issuer_logo_id",
+      "tenantId": "7ee39632-74ea-4fee-a3cb-c028e87cecfc",
+      "sourceLogoId": "0f2c2057-5aae-434c-906a-a2013c35a528",
+      "copyLogoId": "crm-legacy-logo:7ee39632-74ea-4fee-a3cb-c028e87cecfc:0f2c2057-5aae-434c-906a-a2013c35a528"
+    },
+    {
+      "parentTable": "formal_proposals",
+      "parentId": "17aef362-951c-4ee7-85c7-fefcb3fa6d3c",
+      "field": "issuer_logo_id",
+      "tenantId": "389b6cc1-2f8d-4fe4-bc3d-f50f92df3157",
+      "sourceLogoId": "0f2c2057-5aae-434c-906a-a2013c35a528",
+      "copyLogoId": "crm-legacy-logo:389b6cc1-2f8d-4fe4-bc3d-f50f92df3157:0f2c2057-5aae-434c-906a-a2013c35a528"
+    },
+    {
+      "parentTable": "formal_proposals",
+      "parentId": "1906437c-dc15-4fac-9e04-31ce8d752433",
+      "field": "client_logo_id",
+      "tenantId": "7ee39632-74ea-4fee-a3cb-c028e87cecfc",
+      "sourceLogoId": "741be125-3b36-4b97-aa9b-6d4302c8e5c0",
+      "copyLogoId": "crm-legacy-logo:7ee39632-74ea-4fee-a3cb-c028e87cecfc:741be125-3b36-4b97-aa9b-6d4302c8e5c0"
+    },
+    {
+      "parentTable": "formal_proposals",
+      "parentId": "1906437c-dc15-4fac-9e04-31ce8d752433",
+      "field": "issuer_logo_id",
+      "tenantId": "7ee39632-74ea-4fee-a3cb-c028e87cecfc",
+      "sourceLogoId": "0f2c2057-5aae-434c-906a-a2013c35a528",
+      "copyLogoId": "crm-legacy-logo:7ee39632-74ea-4fee-a3cb-c028e87cecfc:0f2c2057-5aae-434c-906a-a2013c35a528"
+    },
+    {
+      "parentTable": "formal_proposals",
+      "parentId": "198a9a3e-c5a6-466d-b006-30ca90990a09",
+      "field": "issuer_logo_id",
+      "tenantId": "389b6cc1-2f8d-4fe4-bc3d-f50f92df3157",
+      "sourceLogoId": "0f2c2057-5aae-434c-906a-a2013c35a528",
+      "copyLogoId": "crm-legacy-logo:389b6cc1-2f8d-4fe4-bc3d-f50f92df3157:0f2c2057-5aae-434c-906a-a2013c35a528"
+    },
+    {
+      "parentTable": "formal_proposals",
+      "parentId": "1d35c5e2-b555-4097-818b-07077df3b7fe",
+      "field": "client_logo_id",
+      "tenantId": "b0e92d15-2e87-4c1a-93ac-3399bf8fe515",
+      "sourceLogoId": "ef8a58f1-326d-43b9-8fef-7113a1199ad4",
+      "copyLogoId": "crm-legacy-logo:b0e92d15-2e87-4c1a-93ac-3399bf8fe515:ef8a58f1-326d-43b9-8fef-7113a1199ad4"
+    },
+    {
+      "parentTable": "formal_proposals",
+      "parentId": "1d35c5e2-b555-4097-818b-07077df3b7fe",
+      "field": "issuer_logo_id",
+      "tenantId": "b0e92d15-2e87-4c1a-93ac-3399bf8fe515",
+      "sourceLogoId": "bc7674ce-d1a7-42ed-abcc-f2f079bf34de",
+      "copyLogoId": "crm-legacy-logo:b0e92d15-2e87-4c1a-93ac-3399bf8fe515:bc7674ce-d1a7-42ed-abcc-f2f079bf34de"
+    },
+    {
+      "parentTable": "formal_proposals",
+      "parentId": "29991ea8-3804-49a7-9532-56b44789dc4d",
+      "field": "client_logo_id",
+      "tenantId": "7ee39632-74ea-4fee-a3cb-c028e87cecfc",
+      "sourceLogoId": "741be125-3b36-4b97-aa9b-6d4302c8e5c0",
+      "copyLogoId": "crm-legacy-logo:7ee39632-74ea-4fee-a3cb-c028e87cecfc:741be125-3b36-4b97-aa9b-6d4302c8e5c0"
+    },
+    {
+      "parentTable": "formal_proposals",
+      "parentId": "29991ea8-3804-49a7-9532-56b44789dc4d",
+      "field": "issuer_logo_id",
+      "tenantId": "7ee39632-74ea-4fee-a3cb-c028e87cecfc",
+      "sourceLogoId": "0f2c2057-5aae-434c-906a-a2013c35a528",
+      "copyLogoId": "crm-legacy-logo:7ee39632-74ea-4fee-a3cb-c028e87cecfc:0f2c2057-5aae-434c-906a-a2013c35a528"
+    },
+    {
+      "parentTable": "formal_proposals",
+      "parentId": "2b304d7e-e45f-492d-9daa-c671c818d5aa",
+      "field": "issuer_logo_id",
+      "tenantId": "b0e92d15-2e87-4c1a-93ac-3399bf8fe515",
+      "sourceLogoId": "bc7674ce-d1a7-42ed-abcc-f2f079bf34de",
+      "copyLogoId": "crm-legacy-logo:b0e92d15-2e87-4c1a-93ac-3399bf8fe515:bc7674ce-d1a7-42ed-abcc-f2f079bf34de"
+    },
+    {
+      "parentTable": "formal_proposals",
+      "parentId": "30b2da00-9d29-48b1-9b54-09b16cd2be9d",
+      "field": "issuer_logo_id",
+      "tenantId": "7ee39632-74ea-4fee-a3cb-c028e87cecfc",
+      "sourceLogoId": "13e95e78-2b45-4c13-a978-f1edf0955746",
+      "copyLogoId": "crm-legacy-logo:7ee39632-74ea-4fee-a3cb-c028e87cecfc:13e95e78-2b45-4c13-a978-f1edf0955746"
+    },
+    {
+      "parentTable": "formal_proposals",
+      "parentId": "30b72834-7257-4895-af05-567da9f0ea63",
+      "field": "issuer_logo_id",
+      "tenantId": "7ee39632-74ea-4fee-a3cb-c028e87cecfc",
+      "sourceLogoId": "0f2c2057-5aae-434c-906a-a2013c35a528",
+      "copyLogoId": "crm-legacy-logo:7ee39632-74ea-4fee-a3cb-c028e87cecfc:0f2c2057-5aae-434c-906a-a2013c35a528"
+    },
+    {
+      "parentTable": "formal_proposals",
+      "parentId": "312bb754-809c-4f51-b1d0-8558bb2e17d7",
+      "field": "issuer_logo_id",
+      "tenantId": "389b6cc1-2f8d-4fe4-bc3d-f50f92df3157",
+      "sourceLogoId": "0f2c2057-5aae-434c-906a-a2013c35a528",
+      "copyLogoId": "crm-legacy-logo:389b6cc1-2f8d-4fe4-bc3d-f50f92df3157:0f2c2057-5aae-434c-906a-a2013c35a528"
+    },
+    {
+      "parentTable": "formal_proposals",
+      "parentId": "35bbc01e-41a3-410f-a65e-a7a855d953ea",
+      "field": "client_logo_id",
+      "tenantId": "7ee39632-74ea-4fee-a3cb-c028e87cecfc",
+      "sourceLogoId": "17a98a3b-cf6f-4542-a411-a36bfb4cea46",
+      "copyLogoId": "crm-legacy-logo:7ee39632-74ea-4fee-a3cb-c028e87cecfc:17a98a3b-cf6f-4542-a411-a36bfb4cea46"
+    },
+    {
+      "parentTable": "formal_proposals",
+      "parentId": "35bbc01e-41a3-410f-a65e-a7a855d953ea",
+      "field": "issuer_logo_id",
+      "tenantId": "7ee39632-74ea-4fee-a3cb-c028e87cecfc",
+      "sourceLogoId": "0f2c2057-5aae-434c-906a-a2013c35a528",
+      "copyLogoId": "crm-legacy-logo:7ee39632-74ea-4fee-a3cb-c028e87cecfc:0f2c2057-5aae-434c-906a-a2013c35a528"
+    },
+    {
+      "parentTable": "formal_proposals",
+      "parentId": "370245d7-ea98-4a3c-be04-5f06d3eb00b3",
+      "field": "client_logo_id",
+      "tenantId": "7ee39632-74ea-4fee-a3cb-c028e87cecfc",
+      "sourceLogoId": "741be125-3b36-4b97-aa9b-6d4302c8e5c0",
+      "copyLogoId": "crm-legacy-logo:7ee39632-74ea-4fee-a3cb-c028e87cecfc:741be125-3b36-4b97-aa9b-6d4302c8e5c0"
+    },
+    {
+      "parentTable": "formal_proposals",
+      "parentId": "370245d7-ea98-4a3c-be04-5f06d3eb00b3",
+      "field": "issuer_logo_id",
+      "tenantId": "7ee39632-74ea-4fee-a3cb-c028e87cecfc",
+      "sourceLogoId": "0f2c2057-5aae-434c-906a-a2013c35a528",
+      "copyLogoId": "crm-legacy-logo:7ee39632-74ea-4fee-a3cb-c028e87cecfc:0f2c2057-5aae-434c-906a-a2013c35a528"
+    },
+    {
+      "parentTable": "formal_proposals",
+      "parentId": "389be82f-653f-4337-aa87-b92ea6605529",
+      "field": "issuer_logo_id",
+      "tenantId": "7ee39632-74ea-4fee-a3cb-c028e87cecfc",
+      "sourceLogoId": "4f64c340-57c5-40d0-8a09-63a18e245c17",
+      "copyLogoId": "crm-legacy-logo:7ee39632-74ea-4fee-a3cb-c028e87cecfc:4f64c340-57c5-40d0-8a09-63a18e245c17"
+    },
+    {
+      "parentTable": "formal_proposals",
+      "parentId": "3e6177a0-1f3e-4d71-8b94-a12e3c8ce9b1",
+      "field": "client_logo_id",
+      "tenantId": "7ee39632-74ea-4fee-a3cb-c028e87cecfc",
+      "sourceLogoId": "f035d609-9551-40d0-9edc-d9a83b4b6ed6",
+      "copyLogoId": "crm-legacy-logo:7ee39632-74ea-4fee-a3cb-c028e87cecfc:f035d609-9551-40d0-9edc-d9a83b4b6ed6"
+    },
+    {
+      "parentTable": "formal_proposals",
+      "parentId": "3e6177a0-1f3e-4d71-8b94-a12e3c8ce9b1",
+      "field": "issuer_logo_id",
+      "tenantId": "7ee39632-74ea-4fee-a3cb-c028e87cecfc",
+      "sourceLogoId": "0f2c2057-5aae-434c-906a-a2013c35a528",
+      "copyLogoId": "crm-legacy-logo:7ee39632-74ea-4fee-a3cb-c028e87cecfc:0f2c2057-5aae-434c-906a-a2013c35a528"
+    },
+    {
+      "parentTable": "formal_proposals",
+      "parentId": "41a8ff1a-eaa6-499f-98f0-f41bdcae8b2e",
+      "field": "issuer_logo_id",
+      "tenantId": "389b6cc1-2f8d-4fe4-bc3d-f50f92df3157",
+      "sourceLogoId": "0f2c2057-5aae-434c-906a-a2013c35a528",
+      "copyLogoId": "crm-legacy-logo:389b6cc1-2f8d-4fe4-bc3d-f50f92df3157:0f2c2057-5aae-434c-906a-a2013c35a528"
+    },
+    {
+      "parentTable": "formal_proposals",
+      "parentId": "42bd299c-83f8-4074-acd7-8e9cf772bc25",
+      "field": "issuer_logo_id",
+      "tenantId": "389b6cc1-2f8d-4fe4-bc3d-f50f92df3157",
+      "sourceLogoId": "52e3d239-9e0b-4789-ad87-86d4a357e8d6",
+      "copyLogoId": "crm-legacy-logo:389b6cc1-2f8d-4fe4-bc3d-f50f92df3157:52e3d239-9e0b-4789-ad87-86d4a357e8d6"
+    },
+    {
+      "parentTable": "formal_proposals",
+      "parentId": "434cf45b-d87d-4dbe-a9c3-39932d617f96",
+      "field": "client_logo_id",
+      "tenantId": "7ee39632-74ea-4fee-a3cb-c028e87cecfc",
+      "sourceLogoId": "3b0ba0e4-8d85-4057-8e74-60e1d929c70a",
+      "copyLogoId": "crm-legacy-logo:7ee39632-74ea-4fee-a3cb-c028e87cecfc:3b0ba0e4-8d85-4057-8e74-60e1d929c70a"
+    },
+    {
+      "parentTable": "formal_proposals",
+      "parentId": "434cf45b-d87d-4dbe-a9c3-39932d617f96",
+      "field": "issuer_logo_id",
+      "tenantId": "7ee39632-74ea-4fee-a3cb-c028e87cecfc",
+      "sourceLogoId": "0f2c2057-5aae-434c-906a-a2013c35a528",
+      "copyLogoId": "crm-legacy-logo:7ee39632-74ea-4fee-a3cb-c028e87cecfc:0f2c2057-5aae-434c-906a-a2013c35a528"
+    },
+    {
+      "parentTable": "formal_proposals",
+      "parentId": "43500f57-3142-4992-8c9e-1f545ee24859",
+      "field": "client_logo_id",
+      "tenantId": "7ee39632-74ea-4fee-a3cb-c028e87cecfc",
+      "sourceLogoId": "67427bfb-cea2-4fa4-892e-5144feb91896",
+      "copyLogoId": "crm-legacy-logo:7ee39632-74ea-4fee-a3cb-c028e87cecfc:67427bfb-cea2-4fa4-892e-5144feb91896"
+    },
+    {
+      "parentTable": "formal_proposals",
+      "parentId": "43500f57-3142-4992-8c9e-1f545ee24859",
+      "field": "issuer_logo_id",
+      "tenantId": "7ee39632-74ea-4fee-a3cb-c028e87cecfc",
+      "sourceLogoId": "0f2c2057-5aae-434c-906a-a2013c35a528",
+      "copyLogoId": "crm-legacy-logo:7ee39632-74ea-4fee-a3cb-c028e87cecfc:0f2c2057-5aae-434c-906a-a2013c35a528"
+    },
+    {
+      "parentTable": "formal_proposals",
+      "parentId": "4949b898-79bf-4568-9f89-1f856053aa51",
+      "field": "issuer_logo_id",
+      "tenantId": "7ee39632-74ea-4fee-a3cb-c028e87cecfc",
+      "sourceLogoId": "bc7674ce-d1a7-42ed-abcc-f2f079bf34de",
+      "copyLogoId": "crm-legacy-logo:7ee39632-74ea-4fee-a3cb-c028e87cecfc:bc7674ce-d1a7-42ed-abcc-f2f079bf34de"
+    },
+    {
+      "parentTable": "formal_proposals",
+      "parentId": "4a8813d4-9fbc-4371-a300-6dbda65b68fb",
+      "field": "client_logo_id",
+      "tenantId": "7ee39632-74ea-4fee-a3cb-c028e87cecfc",
+      "sourceLogoId": "12a062f9-8883-44e6-8ffb-c5b9be3b5d5f",
+      "copyLogoId": "crm-legacy-logo:7ee39632-74ea-4fee-a3cb-c028e87cecfc:12a062f9-8883-44e6-8ffb-c5b9be3b5d5f"
+    },
+    {
+      "parentTable": "formal_proposals",
+      "parentId": "4a8813d4-9fbc-4371-a300-6dbda65b68fb",
+      "field": "issuer_logo_id",
+      "tenantId": "7ee39632-74ea-4fee-a3cb-c028e87cecfc",
+      "sourceLogoId": "0f2c2057-5aae-434c-906a-a2013c35a528",
+      "copyLogoId": "crm-legacy-logo:7ee39632-74ea-4fee-a3cb-c028e87cecfc:0f2c2057-5aae-434c-906a-a2013c35a528"
+    },
+    {
+      "parentTable": "formal_proposals",
+      "parentId": "50757e26-3e8e-4ce5-ad4e-415a7f39df39",
+      "field": "client_logo_id",
+      "tenantId": "7ee39632-74ea-4fee-a3cb-c028e87cecfc",
+      "sourceLogoId": "5c3da1d4-93ee-4c0d-b9cd-060edf61ae34",
+      "copyLogoId": "crm-legacy-logo:7ee39632-74ea-4fee-a3cb-c028e87cecfc:5c3da1d4-93ee-4c0d-b9cd-060edf61ae34"
+    },
+    {
+      "parentTable": "formal_proposals",
+      "parentId": "50757e26-3e8e-4ce5-ad4e-415a7f39df39",
+      "field": "issuer_logo_id",
+      "tenantId": "7ee39632-74ea-4fee-a3cb-c028e87cecfc",
+      "sourceLogoId": "0f2c2057-5aae-434c-906a-a2013c35a528",
+      "copyLogoId": "crm-legacy-logo:7ee39632-74ea-4fee-a3cb-c028e87cecfc:0f2c2057-5aae-434c-906a-a2013c35a528"
+    },
+    {
+      "parentTable": "formal_proposals",
+      "parentId": "55cde245-561e-4b60-926a-613480bb0cdd",
+      "field": "client_logo_id",
+      "tenantId": "7ee39632-74ea-4fee-a3cb-c028e87cecfc",
+      "sourceLogoId": "c9418e5d-a540-4610-bd91-954a6344e61b",
+      "copyLogoId": "crm-legacy-logo:7ee39632-74ea-4fee-a3cb-c028e87cecfc:c9418e5d-a540-4610-bd91-954a6344e61b"
+    },
+    {
+      "parentTable": "formal_proposals",
+      "parentId": "55cde245-561e-4b60-926a-613480bb0cdd",
+      "field": "issuer_logo_id",
+      "tenantId": "7ee39632-74ea-4fee-a3cb-c028e87cecfc",
+      "sourceLogoId": "0f2c2057-5aae-434c-906a-a2013c35a528",
+      "copyLogoId": "crm-legacy-logo:7ee39632-74ea-4fee-a3cb-c028e87cecfc:0f2c2057-5aae-434c-906a-a2013c35a528"
+    },
+    {
+      "parentTable": "formal_proposals",
+      "parentId": "63aa357d-aef9-428a-a680-9776c7202188",
+      "field": "client_logo_id",
+      "tenantId": "b0e92d15-2e87-4c1a-93ac-3399bf8fe515",
+      "sourceLogoId": "b149275b-3d2f-4cdf-91a9-2e226d9214d3",
+      "copyLogoId": "crm-legacy-logo:b0e92d15-2e87-4c1a-93ac-3399bf8fe515:b149275b-3d2f-4cdf-91a9-2e226d9214d3"
+    },
+    {
+      "parentTable": "formal_proposals",
+      "parentId": "63aa357d-aef9-428a-a680-9776c7202188",
+      "field": "issuer_logo_id",
+      "tenantId": "b0e92d15-2e87-4c1a-93ac-3399bf8fe515",
+      "sourceLogoId": "bc7674ce-d1a7-42ed-abcc-f2f079bf34de",
+      "copyLogoId": "crm-legacy-logo:b0e92d15-2e87-4c1a-93ac-3399bf8fe515:bc7674ce-d1a7-42ed-abcc-f2f079bf34de"
+    },
+    {
+      "parentTable": "formal_proposals",
+      "parentId": "6813fc5b-168c-45e0-99a1-c2fdfb1bcb15",
+      "field": "client_logo_id",
+      "tenantId": "7ee39632-74ea-4fee-a3cb-c028e87cecfc",
+      "sourceLogoId": "24a03057-fe39-4dc2-97f5-026a14f3cadb",
+      "copyLogoId": "crm-legacy-logo:7ee39632-74ea-4fee-a3cb-c028e87cecfc:24a03057-fe39-4dc2-97f5-026a14f3cadb"
+    },
+    {
+      "parentTable": "formal_proposals",
+      "parentId": "6813fc5b-168c-45e0-99a1-c2fdfb1bcb15",
+      "field": "issuer_logo_id",
+      "tenantId": "7ee39632-74ea-4fee-a3cb-c028e87cecfc",
+      "sourceLogoId": "0f2c2057-5aae-434c-906a-a2013c35a528",
+      "copyLogoId": "crm-legacy-logo:7ee39632-74ea-4fee-a3cb-c028e87cecfc:0f2c2057-5aae-434c-906a-a2013c35a528"
+    },
+    {
+      "parentTable": "formal_proposals",
+      "parentId": "6c76fac3-0d7c-4145-9846-036a388946a1",
+      "field": "issuer_logo_id",
+      "tenantId": "7ee39632-74ea-4fee-a3cb-c028e87cecfc",
+      "sourceLogoId": "0f2c2057-5aae-434c-906a-a2013c35a528",
+      "copyLogoId": "crm-legacy-logo:7ee39632-74ea-4fee-a3cb-c028e87cecfc:0f2c2057-5aae-434c-906a-a2013c35a528"
+    },
+    {
+      "parentTable": "formal_proposals",
+      "parentId": "6d0340fa-dad5-47c7-865d-5cf2058b47db",
+      "field": "client_logo_id",
+      "tenantId": "7ee39632-74ea-4fee-a3cb-c028e87cecfc",
+      "sourceLogoId": "741be125-3b36-4b97-aa9b-6d4302c8e5c0",
+      "copyLogoId": "crm-legacy-logo:7ee39632-74ea-4fee-a3cb-c028e87cecfc:741be125-3b36-4b97-aa9b-6d4302c8e5c0"
+    },
+    {
+      "parentTable": "formal_proposals",
+      "parentId": "6d0340fa-dad5-47c7-865d-5cf2058b47db",
+      "field": "issuer_logo_id",
+      "tenantId": "7ee39632-74ea-4fee-a3cb-c028e87cecfc",
+      "sourceLogoId": "0f2c2057-5aae-434c-906a-a2013c35a528",
+      "copyLogoId": "crm-legacy-logo:7ee39632-74ea-4fee-a3cb-c028e87cecfc:0f2c2057-5aae-434c-906a-a2013c35a528"
+    },
+    {
+      "parentTable": "formal_proposals",
+      "parentId": "708bcd57-9cb0-4b9e-95ec-31e5659dba5b",
+      "field": "client_logo_id",
+      "tenantId": "7ee39632-74ea-4fee-a3cb-c028e87cecfc",
+      "sourceLogoId": "741be125-3b36-4b97-aa9b-6d4302c8e5c0",
+      "copyLogoId": "crm-legacy-logo:7ee39632-74ea-4fee-a3cb-c028e87cecfc:741be125-3b36-4b97-aa9b-6d4302c8e5c0"
+    },
+    {
+      "parentTable": "formal_proposals",
+      "parentId": "708bcd57-9cb0-4b9e-95ec-31e5659dba5b",
+      "field": "issuer_logo_id",
+      "tenantId": "7ee39632-74ea-4fee-a3cb-c028e87cecfc",
+      "sourceLogoId": "0f2c2057-5aae-434c-906a-a2013c35a528",
+      "copyLogoId": "crm-legacy-logo:7ee39632-74ea-4fee-a3cb-c028e87cecfc:0f2c2057-5aae-434c-906a-a2013c35a528"
+    },
+    {
+      "parentTable": "formal_proposals",
+      "parentId": "72e6bc11-8035-4978-8045-8120c1062695",
+      "field": "issuer_logo_id",
+      "tenantId": "389b6cc1-2f8d-4fe4-bc3d-f50f92df3157",
+      "sourceLogoId": "0f2c2057-5aae-434c-906a-a2013c35a528",
+      "copyLogoId": "crm-legacy-logo:389b6cc1-2f8d-4fe4-bc3d-f50f92df3157:0f2c2057-5aae-434c-906a-a2013c35a528"
+    },
+    {
+      "parentTable": "formal_proposals",
+      "parentId": "75dc517a-f5f3-49d1-99ed-d133f6d19392",
+      "field": "client_logo_id",
+      "tenantId": "7ee39632-74ea-4fee-a3cb-c028e87cecfc",
+      "sourceLogoId": "741be125-3b36-4b97-aa9b-6d4302c8e5c0",
+      "copyLogoId": "crm-legacy-logo:7ee39632-74ea-4fee-a3cb-c028e87cecfc:741be125-3b36-4b97-aa9b-6d4302c8e5c0"
+    },
+    {
+      "parentTable": "formal_proposals",
+      "parentId": "75dc517a-f5f3-49d1-99ed-d133f6d19392",
+      "field": "issuer_logo_id",
+      "tenantId": "7ee39632-74ea-4fee-a3cb-c028e87cecfc",
+      "sourceLogoId": "0f2c2057-5aae-434c-906a-a2013c35a528",
+      "copyLogoId": "crm-legacy-logo:7ee39632-74ea-4fee-a3cb-c028e87cecfc:0f2c2057-5aae-434c-906a-a2013c35a528"
+    },
+    {
+      "parentTable": "formal_proposals",
+      "parentId": "75e90386-6ffc-4cfd-b4d2-73ff573b37f9",
+      "field": "issuer_logo_id",
+      "tenantId": "7ee39632-74ea-4fee-a3cb-c028e87cecfc",
+      "sourceLogoId": "0f2c2057-5aae-434c-906a-a2013c35a528",
+      "copyLogoId": "crm-legacy-logo:7ee39632-74ea-4fee-a3cb-c028e87cecfc:0f2c2057-5aae-434c-906a-a2013c35a528"
+    },
+    {
+      "parentTable": "formal_proposals",
+      "parentId": "76459441-baf8-430a-9205-285567e3b77c",
+      "field": "issuer_logo_id",
+      "tenantId": "7ee39632-74ea-4fee-a3cb-c028e87cecfc",
+      "sourceLogoId": "52e3d239-9e0b-4789-ad87-86d4a357e8d6",
+      "copyLogoId": "crm-legacy-logo:7ee39632-74ea-4fee-a3cb-c028e87cecfc:52e3d239-9e0b-4789-ad87-86d4a357e8d6"
+    },
+    {
+      "parentTable": "formal_proposals",
+      "parentId": "76e9b35f-1fa2-486e-bd17-13122b26912a",
+      "field": "client_logo_id",
+      "tenantId": "b0e92d15-2e87-4c1a-93ac-3399bf8fe515",
+      "sourceLogoId": "ef8a58f1-326d-43b9-8fef-7113a1199ad4",
+      "copyLogoId": "crm-legacy-logo:b0e92d15-2e87-4c1a-93ac-3399bf8fe515:ef8a58f1-326d-43b9-8fef-7113a1199ad4"
+    },
+    {
+      "parentTable": "formal_proposals",
+      "parentId": "76e9b35f-1fa2-486e-bd17-13122b26912a",
+      "field": "issuer_logo_id",
+      "tenantId": "b0e92d15-2e87-4c1a-93ac-3399bf8fe515",
+      "sourceLogoId": "bc7674ce-d1a7-42ed-abcc-f2f079bf34de",
+      "copyLogoId": "crm-legacy-logo:b0e92d15-2e87-4c1a-93ac-3399bf8fe515:bc7674ce-d1a7-42ed-abcc-f2f079bf34de"
+    },
+    {
+      "parentTable": "formal_proposals",
+      "parentId": "7ed504a1-e5c8-4cc6-ba19-4ace258a8c42",
+      "field": "client_logo_id",
+      "tenantId": "7ee39632-74ea-4fee-a3cb-c028e87cecfc",
+      "sourceLogoId": "2a9dfb5d-39ea-4f57-96b4-6889ba3abc16",
+      "copyLogoId": "crm-legacy-logo:7ee39632-74ea-4fee-a3cb-c028e87cecfc:2a9dfb5d-39ea-4f57-96b4-6889ba3abc16"
+    },
+    {
+      "parentTable": "formal_proposals",
+      "parentId": "7ed504a1-e5c8-4cc6-ba19-4ace258a8c42",
+      "field": "issuer_logo_id",
+      "tenantId": "7ee39632-74ea-4fee-a3cb-c028e87cecfc",
+      "sourceLogoId": "bc7674ce-d1a7-42ed-abcc-f2f079bf34de",
+      "copyLogoId": "crm-legacy-logo:7ee39632-74ea-4fee-a3cb-c028e87cecfc:bc7674ce-d1a7-42ed-abcc-f2f079bf34de"
+    },
+    {
+      "parentTable": "formal_proposals",
+      "parentId": "7f7ebc16-3340-4c43-8f81-fbec5196a73a",
+      "field": "client_logo_id",
+      "tenantId": "7ee39632-74ea-4fee-a3cb-c028e87cecfc",
+      "sourceLogoId": "6cceb151-4963-4ced-a656-f678f50f851e",
+      "copyLogoId": "crm-legacy-logo:7ee39632-74ea-4fee-a3cb-c028e87cecfc:6cceb151-4963-4ced-a656-f678f50f851e"
+    },
+    {
+      "parentTable": "formal_proposals",
+      "parentId": "7f7ebc16-3340-4c43-8f81-fbec5196a73a",
+      "field": "issuer_logo_id",
+      "tenantId": "7ee39632-74ea-4fee-a3cb-c028e87cecfc",
+      "sourceLogoId": "0f2c2057-5aae-434c-906a-a2013c35a528",
+      "copyLogoId": "crm-legacy-logo:7ee39632-74ea-4fee-a3cb-c028e87cecfc:0f2c2057-5aae-434c-906a-a2013c35a528"
+    },
+    {
+      "parentTable": "formal_proposals",
+      "parentId": "7ff48290-84b9-456a-8414-159a7a39c7ca",
+      "field": "client_logo_id",
+      "tenantId": "7ee39632-74ea-4fee-a3cb-c028e87cecfc",
+      "sourceLogoId": "53c268f2-179b-42eb-bf9f-e7b5fd690fbf",
+      "copyLogoId": "crm-legacy-logo:7ee39632-74ea-4fee-a3cb-c028e87cecfc:53c268f2-179b-42eb-bf9f-e7b5fd690fbf"
+    },
+    {
+      "parentTable": "formal_proposals",
+      "parentId": "7ff48290-84b9-456a-8414-159a7a39c7ca",
+      "field": "issuer_logo_id",
+      "tenantId": "7ee39632-74ea-4fee-a3cb-c028e87cecfc",
+      "sourceLogoId": "0f2c2057-5aae-434c-906a-a2013c35a528",
+      "copyLogoId": "crm-legacy-logo:7ee39632-74ea-4fee-a3cb-c028e87cecfc:0f2c2057-5aae-434c-906a-a2013c35a528"
+    },
+    {
+      "parentTable": "formal_proposals",
+      "parentId": "84461e3f-81db-4129-8628-fdcaafbeb9d2",
+      "field": "issuer_logo_id",
+      "tenantId": "7ee39632-74ea-4fee-a3cb-c028e87cecfc",
+      "sourceLogoId": "0f2c2057-5aae-434c-906a-a2013c35a528",
+      "copyLogoId": "crm-legacy-logo:7ee39632-74ea-4fee-a3cb-c028e87cecfc:0f2c2057-5aae-434c-906a-a2013c35a528"
+    },
+    {
+      "parentTable": "formal_proposals",
+      "parentId": "8666343f-a6cb-458e-88ce-4ec83e0990c3",
+      "field": "client_logo_id",
+      "tenantId": "7ee39632-74ea-4fee-a3cb-c028e87cecfc",
+      "sourceLogoId": "741be125-3b36-4b97-aa9b-6d4302c8e5c0",
+      "copyLogoId": "crm-legacy-logo:7ee39632-74ea-4fee-a3cb-c028e87cecfc:741be125-3b36-4b97-aa9b-6d4302c8e5c0"
+    },
+    {
+      "parentTable": "formal_proposals",
+      "parentId": "8666343f-a6cb-458e-88ce-4ec83e0990c3",
+      "field": "issuer_logo_id",
+      "tenantId": "7ee39632-74ea-4fee-a3cb-c028e87cecfc",
+      "sourceLogoId": "0f2c2057-5aae-434c-906a-a2013c35a528",
+      "copyLogoId": "crm-legacy-logo:7ee39632-74ea-4fee-a3cb-c028e87cecfc:0f2c2057-5aae-434c-906a-a2013c35a528"
+    },
+    {
+      "parentTable": "formal_proposals",
+      "parentId": "870d1c8d-fd1c-4935-8afc-92c0f550c7cb",
+      "field": "issuer_logo_id",
+      "tenantId": "7ee39632-74ea-4fee-a3cb-c028e87cecfc",
+      "sourceLogoId": "bc7674ce-d1a7-42ed-abcc-f2f079bf34de",
+      "copyLogoId": "crm-legacy-logo:7ee39632-74ea-4fee-a3cb-c028e87cecfc:bc7674ce-d1a7-42ed-abcc-f2f079bf34de"
+    },
+    {
+      "parentTable": "formal_proposals",
+      "parentId": "8844bcce-78c7-46f5-82cc-f972ff6735bb",
+      "field": "issuer_logo_id",
+      "tenantId": "7ee39632-74ea-4fee-a3cb-c028e87cecfc",
+      "sourceLogoId": "bc7674ce-d1a7-42ed-abcc-f2f079bf34de",
+      "copyLogoId": "crm-legacy-logo:7ee39632-74ea-4fee-a3cb-c028e87cecfc:bc7674ce-d1a7-42ed-abcc-f2f079bf34de"
+    },
+    {
+      "parentTable": "formal_proposals",
+      "parentId": "8a5782b0-8901-444e-a842-ff1729539f45",
+      "field": "issuer_logo_id",
+      "tenantId": "389b6cc1-2f8d-4fe4-bc3d-f50f92df3157",
+      "sourceLogoId": "52e3d239-9e0b-4789-ad87-86d4a357e8d6",
+      "copyLogoId": "crm-legacy-logo:389b6cc1-2f8d-4fe4-bc3d-f50f92df3157:52e3d239-9e0b-4789-ad87-86d4a357e8d6"
+    },
+    {
+      "parentTable": "formal_proposals",
+      "parentId": "8f688a25-b3be-44ca-9310-e003df66059e",
+      "field": "client_logo_id",
+      "tenantId": "7ee39632-74ea-4fee-a3cb-c028e87cecfc",
+      "sourceLogoId": "14d87492-239a-4cee-9352-c06491d0094a",
+      "copyLogoId": "crm-legacy-logo:7ee39632-74ea-4fee-a3cb-c028e87cecfc:14d87492-239a-4cee-9352-c06491d0094a"
+    },
+    {
+      "parentTable": "formal_proposals",
+      "parentId": "8f688a25-b3be-44ca-9310-e003df66059e",
+      "field": "issuer_logo_id",
+      "tenantId": "7ee39632-74ea-4fee-a3cb-c028e87cecfc",
+      "sourceLogoId": "0f2c2057-5aae-434c-906a-a2013c35a528",
+      "copyLogoId": "crm-legacy-logo:7ee39632-74ea-4fee-a3cb-c028e87cecfc:0f2c2057-5aae-434c-906a-a2013c35a528"
+    },
+    {
+      "parentTable": "formal_proposals",
+      "parentId": "92efa9d6-2e93-4b27-b800-ae6c2bfc94a9",
+      "field": "issuer_logo_id",
+      "tenantId": "7ee39632-74ea-4fee-a3cb-c028e87cecfc",
+      "sourceLogoId": "0f2c2057-5aae-434c-906a-a2013c35a528",
+      "copyLogoId": "crm-legacy-logo:7ee39632-74ea-4fee-a3cb-c028e87cecfc:0f2c2057-5aae-434c-906a-a2013c35a528"
+    },
+    {
+      "parentTable": "formal_proposals",
+      "parentId": "93e725a4-6a5d-436b-8868-b097005517c1",
+      "field": "client_logo_id",
+      "tenantId": "7ee39632-74ea-4fee-a3cb-c028e87cecfc",
+      "sourceLogoId": "741be125-3b36-4b97-aa9b-6d4302c8e5c0",
+      "copyLogoId": "crm-legacy-logo:7ee39632-74ea-4fee-a3cb-c028e87cecfc:741be125-3b36-4b97-aa9b-6d4302c8e5c0"
+    },
+    {
+      "parentTable": "formal_proposals",
+      "parentId": "93e725a4-6a5d-436b-8868-b097005517c1",
+      "field": "issuer_logo_id",
+      "tenantId": "7ee39632-74ea-4fee-a3cb-c028e87cecfc",
+      "sourceLogoId": "0f2c2057-5aae-434c-906a-a2013c35a528",
+      "copyLogoId": "crm-legacy-logo:7ee39632-74ea-4fee-a3cb-c028e87cecfc:0f2c2057-5aae-434c-906a-a2013c35a528"
+    },
+    {
+      "parentTable": "formal_proposals",
+      "parentId": "991eea27-18cc-4ea0-b8d7-42a2ae5f4fd7",
+      "field": "client_logo_id",
+      "tenantId": "7ee39632-74ea-4fee-a3cb-c028e87cecfc",
+      "sourceLogoId": "741be125-3b36-4b97-aa9b-6d4302c8e5c0",
+      "copyLogoId": "crm-legacy-logo:7ee39632-74ea-4fee-a3cb-c028e87cecfc:741be125-3b36-4b97-aa9b-6d4302c8e5c0"
+    },
+    {
+      "parentTable": "formal_proposals",
+      "parentId": "991eea27-18cc-4ea0-b8d7-42a2ae5f4fd7",
+      "field": "issuer_logo_id",
+      "tenantId": "7ee39632-74ea-4fee-a3cb-c028e87cecfc",
+      "sourceLogoId": "0f2c2057-5aae-434c-906a-a2013c35a528",
+      "copyLogoId": "crm-legacy-logo:7ee39632-74ea-4fee-a3cb-c028e87cecfc:0f2c2057-5aae-434c-906a-a2013c35a528"
+    },
+    {
+      "parentTable": "formal_proposals",
+      "parentId": "a1b0b93f-024c-4377-a979-42dca8ee86a0",
+      "field": "issuer_logo_id",
+      "tenantId": "7ee39632-74ea-4fee-a3cb-c028e87cecfc",
+      "sourceLogoId": "0f2c2057-5aae-434c-906a-a2013c35a528",
+      "copyLogoId": "crm-legacy-logo:7ee39632-74ea-4fee-a3cb-c028e87cecfc:0f2c2057-5aae-434c-906a-a2013c35a528"
+    },
+    {
+      "parentTable": "formal_proposals",
+      "parentId": "a33748ea-d8b3-440e-9695-c644ef1c8159",
+      "field": "client_logo_id",
+      "tenantId": "7ee39632-74ea-4fee-a3cb-c028e87cecfc",
+      "sourceLogoId": "6ee2f5aa-ad7f-4fc9-8270-408550735e2f",
+      "copyLogoId": "crm-legacy-logo:7ee39632-74ea-4fee-a3cb-c028e87cecfc:6ee2f5aa-ad7f-4fc9-8270-408550735e2f"
+    },
+    {
+      "parentTable": "formal_proposals",
+      "parentId": "a33748ea-d8b3-440e-9695-c644ef1c8159",
+      "field": "issuer_logo_id",
+      "tenantId": "7ee39632-74ea-4fee-a3cb-c028e87cecfc",
+      "sourceLogoId": "0f2c2057-5aae-434c-906a-a2013c35a528",
+      "copyLogoId": "crm-legacy-logo:7ee39632-74ea-4fee-a3cb-c028e87cecfc:0f2c2057-5aae-434c-906a-a2013c35a528"
+    },
+    {
+      "parentTable": "formal_proposals",
+      "parentId": "a5f84849-ad04-443b-9fcb-1a200f8ad5c0",
+      "field": "client_logo_id",
+      "tenantId": "7ee39632-74ea-4fee-a3cb-c028e87cecfc",
+      "sourceLogoId": "53c268f2-179b-42eb-bf9f-e7b5fd690fbf",
+      "copyLogoId": "crm-legacy-logo:7ee39632-74ea-4fee-a3cb-c028e87cecfc:53c268f2-179b-42eb-bf9f-e7b5fd690fbf"
+    },
+    {
+      "parentTable": "formal_proposals",
+      "parentId": "a5f84849-ad04-443b-9fcb-1a200f8ad5c0",
+      "field": "issuer_logo_id",
+      "tenantId": "7ee39632-74ea-4fee-a3cb-c028e87cecfc",
+      "sourceLogoId": "0f2c2057-5aae-434c-906a-a2013c35a528",
+      "copyLogoId": "crm-legacy-logo:7ee39632-74ea-4fee-a3cb-c028e87cecfc:0f2c2057-5aae-434c-906a-a2013c35a528"
+    },
+    {
+      "parentTable": "formal_proposals",
+      "parentId": "a825ada5-2b1c-445e-b729-ed1efc0d0b03",
+      "field": "client_logo_id",
+      "tenantId": "7ee39632-74ea-4fee-a3cb-c028e87cecfc",
+      "sourceLogoId": "c2106764-d553-4da5-b9bd-d0ca9ce1e4a5",
+      "copyLogoId": "crm-legacy-logo:7ee39632-74ea-4fee-a3cb-c028e87cecfc:c2106764-d553-4da5-b9bd-d0ca9ce1e4a5"
+    },
+    {
+      "parentTable": "formal_proposals",
+      "parentId": "a825ada5-2b1c-445e-b729-ed1efc0d0b03",
+      "field": "issuer_logo_id",
+      "tenantId": "7ee39632-74ea-4fee-a3cb-c028e87cecfc",
+      "sourceLogoId": "0f2c2057-5aae-434c-906a-a2013c35a528",
+      "copyLogoId": "crm-legacy-logo:7ee39632-74ea-4fee-a3cb-c028e87cecfc:0f2c2057-5aae-434c-906a-a2013c35a528"
+    },
+    {
+      "parentTable": "formal_proposals",
+      "parentId": "a82d85a1-3c79-4a3a-a426-ee2e3ed1ce11",
+      "field": "issuer_logo_id",
+      "tenantId": "7ee39632-74ea-4fee-a3cb-c028e87cecfc",
+      "sourceLogoId": "4f64c340-57c5-40d0-8a09-63a18e245c17",
+      "copyLogoId": "crm-legacy-logo:7ee39632-74ea-4fee-a3cb-c028e87cecfc:4f64c340-57c5-40d0-8a09-63a18e245c17"
+    },
+    {
+      "parentTable": "formal_proposals",
+      "parentId": "ab880cca-7e97-4bda-b934-406806ed064c",
+      "field": "issuer_logo_id",
+      "tenantId": "7ee39632-74ea-4fee-a3cb-c028e87cecfc",
+      "sourceLogoId": "0f2c2057-5aae-434c-906a-a2013c35a528",
+      "copyLogoId": "crm-legacy-logo:7ee39632-74ea-4fee-a3cb-c028e87cecfc:0f2c2057-5aae-434c-906a-a2013c35a528"
+    },
+    {
+      "parentTable": "formal_proposals",
+      "parentId": "adb004c8-78ae-4255-8b88-b92373f16d93",
+      "field": "issuer_logo_id",
+      "tenantId": "7ee39632-74ea-4fee-a3cb-c028e87cecfc",
+      "sourceLogoId": "bc7674ce-d1a7-42ed-abcc-f2f079bf34de",
+      "copyLogoId": "crm-legacy-logo:7ee39632-74ea-4fee-a3cb-c028e87cecfc:bc7674ce-d1a7-42ed-abcc-f2f079bf34de"
+    },
+    {
+      "parentTable": "formal_proposals",
+      "parentId": "ae81c1be-0720-4b13-b1ca-ea9a6a754f87",
+      "field": "client_logo_id",
+      "tenantId": "7ee39632-74ea-4fee-a3cb-c028e87cecfc",
+      "sourceLogoId": "818ff950-f764-4441-8a50-0ebd7ff8485a",
+      "copyLogoId": "crm-legacy-logo:7ee39632-74ea-4fee-a3cb-c028e87cecfc:818ff950-f764-4441-8a50-0ebd7ff8485a"
+    },
+    {
+      "parentTable": "formal_proposals",
+      "parentId": "ae81c1be-0720-4b13-b1ca-ea9a6a754f87",
+      "field": "issuer_logo_id",
+      "tenantId": "7ee39632-74ea-4fee-a3cb-c028e87cecfc",
+      "sourceLogoId": "bc7674ce-d1a7-42ed-abcc-f2f079bf34de",
+      "copyLogoId": "crm-legacy-logo:7ee39632-74ea-4fee-a3cb-c028e87cecfc:bc7674ce-d1a7-42ed-abcc-f2f079bf34de"
+    },
+    {
+      "parentTable": "formal_proposals",
+      "parentId": "b34d173a-3d06-4d56-92f4-0fe1281f72af",
+      "field": "issuer_logo_id",
+      "tenantId": "7ee39632-74ea-4fee-a3cb-c028e87cecfc",
+      "sourceLogoId": "347c244d-04bd-4a73-92f6-dd85c5bf2ed7",
+      "copyLogoId": "crm-legacy-logo:7ee39632-74ea-4fee-a3cb-c028e87cecfc:347c244d-04bd-4a73-92f6-dd85c5bf2ed7"
+    },
+    {
+      "parentTable": "formal_proposals",
+      "parentId": "b4c93726-5abb-4ef1-9929-e0b30a65299b",
+      "field": "client_logo_id",
+      "tenantId": "7ee39632-74ea-4fee-a3cb-c028e87cecfc",
+      "sourceLogoId": "e237f09e-0ae6-402f-9b6d-ad1e56d790cb",
+      "copyLogoId": "crm-legacy-logo:7ee39632-74ea-4fee-a3cb-c028e87cecfc:e237f09e-0ae6-402f-9b6d-ad1e56d790cb"
+    },
+    {
+      "parentTable": "formal_proposals",
+      "parentId": "b4c93726-5abb-4ef1-9929-e0b30a65299b",
+      "field": "issuer_logo_id",
+      "tenantId": "7ee39632-74ea-4fee-a3cb-c028e87cecfc",
+      "sourceLogoId": "0f2c2057-5aae-434c-906a-a2013c35a528",
+      "copyLogoId": "crm-legacy-logo:7ee39632-74ea-4fee-a3cb-c028e87cecfc:0f2c2057-5aae-434c-906a-a2013c35a528"
+    },
+    {
+      "parentTable": "formal_proposals",
+      "parentId": "b63262b4-6e99-456b-a1b4-210c1f9ef2aa",
+      "field": "client_logo_id",
+      "tenantId": "7ee39632-74ea-4fee-a3cb-c028e87cecfc",
+      "sourceLogoId": "24db1f00-e2d3-44f0-804d-a5c471be4ee4",
+      "copyLogoId": "crm-legacy-logo:7ee39632-74ea-4fee-a3cb-c028e87cecfc:24db1f00-e2d3-44f0-804d-a5c471be4ee4"
+    },
+    {
+      "parentTable": "formal_proposals",
+      "parentId": "b63262b4-6e99-456b-a1b4-210c1f9ef2aa",
+      "field": "issuer_logo_id",
+      "tenantId": "7ee39632-74ea-4fee-a3cb-c028e87cecfc",
+      "sourceLogoId": "0f2c2057-5aae-434c-906a-a2013c35a528",
+      "copyLogoId": "crm-legacy-logo:7ee39632-74ea-4fee-a3cb-c028e87cecfc:0f2c2057-5aae-434c-906a-a2013c35a528"
+    },
+    {
+      "parentTable": "formal_proposals",
+      "parentId": "b9911664-2575-435c-ae99-1fd0b81a536e",
+      "field": "issuer_logo_id",
+      "tenantId": "7ee39632-74ea-4fee-a3cb-c028e87cecfc",
+      "sourceLogoId": "0f2c2057-5aae-434c-906a-a2013c35a528",
+      "copyLogoId": "crm-legacy-logo:7ee39632-74ea-4fee-a3cb-c028e87cecfc:0f2c2057-5aae-434c-906a-a2013c35a528"
+    },
+    {
+      "parentTable": "formal_proposals",
+      "parentId": "bab68529-bfa6-4127-b195-1fdcfee733a7",
+      "field": "client_logo_id",
+      "tenantId": "7ee39632-74ea-4fee-a3cb-c028e87cecfc",
+      "sourceLogoId": "65bcc8b9-b6bf-4db1-88a6-ac4de81906f6",
+      "copyLogoId": "crm-legacy-logo:7ee39632-74ea-4fee-a3cb-c028e87cecfc:65bcc8b9-b6bf-4db1-88a6-ac4de81906f6"
+    },
+    {
+      "parentTable": "formal_proposals",
+      "parentId": "bab68529-bfa6-4127-b195-1fdcfee733a7",
+      "field": "issuer_logo_id",
+      "tenantId": "7ee39632-74ea-4fee-a3cb-c028e87cecfc",
+      "sourceLogoId": "0f2c2057-5aae-434c-906a-a2013c35a528",
+      "copyLogoId": "crm-legacy-logo:7ee39632-74ea-4fee-a3cb-c028e87cecfc:0f2c2057-5aae-434c-906a-a2013c35a528"
+    },
+    {
+      "parentTable": "formal_proposals",
+      "parentId": "bdb97964-b706-4f6f-a877-80edbbcf798a",
+      "field": "client_logo_id",
+      "tenantId": "7ee39632-74ea-4fee-a3cb-c028e87cecfc",
+      "sourceLogoId": "f1a4e491-ed03-4992-8056-7c8353ec044f",
+      "copyLogoId": "crm-legacy-logo:7ee39632-74ea-4fee-a3cb-c028e87cecfc:f1a4e491-ed03-4992-8056-7c8353ec044f"
+    },
+    {
+      "parentTable": "formal_proposals",
+      "parentId": "bdb97964-b706-4f6f-a877-80edbbcf798a",
+      "field": "issuer_logo_id",
+      "tenantId": "7ee39632-74ea-4fee-a3cb-c028e87cecfc",
+      "sourceLogoId": "0f2c2057-5aae-434c-906a-a2013c35a528",
+      "copyLogoId": "crm-legacy-logo:7ee39632-74ea-4fee-a3cb-c028e87cecfc:0f2c2057-5aae-434c-906a-a2013c35a528"
+    },
+    {
+      "parentTable": "formal_proposals",
+      "parentId": "bed4ea62-4b96-465a-becf-4c3183a99135",
+      "field": "client_logo_id",
+      "tenantId": "7ee39632-74ea-4fee-a3cb-c028e87cecfc",
+      "sourceLogoId": "35e4af9c-c7f8-429d-9061-3219eccc88ee",
+      "copyLogoId": "crm-legacy-logo:7ee39632-74ea-4fee-a3cb-c028e87cecfc:35e4af9c-c7f8-429d-9061-3219eccc88ee"
+    },
+    {
+      "parentTable": "formal_proposals",
+      "parentId": "bed4ea62-4b96-465a-becf-4c3183a99135",
+      "field": "issuer_logo_id",
+      "tenantId": "7ee39632-74ea-4fee-a3cb-c028e87cecfc",
+      "sourceLogoId": "0f2c2057-5aae-434c-906a-a2013c35a528",
+      "copyLogoId": "crm-legacy-logo:7ee39632-74ea-4fee-a3cb-c028e87cecfc:0f2c2057-5aae-434c-906a-a2013c35a528"
+    },
+    {
+      "parentTable": "formal_proposals",
+      "parentId": "c08f9bd2-e4c8-48ae-aabc-1dcd5582962c",
+      "field": "client_logo_id",
+      "tenantId": "7ee39632-74ea-4fee-a3cb-c028e87cecfc",
+      "sourceLogoId": "f740b66a-e31c-4cbf-9f06-9a5165432623",
+      "copyLogoId": "crm-legacy-logo:7ee39632-74ea-4fee-a3cb-c028e87cecfc:f740b66a-e31c-4cbf-9f06-9a5165432623"
+    },
+    {
+      "parentTable": "formal_proposals",
+      "parentId": "c08f9bd2-e4c8-48ae-aabc-1dcd5582962c",
+      "field": "issuer_logo_id",
+      "tenantId": "7ee39632-74ea-4fee-a3cb-c028e87cecfc",
+      "sourceLogoId": "0f2c2057-5aae-434c-906a-a2013c35a528",
+      "copyLogoId": "crm-legacy-logo:7ee39632-74ea-4fee-a3cb-c028e87cecfc:0f2c2057-5aae-434c-906a-a2013c35a528"
+    },
+    {
+      "parentTable": "formal_proposals",
+      "parentId": "c7716d81-b108-4dc4-8fd4-e29e65e21de8",
+      "field": "client_logo_id",
+      "tenantId": "7ee39632-74ea-4fee-a3cb-c028e87cecfc",
+      "sourceLogoId": "533d715d-17ab-467b-97a0-9f3be808228b",
+      "copyLogoId": "crm-legacy-logo:7ee39632-74ea-4fee-a3cb-c028e87cecfc:533d715d-17ab-467b-97a0-9f3be808228b"
+    },
+    {
+      "parentTable": "formal_proposals",
+      "parentId": "c7716d81-b108-4dc4-8fd4-e29e65e21de8",
+      "field": "issuer_logo_id",
+      "tenantId": "7ee39632-74ea-4fee-a3cb-c028e87cecfc",
+      "sourceLogoId": "0f2c2057-5aae-434c-906a-a2013c35a528",
+      "copyLogoId": "crm-legacy-logo:7ee39632-74ea-4fee-a3cb-c028e87cecfc:0f2c2057-5aae-434c-906a-a2013c35a528"
+    },
+    {
+      "parentTable": "formal_proposals",
+      "parentId": "cac59463-6e10-4719-b2e9-06f507b32e47",
+      "field": "client_logo_id",
+      "tenantId": "7ee39632-74ea-4fee-a3cb-c028e87cecfc",
+      "sourceLogoId": "12dfafa6-b49b-4a38-b45e-95cd115bcb0b",
+      "copyLogoId": "crm-legacy-logo:7ee39632-74ea-4fee-a3cb-c028e87cecfc:12dfafa6-b49b-4a38-b45e-95cd115bcb0b"
+    },
+    {
+      "parentTable": "formal_proposals",
+      "parentId": "cac59463-6e10-4719-b2e9-06f507b32e47",
+      "field": "issuer_logo_id",
+      "tenantId": "7ee39632-74ea-4fee-a3cb-c028e87cecfc",
+      "sourceLogoId": "0f2c2057-5aae-434c-906a-a2013c35a528",
+      "copyLogoId": "crm-legacy-logo:7ee39632-74ea-4fee-a3cb-c028e87cecfc:0f2c2057-5aae-434c-906a-a2013c35a528"
+    },
+    {
+      "parentTable": "formal_proposals",
+      "parentId": "ccec2aca-e17d-4ab7-8ed3-30c3db4bdd9e",
+      "field": "client_logo_id",
+      "tenantId": "7ee39632-74ea-4fee-a3cb-c028e87cecfc",
+      "sourceLogoId": "9438f8b0-7460-428f-ab71-3006a7012677",
+      "copyLogoId": "crm-legacy-logo:7ee39632-74ea-4fee-a3cb-c028e87cecfc:9438f8b0-7460-428f-ab71-3006a7012677"
+    },
+    {
+      "parentTable": "formal_proposals",
+      "parentId": "ccec2aca-e17d-4ab7-8ed3-30c3db4bdd9e",
+      "field": "issuer_logo_id",
+      "tenantId": "7ee39632-74ea-4fee-a3cb-c028e87cecfc",
+      "sourceLogoId": "4f64c340-57c5-40d0-8a09-63a18e245c17",
+      "copyLogoId": "crm-legacy-logo:7ee39632-74ea-4fee-a3cb-c028e87cecfc:4f64c340-57c5-40d0-8a09-63a18e245c17"
+    },
+    {
+      "parentTable": "formal_proposals",
+      "parentId": "cd17e20f-742b-427f-8be5-e650bdc1caae",
+      "field": "client_logo_id",
+      "tenantId": "7ee39632-74ea-4fee-a3cb-c028e87cecfc",
+      "sourceLogoId": "17a98a3b-cf6f-4542-a411-a36bfb4cea46",
+      "copyLogoId": "crm-legacy-logo:7ee39632-74ea-4fee-a3cb-c028e87cecfc:17a98a3b-cf6f-4542-a411-a36bfb4cea46"
+    },
+    {
+      "parentTable": "formal_proposals",
+      "parentId": "cd17e20f-742b-427f-8be5-e650bdc1caae",
+      "field": "issuer_logo_id",
+      "tenantId": "7ee39632-74ea-4fee-a3cb-c028e87cecfc",
+      "sourceLogoId": "0f2c2057-5aae-434c-906a-a2013c35a528",
+      "copyLogoId": "crm-legacy-logo:7ee39632-74ea-4fee-a3cb-c028e87cecfc:0f2c2057-5aae-434c-906a-a2013c35a528"
+    },
+    {
+      "parentTable": "formal_proposals",
+      "parentId": "ceba58d3-8059-464e-bb37-63ba253bcc14",
+      "field": "client_logo_id",
+      "tenantId": "7ee39632-74ea-4fee-a3cb-c028e87cecfc",
+      "sourceLogoId": "44e62792-350a-45c4-b041-2095c2a015e8",
+      "copyLogoId": "crm-legacy-logo:7ee39632-74ea-4fee-a3cb-c028e87cecfc:44e62792-350a-45c4-b041-2095c2a015e8"
+    },
+    {
+      "parentTable": "formal_proposals",
+      "parentId": "ceba58d3-8059-464e-bb37-63ba253bcc14",
+      "field": "issuer_logo_id",
+      "tenantId": "7ee39632-74ea-4fee-a3cb-c028e87cecfc",
+      "sourceLogoId": "0f2c2057-5aae-434c-906a-a2013c35a528",
+      "copyLogoId": "crm-legacy-logo:7ee39632-74ea-4fee-a3cb-c028e87cecfc:0f2c2057-5aae-434c-906a-a2013c35a528"
+    },
+    {
+      "parentTable": "formal_proposals",
+      "parentId": "d2922884-2ac0-4599-b295-b99303668e2a",
+      "field": "client_logo_id",
+      "tenantId": "7ee39632-74ea-4fee-a3cb-c028e87cecfc",
+      "sourceLogoId": "741be125-3b36-4b97-aa9b-6d4302c8e5c0",
+      "copyLogoId": "crm-legacy-logo:7ee39632-74ea-4fee-a3cb-c028e87cecfc:741be125-3b36-4b97-aa9b-6d4302c8e5c0"
+    },
+    {
+      "parentTable": "formal_proposals",
+      "parentId": "d2922884-2ac0-4599-b295-b99303668e2a",
+      "field": "issuer_logo_id",
+      "tenantId": "7ee39632-74ea-4fee-a3cb-c028e87cecfc",
+      "sourceLogoId": "0f2c2057-5aae-434c-906a-a2013c35a528",
+      "copyLogoId": "crm-legacy-logo:7ee39632-74ea-4fee-a3cb-c028e87cecfc:0f2c2057-5aae-434c-906a-a2013c35a528"
+    },
+    {
+      "parentTable": "formal_proposals",
+      "parentId": "d6a3747c-0571-4094-ae7f-07ee5ad82a35",
+      "field": "client_logo_id",
+      "tenantId": "7ee39632-74ea-4fee-a3cb-c028e87cecfc",
+      "sourceLogoId": "19e3c64d-099c-4b8d-838c-f6a5e4433d43",
+      "copyLogoId": "crm-legacy-logo:7ee39632-74ea-4fee-a3cb-c028e87cecfc:19e3c64d-099c-4b8d-838c-f6a5e4433d43"
+    },
+    {
+      "parentTable": "formal_proposals",
+      "parentId": "d6a3747c-0571-4094-ae7f-07ee5ad82a35",
+      "field": "issuer_logo_id",
+      "tenantId": "7ee39632-74ea-4fee-a3cb-c028e87cecfc",
+      "sourceLogoId": "4f64c340-57c5-40d0-8a09-63a18e245c17",
+      "copyLogoId": "crm-legacy-logo:7ee39632-74ea-4fee-a3cb-c028e87cecfc:4f64c340-57c5-40d0-8a09-63a18e245c17"
+    },
+    {
+      "parentTable": "formal_proposals",
+      "parentId": "d84c63ca-8f34-4771-815e-94e33d6a57f6",
+      "field": "client_logo_id",
+      "tenantId": "7ee39632-74ea-4fee-a3cb-c028e87cecfc",
+      "sourceLogoId": "bb53483c-93c2-4a8c-b249-ddaabc78181f",
+      "copyLogoId": "crm-legacy-logo:7ee39632-74ea-4fee-a3cb-c028e87cecfc:bb53483c-93c2-4a8c-b249-ddaabc78181f"
+    },
+    {
+      "parentTable": "formal_proposals",
+      "parentId": "d84c63ca-8f34-4771-815e-94e33d6a57f6",
+      "field": "issuer_logo_id",
+      "tenantId": "7ee39632-74ea-4fee-a3cb-c028e87cecfc",
+      "sourceLogoId": "0f2c2057-5aae-434c-906a-a2013c35a528",
+      "copyLogoId": "crm-legacy-logo:7ee39632-74ea-4fee-a3cb-c028e87cecfc:0f2c2057-5aae-434c-906a-a2013c35a528"
+    },
+    {
+      "parentTable": "formal_proposals",
+      "parentId": "da3a93a6-c559-4d1a-91bc-e84df8f11d45",
+      "field": "issuer_logo_id",
+      "tenantId": "7ee39632-74ea-4fee-a3cb-c028e87cecfc",
+      "sourceLogoId": "0f2c2057-5aae-434c-906a-a2013c35a528",
+      "copyLogoId": "crm-legacy-logo:7ee39632-74ea-4fee-a3cb-c028e87cecfc:0f2c2057-5aae-434c-906a-a2013c35a528"
+    },
+    {
+      "parentTable": "formal_proposals",
+      "parentId": "dd203a16-e021-4884-964d-def3824ffa41",
+      "field": "issuer_logo_id",
+      "tenantId": "7ee39632-74ea-4fee-a3cb-c028e87cecfc",
+      "sourceLogoId": "bc7674ce-d1a7-42ed-abcc-f2f079bf34de",
+      "copyLogoId": "crm-legacy-logo:7ee39632-74ea-4fee-a3cb-c028e87cecfc:bc7674ce-d1a7-42ed-abcc-f2f079bf34de"
+    },
+    {
+      "parentTable": "formal_proposals",
+      "parentId": "ddd6b9c6-91cd-4c8c-bae7-b95e98be15ab",
+      "field": "issuer_logo_id",
+      "tenantId": "b0e92d15-2e87-4c1a-93ac-3399bf8fe515",
+      "sourceLogoId": "52e3d239-9e0b-4789-ad87-86d4a357e8d6",
+      "copyLogoId": "crm-legacy-logo:b0e92d15-2e87-4c1a-93ac-3399bf8fe515:52e3d239-9e0b-4789-ad87-86d4a357e8d6"
+    },
+    {
+      "parentTable": "formal_proposals",
+      "parentId": "e29369da-0bdc-4a83-9f47-eb6dbddc9afb",
+      "field": "client_logo_id",
+      "tenantId": "7ee39632-74ea-4fee-a3cb-c028e87cecfc",
+      "sourceLogoId": "47a6f43c-4fcd-4800-8c5d-62661745fe81",
+      "copyLogoId": "crm-legacy-logo:7ee39632-74ea-4fee-a3cb-c028e87cecfc:47a6f43c-4fcd-4800-8c5d-62661745fe81"
+    },
+    {
+      "parentTable": "formal_proposals",
+      "parentId": "e29369da-0bdc-4a83-9f47-eb6dbddc9afb",
+      "field": "issuer_logo_id",
+      "tenantId": "7ee39632-74ea-4fee-a3cb-c028e87cecfc",
+      "sourceLogoId": "4f64c340-57c5-40d0-8a09-63a18e245c17",
+      "copyLogoId": "crm-legacy-logo:7ee39632-74ea-4fee-a3cb-c028e87cecfc:4f64c340-57c5-40d0-8a09-63a18e245c17"
+    },
+    {
+      "parentTable": "formal_proposals",
+      "parentId": "ee0675dc-b843-4a53-b084-4b75ee8637b2",
+      "field": "issuer_logo_id",
+      "tenantId": "389b6cc1-2f8d-4fe4-bc3d-f50f92df3157",
+      "sourceLogoId": "0f2c2057-5aae-434c-906a-a2013c35a528",
+      "copyLogoId": "crm-legacy-logo:389b6cc1-2f8d-4fe4-bc3d-f50f92df3157:0f2c2057-5aae-434c-906a-a2013c35a528"
+    },
+    {
+      "parentTable": "formal_proposals",
+      "parentId": "f92ef348-76ae-4ee0-b25a-cd1532a20ee7",
+      "field": "issuer_logo_id",
+      "tenantId": "7ee39632-74ea-4fee-a3cb-c028e87cecfc",
+      "sourceLogoId": "bc7674ce-d1a7-42ed-abcc-f2f079bf34de",
+      "copyLogoId": "crm-legacy-logo:7ee39632-74ea-4fee-a3cb-c028e87cecfc:bc7674ce-d1a7-42ed-abcc-f2f079bf34de"
+    },
+    {
+      "parentTable": "formal_proposals",
+      "parentId": "fe82e4ed-5037-4969-94de-dffcc4a40597",
+      "field": "issuer_logo_id",
+      "tenantId": "b0e92d15-2e87-4c1a-93ac-3399bf8fe515",
+      "sourceLogoId": "52e3d239-9e0b-4789-ad87-86d4a357e8d6",
+      "copyLogoId": "crm-legacy-logo:b0e92d15-2e87-4c1a-93ac-3399bf8fe515:52e3d239-9e0b-4789-ad87-86d4a357e8d6"
+    }
+  ]
+}

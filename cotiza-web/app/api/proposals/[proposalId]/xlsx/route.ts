@@ -4,6 +4,7 @@ import * as XLSX from "xlsx";
 import { getCurrentTenantContext } from "@/lib/auth/tenant-context";
 import {
   consumeProposalIssuanceForce,
+  isProposalVisibleToViewer,
   getProposalExcelPayloadByTenant,
   importProposalItemsByTenant,
 } from "@/lib/db/proposals";
@@ -102,6 +103,10 @@ export async function GET(request: Request, context: RouteContext) {
   }
 
   const { proposalId } = await context.params;
+  const canSeeAll = tenant.isSuperAdmin || tenant.userRole === "owner" || tenant.userRole === "admin";
+  if (!await isProposalVisibleToViewer(tenant.id, proposalId, tenant.userId, canSeeAll)) {
+    return NextResponse.json({ error: "Propuesta no encontrada" }, { status: 404 });
+  }
   const rateLimit = enforceRateLimit(`xlsx:download:${tenant.id}:${proposalId}`, 30, 60_000);
 
   if (!rateLimit.allowed) {
@@ -202,6 +207,10 @@ export async function POST(request: Request, context: RouteContext) {
   }
 
   const { proposalId } = await context.params;
+  const canSeeAll = tenant.isSuperAdmin || tenant.userRole === "owner" || tenant.userRole === "admin";
+  if (!await isProposalVisibleToViewer(tenant.id, proposalId, tenant.userId, canSeeAll)) {
+    return NextResponse.json({ error: "Propuesta no encontrada" }, { status: 404 });
+  }
   const identity = getRequestIdentity(request, tenant.userId ?? tenant.id);
   const rateLimit = enforceRateLimit(`xlsx:upload:${tenant.id}:${proposalId}:${identity}`, 10, 60_000);
 

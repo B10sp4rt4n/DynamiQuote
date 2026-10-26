@@ -1,0 +1,85 @@
+Disposable database ready on loopback; schema and multitenant constraints applied.
+(!) Your Vite config uses features that are unsupported by `configLoader: 'native'`, which is planned to become the default in a future major version of Vite:
+  - ESM syntax in a file loaded as CommonJS (vitest.config.ts:1:1). Use a `.mjs` extension or set `"type": "module"` in the closest package.json
+Set `VITE_CONFIG_NATIVE_IGNORE_WARNING=true` to suppress this warning.
+
+ RUN  v4.1.12 /workspace/scratch/ea48e1405215/crm-fiscal-compat/cotiza-web
+
+ ✓ lib/db/opportunity-lifecycle.integration.test.ts > commercial dates against disposable Postgres > records the decision separately from creation and internal approval; retry is idempotent 60ms
+ ✓ lib/db/opportunity-lifecycle.integration.test.ts > commercial dates against disposable Postgres > rejects a foreign tenant and another seller without changing the date 8ms
+ ✓ lib/db/opportunity-lifecycle.integration.test.ts > commercial dates against disposable Postgres > keeps corrections in audit, and reopening clears the close without resetting the opportunity start 68ms
+ ✓ lib/db/opportunity-lifecycle.integration.test.ts > commercial dates against disposable Postgres > does not backfill historical decisions, including when the same outcome is repeated 17ms
+ ✓ lib/db/opportunity-lifecycle.integration.test.ts > commercial dates against disposable Postgres > attributes old proposals to the CDMX closing month, using only active items and authorized tenant/seller 19ms
+ ✓ lib/db/opportunity-lifecycle.integration.test.ts > commercial dates against disposable Postgres > keeps one opportunity clock across proposals and treats an undated winning version conservatively 35ms
+ ✓ lib/db/opportunity-lifecycle.integration.test.ts > commercial dates against disposable Postgres > reconciles undated amounts across items, ignores discarded/deleted data and preserves tenant/seller scope 32ms
+ ✓ lib/db/opportunity-lifecycle.integration.test.ts > commercial dates against disposable Postgres > tags only existing undated decisions once, restores creation months and prioritizes real closes after reopening 76ms
+ ✓ lib/db/opportunity-lifecycle.integration.test.ts > commercial dates against disposable Postgres > moves a historical win to a chosen close month, preserving totals, audit and creation 31ms
+ ✓ lib/db/opportunity-lifecycle.integration.test.ts > commercial dates against disposable Postgres > validates dates and tenant/seller access, and allows closure after opportunity start but before the document was created 60ms
+ ✓ lib/db/opportunity-lifecycle.integration.test.ts > commercial dates against disposable Postgres > records a linked, hash-verifiable contract for decisions, date corrections and reopening 19ms
+stdout | lib/db/opportunity-lifecycle.integration.test.ts > commercial dates against disposable Postgres > rolls back a decision when audit persistence fails, preserving the prior state
+prisma:error 
+Invalid `tx.proposal_audit_events.create()` invocation in
+/workspace/scratch/ea48e1405215/crm-fiscal-compat/cotiza-web/lib/db/commercial-acts.ts:45:34
+
+  42 }
+  43 const eventId = randomUUID();
+  44 const payload = { ...input.legacyPayload, commercialAct: buildCommercialAct({ ...input, eventId, previous }) };
+→ 45 await tx.proposal_audit_events.create(
+Database error. Code: `P0001`. Message: `fixture audit failure`
+
+stdout | lib/db/opportunity-lifecycle.integration.test.ts > commercial dates against disposable Postgres > rolls back a decision when audit persistence fails, preserving the prior state
+prisma:error 
+Invalid `tx.proposal_audit_events.create()` invocation in
+/workspace/scratch/ea48e1405215/crm-fiscal-compat/cotiza-web/lib/db/commercial-acts.ts:45:34
+
+  42 }
+  43 const eventId = randomUUID();
+  44 const payload = { ...input.legacyPayload, commercialAct: buildCommercialAct({ ...input, eventId, previous }) };
+→ 45 await tx.proposal_audit_events.create(
+Database error. Code: `P0001`. Message: `fixture audit failure`
+
+ ✓ lib/db/opportunity-lifecycle.integration.test.ts > commercial dates against disposable Postgres > rolls back a decision when audit persistence fails, preserving the prior state 57ms
+ ✓ lib/db/opportunity-lifecycle.integration.test.ts > commercial dates against disposable Postgres > detects modified recorded content and refuses to extend a damaged commercial history 14ms
+ ✓ lib/db/opportunity-lifecycle.integration.test.ts > commercial dates against disposable Postgres > serializes concurrent retries into one decision and one recorded act 13ms
+ ✓ lib/db/crm-isolation.integration.test.ts > CRM workflow and authorization against disposable PostgreSQL > creates each client under its authenticated company, ignoring a supplied tenant 40ms
+ ✓ lib/db/crm-isolation.integration.test.ts > CRM workflow and authorization against disposable PostgreSQL > creates a quotation and opportunity in each company 43ms
+ ✓ lib/db/crm-isolation.integration.test.ts > CRM workflow and authorization against disposable PostgreSQL > rejects a foreign client before saving a quotation or opportunity 13ms
+ ✓ lib/db/crm-isolation.integration.test.ts > CRM workflow and authorization against disposable PostgreSQL > saves the first edited line through PUT on a newly created free-text quotation 72ms
+ ✓ lib/db/crm-isolation.integration.test.ts > CRM workflow and authorization against disposable PostgreSQL > rejects generating a proposal from another seller's quotation without writes 4ms
+ ✓ lib/db/crm-isolation.integration.test.ts > CRM workflow and authorization against disposable PostgreSQL > preserves the opportunity across quote version and proposal, and replays proposal creation 78ms
+ ✓ lib/db/crm-isolation.integration.test.ts > CRM workflow and authorization against disposable PostgreSQL > denies a foreign tenant and another seller, while allowing the seller and owner 65ms
+ ✓ lib/db/crm-isolation.integration.test.ts > CRM workflow and authorization against disposable PostgreSQL > keeps the client 360 opportunity history within the same seller scope as Pipeline 11ms
+ ✓ lib/db/crm-isolation.integration.test.ts > CRM workflow and authorization against disposable PostgreSQL > does not disclose another seller's opportunity through the task selector API 6ms
+ ✓ lib/db/crm-isolation.integration.test.ts > CRM workflow and authorization against disposable PostgreSQL > rejects a forged task link to a colleague's opportunity without writing 11ms
+ ✓ lib/db/crm-isolation.integration.test.ts > CRM workflow and authorization against disposable PostgreSQL > rejects proposals from a foreign company and context forgery 7ms
+ ✓ lib/db/crm-isolation.integration.test.ts > CRM workflow and authorization against disposable PostgreSQL > creates follow-up for the same client and opportunity, rejecting crossed parents 16ms
+ ✓ lib/db/crm-isolation.integration.test.ts > CRM workflow and authorization against disposable PostgreSQL > blocks unauthorized task completion without modifying it, then lets its creator complete it 9ms
+ ✓ lib/db/crm-isolation.integration.test.ts > CRM workflow and authorization against disposable PostgreSQL > closes and reopens the proposal without resetting the opportunity or mixing KPIs 107ms
+ ✓ lib/db/crm-isolation.integration.test.ts > CRM workflow and authorization against disposable PostgreSQL > lets an owner generate a proposal but does not expose that existing proposal to another seller through replay 29ms
+ ✓ lib/db/crm-isolation.integration.test.ts > CRM workflow and authorization against disposable PostgreSQL > rejects API access with no authenticated context 0ms
+ ✓ lib/db/crm-isolation.integration.test.ts > CRM workflow and authorization against disposable PostgreSQL > allows owner follow-up on another seller's opportunity 7ms
+ ✓ lib/db/crm-isolation.integration.test.ts > CRM workflow and authorization against disposable PostgreSQL > does not delete another tenant's search entry when quotation folios coincide 18ms
+ ✓ lib/db/crm-isolation.integration.test.ts > CRM workflow and authorization against disposable PostgreSQL > keeps deal notes private while allowing shared client notes 33ms
+ ✓ lib/db/crm-isolation.integration.test.ts > CRM workflow and authorization against disposable PostgreSQL > limits note deletion to its author or owner and the addressed client 7ms
+ ✓ lib/db/crm-isolation.integration.test.ts > CRM workflow and authorization against disposable PostgreSQL > does not bind a global issuer profile to a new tenant proposal 19ms
+ ✓ lib/db/crm-isolation.integration.test.ts > CRM workflow and authorization against disposable PostgreSQL > never renders issuer or client image bytes from unassigned global profiles 36ms
+ ✓ lib/db/crm-isolation.integration.test.ts > CRM workflow and authorization against disposable PostgreSQL > retains tenant logos and refuses explicit logo IDs from another tenant 37ms
+ ✓ lib/db/crm-isolation.integration.test.ts > CRM workflow and authorization against disposable PostgreSQL > selects a safe issuer for a new proposal: historical 52ms
+ ✓ lib/db/crm-isolation.integration.test.ts > CRM workflow and authorization against disposable PostgreSQL > selects a safe issuer for a new proposal: designated 49ms
+ ✓ lib/db/crm-isolation.integration.test.ts > CRM workflow and authorization against disposable PostgreSQL > selects a safe issuer for a new proposal: regular 45ms
+ ✓ lib/db/proposal-invoices.integration.test.ts > Invoice safety against disposable PostgreSQL; fiscal provider simulated > reserves once before the provider call; a concurrent request cannot issue again 50ms
+ ✓ lib/db/proposal-invoices.integration.test.ts > Invoice safety against disposable PostgreSQL; fiscal provider simulated > keeps a timeout reserved and reconciles the original result without another stamp 15ms
+ ✓ lib/db/proposal-invoices.integration.test.ts > Invoice safety against disposable PostgreSQL; fiscal provider simulated > does not reopen an unresolved unknown result 9ms
+ ✓ lib/db/proposal-invoices.integration.test.ts > Invoice safety against disposable PostgreSQL; fiscal provider simulated > does not reopen an unresolved processing result 8ms
+ ✓ lib/db/proposal-invoices.integration.test.ts > Invoice safety against disposable PostgreSQL; fiscal provider simulated > allows correction only after a confirmed rejection, preserving the original claim until then 29ms
+ ✓ lib/db/proposal-invoices.integration.test.ts > Invoice safety against disposable PostgreSQL; fiscal provider simulated > hides reconciliation from a peer seller and from a foreign tenant 10ms
+ ✓ lib/db/proposal-invoices.integration.test.ts > Invoice safety against disposable PostgreSQL; fiscal provider simulated > rejects a stale tenant or draft identifier before updating fiscal state 7ms
+ ✓ lib/db/proposal-invoices.integration.test.ts > Invoice safety against disposable PostgreSQL; fiscal provider simulated > preserves existing fiscal evidence even with an inconsistent draft status: {"invoice_uuid":"historic-uuid"} 22ms
+ ✓ lib/db/proposal-invoices.integration.test.ts > Invoice safety against disposable PostgreSQL; fiscal provider simulated > preserves existing fiscal evidence even with an inconsistent draft status: {"invoice_xml_base64":"historic-xml"} 14ms
+ ✓ lib/db/proposal-invoices.integration.test.ts > Invoice safety against disposable PostgreSQL; fiscal provider simulated > preserves existing fiscal evidence even with an inconsistent draft status: {"invoice_stamped_at":"2026-01-01T00:00:00.000Z"} 15ms
+
+ Test Files  3 passed (3)
+      Tests  50 passed (50)
+   Start at  13:40:21
+   Duration  3.12s (transform 411ms, setup 0ms, import 196ms, tests 2.50s, environment 0ms)
+

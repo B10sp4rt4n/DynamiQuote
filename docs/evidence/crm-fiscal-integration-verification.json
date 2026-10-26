@@ -1,0 +1,195 @@
+{
+  "schema_version": 1,
+  "recorded_at": "2026-10-23T15:18:24.842Z",
+  "status": "historical_checkpoint_validated_preview_ready_browser_unverified",
+  "working_access": {
+    "user_supplied_url": "https://dynami-quote.vercel.app/cotizaciones",
+    "verified_deployment": "dpl_GvKryAuSHx1QQe22MNAUymSiUKwG",
+    "target": "production",
+    "branch": "main",
+    "sha": "55760ab4c4fa45ddf2c0f940694441ee129aefc6",
+    "correction": "User clarified that this URL is the one in use. Earlier conversational inference that Salvador works in Railway is withdrawn; it was never verified."
+  },
+  "candidate": {
+    "remote_sha": "f3683dc83a7e901fd9fe77f2abb048e047c6ff23",
+    "local_equivalent_sha": "48898988f68e383646bf48a1169270d9cf9621da",
+    "tree": "2870832362f0d46534f98f4fdc11a09b9a8b669b",
+    "branch": "fix/multitenant-foundation",
+    "preview_deployment": "dpl_GFj6zx5txLzNMbHtNAXXo9NCZWJF",
+    "preview_origin": "https://dynami-quote-ocsl5f4rz-salvador-ruiz-esparzas-projects.vercel.app",
+    "isolated_neon_branch": "br-old-pond-ahe5jto3",
+    "production_promoted": false,
+    "preview_state": "READY",
+    "authenticated_browser_check": "not verified: browser tool timed out opening the new preview; no login outcome or app failure inferred",
+    "current_branch_has_later_changes": true
+  },
+  "provenance": {
+    "cotiza_fiscal_pr": "https://github.com/B10sp4rt4n/DynamiQuote/pull/5",
+    "cotiza_fiscal_head": "3a09ccb2e8817e63bc85070d78f5ecd21ad642d9",
+    "cotiza_pr_state": "open draft; not merged or closed by this work",
+    "digestor_pr": "https://github.com/B10sp4rt4n/digestor__fiscal/pull/2",
+    "digestor_head": "a6cc68f9526570171bc6c8ea1a5774f9d4335d4d",
+    "digestor_pr_state": "open draft; deployment compatibility not verified",
+    "dependency": "Validate and deploy compatible Digestor first; then approve CRM production cutover. Do not merge the original Cotiza PR separately without reconciling duplicated changes."
+  },
+  "changes": [
+    "Integrated compare-and-set reservation and local stamping status; same tenant/proposal/draft required for transitions.",
+    "Network/ambiguous result holds reservation; read persisted Digestor stamp result via GET, never another stamp during reconciliation.",
+    "Reconciliation applies same tenant and seller visibility gate as invoice endpoints.",
+    "Server and atomic updates reject replacement/clearing of existing UUID, XML or stamped timestamp, even with inconsistent historical status.",
+    "UI offers Consultar estado (sin timbrar) and keeps uncertain invoices blocked.",
+    "No invoice audit AUP contract added; commercial AUP remains local_only under existing contract."
+  ],
+  "verification": {
+    "general": {
+      "passed": 543,
+      "skipped": 2,
+      "files": 57,
+      "failed": 0
+    },
+    "database": {
+      "passed": 50,
+      "files": 3,
+      "previous_cases": 40,
+      "new_invoice_cases": 10,
+      "target": "disposable loopback PostgreSQL/PGlite",
+      "fiscal_provider": "mocked"
+    },
+    "http": {
+      "checks": 14,
+      "closed": 12,
+      "resumed": 2,
+      "new_route": "POST /api/proposals/qa/invoice/reconcile => 503 under paused",
+      "target": "loopback; Clerk disabled; database unreachable placeholder"
+    },
+    "typescript": "passed",
+    "eslint_changed_files": "passed",
+    "local_build": "next build --webpack passed; existing shared dependencies; no clean install; no usable service credentials",
+    "recovery": {
+      "verified_files": 411,
+      "source_only": true,
+      "build_or_database_backup_included": false,
+      "historical_checkpoint_only": true,
+      "approved_production_fallback": false
+    },
+    "static_writer_routes": 39
+  },
+  "readonly_invoice_audit": {
+    "sql": "scripts/audit_invoice_rollout.sql",
+    "production_branch": "br-quiet-morning-ahkomhhi",
+    "production": {
+      "columns": [
+        {
+          "name": "invoice_draft_id",
+          "type": "text"
+        },
+        {
+          "name": "invoice_stamped_at",
+          "type": "timestamp without time zone"
+        },
+        {
+          "name": "invoice_status",
+          "type": "text"
+        },
+        {
+          "name": "invoice_uuid",
+          "type": "text"
+        },
+        {
+          "name": "invoice_xml_base64",
+          "type": "text"
+        }
+      ],
+      "state_counts": [
+        {
+          "count": 205,
+          "status": null
+        },
+        {
+          "count": 1,
+          "status": "stamped"
+        }
+      ],
+      "unknown_status_count": 0,
+      "pending_stamping_count": 0,
+      "status_check_constraints": [],
+      "stamped_missing_uuid_or_xml": 0,
+      "evidence_without_stamped_status": 0
+    },
+    "copy_branch": "br-old-pond-ahe5jto3",
+    "copy": {
+      "columns": [
+        {
+          "name": "invoice_draft_id",
+          "type": "text"
+        },
+        {
+          "name": "invoice_stamped_at",
+          "type": "timestamp without time zone"
+        },
+        {
+          "name": "invoice_status",
+          "type": "text"
+        },
+        {
+          "name": "invoice_uuid",
+          "type": "text"
+        },
+        {
+          "name": "invoice_xml_base64",
+          "type": "text"
+        }
+      ],
+      "state_counts": [
+        {
+          "count": 207,
+          "status": null
+        },
+        {
+          "count": 1,
+          "status": "stamped"
+        }
+      ],
+      "unknown_status_count": 0,
+      "pending_stamping_count": 0,
+      "status_check_constraints": [],
+      "stamped_missing_uuid_or_xml": 0,
+      "evidence_without_stamped_status": 0
+    },
+    "interpretation": "invoice_status is text with no matching CHECK constraints; supports stamping without a schema migration. One existing stamped row has nonempty UUID/XML. No unknown state, pending stamping or evidence/status mismatch observed. Counts do not verify commercial truth or XML signature; repeat during cutover.",
+    "observation_time": "Snapshot collected before browser timeout; not a current-data guarantee."
+  },
+  "attempts_and_limits": [
+    "First complete unit invocation included the pre-existing live-database E2E fixture; it failed at import due to absent DATABASE_URL, before setup or writes. Final command explicitly excludes this live fixture and opt-in DB suites, run separately on loopback.",
+    "Initial HTTP rehearsal in a detached worktree failed because Turbopack rejects a node_modules symlink outside its root. Repeated successfully in canonical checkout; no app config workaround.",
+    "Two existing optional tests remain skipped; backend Digestor PR tests/deployment not certified here.",
+    "No real stamp, mail, invitation, production migration or service stop/redeploy performed. No Railway variable edit. Vercel production remains main baseline."
+  ],
+  "remaining_gates": [
+    "Validate and deploy compatible Digestor before enabling reconciliation in production.",
+    "Approve real launch operators and verify only their exact Clerk IDs/logins/roles; keep identified test pending/legacy accounts excluded, unlinked and without invitations, per newer runbook.",
+    "Confirm remaining Railway consumers and external writers; approve independent stop/drain during cutover.",
+    "Database backup/recovery point and preflight under controlled write window.",
+    "Production smoke checks and final cutover approval."
+  ],
+  "pre_browser_timeout_recorded_at": "2026-10-23T05:55:15.029Z",
+  "concurrent_updates": {
+    "remote_head": "a0bc4b1f0d5a9e64aaa4d45ff1596cce77e724d0",
+    "source_tree": "988780696e3e0c3f03b6cc489e7b890464ddf475",
+    "commits_after_tested_checkpoint": 17,
+    "preserved_without_reverting": true,
+    "ci": {
+      "url": "https://github.com/B10sp4rt4n/DynamiQuote/actions/runs/39969779692",
+      "status": "completed",
+      "conclusion": "success",
+      "head_sha": "a0bc4b1f0d5a9e64aaa4d45ff1596cce77e724d0"
+    },
+    "limit": "543/50 local results apply only to f3683dc8. The newer branch has its own CI; no claim of our independent execution of those newer tests."
+  },
+  "evidence_sha256": {
+    "crm-fiscal-build.log": "caab103449566d456adf068946bd3947addb23d016cf0dccc1e1da066f3e1003",
+    "crm-fiscal-db-integration.log": "196beefe091893f35ec0f810639bd377043c0c41c53744266978beff9777c554",
+    "crm-fiscal-maintenance-http.json": "f4772c23158693d3b324d7b7f8431120c92ae43136948cd0541a68b9a5db3b5f",
+    "crm-fiscal-recovery-source-manifest.json": "340bdb542dd33ef2ddd97ef41a02eb9f2e12d0f16f45a494b2801988d887fb10"
+  }
+}

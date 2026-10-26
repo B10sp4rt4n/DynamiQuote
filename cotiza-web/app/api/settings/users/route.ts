@@ -5,11 +5,8 @@ import { getCurrentTenantContext } from "@/lib/auth/tenant-context";
 import { hasClerkCredentials } from "@/lib/auth/clerk";
 import {
   createManagedUserByTenant,
-  deleteManagedUserByTenant,
   getAppUsersByTenant,
   getAppUsersForSuperAdmin,
-  relinkManagedUserIdByTenant,
-  updateManagedUserByTenant,
 } from "@/lib/db/settings";
 import { prisma } from "@/lib/db/prisma";
 import { createManagedUserSchema } from "@/lib/validations/users";
@@ -68,10 +65,30 @@ export async function GET() {
     ? await getAppUsersForSuperAdmin()
     : await getAppUsersByTenant(tenant.id);
 
+  // Only tenant managers may access coworkers' personal/contact data.
+  // Ordinary sellers retain an active, minimal directory for assignments,
+  // plus their own complete record. Never use this endpoint to change membership.
+  const canManageUsers = tenant.isSuperAdmin || tenant.userRole === "owner" || tenant.userRole === "admin";
+  const visibleUsers = canManageUsers
+    ? users
+    : users
+      .filter((user) => user.active || user.userId === tenant.userId)
+      .map((user) => user.userId === tenant.userId ? user : ({
+        active: user.active,
+        alias: user.alias,
+        firstName: user.firstName,
+        lastName: user.lastName,
+        role: user.role,
+        sellerCode: user.sellerCode,
+        tenantId: user.tenantId,
+        tenantName: user.tenantName,
+        userId: user.userId,
+      }));
+
   return NextResponse.json({
     canManageAllTenants: tenant.isSuperAdmin,
-    users,
-  });
+    users: visibleUsers,
+  }, { headers: { "Cache-Control": "private, no-store" } });
 }
 
 export async function POST(request: Request) {
@@ -130,6 +147,39 @@ export async function POST(request: Request) {
   const assignedRole = requestedRole;
   const normalizedEmail = parsed.data.email.trim().toLowerCase();
   const adminProvidedUserId = parsed.data.userId?.trim() || null;
+  // Existing identities require an explicit, verified Clerk ID selected by a
+  // superadmin. An email match is a conflict, never permission to move an account.
+  let identityClient: Awaited<ReturnType<typeof clerkClient>> | null = null;
+  if (adminProvidedUserId && !tenant.isSuperAdmin) {
+    return NextResponse.json({ error: "Solo superadmin puede vincular un ID existente" }, { status: 403 });
+  }
+  if (adminProvidedUserId && !isClerkUserId(adminProvidedUserId)) {
+    return NextResponse.json({ error: "Se requiere un ID Clerk exacto" }, { status: 422 });
+  }
+  if (adminProvidedUserId && !hasClerkCredentials()) {
+    return NextResponse.json({ error: "No es posible verificar la identidad en Clerk" }, { status: 503 });
+  }
+  if (hasClerkCredentials()) {
+    try {
+      identityClient = await clerkClient();
+      if (adminProvidedUserId) {
+        const identity = await identityClient.users.getUser(adminProvidedUserId);
+        const verifiedEmail = identity.emailAddresses.some((email) =>
+          email.emailAddress.trim().toLowerCase() === normalizedEmail && email.verification?.status === "verified",
+        );
+        if (identity.id !== adminProvidedUserId || !verifiedEmail || identity.banned || identity.locked) {
+          return NextResponse.json({ error: "El ID no tiene el correo verificado indicado o no esta habilitado" }, { status: 422 });
+        }
+      } else {
+        const matches = await identityClient.users.getUserList({ emailAddress: [normalizedEmail], limit: 1 });
+        if (matches.data.length > 0) {
+          return NextResponse.json({ error: "La identidad ya existe. Requiere revision y vinculacion explicita por superadmin" }, { status: 409 });
+        }
+      }
+    } catch {
+      return NextResponse.json({ error: "No fue posible verificar la identidad en Clerk; no se creo el usuario" }, { status: 503 });
+    }
+  }
   const provisionalUserId = adminProvidedUserId || `pending_${crypto.randomUUID()}`;
 
   const created = await createManagedUserByTenant({
@@ -144,7 +194,7 @@ export async function POST(request: Request) {
     );
   }
 
-  let responseUser = created;
+  const responseUser = created;
 
   let clerkSynced = false;
   let invitationSent = false;
@@ -152,89 +202,23 @@ export async function POST(request: Request) {
 
   if (hasClerkCredentials()) {
     try {
-      const client = await clerkClient();
-      let clerkUserId: string | null = null;
-
-      if (adminProvidedUserId && isClerkUserId(adminProvidedUserId)) {
-        clerkUserId = adminProvidedUserId;
-      }
-
-      if (!clerkUserId) {
-        const byEmail = await client.users.getUserList({
-          emailAddress: [normalizedEmail],
-          limit: 1,
-        });
-
-        const existing = byEmail.data[0];
-        if (existing?.id) {
-          clerkUserId = existing.id;
-        }
-      }
-
-      // Para usuarios nuevos no intentamos createUser (requiere contraseña en la mayoría
-      // de instancias Clerk y devuelve 422). Si no hay clerkUserId tras la búsqueda por
-      // email, caemos directamente a createInvitation más abajo.
-
-      if (clerkUserId) {
+      const client = identityClient!;
+      if (adminProvidedUserId) {
         try {
-          await client.users.getUser(clerkUserId);
-          await client.users.updateUserMetadata(clerkUserId, {
+          await client.users.updateUserMetadata(adminProvidedUserId, {
             publicMetadata: {
               localUserId: responseUser.userId,
               role: assignedRole,
-              subtenantKey: `${targetTenant.tenant_id}:${clerkUserId}`,
+              subtenantKey: `${targetTenant.tenant_id}:${adminProvidedUserId}`,
               tenantId: targetTenant.tenant_id,
               tenantSlug: targetTenant.slug,
             },
           });
           clerkSynced = true;
-
-          if (responseUser.userId !== clerkUserId) {
-            try {
-              const relinked = await relinkManagedUserIdByTenant({
-                currentUserId: responseUser.userId,
-                newUserId: clerkUserId,
-                tenantId: targetTenantId,
-              });
-
-              if (relinked) {
-                responseUser = relinked;
-              }
-            } catch (error) {
-              if (error instanceof Error && error.message === "DUPLICATE_USER_ID") {
-                const reassigned = await updateManagedUserByTenant({
-                  payload: {
-                    active: true,
-                    alias: parsed.data.alias,
-                    firstName: parsed.data.firstName,
-                    lastName: parsed.data.lastName,
-                    role: assignedRole,
-                    sellerCode: parsed.data.sellerCode ?? null,
-                    tenantId: targetTenantId,
-                  },
-                  tenantId: null,
-                  userId: clerkUserId,
-                });
-
-                if (reassigned) {
-                  await deleteManagedUserByTenant(targetTenantId, responseUser.userId);
-                  responseUser = reassigned;
-                  clerkWarning =
-                    "El correo ya existia en Clerk y en BD. Se reasigno automaticamente al tenant destino.";
-                } else {
-                  clerkWarning =
-                    "El correo ya existe en Clerk, pero no fue posible reasignarlo en BD al tenant destino.";
-                }
-              } else {
-                const relinkDetail = extractClerkErrorMessage(error);
-                clerkWarning = `Se creó en Clerk, pero no se pudo actualizar userId local: ${relinkDetail}`;
-              }
-            }
-          }
         } catch (error) {
           const clerkDetail = extractClerkErrorMessage(error);
-          clerkWarning = `No se pudo vincular el userId en Clerk: ${clerkDetail}`;
-          console.error("[clerk] Error al vincular userId:", error);
+          clerkWarning = `No se pudo sincronizar metadata en Clerk: ${clerkDetail}`;
+          console.error("[clerk] Error al sincronizar metadata:", error);
         }
       } else {
         try {

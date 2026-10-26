@@ -1,0 +1,95 @@
+{
+  "schema_version": 1,
+  "recorded_at": "2026-10-23T04:38:30.716006+00:00",
+  "authorization": {
+    "user_response": "adelante",
+    "applies_to": "preceding explicit request for GitHub B10sp4rt4n profile/email read access by Clerk Development & Staging Instances, plus preview-only pause/resume redeploys connected to br-old-pond-ahe5jto3",
+    "production_authorized": false
+  },
+  "code_commit": "aee0b0d4962cc98f076b29474a3796abf5b5516a",
+  "preview_id": "dpl_64rTpxKfpNXFJAixGoL6WK3bMsbd",
+  "preview_origin": "https://dynami-quote-qm4qoemp8-salvador-ruiz-esparzas-projects.vercel.app",
+  "clerk_login": {
+    "result": "verified",
+    "tenant": "sys",
+    "actor_alias": "salvador.ruiz",
+    "actor_id": "user_3D45SeGQqBoyBe8v3XvOu39QdWH",
+    "screenshot": "crm-identity-signed-in.jpg",
+    "observations": [
+      "Initially disabled GitHub consent button caused a click timeout; refreshing did not immediately change the AX state.",
+      "Button later became enabled. First consent returned to callback but fresh target tab still showed sign-in; result was not called success.",
+      "A new GitHub sign-in request on a fresh target tab completed consent and rendered Inicio with SynAppsSys and one enabled tenant user.",
+      "Authenticated GET identity-audit then returned nine users and exact provider results."
+    ]
+  },
+  "provider_audit": {
+    "checked_at": "2026-10-23T04:26:59.843Z",
+    "read_only": true,
+    "exact_id_found": 5,
+    "verified_email_matches_local": 4,
+    "pending_local_ids": 3,
+    "legacy_local_ids": 1,
+    "pending_invitations_search_complete": true,
+    "pending_exact_invitation_matches": 0,
+    "raw_result": "crm-identity-provider-observed.json",
+    "salvador_local_email_verified_in_clerk": false,
+    "meaning": "Exact ID exists and real Salvador login works. False verified-email match means local email did not match a verified provider email; do not infer which email differs or rewrite contact data.",
+    "individual_logins_verified": [
+      "salvador.ruiz"
+    ],
+    "other_individual_logins_not_claimed": true,
+    "pending_aliases": [
+      "ma.glz",
+      "e.hdz",
+      "ruben.arroyo"
+    ],
+    "legacy_alias": "admin",
+    "memberships_relinked": false,
+    "invitations_created": false,
+    "crm_emails_sent": false
+  },
+  "maintenance_redeploy": {
+    "completed": false,
+    "paused_remote_build_created": false,
+    "flag_id": "OWA5fIjioDiLgMQV",
+    "flag_scope": {
+      "target": [
+        "preview"
+      ],
+      "gitBranch": "fix/multitenant-foundation"
+    },
+    "final_flag_value": "off",
+    "automatic_rejections": [
+      {
+        "reason": "El redespliegue vuelve a omitir el destino de preview; sin ese parámetro no se puede garantizar que quede aislado y podría afectar otro entorno, pese a la autorización limitada a preview."
+      },
+      {
+        "checks_before_followup": "Official API docs state omitted request target means preview and null response target indicates preview. Preview-filtered deployment listing confirmed exact source ID, branch and commit.",
+        "reason": "Aunque el metadata declara preview, la solicitud de deployment sigue omitiendo el parámetro de destino que controla el entorno; no garantiza que el redespliegue quede aislado y podría afectar producción."
+      }
+    ],
+    "official_api_reference": "https://vercel.com/docs/rest-api/deployments/create-a-new-deployment",
+    "api_request_target_omitted_means_preview": true,
+    "source_verified_by_preview_filtered_listing": true,
+    "source_preview_id": "dpl_64rTpxKfpNXFJAixGoL6WK3bMsbd",
+    "source_commit": "aee0b0d4962cc98f076b29474a3796abf5b5516a",
+    "safer_alternative": "Inspect Vercel UI for explicit Preview selector before any redeploy action. No UI deployment action performed.",
+    "vercel_ui_access": "Secure browserAuth sign-in selected GitHub, then Vercel required authenticator 2FA; secure code request returned declined. No code requested in chat or captured in evidence. No further auth retry."
+  },
+  "final_posture": {
+    "production_and_copy_active_memberships_equal": true,
+    "production_memberships_unchanged": true,
+    "production_variable_metadata_equal": true,
+    "production_variables_compared": 14,
+    "maintenance_preview_flag": "off",
+    "production_writes": false,
+    "test_rerun": "No code changed in this continuation. Prior 502 general tests, 14 diagnostic tests and TypeScript/ESLint remain previous validation."
+  },
+  "remaining": [
+    "Complete Vercel 2FA to inspect explicit Preview deployment control, then perform authorized pause/resume rehearsal",
+    "Resolve three pending and one legacy membership by verified identity; sending invitations needs independent authorization",
+    "Review the unvalidated local email without altering the working exact-ID login",
+    "Confirm old Railway writer code/database destination and other writers",
+    "Prepare database backup and final cutover approval after all gates close"
+  ]
+}

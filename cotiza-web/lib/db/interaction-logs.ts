@@ -3,6 +3,7 @@ import "server-only";
 import { randomUUID } from "crypto";
 
 import { prisma } from "@/lib/db/prisma";
+import { assertClientOpportunityForTenant, assertOpportunityOwnerForTenant } from "@/lib/db/tenant-relations";
 
 export type InteractionLog = {
   authorDisplayName: string | null;
@@ -21,10 +22,20 @@ export type CreateInteractionLogInput = {
 
 // Historial de notas por cliente -- separado de Tareas (que mira hacia
 // adelante); esto registra lo que ya pasó (llamadas, reuniones, correos).
-export async function listInteractionLogsForTenant(tenantId: string, clientId: string): Promise<InteractionLog[]> {
+export async function listInteractionLogsForTenant(
+  tenantId: string, clientId: string, viewerUserId: string | null = null, canSeeAll = true,
+): Promise<InteractionLog[]> {
+  const visibleOpportunities = canSeeAll ? null : await prisma.opportunities.findMany({
+    select: { opportunity_id: true },
+    where: { tenant_id: tenantId, client_id: clientId,
+      OR: [{ owner_user_id: viewerUserId }, { owner_user_id: null }] },
+  });
   const rows = await prisma.interaction_logs.findMany({
     orderBy: { created_at: "desc" },
-    where: { client_id: clientId, tenant_id: tenantId },
+    where: { client_id: clientId, tenant_id: tenantId,
+      ...(visibleOpportunities ? { OR: [{ opportunity_id: null },
+        { opportunity_id: { in: visibleOpportunities.map(o => o.opportunity_id) } }] } : {}),
+    },
   });
 
   if (rows.length === 0) {
@@ -48,7 +59,7 @@ export async function listInteractionLogsForTenant(tenantId: string, clientId: s
     userIds.length > 0
       ? prisma.app_users.findMany({
           select: { alias: true, first_name: true, last_name: true, user_id: true },
-          where: { user_id: { in: userIds } },
+          where: { user_id: { in: userIds }, tenant_id: tenantId },
         })
       : Promise.resolve([]),
   ]);
@@ -72,7 +83,10 @@ export async function createInteractionLogForTenant(
   tenantId: string,
   clientId: string,
   input: CreateInteractionLogInput,
+  canSeeAllOpportunities = false,
 ): Promise<InteractionLog> {
+  await assertClientOpportunityForTenant(tenantId, clientId, input.opportunityId);
+  await assertOpportunityOwnerForTenant(tenantId, clientId, input.opportunityId, input.createdByUserId, canSeeAllOpportunities);
   const interactionId = randomUUID();
 
   const row = await prisma.interaction_logs.create({
@@ -102,7 +116,7 @@ export async function createInteractionLogForTenant(
   if (row.created_by_user_id) {
     const user = await prisma.app_users.findFirst({
       select: { alias: true, first_name: true, last_name: true },
-      where: { user_id: row.created_by_user_id },
+      where: { user_id: row.created_by_user_id, tenant_id: tenantId },
     });
     authorDisplayName = user ? `${user.first_name} ${user.last_name}`.trim() || user.alias : null;
   }
@@ -117,14 +131,21 @@ export async function createInteractionLogForTenant(
   };
 }
 
-export type DeleteInteractionLogResult = "deleted" | "not_found";
+export type DeleteInteractionLogResult = "deleted" | "not_found" | "forbidden";
 
 export async function deleteInteractionLogForTenant(
   tenantId: string,
   interactionId: string,
+  viewerUserId: string | null = null,
+  canSeeAll = false,
+  clientId?: string,
 ): Promise<DeleteInteractionLogResult> {
+  const where = { interaction_id: interactionId, tenant_id: tenantId, ...(clientId ? { client_id: clientId } : {}) };
+  const note = await prisma.interaction_logs.findFirst({ where, select: { created_by_user_id: true } });
+  if (!note) return "not_found";
+  if (!canSeeAll && (!viewerUserId || note.created_by_user_id !== viewerUserId)) return "forbidden";
   const result = await prisma.interaction_logs.deleteMany({
-    where: { interaction_id: interactionId, tenant_id: tenantId },
+    where: { ...where, ...(canSeeAll ? {} : { created_by_user_id: viewerUserId }) },
   });
 
   return result.count > 0 ? "deleted" : "not_found";
