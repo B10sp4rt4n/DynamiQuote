@@ -127,6 +127,11 @@ La suite `tests/contracts/` cubre únicamente el contrato de consulta/respuesta 
 
 ## Próximo incremento autorizado de preparación
 
+Preparación posterior aislada: [exportador interno de candidatos de propuestas](commercial-proposal-export-preparation.md).
+Implementa lectura SQL y sobre local con pruebas sintéticas, sin endpoint ni
+habilitación. No sustituye `commercial_snapshot`, no selecciona versiones por
+venta y no cierra G0/G1. La integración productiva conserva sus compuertas.
+
 Conservar esta propuesta separada del PR de liberación. Respuesta v0.1, fixtures de estados/errores y oráculo sintético ya preparados; tras G0, acordar el schema universal fuente y atestación, implementar exportador aislado y consulta anual por cliente, y verificar el contrato contra autorización y reglas financieras reales. Después demostrar el caso real a Salvador en un tenant habilitado y con datos conciliados. Habilitación del chat, creación de borradores y envío permanecen compuertas posteriores.
 
 ## Fuentes revisadas
