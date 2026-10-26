@@ -88,11 +88,13 @@ async function resolveAppUserEmailByTenant(tenantId: string, userId: string | nu
 async function resolveTenantOwnerEmail(tenantId: string): Promise<string | null> {
   try {
     const ownerRow = await prisma.app_users.findFirst({
-      select: { user_id: true },
+      select: { user_id: true, email: true, contact_email: true },
       where: { role: "owner", tenant_id: tenantId, active: true },
     });
     if (!ownerRow) return null;
 
+    const storedEmail = sanitizeEmail(ownerRow.contact_email) ?? sanitizeEmail(ownerRow.email);
+    if (storedEmail) return storedEmail;
     const client = await clerkClient();
     const clerkUser = await client.users.getUser(ownerRow.user_id);
     const primary = clerkUser.emailAddresses.find(
@@ -153,6 +155,14 @@ function buildSellerProposalHtml(input: {
 </html>`;
 }
 
+function escapeHtml(value: string): string {
+  return value.replace(/[&<>"']/g, char => ({ "&": "&amp;", "<": "&lt;", ">": "&gt;", '"': "&quot;", "'": "&#39;" })[char]!);
+}
+
+function buildCustomerProposalHtml(input: { contactName: string; issuerCompany: string; proposalNumber: string }): string {
+  return `<html><body><p>Hola ${escapeHtml(input.contactName)},</p><p>Adjuntamos nuestra propuesta ${escapeHtml(input.proposalNumber)} para tu revisión.</p><p>Quedamos atentos a tus comentarios.</p><p>${escapeHtml(input.issuerCompany)}</p></body></html>`;
+}
+
 export async function POST(request: Request, context: RouteContext) {
   const tenant = await getCurrentTenantContext();
 
@@ -181,8 +191,13 @@ export async function POST(request: Request, context: RouteContext) {
     return NextResponse.json({ error: resendClient.error }, { status: 500 });
   }
 
-  // Ignorar cualquier email del body — el destino se resuelve server-side
-  await request.json().catch(() => null);
+  // Only the opt-in is accepted; recipient addresses always come from this tenant's saved proposal.
+  const body: unknown = await request.json().catch(() => null);
+  if (!body || typeof body !== "object" || Array.isArray(body) ||
+    ("sendToContact" in body && typeof body.sendToContact !== "boolean")) {
+    return NextResponse.json({ error: "La opción de envío al contacto debe ser booleana." }, { status: 400 });
+  }
+  const sendToContact = "sendToContact" in body && body.sendToContact === true;
 
   const canSeeAll = tenant.isSuperAdmin || tenant.userRole === "owner" || tenant.userRole === "admin";
   if (!await isProposalVisibleToViewer(tenant.id, proposalId, tenant.userId, canSeeAll)) {
@@ -224,14 +239,12 @@ export async function POST(request: Request, context: RouteContext) {
   const ownerEmail = await resolveTenantOwnerEmail(tenant.id);
   const sellerEmail = sessionEmail ?? formIssuerEmail ?? appUserEmail ?? ownerEmail;
 
-  console.info("[proposal-email] Resolucion de destinatario vendedor", {
-    appUserEmail,
-    ownerEmail,
-    proposalId,
-    sellerEmail,
-    sessionEmail,
-    tenantId: tenant.id,
-  });
+  const emitterEmail = formIssuerEmail ?? sessionEmail ?? appUserEmail;
+  const contactEmail = sanitizeEmail(proposal.formal.recipientEmail);
+  if (sendToContact && (!contactEmail || !ownerEmail || !emitterEmail)) {
+    return NextResponse.json({ error: "Para enviar al cliente se requiere un correo válido del contacto, del owner y del emisor. Revisa los datos guardados." }, { status: 400 });
+  }
+  const toEmail = sendToContact ? contactEmail! : sellerEmail;
 
   if (!sellerEmail) {
     return NextResponse.json(
@@ -243,7 +256,6 @@ export async function POST(request: Request, context: RouteContext) {
   const proposalNumber = proposal.formal?.proposalNumber ?? proposal.proposalId;
   const issuerCompany = proposal.formal?.issuerCompany ?? tenant.name;
   const recipientCompany = proposal.formal?.recipientCompany ?? "Cliente";
-  const subjectBase = proposal.formal?.subject ?? proposalNumber;
   const from = resendClient.from;
 
   const issuerContact = proposal.formal?.issuerContactName?.trim().toLowerCase() ?? "";
@@ -289,17 +301,15 @@ export async function POST(request: Request, context: RouteContext) {
     filename: attachmentFilename,
   };
 
-  // Resolver email del owner para copia — siempre va en CC aunque coincida con el vendedor
-  const ccRecipients = Array.from(
-    new Set([ownerEmail].filter((e): e is string => Boolean(e))),
-  );
-
-  const html = buildSellerProposalHtml({
-    issuerCompany,
-    proposalNumber,
-    recipientCompany,
-    sellerName,
-  });
+  const ccRecipients = Array.from(new Set(
+    (sendToContact ? [ownerEmail, emitterEmail] : [ownerEmail])
+      .filter((email): email is string => Boolean(email) && email !== toEmail),
+  ));
+  const html = sendToContact
+    ? buildCustomerProposalHtml({ contactName: proposal.formal.recipientContactName || recipientCompany, issuerCompany, proposalNumber })
+    : buildSellerProposalHtml({ issuerCompany: escapeHtml(issuerCompany), proposalNumber: escapeHtml(proposalNumber),
+        recipientCompany: escapeHtml(recipientCompany), sellerName: escapeHtml(sellerName) });
+  const recipientScope = sendToContact ? "customer_owner_and_emitter" as const : "seller_and_owner" as const;
 
   if (!await isProposalDeliveryAuthorizedByTenant({ tenantId: tenant.id, proposalId,
     documentId: proposal.formal.proposalDocId, expectedUpdatedAt: proposal.formal.updatedAt ?? null })) {
@@ -310,8 +320,9 @@ export async function POST(request: Request, context: RouteContext) {
     ...(ccRecipients.length > 0 ? { cc: ccRecipients } : {}),
     from,
     html,
-    subject: `[${proposalNumber}] Propuesta lista — ${recipientCompany}`,
-    to: [sellerEmail],
+    subject: sendToContact ? `[${proposalNumber}] Propuesta — ${issuerCompany}` : `[${proposalNumber}] Propuesta lista — ${recipientCompany}`,
+    to: [toEmail!],
+    ...(emitterEmail ? { replyTo: emitterEmail } : {}),
   });
 
   if (result.error) {
@@ -347,12 +358,13 @@ export async function POST(request: Request, context: RouteContext) {
     const delivery = await recordProposalDeliveryByTenant({ tenantId: tenant.id, proposalId,
       documentId: proposal.formal.proposalDocId, expectedUpdatedAt: proposal.formal.updatedAt ?? null,
       actorUserId: tenant.userId, providerId: result.data?.id ?? null,
+      recipientScope, recipients: { to: [toEmail!], cc: ccRecipients },
       pdfSha256: createHash("sha256").update(pdfBuffer).digest("hex"),
     });
-    return NextResponse.json({ ok: true, success: true, ...delivery,
+    return NextResponse.json({ ok: true, success: true, recipientScope, ...delivery,
       warning: delivery.recordedForCurrentRevision ? null : "El proveedor aceptó el correo, pero la propuesta cambió. Revisa el historial; no reenvíes por este aviso." });
   } catch {
-    return NextResponse.json({ ok: true, success: true, sentAt: null, recordedForCurrentRevision: false,
+    return NextResponse.json({ ok: true, success: true, recipientScope, sentAt: null, recordedForCurrentRevision: false,
       warning: "El proveedor aceptó el correo, pero no se pudo guardar su registro. No lo reenvíes por este aviso." });
   }
 }

@@ -16,6 +16,11 @@ describe("delivery metadata preserves authorization", () => {
     expect(m.changeStatus).not.toHaveBeenCalled();
     expect(JSON.parse(m.audit.mock.calls[0][0].data.payload)).toMatchObject({ authorizationAtDispatch: "approved", providerAccepted: true, recipientScope: "seller_and_owner" });
   });
+  it("preserves customer routing evidence without changing authorization", async () => {
+    await recordProposalDeliveryByTenant({ ...input, recipientScope: "customer_owner_and_emitter", recipients: { to: ["client@example.test"], cc: ["owner@example.test", "emitter@example.test"] } });
+    expect(JSON.parse(m.audit.mock.calls[0][0].data.payload)).toMatchObject({ recipientScope: "customer_owner_and_emitter", recipients: { to: ["client@example.test"], cc: ["owner@example.test", "emitter@example.test"] } });
+    expect(m.changeStatus).not.toHaveBeenCalled();
+  });
   it("keeps historical evidence without marking a revised or reopened document as sent", async () => {
     m.read.mockResolvedValue({ status: "draft" });
     expect(await recordProposalDeliveryByTenant(input)).toEqual({ sentAt: null, recordedForCurrentRevision: false });

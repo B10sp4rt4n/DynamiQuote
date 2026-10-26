@@ -266,6 +266,7 @@ export function ProposalShell({
   const [descriptionEnabled, setDescriptionEnabled] = useState<boolean>(
     Boolean(proposals[0]?.formal?.customIntro || proposals[0]?.formal?.objective),
   );
+  const [sendToContact, setSendToContact] = useState(false);
   const [selectedSentAt, setSelectedSentAt] = useState<string | null>(null);
   const [selectedOutcome, setSelectedOutcome] = useState<string | null>(null);
   const [selectedStatus, setSelectedStatus] = useState<ProposalStatus>(
@@ -510,6 +511,7 @@ export function ProposalShell({
     const found = items.find((item) => item.proposalId === proposalId);
 
     setSelectedProposalId(proposalId);
+    setSendToContact(false);
     setIssuerCompany(found?.formal?.issuerCompany ?? "");
     setIssuerEmail(found?.formal?.issuerEmail ?? "");
     setIssuerPhone(found?.formal?.issuerPhone ?? "");
@@ -1297,8 +1299,8 @@ export function ProposalShell({
 
     try {
       const response = await fetch(`/api/proposals/${selectedProposal.proposalId}/send-email`, {
-        // El destino se resuelve server-side; no se envía correo del cliente
-        body: JSON.stringify({}),
+        // Only opt-in; saved addresses are resolved server-side.
+        body: JSON.stringify({ sendToContact }),
         headers: {
           "Content-Type": "application/json",
         },
@@ -1316,7 +1318,7 @@ export function ProposalShell({
       setItems(current => current.map(item => item.proposalId === selectedProposal.proposalId && item.formal
         ? { ...item, formal: { ...item.formal, sentAt: data?.sentAt ?? null } } : item));
       setEmailStatus("success");
-      setEmailMessage(data?.warning ?? "Envío del PDF al vendedor registrado. La propuesta conserva su autorización.");
+      setEmailMessage(data?.warning ?? (sendToContact ? "Proveedor aceptó el envío al cliente, con copia al owner y al emisor. La propuesta conserva su autorización." : "Envío del PDF al vendedor registrado. La propuesta conserva su autorización."));
     } catch (error) {
       setEmailStatus("error");
       setEmailMessage(error instanceof Error ? error.message : "Error interno al enviar correo");
@@ -2273,31 +2275,41 @@ export function ProposalShell({
               ) : null}
 
               {/* Botón de correo: disponible únicamente con autorización interna vigente.
-                  El PDF llega al correo del vendedor (sesión activa) + copia al owner del tenant.
+                  El contacto recibe el PDF sólo con opt-in explícito; en ese caso owner y emisor reciben copia.
                   El envío conserva la autorización; el registro de entrega se muestra por separado. */}
               {selectedStatus === "approved" ? (
                 <div className="flex flex-col gap-1">
+                  <label className="flex items-center gap-2 text-sm text-zinc-700">
+                    <input type="checkbox" checked={sendToContact} disabled={emailStatus === "sending"}
+                      onChange={event => { setSendToContact(event.target.checked); setEmailMessage(null); }} />
+                    Habilitar envío al contacto del cliente
+                  </label>
+                  <p className="text-xs text-zinc-500">{sendToContact
+                    ? `Para: ${selectedProposal.formal?.recipientEmail || "Falta el correo del contacto"}. CC: owner y emisor. Se usarán los datos guardados.`
+                    : "Para: tu correo. CC: owner."}</p>
                   <button
                     className="w-fit rounded-lg border border-blue-300 bg-blue-50 px-4 py-2 text-sm font-medium text-blue-700 transition hover:bg-blue-100 disabled:cursor-not-allowed disabled:opacity-60"
-                    disabled={emailStatus === "sending" || emailReleaseGate.kind === "blocked"}
+                    disabled={emailStatus === "sending" || emailReleaseGate.kind === "blocked" || (sendToContact && !selectedProposal.formal?.recipientEmail)}
                     onClick={() => { ensureCurrencyThenRun(() => { void handleSendEmailProposal(); }); }}
                     title={emailReleaseGate.kind === "blocked" ? emailReleaseGate.reason : undefined}
                     type="button"
                   >
                     {emailStatus === "sending"
                       ? "Enviando..."
-                      : selectedSentAt
+                      : sendToContact
+                        ? "Enviar propuesta al cliente"
+                        : selectedSentAt
                         ? "Re-enviarme el PDF"
                         : "Enviarme el PDF"}
                   </button>
-                  <p className="text-xs text-zinc-500">El PDF llega a tu correo. El owner recibe copia.</p>
+                  <p className="text-xs text-zinc-500">{sendToContact ? "El cliente recibe un mensaje comercial con el PDF adjunto." : "El PDF llega a tu correo. El owner recibe copia."}</p>
                 </div>
               ) : null}
 
               <div className="rounded-lg border border-zinc-200 bg-white p-3 text-sm">
-                <p><strong>Envío del PDF:</strong> {selectedSentAt ? `Registrado al vendedor · ${formatDate(selectedSentAt)}` : "Sin envío registrado"}</p>
+                <p><strong>Envío del PDF:</strong> {selectedSentAt ? `Registrado por el proveedor · ${formatDate(selectedSentAt)}` : "Sin envío registrado"}</p>
                 <p className="mt-1"><strong>Resultado comercial:</strong> {selectedOutcome === "won" ? "Ganada" : selectedOutcome === "lost" ? "Perdida" : selectedOutcome === "discarded" ? "Descartada" : "Sin cierre registrado"}</p>
-                <p className="mt-2 text-xs text-zinc-500">El envío al vendedor no confirma recepción ni aceptación del cliente. Registra Ganada o Perdida en el detalle de la propuesta o en Pipeline.</p>
+                <p className="mt-2 text-xs text-zinc-500">El registro del proveedor no confirma recepción ni aceptación del cliente. Registra Ganada o Perdida en el detalle de la propuesta o en Pipeline.</p>
                 {selectedStatus === "sent" ? <p className="mt-2 text-xs text-amber-800">Registro anterior: el dato de envío no acredita autorización. Revisa y autoriza la propuesta antes de volver a enviar.</p> : null}
               </div>
 

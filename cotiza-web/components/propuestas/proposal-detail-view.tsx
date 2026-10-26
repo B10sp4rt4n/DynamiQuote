@@ -103,8 +103,8 @@ export function ProposalDetailView({
       </div>
 
       <div className="rounded-lg border border-zinc-200 p-3 text-sm">
-        <p><strong>Envío del PDF:</strong> {formal?.sentAt ? `Registrado al vendedor · ${formatDate(formal.sentAt)}` : "Sin envío registrado"}</p>
-        <p className="mt-1 text-xs text-zinc-500">El envío al vendedor no confirma recepción ni aceptación del cliente. El resultado comercial se registra por separado.</p>
+        <p><strong>Envío del PDF:</strong> {formal?.sentAt ? `Registrado por el proveedor · ${formatDate(formal.sentAt)}` : "Sin envío registrado"}</p>
+        <p className="mt-1 text-xs text-zinc-500">El registro del proveedor no confirma recepción ni aceptación del cliente. El resultado comercial se registra por separado.</p>
       </div>
       <div className="grid gap-4 sm:grid-cols-2 lg:grid-cols-4">
         <div className="rounded-lg border border-zinc-200 bg-zinc-50 p-3">

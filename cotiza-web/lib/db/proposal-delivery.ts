@@ -8,6 +8,8 @@ import { prisma } from "@/lib/db/prisma";
 export async function recordProposalDeliveryByTenant(input: {
   tenantId: string; proposalId: string; documentId: string; expectedUpdatedAt: string | null;
   actorUserId: string | null; providerId: string | null; pdfSha256: string;
+  recipientScope?: "seller_and_owner" | "customer_owner_and_emitter";
+  recipients?: { to: string[]; cc: string[] };
 }): Promise<{ sentAt: string | null; recordedForCurrentRevision: boolean }> {
   return prisma.$transaction(async tx => {
     await tx.$queryRaw(Prisma.sql`SELECT proposal_id FROM proposals
@@ -24,7 +26,8 @@ export async function recordProposalDeliveryByTenant(input: {
       event_id: randomUUID(), event_hash: randomUUID(), event_type: "document_issued",
       proposal_id: input.proposalId, tenant_id: input.tenantId, created_at: now,
       payload: JSON.stringify({ actorUserId: input.actorUserId, via: "email", status: "approved",
-        authorizationAtDispatch: "approved", providerAccepted: true, recipientScope: "seller_and_owner",
+        authorizationAtDispatch: "approved", providerAccepted: true, recipientScope: input.recipientScope ?? "seller_and_owner",
+        ...(input.recipients ? { recipients: input.recipients } : {}),
         documentId: input.documentId, providerId: input.providerId, pdfSha256: input.pdfSha256,
         recordedForCurrentRevision: result.count === 1, watermark: false, forced: false }),
     } });
