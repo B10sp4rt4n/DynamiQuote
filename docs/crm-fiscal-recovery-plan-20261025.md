@@ -68,3 +68,9 @@ Para CRM se conserva [el procedimiento existente](neon-backup-recovery.md). Para
 | Autorización de corte | No solicitada ni concedida por este plan |
 
 Este plan convierte los pendientes en pasos comprobables. No declara un respaldo existente, un vínculo verificado, pérdida de datos o una recuperación concluida.
+
+## Actualización de la comparación pendiente
+
+La revisión web limitada de host/base fue autorizada, pero la revisión automática rechazó mostrar `DB_URL` porque también expondría credenciales; la acción no se ejecutó. El usuario no pudo confirmar los metadatos manualmente. Mantener el vínculo **sin confirmar**, sin atribuir al servicio el endpoint fiscal esperado y sin repetir la revelación por otro método. Fuentes: `src-limited-inspection-blocked`, `src-user-unable-to-confirm-binding`.
+
+La evidencia restante es un informe de configuración previamente redactado que incluya solo host/base y procedencia. Las etapas de diseño y custodia pueden prepararse con el candidato histórico identificado; la exportación real, cualquier activación y el corte continúan bloqueados hasta reunir evidencia y autorización específicas.

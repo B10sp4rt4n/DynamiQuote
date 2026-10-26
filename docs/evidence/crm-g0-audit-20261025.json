@@ -575,6 +575,50 @@
         "upload_dir_requires_separate_inventory": true,
         "limits": "Source model names and defaults are not live schema inspection or proof of effective runtime settings. Full backup must include actual schema and external files; this is not an export filter."
       }
+    },
+    {
+      "source_id": "src-limited-inspection-blocked",
+      "source_type": "other",
+      "title": "Inspección web autorizada de metadatos y rechazo automático de revelación completa",
+      "author_or_origin": "Railway browser UI and automatic tool approval review",
+      "retrieved_at_utc": "2026-10-26T02:52:02.667280Z",
+      "locator": "Railway service ef6c5593-5099-48e0-9da5-b78bcd66a845 / production / variables; current conversation tool review",
+      "access_scope": "authorized_source",
+      "integrity_status": "not_verified",
+      "observed": {
+        "user_authorized_scope": [
+          "host",
+          "database_name"
+        ],
+        "panel_access_succeeded": true,
+        "db_url_field_present": true,
+        "show_value_controls": 19,
+        "hide_value_controls": 0,
+        "full_value_reveal_executed": false,
+        "credentials_read": false,
+        "configuration_modified": false,
+        "review_result": "rejected",
+        "review_reason": "Showing and reading the entire DB_URL would include credentials beyond the approved host/database metadata scope, even if later redacted.",
+        "alternate_extraction_attempted": false,
+        "limits": "No value or binding was observed. Control counts only confirmed values remain masked. Rejection is not evidence of a missing, wrong or broken DB URL."
+      }
+    },
+    {
+      "source_id": "src-user-unable-to-confirm-binding",
+      "source_type": "message",
+      "title": "Salvador no pudo confirmar host/base en la revisión manual",
+      "author_or_origin": "Salvador, current conversation",
+      "retrieved_at_utc": "2026-10-26T02:52:02.667280Z",
+      "locator": "Current conversation response to host/database confirmation question",
+      "access_scope": "user_provided",
+      "integrity_status": "not_verified",
+      "observed": {
+        "epistemic_class": "recorded_claim",
+        "reply": "No puedo verlos",
+        "binding_confirmed": false,
+        "values_provided": false,
+        "limits": "Does not establish which values are configured or why manual viewing was unavailable."
+      }
     }
   ],
   "events": [
@@ -995,6 +1039,54 @@
         "src-backup-tool-profile",
         "src-fiscal-recovery-models"
       ]
+    },
+    {
+      "recordia_version": "1.0",
+      "event_id": "evt-limited-inspection-blocked",
+      "case_id": "case-crm-g0-20261025",
+      "event_type": "verification.blocked",
+      "recorded_at_utc": "2026-10-26T02:52:02.667280Z",
+      "actors": [
+        {
+          "actor_id": "audit-codex",
+          "role": "observer_readonly",
+          "identity_status": "declared"
+        }
+      ],
+      "subject": {
+        "entity_id": "fiscal-runtime-database-binding",
+        "entity_type": "configuration_relationship"
+      },
+      "action_or_state": "Limited host/database UI inspection authorized; full DB_URL reveal rejected before execution because it would expose credentials",
+      "epistemic_class": "observed_fact",
+      "support_status": "supported",
+      "source_refs": [
+        "src-limited-inspection-blocked"
+      ]
+    },
+    {
+      "recordia_version": "1.0",
+      "event_id": "evt-binding-not-confirmed",
+      "case_id": "case-crm-g0-20261025",
+      "event_type": "verification.blocked",
+      "recorded_at_utc": "2026-10-26T02:52:02.667280Z",
+      "actors": [
+        {
+          "actor_id": "audit-codex",
+          "role": "observer_readonly",
+          "identity_status": "declared"
+        }
+      ],
+      "subject": {
+        "entity_id": "fiscal-runtime-database-binding",
+        "entity_type": "configuration_relationship"
+      },
+      "action_or_state": "User reported unable to view host/database; binding remains unconfirmed without inferred match or mismatch",
+      "epistemic_class": "recorded_claim",
+      "support_status": "supported",
+      "source_refs": [
+        "src-user-unable-to-confirm-binding"
+      ]
     }
   ],
   "evidence": [
@@ -1286,6 +1378,30 @@
       "limitations": [
         "Source model names and defaults are not live schema inspection or proof of effective runtime settings. Full backup must include actual schema and external files; this is not an export filter."
       ]
+    },
+    {
+      "evidence_id": "evd-src-limited-inspection-blocked",
+      "source_id": "src-limited-inspection-blocked",
+      "proposition": "Inspección web autorizada de metadatos y rechazo automático de revelación completa",
+      "relation": "supports",
+      "support_status": "supported",
+      "integrity_status": "not_verified",
+      "verification_method": "Approval-review output and masked-control counts, or direct user statement; no credential access",
+      "limitations": [
+        "No value or binding was observed. Control counts only confirmed values remain masked. Rejection is not evidence of a missing, wrong or broken DB URL."
+      ]
+    },
+    {
+      "evidence_id": "evd-src-user-unable-to-confirm-binding",
+      "source_id": "src-user-unable-to-confirm-binding",
+      "proposition": "Salvador no pudo confirmar host/base en la revisión manual",
+      "relation": "supports",
+      "support_status": "supported",
+      "integrity_status": "not_verified",
+      "verification_method": "Approval-review output and masked-control counts, or direct user statement; no credential access",
+      "limitations": [
+        "Does not establish which values are configured or why manual viewing was unavailable."
+      ]
     }
   ],
   "inferences": [
@@ -1366,9 +1482,11 @@
         "src-vercel-access-recovered",
         "src-vercel-production-current",
         "src-vercel-fiscal-url-redacted",
-        "src-fiscal-service-domain-status"
+        "src-fiscal-service-domain-status",
+        "src-limited-inspection-blocked",
+        "src-user-unable-to-confirm-binding"
       ],
-      "next_evidence": "Servicio fiscal identificado con dominio configurado y estado offline. Comparar host efectivo de DIGESTOR_FISCAL_BASE_URL y host/base efectivos del servicio, sin revelar credenciales, iniciar runtime o cambiar variables.",
+      "next_evidence": "Comparación pendiente. La autorización limitada no permite leer DB_URL completo. Requiere informe operativo previamente redactado con solo host/base, sin acceso automatizado a credenciales. No repetir la revelación rechazada ni pedir al usuario confirmar datos que no pudo ver.",
       "release_condition_changed": false
     },
     {
@@ -1381,9 +1499,11 @@
         "src-prior-fiscal-storage-reference",
         "src-fiscal-neon-metadata",
         "src-recovery-endpoint-metadata",
-        "src-fiscal-recovery-models"
+        "src-fiscal-recovery-models",
+        "src-limited-inspection-blocked",
+        "src-user-unable-to-confirm-binding"
       ],
-      "next_evidence": "Comparar host/base efectivos de DATABASE_URL o DB_URL según precedencia contra Fiscal_Context/neondb. El servicio está offline; la lectura debe ser de configuración sin arranque.",
+      "next_evidence": "Comparación pendiente. La autorización limitada no permite leer DB_URL completo. Requiere informe operativo previamente redactado con solo host/base, sin acceso automatizado a credenciales. No repetir la revelación rechazada ni pedir al usuario confirmar datos que no pudo ver.",
       "release_condition_changed": false
     },
     {
@@ -1461,7 +1581,7 @@
     {
       "gap_id": "gap-G0-TOPOLOGY",
       "statement": "Servicio fiscal Railway y dominio identificados, offline; faltan comparaciones de configuración efectiva",
-      "needed_evidence": "Igualdad o diferencia del host fiscal efectivo de Cotiza y comparación del host/base efectivos del servicio con Fiscal_Context/neondb; solo metadatos, sin credenciales o arranque.",
+      "needed_evidence": "Informe operativo de configuración que exponga solo host y nombre de base, con procedencia, sin credenciales. No hay confirmación manual disponible.",
       "source_refs": [
         "src-vercel",
         "src-railway-cotiza",
@@ -1470,18 +1590,22 @@
         "src-vercel-access-recovered",
         "src-vercel-production-current",
         "src-vercel-fiscal-url-redacted",
-        "src-fiscal-service-domain-status"
+        "src-fiscal-service-domain-status",
+        "src-limited-inspection-blocked",
+        "src-user-unable-to-confirm-binding"
       ]
     },
     {
       "gap_id": "gap-G0-FISCAL-STORAGE",
       "statement": "Backend y persistencia de la base fiscal",
-      "needed_evidence": "Comparación de hostname/base configurados del servicio offline con endpoint ep-crimson-sun-amjpdtcq y base neondb del candidato histórico, sin conectar SQL ni reactivar recursos.",
+      "needed_evidence": "Informe operativo de configuración que exponga solo host y nombre de base, con procedencia, sin credenciales. No hay confirmación manual disponible.",
       "source_refs": [
         "src-prev-release",
         "src-railway-fiscal",
         "src-prior-fiscal-storage-reference",
-        "src-fiscal-neon-metadata"
+        "src-fiscal-neon-metadata",
+        "src-limited-inspection-blocked",
+        "src-user-unable-to-confirm-binding"
       ]
     },
     {
@@ -1629,6 +1753,11 @@
     "recovery_key_selected": false,
     "sql_connection_performed": false,
     "reactivation_performed": false,
-    "binding_inspection_needed": "Only host and database name from approved configuration inspection; no passwords or full connection strings"
+    "binding_inspection_needed": "A pre-redacted configuration report limited to host and database name, without reading or transferring the full credential-bearing URL.",
+    "binding_verification_state": "blocked_no_metadata_confirmation",
+    "limited_web_inspection_authorized": true,
+    "full_db_url_access_authorized": false,
+    "automatic_review_rejected_full_reveal": true,
+    "credentials_read": false
   }
 }
