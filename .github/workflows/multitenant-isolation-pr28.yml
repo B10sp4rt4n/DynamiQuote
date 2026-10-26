@@ -1,11 +1,12 @@
 name: Multitenant isolation (PR 28)
 
-# Only this PR branch. No production environment, no repository secrets,
+# Reviewed multitenant and authorization/delivery branches. No production environment, no repository secrets,
 # no provider APIs, and no billed larger/self-hosted runners.
 on:
   push:
     branches:
       - fix/multitenant-foundation
+      - fix/approval-delivery-status
   workflow_dispatch:
 
 permissions:

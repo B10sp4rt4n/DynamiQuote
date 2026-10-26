@@ -229,7 +229,7 @@ suite("CRM workflow and authorization against disposable PostgreSQL", () => {
 
   it("closes and reopens the proposal without resetting the opportunity or mixing KPIs", async () => {
     const actor = { isSuperAdmin: false, userId: owner, userRole: "owner" as const };
-    await proposalService.updateProposalWorkflowByTenant(a, proposalA, { status: "sent" }, actor);
+    await proposalService.updateProposalWorkflowByTenant(a, proposalA, { status: "approved" }, actor);
     asUser(a, seller);
     const result = await proposal.PATCH(request({ outcome: "won", closedOn: new Intl.DateTimeFormat("en-CA", {
       timeZone: "America/Mexico_City", year: "numeric", month: "2-digit", day: "2-digit",
@@ -386,4 +386,33 @@ suite("CRM workflow and authorization against disposable PostgreSQL", () => {
     expect((await proposalService.getProposalWorkflowByTenant(tenantId, created!.proposalId, { includeLogoData: true }))?.formal?.issuerLogoDataUrl)
       .toBe("data:image/png;base64,BwgJ");
   });
+
+  it("records dispatch separately from authorization, revision and commercial outcome", async () => {
+    const service = await import("./proposal-delivery");
+    const id = "delivery-semantics-proof"; const updated = new Date("2026-10-20T12:00:00.000Z");
+    await db.proposals.create({ data: { proposal_id: id, tenant_id: a, status: "approved", created_at: new Date(), created_by: seller, created_by_user_id: seller } });
+    await db.formal_proposals.create({ data: { proposal_doc_id: id, proposal_id: id, tenant_id: a,
+      proposal_number: "SYNTHETIC-DELIVERY", issued_date: new Date(), issuer_company: "Synthetic", recipient_company: "Synthetic", status: "approved", created_at: updated, updated_at: updated } });
+    const input = { tenantId: a, proposalId: id, documentId: id, expectedUpdatedAt: updated.toISOString(),
+      actorUserId: seller, providerId: "synthetic-provider-only", pdfSha256: "a".repeat(64) };
+    const snapshot = await proposalService.getProposalWorkflowByTenant(a, id);
+    expect(snapshot?.formal?.updatedAt).toBe(updated.toISOString());
+    expect(await service.isProposalDeliveryAuthorizedByTenant({ ...input, expectedUpdatedAt: snapshot!.formal!.updatedAt ?? null })).toBe(true);
+    expect(await service.isProposalDeliveryAuthorizedByTenant(input)).toBe(true);
+    expect((await service.recordProposalDeliveryByTenant(input)).recordedForCurrentRevision).toBe(true);
+    expect((await db.proposals.findUniqueOrThrow({ where: { proposal_id: id } })).status).toBe("approved");
+    expect((await db.formal_proposals.findUniqueOrThrow({ where: { proposal_doc_id: id } })).sent_at).not.toBeNull();
+    expect((await proposalService.getProposalWorkflowByTenant(a, id))?.formal?.sentAt).toBeTruthy();
+    expect((await proposalService.getProposalSummariesByTenant(a)).find(row => row.proposalId === id)?.formal?.sentAt).toBeTruthy();
+    await expect(service.recordProposalDeliveryByTenant({ ...input, tenantId: b })).rejects.toThrow("no encontrada");
+    await db.formal_proposals.update({ where: { proposal_doc_id: id }, data: { updated_at: new Date("2026-10-21T12:00:00Z"), sent_at: null } });
+    expect(await service.isProposalDeliveryAuthorizedByTenant(input)).toBe(false);
+    expect((await service.recordProposalDeliveryByTenant(input)).recordedForCurrentRevision).toBe(false);
+    expect((await db.formal_proposals.findUniqueOrThrow({ where: { proposal_doc_id: id } })).sent_at).toBeNull();
+    await db.proposals.update({ where: { proposal_id: id }, data: { status: "sent" } });
+    expect(await proposalService.setProposalOutcomeByTenant(a, id, "won", { isSuperAdmin: false, userId: owner, userRole: "owner" }, true)).toBe("invalid_status");
+    expect((await db.proposals.findUniqueOrThrow({ where: { proposal_id: id } })).status).toBe("sent");
+    expect(await db.proposal_approvals.count({ where: { proposal_id: id } })).toBe(0);
+  });
+
 });

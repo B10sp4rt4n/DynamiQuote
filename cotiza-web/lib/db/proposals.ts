@@ -46,7 +46,7 @@ const terminalStatuses: ProposalStatus[] = ["approved", "rejected", "expired"];
 // fuera de ahi (se reabre a borrador, se rechaza internamente, etc.), la
 // etiqueta queda contradiciendo al estatus y se limpia sola. "Descartada" no
 // se toca: esa sí convive con cualquier estatus por diseño.
-const OUTCOME_DECISION_STATUSES = new Set<ProposalStatus>(["sent", "approved"]);
+const OUTCOME_DECISION_STATUSES = new Set<ProposalStatus>(["approved"]);
 
 const legacyStatusMap: Record<string, ProposalStatus> = {
   "aprobada": "approved",
@@ -352,6 +352,8 @@ type FormalProposalSlice = {
   recipientContactTitle: string;
   recipientEmail: string;
   status: ProposalStatus;
+  sentAt?: string | null;
+  updatedAt?: string | null;
   subject: string;
   termsAndConditions: string;
   validUntil: string | null;
@@ -459,6 +461,8 @@ function toFormalSlice(row: {
   recipient_contact_title: string | null;
   recipient_email: string | null;
   status: string | null;
+  sent_at?: Date | null;
+  updated_at?: Date | null;
   subject: string | null;
   terms_and_conditions: string | null;
   valid_until: Date | null;
@@ -484,6 +488,8 @@ function toFormalSlice(row: {
     recipientContactTitle: row.recipient_contact_title ?? "",
     recipientEmail: row.recipient_email ?? "",
     status: normalizeStatus(row.status),
+    sentAt: row.sent_at?.toISOString() ?? null,
+    updatedAt: row.updated_at?.toISOString() ?? null,
     subject: row.subject ?? "Sin asunto",
     termsAndConditions: row.terms_and_conditions ?? "",
     validUntil: dateToIso(row.valid_until),
@@ -679,6 +685,8 @@ export async function createProposalFromQuoteByTenant(
           recipient_contact_title: true,
           recipient_email: true,
           status: true,
+          sent_at: true,
+          updated_at: true,
           subject: true,
           terms_and_conditions: true,
           valid_until: true,
@@ -985,6 +993,8 @@ type ProposalSummaryRow = Prisma.proposalsGetPayload<{
         recipient_contact_title: true;
         recipient_email: true;
         status: true;
+        sent_at: true;
+        updated_at: true;
         subject: true;
         custom_intro: true;
         objective: true;
@@ -1033,6 +1043,8 @@ async function fetchProposalSummaryRows(
           recipient_contact_title: true,
           recipient_email: true,
           status: true,
+          sent_at: true,
+          updated_at: true,
           subject: true,
           terms_and_conditions: true,
           valid_until: true,
@@ -1488,6 +1500,8 @@ export async function getProposalWorkflowByTenant(
           recipient_contact_title: true,
           recipient_email: true,
           status: true,
+          sent_at: true,
+          updated_at: true,
           subject: true,
           terms_and_conditions: true,
           valid_until: true,
@@ -1737,8 +1751,8 @@ export type ProposalOutcomeDateInput = {
 
 // Etiqueta el desenlace comercial real (ganada/perdida) -- separado del
 // status de flujo interno. Solo se puede asignar (won/lost) cuando el
-// status actual es "sent" o "approved" (esos son los dos puntos donde
-// tiene sentido preguntar si el cliente acepto); quitar la etiqueta
+// status actual es "approved": el resultado comercial no autoriza.
+// Quitar la etiqueta
 // (null) siempre esta permitido, para poder corregir un error.
 export async function setProposalOutcomeByTenant(
   tenantId: string,
@@ -1768,7 +1782,7 @@ export async function setProposalOutcomeByTenant(
         && (row.outcome_at?.toISOString() ?? null) !== (dateInput.expectedOutcomeAt ? new Date(dateInput.expectedOutcomeAt).toISOString() : null))) {
       return "conflict";
     }
-    if ((outcome === "won" || outcome === "lost") && row.status !== "sent" && row.status !== "approved") {
+    if ((outcome === "won" || outcome === "lost") && row.status !== "approved") {
       return "invalid_status";
     }
     const now = new Date();
@@ -1801,7 +1815,7 @@ export async function setProposalOutcomeByTenant(
         proposalId, tenantId, opportunityId: row.opportunity_id,
         action: row.outcome === outcome ? "close_date_corrected" : outcome === null ? "outcome_cleared" : "outcome_set",
         before: { status: row.status, outcome: row.outcome, outcomeAt: row.outcome_at?.toISOString() ?? null },
-        after: { status: outcome === "won" && row.status === "sent" && actor.userId ? "approved" : row.status,
+        after: { status: row.status,
           outcome, outcomeAt: outcomeAt?.toISOString() ?? null },
         recordedAt: now.toISOString(), selectedCloseDate: dateInput.closedOn ?? null,
         legacyPayload: { actorUserId: actor.userId, fromOutcome: row.outcome, toOutcome: outcome,
@@ -1809,22 +1823,6 @@ export async function setProposalOutcomeByTenant(
           selectedCloseDate: dateInput.closedOn ?? null, datePrecision: dateInput.closedOn ? "day" : "instant",
           recordedAt: now.toISOString() },
     });
-    if (outcome === "won" && row.status === "sent" && actor.userId) {
-      await applyProposalStatusOnly(tx, { currentOutcome: outcome, nextStatus: "approved", proposalId });
-      await registerProposalApprovalDecisionByTenant({
-        approverRole: resolveApproverRole(actor), approverUserId: actor.userId,
-        decision: "approved", proposalId,
-        reason: "Auto-aprobado: la propuesta fue marcada como ganada por el cliente.", tenantId,
-      }, tx);
-      await tx.proposal_audit_events.create({
-        data: {
-          created_at: now, event_hash: randomUUID(), event_id: randomUUID(),
-          event_type: "status_change_requested", proposal_id: proposalId, tenant_id: tenantId,
-          payload: JSON.stringify({ actorUserId: actor.userId, fromStatus: "sent", ok: true,
-            requestedStatus: "approved", resultStatus: "approved", trigger: "outcome_won" }),
-        },
-      });
-    }
     return "updated";
   });
 }
@@ -2112,54 +2110,6 @@ export async function executeMarginOverride(input: {
   return getProposalWorkflowByTenant(input.tenantId, input.proposalId);
 }
 
-// Si el margen ya calificaba para autorizacion final, resolveProposalIssuanceGate
-// permite enviarse la propuesta por correo sin pasar por "Solicitud de
-// aprobacion" -- pero eso dejaba la propuesta en "sent" sin ningun registro
-// de que quedo aprobada por politica de margen (a diferencia del atajo
-// equivalente al someter un borrador, que si registra la auto-aprobacion --
-// ver updateProposalWorkflowByTenant, "isDraftMarginAutoApproval"). Este
-// helper cierra ese hueco para la via de envio por correo: si el margen
-// califica (no es un forzamiento de Owner/Superadmin -- ese caso ya tiene su
-// propio registro via executeMarginOverride/consumeProposalIssuanceForce),
-// promueve directo a "approved" y deja el mismo rastro en proposal_approvals
-// que el atajo de borrador, con quien disparo el envio como aprobador
-// (la decision la toma la politica, no la persona).
-export async function autoApproveProposalByMarginPolicy(input: {
-  actor: { isSuperAdmin: boolean; userId: string | null; userRole: "superadmin" | "owner" | "admin" | "user" };
-  proposalId: string;
-  reason: string;
-  tenantId: string;
-}): Promise<ProposalWorkflowDetail | null> {
-  const current = await getProposalWorkflowByTenant(input.tenantId, input.proposalId);
-
-  const approverUserId = input.actor.userId;
-  if (!current || current.status === "approved" || !approverUserId) {
-    return current;
-  }
-
-  await prisma.$transaction(async (tx) => {
-    await applyProposalStatusOnly(tx, {
-      currentOutcome: current.outcome,
-      nextStatus: "approved",
-      proposalId: input.proposalId,
-    });
-
-    await registerProposalApprovalDecisionByTenant(
-      {
-        approverRole: resolveApproverRole(input.actor),
-        approverUserId,
-        decision: "approved",
-        proposalId: input.proposalId,
-        reason: input.reason,
-        tenantId: input.tenantId,
-      },
-      tx,
-    );
-  });
-
-  return getProposalWorkflowByTenant(input.tenantId, input.proposalId);
-}
-
 export async function updateProposalWorkflowByTenant(
   tenantId: string,
   proposalId: string,
@@ -2323,7 +2273,7 @@ export async function updateProposalWorkflowByTenant(
   // Si el tenant exige un observador (requireObserverApproval) y quien
   // somete no lo satisface por si solo, la propuesta cae a "in_review" en
   // vez de fallar con un error. Cualquier otra transicion a "approved"
-  // (ej. "Cliente acepto" desde estado "sent", o una decision manual)
+  // (incluidos registros heredados que requieren autorización, o una decisión manual)
   // mantiene el chequeo estricto de elegibilidad + gate, sin cambios.
   const isDraftMarginAutoApproval = hasStatusUpdate && nextStatus === "approved" && currentStatus === "draft";
   const skipApprovalGate = isDraftMarginAutoApproval && !policy.requireObserverApproval;
@@ -2517,7 +2467,7 @@ export async function updateProposalWorkflowByTenant(
           ? recipientContactTitleToPersist
           : undefined,
         recipient_email: hasRecipientEmailUpdate ? recipientEmailToPersist : undefined,
-        sent_at: nextStatus === "sent" ? now : undefined,
+        sent_at: hasContentUpdate || (nextStatus === "draft" && currentStatus !== "draft") ? null : undefined,
         status: hasStatusUpdate ? nextStatus : undefined,
         subject: hasSubjectUpdate ? subjectToPersist : undefined,
         custom_intro: hasCustomIntroUpdate ? customIntroToPersist || null : undefined,

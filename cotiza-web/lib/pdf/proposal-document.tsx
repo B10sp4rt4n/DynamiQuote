@@ -353,12 +353,12 @@ function formatDate(value: string | null | undefined): string {
 
 function statusLabel(value: ProposalWorkflowDetail["status"]): string {
   const labels: Record<ProposalWorkflowDetail["status"], string> = {
-    approved: "Aprobada",
+    approved: "Autorizada",
     draft: "Borrador",
     expired: "Vencida",
     in_review: "En revision",
     rejected: "Rechazada",
-    sent: "Enviada",
+    sent: "Por verificar",
   };
 
   return labels[value] ?? value;
@@ -537,7 +537,7 @@ export function ProposalPdfDocument({
 
         <View style={styles.dates}>
           <Text style={styles.micro}>Fecha: {formatDate(formal?.issuedDate)}</Text>
-          <Text style={styles.micro}>Estado: {statusLabel(proposal.status)}</Text>
+          <Text style={styles.micro}>Autorización interna: {statusLabel(proposal.status)}</Text>
           <Text style={styles.micro}>Moneda: {formal?.currency ?? "N/D"}</Text>
           {formal?.validUntil ? (
             <Text style={styles.micro}>Válido hasta: {formatDate(formal.validUntil)}</Text>

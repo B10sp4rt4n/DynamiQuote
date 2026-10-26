@@ -255,3 +255,10 @@ describe("proposal-workflow-guard", () => {
     expect(resolveApprovalGateError([])).toBeNull();
   });
 });
+
+it("delivery is not a workflow transition or an authorization bypass", () => {
+  expect(canTransitionProposalStatus("draft", "sent")).toBe(false);
+  expect(canTransitionProposalStatus("approved", "sent")).toBe(false);
+  expect(() => assertProposalWorkflowGuard({ currentStatus: "sent", nextStatus: "approved",
+    allowApprovedTermsUpdate: false, hasContentUpdate: false, marginCanAuthorizeFinal: false })).toThrow("margen");
+});

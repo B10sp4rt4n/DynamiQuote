@@ -66,7 +66,7 @@ type ProposalShellProps = {
 type StatusFilterGroup = "estatus" | "riesgo" | "desenlace";
 
 const STATUS_FILTER_GROUPS: Array<{ group: StatusFilterGroup; label: string }> = [
-  { group: "estatus", label: "Estatus" },
+  { group: "estatus", label: "Autorización interna" },
   { group: "riesgo", label: "Riesgo" },
   { group: "desenlace", label: "Desenlace" },
 ];
@@ -83,9 +83,9 @@ type StatusFilterChip =
 const STATUS_FILTERS: StatusFilterChip[] = [
   { className: "border-zinc-900 bg-zinc-900 text-white", countKey: "all", group: "estatus", kind: "status", label: "Todas", value: "all" },
   { className: "border-zinc-300 bg-white text-zinc-600 hover:bg-zinc-50", countKey: "draft", group: "estatus", kind: "status", label: "Borrador", value: "draft" },
-  { className: "border-blue-300 bg-white text-blue-700 hover:bg-blue-50", countKey: "sent", group: "estatus", kind: "status", label: "Enviadas", value: "sent" },
+  { className: "border-blue-300 bg-white text-blue-700 hover:bg-blue-50", countKey: "sent", group: "estatus", kind: "status", label: "Por verificar (anteriores)", value: "sent" },
   { className: "border-amber-300 bg-white text-amber-700 hover:bg-amber-50", countKey: "in_review", group: "estatus", kind: "status", label: "En revision", value: "in_review" },
-  { className: "border-emerald-300 bg-white text-emerald-700 hover:bg-emerald-50", countKey: "approved", group: "estatus", kind: "status", label: "Aprobadas", value: "approved" },
+  { className: "border-emerald-300 bg-white text-emerald-700 hover:bg-emerald-50", countKey: "approved", group: "estatus", kind: "status", label: "Autorizadas", value: "approved" },
   { className: "border-rose-300 bg-white text-rose-700 hover:bg-rose-50", countKey: "rejected", group: "estatus", kind: "status", label: "Rechazadas", value: "rejected" },
   { className: "border-zinc-300 bg-white text-zinc-500 hover:bg-zinc-50", countKey: "expired", group: "estatus", kind: "status", label: "Vencidas", value: "expired" },
   { className: "border-rose-300 bg-white text-rose-700 hover:bg-rose-50", countKey: "blocked_margin", group: "riesgo", kind: "risk", label: "Bloqueadas margen" },
@@ -116,9 +116,9 @@ type ProposalStatusOption = {
 
 const statusOptions: ProposalStatusOption[] = [
   { label: "Borrador", value: "draft" },
-  { label: "Enviada", value: "sent" },
+  { label: "Autorización por verificar", value: "sent" },
   { label: "En revision", value: "in_review" },
-  { label: "Aprobada", value: "approved" },
+  { label: "Autorizada", value: "approved" },
   { label: "Rechazada", value: "rejected" },
   { label: "Vencida", value: "expired" },
 ];
@@ -134,7 +134,7 @@ function getStatusBadgeClass(value: ProposalStatus): string {
     case "in_review": return "bg-amber-100 text-amber-800";
     case "approved":  return "bg-emerald-100 text-emerald-800";
     case "rejected":  return "bg-rose-100 text-rose-800";
-    case "sent":      return "bg-blue-100 text-blue-800";
+    case "sent":      return "bg-amber-100 text-amber-800";
     case "expired":   return "bg-zinc-200 text-zinc-600";
   }
 }
@@ -204,29 +204,8 @@ function formatMissingApprovalRoles(roles: Array<"owner" | "superadmin">): strin
   return roles.map((role) => (role === "owner" ? "Owner" : "Superadmin")).join(", ");
 }
 
-function getFinalAuthorizationBadge(item: ProposalSummary): {
-  className: string;
-  label: string;
-} | null {
-  if (item.status === "approved") {
-    return {
-      className: "border-emerald-300 bg-emerald-50 text-emerald-700",
-      label: "Autorizada",
-    };
-  }
-
-  if (item.marginEvaluation && !item.marginEvaluation.canAuthorizeFinal) {
-    return {
-      className: "border-rose-300 bg-rose-50 text-rose-700",
-      label: "Bloqueada por margen",
-    };
-  }
-
-  return null;
-}
-
 function isMarginBlocked(item: ProposalSummary): boolean {
-  return Boolean(item.marginEvaluation && !item.marginEvaluation.canAuthorizeFinal);
+  return item.status !== "approved" && Boolean(item.marginEvaluation && !item.marginEvaluation.canAuthorizeFinal);
 }
 
 export function ProposalShell({
@@ -287,6 +266,9 @@ export function ProposalShell({
   const [descriptionEnabled, setDescriptionEnabled] = useState<boolean>(
     Boolean(proposals[0]?.formal?.customIntro || proposals[0]?.formal?.objective),
   );
+  const [sendToContact, setSendToContact] = useState(false);
+  const [selectedSentAt, setSelectedSentAt] = useState<string | null>(null);
+  const [selectedOutcome, setSelectedOutcome] = useState<string | null>(null);
   const [selectedStatus, setSelectedStatus] = useState<ProposalStatus>(
     proposals[0]?.status ?? "draft",
   );
@@ -529,6 +511,7 @@ export function ProposalShell({
     const found = items.find((item) => item.proposalId === proposalId);
 
     setSelectedProposalId(proposalId);
+    setSendToContact(false);
     setIssuerCompany(found?.formal?.issuerCompany ?? "");
     setIssuerEmail(found?.formal?.issuerEmail ?? "");
     setIssuerPhone(found?.formal?.issuerPhone ?? "");
@@ -673,7 +656,9 @@ export function ProposalShell({
       const data = (await response.json()) as {
         error?: string;
         proposal?: {
+          outcome?: "won" | "lost" | "discarded" | null;
           formal: {
+            sentAt?: string | null;
             currency: string | null;
             customIntro: string | null;
             issuerCompany: string;
@@ -731,6 +716,8 @@ export function ProposalShell({
       setDescriptionEnabled(Boolean(data.proposal.formal?.customIntro || data.proposal.formal?.objective));
       setTermsAndConditions(data.proposal.formal?.termsAndConditions ?? "");
       setSelectedStatus(data.proposal.status);
+      setSelectedSentAt(data.proposal.formal?.sentAt ?? null);
+      setSelectedOutcome(data.proposal.outcome ?? null);
       setSelectedIssuanceStatus(data.proposal.issuanceStatus ?? "normal");
       setSelectedHasOpenMarginOverrideWindow(data.proposal.hasOpenMarginOverrideWindow ?? false);
       setSelectedIsPendingOverrideTarget(data.proposal.isPendingOverrideTarget ?? false);
@@ -866,9 +853,8 @@ export function ProposalShell({
     const statusToSend = statusOverride ?? selectedStatus;
 
     // El guard de margen solo aplica al aprobar desde borrador o revisión.
-    // Si el usuario registra la aceptación del cliente desde el estado "Enviada",
-    // la propuesta ya fue aprobada internamente antes; no se re-valida el margen.
-    if (statusToSend === "approved" && !marginAllowsFinalAuthorization && selectedStatus !== "sent") {
+    // Las decisiones comerciales no omiten los controles de autorización.
+    if (statusToSend === "approved" && !marginAllowsFinalAuthorization) {
       setSaveStatus("error");
       setErrorMessage(
         selectedProposal?.marginEvaluation?.summary ??
@@ -996,6 +982,7 @@ export function ProposalShell({
       const data = (await response.json()) as {
         error?: string;
         proposal?: {
+          outcome?: "won" | "lost" | "discarded" | null;
           formal: {
             currency: string | null;
             customIntro: string | null;
@@ -1095,6 +1082,8 @@ export function ProposalShell({
       // Sincronizar el dropdown con el estado real confirmado por la API
       // (la API puede ajustar el estado si el workflow lo requiere).
       setSelectedStatus(data.proposal.status);
+      setSelectedOutcome(data.proposal.outcome ?? null);
+      setSelectedSentAt(null);
       setSelectedIssuanceStatus(data.proposal.issuanceStatus ?? "normal");
       setSelectedHasOpenMarginOverrideWindow(data.proposal.hasOpenMarginOverrideWindow ?? false);
       setTermsAndConditions(data.proposal.formal?.termsAndConditions ?? termsAndConditions);
@@ -1116,8 +1105,7 @@ export function ProposalShell({
   //   sin necesidad de acción del owner. El usuario ve el estado "Aprobada" de inmediato.
   // - Si el margen NO cumple parámetros: cambia el estado a "En revisión" para que el owner
   //   evalúe la propuesta y decida aprobar o rechazar manualmente.
-  // NOTA: "Enviada" es el estado que se asigna cuando se envía la propuesta al cliente por correo,
-  //       no cuando se envía a revisión interna.
+  // El envío del PDF se registra separado de la autorización y del cierre comercial.
   async function handleSendToApproval() {
     if (!selectedProposal) return;
     const targetStatus: ProposalStatus = marginAllowsFinalAuthorization ? "approved" : "in_review";
@@ -1147,6 +1135,7 @@ export function ProposalShell({
       const data = (await response.json()) as {
         error?: string;
         proposal?: {
+          outcome?: "won" | "lost" | "discarded" | null;
           approvalGate: ProposalApprovalGateView;
           approvals: ProposalApprovalRecordView[];
           formal: ProposalSummary["formal"];
@@ -1165,6 +1154,7 @@ export function ProposalShell({
       setApprovals(data.proposal.approvals ?? []);
       setApprovalGate(data.proposal.approvalGate ?? null);
       setSelectedStatus(data.proposal.status);
+      setSelectedOutcome(data.proposal.outcome ?? null);
       setSelectedIssuanceStatus(data.proposal.issuanceStatus ?? "normal");
       setSelectedHasOpenMarginOverrideWindow(data.proposal.hasOpenMarginOverrideWindow ?? false);
       if (data.proposal.status === "approved") {
@@ -1239,7 +1229,8 @@ export function ProposalShell({
 
       const data = (await response.json()) as {
         error?: string;
-        proposal?: { formal: { currency: string | null } | null };
+        proposal?: {
+          outcome?: "won" | "lost" | "discarded" | null; formal: { currency: string | null } | null };
       };
 
       if (!response.ok || !data.proposal) {
@@ -1308,36 +1299,26 @@ export function ProposalShell({
 
     try {
       const response = await fetch(`/api/proposals/${selectedProposal.proposalId}/send-email`, {
-        // El destino se resuelve server-side; no se envía correo del cliente
-        body: JSON.stringify({}),
+        // Only opt-in; saved addresses are resolved server-side.
+        body: JSON.stringify({ sendToContact }),
         headers: {
           "Content-Type": "application/json",
         },
         method: "POST",
       });
 
-      const data = (await response.json().catch(() => null)) as { error?: string } | null;
+      const data = (await response.json().catch(() => null)) as { error?: string; sentAt?: string | null; warning?: string | null } | null;
 
       if (!response.ok) {
         throw new Error(data?.error ?? "No fue posible enviar el correo");
       }
 
-      // Si la propuesta estaba aprobada, transiciona a "Enviada" para registrar que fue despachada.
-      // Si ya estaba "Enviada", mantiene el estado (re-envío).
-      if (selectedStatus === "approved") {
-        setSelectedStatus("sent");
-        setItems((current) =>
-          current.map((item) =>
-            item.proposalId === selectedProposal.proposalId ? { ...item, status: "sent" } : item,
-          ),
-        );
-      }
+      // Dispatch updates delivery metadata, never the authorization state.
+      setSelectedSentAt(data?.sentAt ?? null);
+      setItems(current => current.map(item => item.proposalId === selectedProposal.proposalId && item.formal
+        ? { ...item, formal: { ...item.formal, sentAt: data?.sentAt ?? null } } : item));
       setEmailStatus("success");
-      setEmailMessage(
-        selectedStatus === "sent"
-          ? "PDF re-enviado a tu correo."
-          : "PDF enviado a tu correo.",
-      );
+      setEmailMessage(data?.warning ?? (sendToContact ? "Proveedor aceptó el envío al cliente, con copia al owner y al emisor. La propuesta conserva su autorización." : "Envío del PDF al vendedor registrado. La propuesta conserva su autorización."));
     } catch (error) {
       setEmailStatus("error");
       setEmailMessage(error instanceof Error ? error.message : "Error interno al enviar correo");
@@ -1465,12 +1446,12 @@ export function ProposalShell({
           <p className="text-sm uppercase tracking-[0.18em] text-zinc-500">Tenant activo</p>
           <h1 className="text-2xl font-semibold text-zinc-900">Propuestas de {tenantName}</h1>
         </div>
-        <a
+        <Link
           className="w-fit rounded-lg border border-zinc-300 bg-white px-3 py-1.5 text-sm font-medium text-zinc-700 transition hover:bg-zinc-100"
           href="/propuestas/kpis"
         >
           Ver KPIs
-        </a>
+        </Link>
       </div>
       <p className="mt-2 text-zinc-600">
         Gestiona estado y condiciones comerciales por propuesta con aislamiento estricto por
@@ -1579,13 +1560,12 @@ export function ProposalShell({
               <tr>
                 <th className="px-4 py-3 font-medium">Propuesta</th>
                 <th className="px-4 py-3 font-medium">Cliente</th>
-                <th className="px-4 py-3 font-medium">Estado</th>
+                <th className="px-4 py-3 font-medium">Autorización y envío</th>
                 <th className="px-4 py-3 font-medium">Fecha</th>
               </tr>
             </thead>
             <tbody className="divide-y divide-zinc-200 bg-white">
               {filteredItems.map((item) => {
-                const finalAuthorizationBadge = getFinalAuthorizationBadge(item);
                 const marginBlocked = isMarginBlocked(item);
 
                 return (
@@ -1613,14 +1593,9 @@ export function ProposalShell({
                       <div className="flex flex-col gap-1">
                         <div className="flex items-center gap-2">
                           <span>{formatStatus(item.status)}</span>
-                          {finalAuthorizationBadge ? (
-                            <span
-                              className={`rounded-full border px-2 py-0.5 text-[10px] font-medium ${finalAuthorizationBadge.className}`}
-                            >
-                              {finalAuthorizationBadge.label}
-                            </span>
-                          ) : null}
+
                         </div>
+                        <span className="text-xs text-zinc-500">{item.formal?.sentAt ? `PDF enviado al vendedor · ${formatDate(item.formal.sentAt)}` : "Sin envío del PDF registrado"}</span>
                         {marginBlocked ? (
                           <span className="w-fit rounded-full border border-rose-300 bg-rose-50 px-2 py-0.5 text-[10px] font-medium text-rose-700">
                             Bloqueada por margen
@@ -1677,7 +1652,7 @@ export function ProposalShell({
               <div className="flex items-center gap-0 rounded-lg border border-zinc-200 bg-white overflow-hidden text-xs font-medium">
                 {([
                   { step: 1, label: "1. Llenar datos", statuses: ["draft"] as ProposalStatus[] },
-                  { step: 2, label: "2. Enviar / Revisión", statuses: ["sent", "in_review"] as ProposalStatus[] },
+                  { step: 2, label: "2. Revisión interna", statuses: ["sent", "in_review"] as ProposalStatus[] },
                   { step: 3, label: "3. Aprobación final", statuses: ["approved", "rejected", "expired"] as ProposalStatus[] },
                 ] as const).map(({ step, label, statuses }) => {
                   const isCurrent = statuses.includes(selectedStatus);
@@ -2212,7 +2187,7 @@ export function ProposalShell({
               {/* Sección de envío a aprobación: visible solo cuando la propuesta está en borrador.
                   El mensaje y la acción del botón cambian según si el margen pre-aprueba o no:
                   - marginAllowsFinalAuthorization: dentro de parámetros → aprueba automáticamente.
-                  - Sin pre-aprobación: envía al owner con estado "Enviada" para su decisión. */}
+                  - Sin pre-aprobación: solicita revisión al owner. */}
               {selectedStatus === "draft" ? (
                 <div
                   className={`rounded-lg border p-3 ${
@@ -2254,11 +2229,11 @@ export function ProposalShell({
                   Las únicas actualizaciones manuales permitidas son la decisión del cliente
                   (cuando ya fue enviada) y el bloque de aprobaciones formales del owner. */}
               <div className="flex flex-wrap items-center gap-3">
-                <span className="text-sm font-medium text-zinc-700">Estado actual:</span>
+                <span className="text-sm font-medium text-zinc-700">Autorización interna:</span>
                 <span className={`inline-flex items-center rounded-full px-3 py-1 text-xs font-semibold ${getStatusBadgeClass(selectedStatus)}`}>
                   {formatStatus(selectedStatus)}
                 </span>
-                {selectedProposal.marginEvaluation && !selectedProposal.marginEvaluation.canAuthorizeFinal ? (
+                {selectedStatus !== "approved" && selectedProposal.marginEvaluation && !selectedProposal.marginEvaluation.canAuthorizeFinal ? (
                   <span className="inline-flex items-center rounded-full border border-rose-300 bg-rose-50 px-3 py-1 text-xs font-semibold text-rose-700">
                     Bloqueada por margen
                   </span>
@@ -2270,7 +2245,7 @@ export function ProposalShell({
                 ) : null}
               </div>
 
-              {selectedProposal.marginEvaluation && !selectedProposal.marginEvaluation.canAuthorizeFinal ? (
+              {selectedStatus !== "approved" && selectedProposal.marginEvaluation && !selectedProposal.marginEvaluation.canAuthorizeFinal ? (
                 <div className="rounded-lg border border-rose-200 bg-rose-50 px-3 py-3 text-sm text-rose-900">
                   <p className="font-semibold">Esta propuesta sigue bloqueada por margen.</p>
                   <p className="mt-1 text-xs leading-5 text-rose-800">
@@ -2299,53 +2274,44 @@ export function ProposalShell({
                 </div>
               ) : null}
 
-              {/* Botón de correo: disponible cuando la propuesta está aprobada o ya fue enviada (re-envío).
-                  El PDF llega al correo del vendedor (sesión activa) + copia al owner del tenant.
-                  El primer envío cambia el estado a "Enviada". Re-envíos mantienen el estado. */}
-              {selectedStatus === "approved" || selectedStatus === "sent" ? (
+              {/* Botón de correo: disponible únicamente con autorización interna vigente.
+                  El contacto recibe el PDF sólo con opt-in explícito; en ese caso owner y emisor reciben copia.
+                  El envío conserva la autorización; el registro de entrega se muestra por separado. */}
+              {selectedStatus === "approved" ? (
                 <div className="flex flex-col gap-1">
+                  <label className="flex items-center gap-2 text-sm text-zinc-700">
+                    <input type="checkbox" checked={sendToContact} disabled={emailStatus === "sending"}
+                      onChange={event => { setSendToContact(event.target.checked); setEmailMessage(null); }} />
+                    Habilitar envío al contacto del cliente
+                  </label>
+                  <p className="text-xs text-zinc-500">{sendToContact
+                    ? `Para: ${selectedProposal.formal?.recipientEmail || "Falta el correo del contacto"}. CC: owner y emisor. Se usarán los datos guardados.`
+                    : "Para: tu correo. CC: owner."}</p>
                   <button
                     className="w-fit rounded-lg border border-blue-300 bg-blue-50 px-4 py-2 text-sm font-medium text-blue-700 transition hover:bg-blue-100 disabled:cursor-not-allowed disabled:opacity-60"
-                    disabled={emailStatus === "sending" || emailReleaseGate.kind === "blocked"}
+                    disabled={emailStatus === "sending" || emailReleaseGate.kind === "blocked" || (sendToContact && !selectedProposal.formal?.recipientEmail)}
                     onClick={() => { ensureCurrencyThenRun(() => { void handleSendEmailProposal(); }); }}
                     title={emailReleaseGate.kind === "blocked" ? emailReleaseGate.reason : undefined}
                     type="button"
                   >
                     {emailStatus === "sending"
                       ? "Enviando..."
-                      : selectedStatus === "sent"
+                      : sendToContact
+                        ? "Enviar propuesta al cliente"
+                        : selectedSentAt
                         ? "Re-enviarme el PDF"
                         : "Enviarme el PDF"}
                   </button>
-                  <p className="text-xs text-zinc-500">El PDF llega a tu correo. El owner recibe copia.</p>
+                  <p className="text-xs text-zinc-500">{sendToContact ? "El cliente recibe un mensaje comercial con el PDF adjunto." : "El PDF llega a tu correo. El owner recibe copia."}</p>
                 </div>
               ) : null}
 
-              {/* Decisión del cliente: una vez que la propuesta fue enviada al cliente (estado "Enviada"),
-                  el usuario registra si el cliente la aceptó o rechazó. */}
-              {selectedStatus === "sent" ? (
-                <div className="flex flex-col gap-2 rounded-lg border border-zinc-200 bg-zinc-50 p-3">
-                  <p className="text-sm font-medium text-zinc-700">Registrar decisión del cliente</p>
-                  <div className="flex gap-2">
-                    <button
-                      className="rounded-lg border border-emerald-300 bg-emerald-50 px-3 py-2 text-sm font-medium text-emerald-700 hover:bg-emerald-100 disabled:opacity-60"
-                      disabled={saveStatus === "saving"}
-                      onClick={() => handleSave("approved")}
-                      type="button"
-                    >
-                      Cliente aceptó
-                    </button>
-                    <button
-                      className="rounded-lg border border-rose-300 bg-rose-50 px-3 py-2 text-sm font-medium text-rose-700 hover:bg-rose-100 disabled:opacity-60"
-                      disabled={saveStatus === "saving"}
-                      onClick={() => handleSave("rejected")}
-                      type="button"
-                    >
-                      Cliente rechazó
-                    </button>
-                  </div>
-                </div>
-              ) : null}
+              <div className="rounded-lg border border-zinc-200 bg-white p-3 text-sm">
+                <p><strong>Envío del PDF:</strong> {selectedSentAt ? `Registrado por el proveedor · ${formatDate(selectedSentAt)}` : "Sin envío registrado"}</p>
+                <p className="mt-1"><strong>Resultado comercial:</strong> {selectedOutcome === "won" ? "Ganada" : selectedOutcome === "lost" ? "Perdida" : selectedOutcome === "discarded" ? "Descartada" : "Sin cierre registrado"}</p>
+                <p className="mt-2 text-xs text-zinc-500">El registro del proveedor no confirma recepción ni aceptación del cliente. Registra Ganada o Perdida en el detalle de la propuesta o en Pipeline.</p>
+                {selectedStatus === "sent" ? <p className="mt-2 text-xs text-amber-800">Registro anterior: el dato de envío no acredita autorización. Revisa y autoriza la propuesta antes de volver a enviar.</p> : null}
+              </div>
 
               <div className="rounded-lg border border-zinc-200 bg-white p-3">
                 <p className="text-xs uppercase tracking-[0.18em] text-zinc-500">Aprobaciones formales</p>
