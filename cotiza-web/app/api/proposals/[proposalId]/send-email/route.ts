@@ -1,3 +1,5 @@
+import { createHash } from "node:crypto";
+import { recordProposalDeliveryByTenant, isProposalDeliveryAuthorizedByTenant } from "@/lib/db/proposal-delivery";
 import { renderToBuffer } from "@react-pdf/renderer";
 import { NextResponse } from "next/server";
 import { auth, clerkClient } from "@clerk/nextjs/server";
@@ -5,10 +7,8 @@ import { auth, clerkClient } from "@clerk/nextjs/server";
 import { getCurrentTenantContext } from "@/lib/auth/tenant-context";
 import { prisma } from "@/lib/db/prisma";
 import {
-  autoApproveProposalByMarginPolicy,
-  consumeProposalIssuanceForce,
   getProposalWorkflowByTenant,
-  updateProposalWorkflowByTenant,
+  isProposalVisibleToViewer,
 } from "@/lib/db/proposals";
 import { recordProposalAuditEvent } from "@/lib/db/proposal-audit";
 import { getTenantProfileByTenant } from "@/lib/db/tenants";
@@ -88,11 +88,13 @@ async function resolveAppUserEmailByTenant(tenantId: string, userId: string | nu
 async function resolveTenantOwnerEmail(tenantId: string): Promise<string | null> {
   try {
     const ownerRow = await prisma.app_users.findFirst({
-      select: { user_id: true },
+      select: { user_id: true, email: true, contact_email: true },
       where: { role: "owner", tenant_id: tenantId, active: true },
     });
     if (!ownerRow) return null;
 
+    const storedEmail = sanitizeEmail(ownerRow.contact_email) ?? sanitizeEmail(ownerRow.email);
+    if (storedEmail) return storedEmail;
     const client = await clerkClient();
     const clerkUser = await client.users.getUser(ownerRow.user_id);
     const primary = clerkUser.emailAddresses.find(
@@ -153,6 +155,14 @@ function buildSellerProposalHtml(input: {
 </html>`;
 }
 
+function escapeHtml(value: string): string {
+  return value.replace(/[&<>"']/g, char => ({ "&": "&amp;", "<": "&lt;", ">": "&gt;", '"': "&quot;", "'": "&#39;" })[char]!);
+}
+
+function buildCustomerProposalHtml(input: { contactName: string; issuerCompany: string; proposalNumber: string }): string {
+  return `<html><body><p>Hola ${escapeHtml(input.contactName)},</p><p>Adjuntamos nuestra propuesta ${escapeHtml(input.proposalNumber)} para tu revisión.</p><p>Quedamos atentos a tus comentarios.</p><p>${escapeHtml(input.issuerCompany)}</p></body></html>`;
+}
+
 export async function POST(request: Request, context: RouteContext) {
   const tenant = await getCurrentTenantContext();
 
@@ -181,21 +191,25 @@ export async function POST(request: Request, context: RouteContext) {
     return NextResponse.json({ error: resendClient.error }, { status: 500 });
   }
 
-  // Ignorar cualquier email del body — el destino se resuelve server-side
-  await request.json().catch(() => null);
+  // Only the opt-in is accepted; recipient addresses always come from this tenant's saved proposal.
+  const body: unknown = await request.json().catch(() => null);
+  if (!body || typeof body !== "object" || Array.isArray(body) ||
+    ("sendToContact" in body && typeof body.sendToContact !== "boolean")) {
+    return NextResponse.json({ error: "La opción de envío al contacto debe ser booleana." }, { status: 400 });
+  }
+  const sendToContact = "sendToContact" in body && body.sendToContact === true;
 
+  const canSeeAll = tenant.isSuperAdmin || tenant.userRole === "owner" || tenant.userRole === "admin";
+  if (!await isProposalVisibleToViewer(tenant.id, proposalId, tenant.userId, canSeeAll)) {
+    return NextResponse.json({ error: "Propuesta no encontrada" }, { status: 404 });
+  }
   const proposal = await getProposalWorkflowByTenant(tenant.id, proposalId, { includeLogoData: true });
 
   if (!proposal) {
     return NextResponse.json({ error: "Propuesta no encontrada" }, { status: 404 });
   }
 
-  // A diferencia de PDF/Excel (vista previa interna, un borrador se puede
-  // descargar con marca de agua para revision), el correo libera la
-  // propuesta de verdad -- exige que ya este aprobada (o que el margen
-  // califique, que se autoaprueba antes de enviar). Salvador, 2026-10-01:
-  // "no puedes enviar algo que no se aprobo, si puedes emitir un borrador
-  // pero no puedes liberarlo por correo".
+  // Dispatch requires recorded authorization before the provider is called.
   const issuanceGate = resolveProposalEmailReleaseGate({
     issuanceStatus: proposal.issuanceStatus,
     marginCanAuthorizeFinal: proposal.marginEvaluation.canAuthorizeFinal,
@@ -213,13 +227,8 @@ export async function POST(request: Request, context: RouteContext) {
     return NextResponse.json({ error: issuanceGate.reason }, { status: 403 });
   }
 
-  if (issuanceGate.forced) {
-    await consumeProposalIssuanceForce({
-      consumedBy: tenant.userId ?? null,
-      consumedVia: "email",
-      proposalId,
-      tenantId: tenant.id,
-    });
+  if (!proposal.formal?.proposalDocId) {
+    return NextResponse.json({ error: "Falta la revisión del documento formal; recarga la propuesta" }, { status: 409 });
   }
 
   // Resolver el correo del vendedor con fallbacks robustos:
@@ -230,14 +239,12 @@ export async function POST(request: Request, context: RouteContext) {
   const ownerEmail = await resolveTenantOwnerEmail(tenant.id);
   const sellerEmail = sessionEmail ?? formIssuerEmail ?? appUserEmail ?? ownerEmail;
 
-  console.info("[proposal-email] Resolucion de destinatario vendedor", {
-    appUserEmail,
-    ownerEmail,
-    proposalId,
-    sellerEmail,
-    sessionEmail,
-    tenantId: tenant.id,
-  });
+  const emitterEmail = formIssuerEmail ?? sessionEmail ?? appUserEmail;
+  const contactEmail = sanitizeEmail(proposal.formal.recipientEmail);
+  if (sendToContact && (!contactEmail || !ownerEmail || !emitterEmail)) {
+    return NextResponse.json({ error: "Para enviar al cliente se requiere un correo válido del contacto, del owner y del emisor. Revisa los datos guardados." }, { status: 400 });
+  }
+  const toEmail = sendToContact ? contactEmail! : sellerEmail;
 
   if (!sellerEmail) {
     return NextResponse.json(
@@ -249,7 +256,6 @@ export async function POST(request: Request, context: RouteContext) {
   const proposalNumber = proposal.formal?.proposalNumber ?? proposal.proposalId;
   const issuerCompany = proposal.formal?.issuerCompany ?? tenant.name;
   const recipientCompany = proposal.formal?.recipientCompany ?? "Cliente";
-  const subjectBase = proposal.formal?.subject ?? proposalNumber;
   const from = resendClient.from;
 
   const issuerContact = proposal.formal?.issuerContactName?.trim().toLowerCase() ?? "";
@@ -295,25 +301,28 @@ export async function POST(request: Request, context: RouteContext) {
     filename: attachmentFilename,
   };
 
-  // Resolver email del owner para copia — siempre va en CC aunque coincida con el vendedor
-  const ccRecipients = Array.from(
-    new Set([ownerEmail].filter((e): e is string => Boolean(e))),
-  );
+  const ccRecipients = Array.from(new Set(
+    (sendToContact ? [ownerEmail, emitterEmail] : [ownerEmail])
+      .filter((email): email is string => Boolean(email) && email !== toEmail),
+  ));
+  const html = sendToContact
+    ? buildCustomerProposalHtml({ contactName: proposal.formal.recipientContactName || recipientCompany, issuerCompany, proposalNumber })
+    : buildSellerProposalHtml({ issuerCompany: escapeHtml(issuerCompany), proposalNumber: escapeHtml(proposalNumber),
+        recipientCompany: escapeHtml(recipientCompany), sellerName: escapeHtml(sellerName) });
+  const recipientScope = sendToContact ? "customer_owner_and_emitter" as const : "seller_and_owner" as const;
 
-  const html = buildSellerProposalHtml({
-    issuerCompany,
-    proposalNumber,
-    recipientCompany,
-    sellerName,
-  });
-
+  if (!await isProposalDeliveryAuthorizedByTenant({ tenantId: tenant.id, proposalId,
+    documentId: proposal.formal.proposalDocId, expectedUpdatedAt: proposal.formal.updatedAt ?? null })) {
+    return NextResponse.json({ error: "La propuesta cambió o perdió su autorización. Recarga antes de enviar." }, { status: 409 });
+  }
   const result = await resendClient.client.emails.send({
     attachments: [pdfAttachment],
     ...(ccRecipients.length > 0 ? { cc: ccRecipients } : {}),
     from,
     html,
-    subject: `[${proposalNumber}] Propuesta lista — ${recipientCompany}`,
-    to: [sellerEmail],
+    subject: sendToContact ? `[${proposalNumber}] Propuesta — ${issuerCompany}` : `[${proposalNumber}] Propuesta lista — ${recipientCompany}`,
+    to: [toEmail!],
+    ...(emitterEmail ? { replyTo: emitterEmail } : {}),
   });
 
   if (result.error) {
@@ -345,36 +354,17 @@ export async function POST(request: Request, context: RouteContext) {
     tenantId: tenant.id,
   });
 
-  await recordProposalAuditEvent({
-    actorUserId: tenant.userId,
-    eventType: "document_issued",
-    payload: {
-      forced: issuanceGate.forced,
-      status: proposal.status,
-      via: "email",
-      watermark: issuanceGate.watermark,
-    },
-    proposalId,
-    tenantId: tenant.id,
-  });
-
-  // Si el margen ya calificaba para autorizacion final, el envio equivale a
-  // una aprobacion de facto -- se deja ese rastro en proposal_approvals en
-  // vez de solo marcar "sent" sin aprobacion registrada (ver
-  // autoApproveProposalByMarginPolicy). Cuando el margen NO califica
-  // (borrador enviado como vista previa sin validar, o un forzamiento de
-  // Owner/Superadmin -- ese ya tiene su propio registro aparte via
-  // consumeProposalIssuanceForce), se conserva el comportamiento previo.
-  if (proposal.marginEvaluation.canAuthorizeFinal) {
-    await autoApproveProposalByMarginPolicy({
-      actor: { isSuperAdmin: tenant.isSuperAdmin, userId: tenant.userId, userRole: tenant.userRole },
-      proposalId,
-      reason: "Auto-aprobado: margen dentro de politica al enviarse la propuesta por correo.",
-      tenantId: tenant.id,
-    }).catch(() => null);
-  } else {
-    await updateProposalWorkflowByTenant(tenant.id, proposalId, { status: "sent" }).catch(() => null);
+  try {
+    const delivery = await recordProposalDeliveryByTenant({ tenantId: tenant.id, proposalId,
+      documentId: proposal.formal.proposalDocId, expectedUpdatedAt: proposal.formal.updatedAt ?? null,
+      actorUserId: tenant.userId, providerId: result.data?.id ?? null,
+      recipientScope, recipients: { to: [toEmail!], cc: ccRecipients },
+      pdfSha256: createHash("sha256").update(pdfBuffer).digest("hex"),
+    });
+    return NextResponse.json({ ok: true, success: true, recipientScope, ...delivery,
+      warning: delivery.recordedForCurrentRevision ? null : "El proveedor aceptó el correo, pero la propuesta cambió. Revisa el historial; no reenvíes por este aviso." });
+  } catch {
+    return NextResponse.json({ ok: true, success: true, recipientScope, sentAt: null, recordedForCurrentRevision: false,
+      warning: "El proveedor aceptó el correo, pero no se pudo guardar su registro. No lo reenvíes por este aviso." });
   }
-
-  return NextResponse.json({ ok: true, success: true }, { status: 200 });
 }

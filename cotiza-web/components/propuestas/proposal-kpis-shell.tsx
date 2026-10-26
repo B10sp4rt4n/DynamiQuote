@@ -51,10 +51,10 @@ const STATUS_COLORS = {
 
 const STATUS_LABELS: Record<keyof typeof STATUS_COLORS, string> = {
   draft: "Borrador",
-  sent: "Enviada",
+  sent: "Autorización por verificar",
   inReview: "En revisión",
   expired: "Vencida",
-  approved: "Aprobada",
+  approved: "Autorizada",
   rejected: "Rechazada",
 };
 
@@ -554,7 +554,7 @@ export function ProposalKpisShell({
                   <tr>
                     <th className="py-2 pr-4 font-medium">Vendedor</th>
                     <th className="py-2 pr-4 font-medium">Propuestas</th>
-                    <th className="py-2 pr-4 font-medium">Aprobadas</th>
+                    <th className="py-2 pr-4 font-medium">Autorizadas</th>
                     <th className="py-2 pr-4 font-medium">Tasa de conversión</th>
                     <th className="py-2 pr-4 font-medium">Monto propuesto</th>
                     <th className="py-2 font-medium">Monto aprobado</th>

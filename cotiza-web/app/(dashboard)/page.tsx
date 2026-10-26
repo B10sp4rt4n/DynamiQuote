@@ -1,3 +1,4 @@
+import Link from "next/link";
 import { getPackagesSummaryByTenant } from "@/lib/db/packages";
 import {
   getProposalMarginBlockedCountByTenant,
@@ -30,16 +31,16 @@ function StatCard({ label, value, sub }: StatCardProps) {
 
 const statusLabel: Record<string, string> = {
   draft: "Borrador",
-  sent: "Enviada",
+  sent: "Autorización por verificar",
   in_review: "En revision",
-  approved: "Aprobada",
+  approved: "Autorizada",
   rejected: "Rechazada",
   expired: "Vencida",
 };
 
 const statusColor: Record<string, string> = {
   draft: "bg-zinc-200 text-zinc-700",
-  sent: "bg-blue-100 text-blue-800",
+  sent: "bg-amber-100 text-amber-800",
   in_review: "bg-amber-100 text-amber-800",
   approved: "bg-emerald-100 text-emerald-800",
   rejected: "bg-rose-100 text-rose-800",
@@ -104,12 +105,12 @@ export default async function DashboardPage() {
                 ? "1 propuesta activa bloqueada por politica de margen"
                 : `${marginBlockedCount} propuestas activas bloqueadas por politica de margen`}
             </p>
-            <a
+            <Link
               className="ml-auto rounded-lg border border-rose-300 bg-white px-3 py-1 text-xs font-medium text-rose-700 hover:bg-rose-100"
               href="/propuestas?filter=blocked_margin"
             >
               Revisar
-            </a>
+            </Link>
           </div>
         ) : null}
         <div className="grid gap-3 grid-cols-3 md:grid-cols-6">
