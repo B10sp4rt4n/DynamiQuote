@@ -331,6 +331,137 @@
         "alternate_connection_attempted": false,
         "limits": "Does not establish that the team was deleted or that the application is down. Correct account/team context must be established before further access."
       }
+    },
+    {
+      "source_id": "src-vercel-access-recovered",
+      "source_type": "api_record",
+      "title": "Acceso del equipo recuperado en la conexión elegida por Salvador",
+      "author_or_origin": "Vercel API",
+      "retrieved_at_utc": "2026-10-26T02:17:51.400Z",
+      "locator": "https://vercel.com/salvador-ruiz-esparzas-projects/dynami-quote",
+      "access_scope": "authorized_source",
+      "integrity_status": "not_verified",
+      "observed": {
+        "account_selection": "Second already-linked connection selected explicitly by user; official team consent completed by user",
+        "team_id": "team_wCPRqvRGXWpRT4eUvfAz38jF",
+        "alias": "dynami-quote.vercel.app",
+        "project_id": "prj_DJT883Ac7UNuSKMrZUD1rPjZdsOd",
+        "deployment_id": "dpl_GvKryAuSHx1QQe22MNAUymSiUKwG",
+        "provider_read_succeeded": true,
+        "limits": "Successful platform metadata read proves current access, not a production release, UI login or database recovery. No consent URL or token retained."
+      }
+    },
+    {
+      "source_id": "src-vercel-production-current",
+      "source_type": "api_record",
+      "title": "Deployment al que apunta el alias productivo habitual",
+      "author_or_origin": "Vercel API",
+      "retrieved_at_utc": "2026-10-26T02:18:28.809Z",
+      "locator": "https://vercel.com/salvador-ruiz-esparzas-projects/dynami-quote/dpl_GvKryAuSHx1QQe22MNAUymSiUKwG",
+      "version": "55760ab4c4fa45ddf2c0f940694441ee129aefc6",
+      "access_scope": "authorized_source",
+      "integrity_status": "not_verified",
+      "observed": {
+        "id": "dpl_GvKryAuSHx1QQe22MNAUymSiUKwG",
+        "url": "dynami-quote-evqd3v4qh-salvador-ruiz-esparzas-projects.vercel.app",
+        "project_id": "prj_DJT883Ac7UNuSKMrZUD1rPjZdsOd",
+        "ready_state": "READY",
+        "target": "production",
+        "source": "git",
+        "git_repo": "B10sp4rt4n/DynamiQuote",
+        "git_branch": "main",
+        "git_sha": "55760ab4c4fa45ddf2c0f940694441ee129aefc6",
+        "project_framework_metadata": "fastapi",
+        "limits": "READY and Git metadata do not validate browser login, business or fiscal flows, effective tenant authorization or database backup. Metadata framework is a platform declaration, not a runtime verification. PR28 is not this source SHA."
+      }
+    },
+    {
+      "source_id": "src-vercel-fiscal-url-redacted",
+      "source_type": "api_record",
+      "title": "Metadatos de destino fiscal configurado, sin valor legible",
+      "author_or_origin": "Vercel API",
+      "retrieved_at_utc": "2026-10-26T02:18:55.174Z",
+      "locator": "Project prj_DJT883Ac7UNuSKMrZUD1rPjZdsOd: filter_project_envs decrypt=false and get_project_env for DIGESTOR_FISCAL_BASE_URL only",
+      "access_scope": "authorized_source",
+      "integrity_status": "not_verified",
+      "observed": {
+        "key": "DIGESTOR_FISCAL_BASE_URL",
+        "type": "sensitive",
+        "target": [
+          "production"
+        ],
+        "readable_value_returned": false,
+        "host_identified": false,
+        "credentials_requested": false,
+        "limits": "Presence of variable metadata does not prove configured runtime value, service availability, DB location or fiscal compatibility. No username/password/token variable value requested."
+      }
+    },
+    {
+      "source_id": "src-fiscal-platform-inventory",
+      "source_type": "api_record",
+      "title": "Inventario acotado de destinos fiscales visibles",
+      "author_or_origin": "Vercel and Railway APIs",
+      "retrieved_at_utc": "2026-10-26T02:20:40.346Z",
+      "locator": "Vercel team_wCPRqvRGXWpRT4eUvfAz38jF project inventory; historical Railway fiscal environment and six generic-name project inventories",
+      "access_scope": "authorized_source",
+      "integrity_status": "not_verified",
+      "observed": {
+        "vercel_team_project_count": 3,
+        "vercel_digestor_name_matches": 0,
+        "railway_other_scanned_project_count": 6,
+        "railway_other_digestor_or_cotiza_matches": 0,
+        "historical_fiscal_service": {
+          "project_id": "911f84ed-a4df-40ec-a122-f77d26da261c",
+          "service_id": "ef6c5593-5099-48e0-9da5-b78bcd66a845",
+          "source_repo": "B10sp4rt4n/digestor__fiscal",
+          "configured_branch": "main",
+          "current_descriptor_latest_status": "FAILED",
+          "mounted_volumes": 0
+        },
+        "limits": "Name/repository matching and bounded provider metadata are not proof that Digestor is absent elsewhere or offline. Unrelated project details omitted. Secret fiscal URL and backend remain unknown."
+      }
+    },
+    {
+      "source_id": "src-prior-fiscal-storage-reference",
+      "source_type": "other",
+      "title": "Referencia histórica recuperada de conversaciones del proyecto",
+      "author_or_origin": "Personal Context retrieval of prior assistant outputs",
+      "retrieved_at_utc": "2026-10-26T02:27:59.193Z",
+      "original_timestamp": "2026-10-23T17:37:04Z",
+      "locator": "Prior assistant output recovered by Personal Context: Fiscal_Context production identified as the fiscal database; no new public service host documented",
+      "access_scope": "authorized_source",
+      "integrity_status": "not_verified",
+      "observed": {
+        "epistemic_class": "recorded_claim",
+        "prior_statement": "Fiscal database identified as Neon project Fiscal_Context, production branch, separate from CRM; earlier inspection reported PostgreSQL remote neondb",
+        "current_binding_independently_verified": false,
+        "limits": "Historical assistant claim recovered through context; not a fresh runtime configuration inspection. No conversation URL or original inspection artifact was available in this retrieval."
+      }
+    },
+    {
+      "source_id": "src-fiscal-neon-metadata",
+      "source_type": "api_record",
+      "title": "Metadatos actuales del candidato histórico de base fiscal",
+      "author_or_origin": "Neon API metadata",
+      "retrieved_at_utc": "2026-10-26T02:26:55.153Z",
+      "locator": "Neon project dry-unit-51861475: list_branches, list_snapshots and get_snapshot_schedule",
+      "access_scope": "authorized_source",
+      "integrity_status": "not_verified",
+      "observed": {
+        "project_id": "dry-unit-51861475",
+        "project_name": "Fiscal_Context",
+        "pg_version": 17,
+        "history_retention_seconds": 21600,
+        "branch_id": "br-jolly-credit-amrmuf99",
+        "branch_name": "production",
+        "current_state": "archived",
+        "snapshots": [],
+        "snapshot_schedule": [],
+        "database_connection_attempted": false,
+        "queries_executed": false,
+        "branch_reactivated": false,
+        "limits": "Metadata confirms a named archived branch, not its current binding to Digestor, content, usable backup or data loss. No SQL, compute activation, restore or backup performed."
+      }
     }
   ],
   "events": [
@@ -549,6 +680,135 @@
         "src-vercel",
         "src-vercel-auth"
       ]
+    },
+    {
+      "recordia_version": "1.0",
+      "event_id": "evt-vercel-access-recovered",
+      "case_id": "case-crm-g0-20261025",
+      "event_type": "platform.metadata_observed",
+      "recorded_at_utc": "2026-10-26T02:24:26.706133Z",
+      "actors": [
+        {
+          "actor_id": "audit-codex",
+          "role": "observer_readonly",
+          "identity_status": "declared"
+        }
+      ],
+      "subject": {
+        "entity_id": "DynamiQuote-production-topology",
+        "entity_type": "hosting_configuration"
+      },
+      "action_or_state": "User-selected second connection can now read the authorized team; earlier denial observations remain historical",
+      "epistemic_class": "observed_fact",
+      "support_status": "supported",
+      "source_refs": [
+        "src-vercel-access-recovered",
+        "src-vercel-auth"
+      ],
+      "relations": [
+        {
+          "predicate": "supersedes",
+          "target_id": "evt-vercel-auth-blocked"
+        }
+      ]
+    },
+    {
+      "recordia_version": "1.0",
+      "event_id": "evt-production-alias-reverified",
+      "case_id": "case-crm-g0-20261025",
+      "event_type": "platform.metadata_observed",
+      "recorded_at_utc": "2026-10-26T02:24:26.706133Z",
+      "actors": [
+        {
+          "actor_id": "audit-codex",
+          "role": "observer_readonly",
+          "identity_status": "declared"
+        }
+      ],
+      "subject": {
+        "entity_id": "DynamiQuote-production-topology",
+        "entity_type": "hosting_configuration"
+      },
+      "action_or_state": "Usual alias currently resolves to READY production/main/55760ab4, separate from PR28 candidate",
+      "epistemic_class": "observed_fact",
+      "support_status": "supported",
+      "source_refs": [
+        "src-vercel-access-recovered",
+        "src-vercel-production-current"
+      ]
+    },
+    {
+      "recordia_version": "1.0",
+      "event_id": "evt-fiscal-location-still-unknown",
+      "case_id": "case-crm-g0-20261025",
+      "event_type": "platform.metadata_observed",
+      "recorded_at_utc": "2026-10-26T02:24:26.706133Z",
+      "actors": [
+        {
+          "actor_id": "audit-codex",
+          "role": "observer_readonly",
+          "identity_status": "declared"
+        }
+      ],
+      "subject": {
+        "entity_id": "DynamiQuote-production-topology",
+        "entity_type": "hosting_configuration"
+      },
+      "action_or_state": "Fiscal URL value is not returned; bounded inventories did not locate a replacement fiscal runtime",
+      "epistemic_class": "observed_fact",
+      "support_status": "supported",
+      "source_refs": [
+        "src-vercel-fiscal-url-redacted",
+        "src-fiscal-platform-inventory"
+      ]
+    },
+    {
+      "recordia_version": "1.0",
+      "event_id": "evt-prior-fiscal-reference-recovered",
+      "case_id": "case-crm-g0-20261025",
+      "event_type": "storage.metadata_observed",
+      "recorded_at_utc": "2026-10-26T02:27:59.430846Z",
+      "actors": [
+        {
+          "actor_id": "audit-codex",
+          "role": "observer_readonly",
+          "identity_status": "declared"
+        }
+      ],
+      "subject": {
+        "entity_id": "dry-unit-51861475",
+        "entity_type": "historical_fiscal_storage_candidate"
+      },
+      "action_or_state": "Historical assistant output linked Fiscal_Context production to the fiscal database; original runtime inspection not revalidated",
+      "epistemic_class": "recorded_claim",
+      "support_status": "supported",
+      "source_refs": [
+        "src-prior-fiscal-storage-reference"
+      ]
+    },
+    {
+      "recordia_version": "1.0",
+      "event_id": "evt-fiscal-neon-metadata-observed",
+      "case_id": "case-crm-g0-20261025",
+      "event_type": "storage.metadata_observed",
+      "recorded_at_utc": "2026-10-26T02:27:59.430846Z",
+      "actors": [
+        {
+          "actor_id": "audit-codex",
+          "role": "observer_readonly",
+          "identity_status": "declared"
+        }
+      ],
+      "subject": {
+        "entity_id": "dry-unit-51861475",
+        "entity_type": "historical_fiscal_storage_candidate"
+      },
+      "action_or_state": "Fiscal_Context production branch observed archived, with no provider snapshots or schedule",
+      "epistemic_class": "observed_fact",
+      "support_status": "supported",
+      "source_refs": [
+        "src-fiscal-neon-metadata"
+      ]
     }
   ],
   "evidence": [
@@ -720,6 +980,78 @@
       "limitations": [
         "A different owner, account context, team state or provider grant may explain the result; not resolved."
       ]
+    },
+    {
+      "evidence_id": "evd-src-vercel-access-recovered",
+      "source_id": "src-vercel-access-recovered",
+      "proposition": "Acceso del equipo recuperado en la conexión elegida por Salvador",
+      "relation": "supports",
+      "support_status": "supported",
+      "integrity_status": "not_verified",
+      "verification_method": "Authorized metadata reads on user-selected provider connection; no DB connection or application login",
+      "limitations": [
+        "Successful platform metadata read proves current access, not a production release, UI login or database recovery. No consent URL or token retained."
+      ]
+    },
+    {
+      "evidence_id": "evd-src-vercel-production-current",
+      "source_id": "src-vercel-production-current",
+      "proposition": "Deployment al que apunta el alias productivo habitual",
+      "relation": "supports",
+      "support_status": "supported",
+      "integrity_status": "not_verified",
+      "verification_method": "Authorized metadata reads on user-selected provider connection; no DB connection or application login",
+      "limitations": [
+        "READY and Git metadata do not validate browser login, business or fiscal flows, effective tenant authorization or database backup. Metadata framework is a platform declaration, not a runtime verification. PR28 is not this source SHA."
+      ]
+    },
+    {
+      "evidence_id": "evd-src-vercel-fiscal-url-redacted",
+      "source_id": "src-vercel-fiscal-url-redacted",
+      "proposition": "Metadatos de destino fiscal configurado, sin valor legible",
+      "relation": "supports",
+      "support_status": "supported",
+      "integrity_status": "not_verified",
+      "verification_method": "Authorized metadata reads on user-selected provider connection; no DB connection or application login",
+      "limitations": [
+        "Presence of variable metadata does not prove configured runtime value, service availability, DB location or fiscal compatibility. No username/password/token variable value requested."
+      ]
+    },
+    {
+      "evidence_id": "evd-src-fiscal-platform-inventory",
+      "source_id": "src-fiscal-platform-inventory",
+      "proposition": "Inventario acotado de destinos fiscales visibles",
+      "relation": "supports",
+      "support_status": "supported",
+      "integrity_status": "not_verified",
+      "verification_method": "Authorized metadata reads on user-selected provider connection; no DB connection or application login",
+      "limitations": [
+        "Name/repository matching and bounded provider metadata are not proof that Digestor is absent elsewhere or offline. Unrelated project details omitted. Secret fiscal URL and backend remain unknown."
+      ]
+    },
+    {
+      "evidence_id": "evd-src-prior-fiscal-storage-reference",
+      "source_id": "src-prior-fiscal-storage-reference",
+      "proposition": "Referencia histórica recuperada de conversaciones del proyecto",
+      "relation": "supports",
+      "support_status": "supported",
+      "integrity_status": "not_verified",
+      "verification_method": "Historical context retrieval kept separate from current provider metadata reads",
+      "limitations": [
+        "Historical assistant claim recovered through context; not a fresh runtime configuration inspection. No conversation URL or original inspection artifact was available in this retrieval."
+      ]
+    },
+    {
+      "evidence_id": "evd-src-fiscal-neon-metadata",
+      "source_id": "src-fiscal-neon-metadata",
+      "proposition": "Metadatos actuales del candidato histórico de base fiscal",
+      "relation": "supports",
+      "support_status": "supported",
+      "integrity_status": "not_verified",
+      "verification_method": "Historical context retrieval kept separate from current provider metadata reads",
+      "limitations": [
+        "Metadata confirms a named archived branch, not its current binding to Digestor, content, usable backup or data loss. No SQL, compute activation, restore or backup performed."
+      ]
     }
   ],
   "inferences": [
@@ -758,6 +1090,22 @@
       ],
       "confidence": "high",
       "confidence_basis": "Two independent bounded API inventory queries agree on the identified deployment states."
+    },
+    {
+      "inference_id": "inf-topology-partially-resolved",
+      "statement": "Provider access and the usual Cotiza production alias are now verified; fiscal runtime topology remains an open condition.",
+      "basis_refs": [
+        "src-vercel-access-recovered",
+        "src-vercel-production-current",
+        "src-vercel-fiscal-url-redacted",
+        "src-fiscal-platform-inventory"
+      ],
+      "reasoning": "Alias and deployment metadata are readable; fiscal endpoint value is hidden and inventory matching is inconclusive.",
+      "alternative_explanations": [
+        "Fiscal service may use a non-matching name, another provider/account or an unobserved private endpoint."
+      ],
+      "confidence": "high",
+      "confidence_basis": "Direct authorized metadata reads establish the narrow resolved portion and identify the remaining information gap."
     }
   ],
   "gates": [
@@ -775,25 +1123,30 @@
     {
       "gate_id": "G0-TOPOLOGY",
       "name": "Destino real de Cotiza/Digestor y dependencias",
-      "state": "blocked_by_provider_access",
+      "state": "partially_supported",
       "source_refs": [
         "src-vercel",
         "src-railway-cotiza",
         "src-railway-fiscal",
-        "src-vercel-auth"
+        "src-vercel-auth",
+        "src-vercel-access-recovered",
+        "src-vercel-production-current",
+        "src-vercel-fiscal-url-redacted"
       ],
-      "next_evidence": "Confirmar cuenta/conexión y equipo correctos. Luego usar consentimiento oficial y fijar deployment, SHA, entorno y destino Digestor actuales.",
+      "next_evidence": "Acceso Vercel y alias Cotiza resueltos. Identificar la URL/host y runtime fiscal reales mediante una fuente operativa autorizada; luego backend y recuperación. No pedir otra autorización de equipo mientras el acceso siga vigente.",
       "release_condition_changed": false
     },
     {
       "gate_id": "G0-FISCAL-STORAGE",
       "name": "Backend y persistencia de la base fiscal",
-      "state": "pending_verification",
+      "state": "partially_supported",
       "source_refs": [
         "src-prev-release",
-        "src-railway-fiscal"
+        "src-railway-fiscal",
+        "src-prior-fiscal-storage-reference",
+        "src-fiscal-neon-metadata"
       ],
-      "next_evidence": "Localizar el runtime actual y verificar tipo/destino fiscal por metadatos de un operador, sin redeploy para inspeccionar.",
+      "next_evidence": "Candidato histórico identificado: Fiscal_Context/production en estado archived. Revalidar vínculo con el runtime fiscal actual y preparar recuperación sin asumir datos perdidos ni reactivar ramas.",
       "release_condition_changed": false
     },
     {
@@ -802,7 +1155,8 @@
       "state": "pending_verification",
       "source_refs": [
         "src-neon",
-        "src-prev-release"
+        "src-prev-release",
+        "src-fiscal-neon-metadata"
       ],
       "next_evidence": "Elegir equipo/almacén privado y custodio de clave; aportar copia consistente cifrada y restore verificado de CRM y fiscal.",
       "release_condition_changed": false
@@ -867,22 +1221,27 @@
   "gaps": [
     {
       "gap_id": "gap-G0-TOPOLOGY",
-      "statement": "Destino real de Cotiza/Digestor y dependencias",
-      "needed_evidence": "Confirmar cuenta/conexión y equipo correctos; autorización oficial antes de consultar runtime/alias.",
+      "statement": "Destino fiscal por identificar; Vercel y alias Cotiza ya comprobados",
+      "needed_evidence": "Host/URL público del servicio fiscal y vínculo con su runtime/almacenamiento actuales; no credenciales.",
       "source_refs": [
         "src-vercel",
         "src-railway-cotiza",
         "src-railway-fiscal",
-        "src-vercel-auth"
+        "src-vercel-auth",
+        "src-vercel-access-recovered",
+        "src-vercel-production-current",
+        "src-vercel-fiscal-url-redacted"
       ]
     },
     {
       "gap_id": "gap-G0-FISCAL-STORAGE",
       "statement": "Backend y persistencia de la base fiscal",
-      "needed_evidence": "Localizar el runtime actual y verificar tipo/destino fiscal por metadatos de un operador, sin redeploy para inspeccionar.",
+      "needed_evidence": "Vínculo comprobado del servicio fiscal actual con Fiscal_Context u otro backend; recuperación propia y estado de acceso del backend, sin reactivar ni conectar bases en esta auditoría.",
       "source_refs": [
         "src-prev-release",
-        "src-railway-fiscal"
+        "src-railway-fiscal",
+        "src-prior-fiscal-storage-reference",
+        "src-fiscal-neon-metadata"
       ]
     },
     {
@@ -975,5 +1334,32 @@
     "production_rollback_tested": false,
     "file_manifest_sha256": "1bfd2166842532bdc32362916d1ee4130ad4e602741a2674941129a3b47bfd4f",
     "reproduction_script": "scripts/prepare_crm_recovery.mjs"
+  },
+  "current_topology": {
+    "vercel_access": "restored_on_user_selected_connection",
+    "cotiza_alias": "dynami-quote.vercel.app",
+    "production_deployment": "dpl_GvKryAuSHx1QQe22MNAUymSiUKwG",
+    "production_sha": "55760ab4c4fa45ddf2c0f940694441ee129aefc6",
+    "production_branch": "main",
+    "crm_candidate_deployed": false,
+    "digestor_runtime_location": "unknown",
+    "fiscal_storage_backend": "historical_reference_to_neon_postgresql_not_currently_bound_to_runtime",
+    "source_refs": [
+      "src-vercel-access-recovered",
+      "src-vercel-production-current",
+      "src-vercel-fiscal-url-redacted",
+      "src-fiscal-platform-inventory"
+    ],
+    "fiscal_storage_candidate": {
+      "project_id": "dry-unit-51861475",
+      "project_name": "Fiscal_Context",
+      "branch_id": "br-jolly-credit-amrmuf99",
+      "branch_state": "archived",
+      "runtime_binding": "historical_claim_not_revalidated",
+      "source_refs": [
+        "src-prior-fiscal-storage-reference",
+        "src-fiscal-neon-metadata"
+      ]
+    }
   }
 }
