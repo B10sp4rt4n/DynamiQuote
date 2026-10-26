@@ -282,3 +282,23 @@ describe("explicit fiscal classification transport", () => {
     ]);
   });
 });
+
+describe("PPD payment transport", () => {
+  const originalFetch = global.fetch;
+  afterEach(() => { clearConfigEnv(); global.fetch = originalFetch; vi.restoreAllMocks(); });
+  it("keeps payment decimal strings and encodes exact draft/payment identifiers", async () => {
+    vi.resetModules(); setConfigEnv();
+    const fetchMock = vi.fn()
+      .mockResolvedValueOnce(jsonResponse({ access_token: "synthetic", expires_in: 3600 }))
+      .mockResolvedValueOnce(jsonResponse({ id: "payment" }))
+      .mockResolvedValueOnce(jsonResponse({ receipt_status: "unknown" }));
+    global.fetch = fetchMock as unknown as typeof fetch;
+    const { registerBillingPayment, getPaymentReceipt } = await import("./digestor-fiscal");
+    const payload = { idempotency_key: "fixture", reference: "BANK", amount: "999999999999.99", paid_at: "2026-10-20T12:00:00Z", payment_form: "03" };
+    await registerBillingPayment("draft/one", payload); await getPaymentReceipt("draft/one", "payment/one");
+    expect(fetchMock.mock.calls[1][0]).toBe("https://digestor.test/v1/billing/drafts/draft%2Fone/payments");
+    expect(JSON.parse(fetchMock.mock.calls[1][1].body)).toEqual(payload);
+    expect(fetchMock.mock.calls[2][0]).toBe("https://digestor.test/v1/billing/drafts/draft%2Fone/payments/payment%2Fone/receipt");
+    expect(fetchMock.mock.calls[2][1].method).toBe("GET");
+  });
+});

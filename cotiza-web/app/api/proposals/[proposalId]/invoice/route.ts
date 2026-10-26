@@ -1,3 +1,4 @@
+import { isPpdCaptureEnabled } from "@/lib/integrations/proposal-payments";
 import { NextResponse } from "next/server";
 
 import { getCurrentTenantContext } from "@/lib/auth/tenant-context";
@@ -46,7 +47,7 @@ export async function GET(_: Request, context: RouteContext) {
   }
 
   if (!proposal) return NextResponse.json({ error: "Propuesta no encontrada" }, { status: 404 });
-  return NextResponse.json({ clientFiscalData, invoice,
+  return NextResponse.json({ clientFiscalData, invoice, ppdEnabled: isPpdCaptureEnabled(),
     fiscalBasis: { fingerprint: invoiceBasisFingerprint(proposal), currency: proposal.formal?.currency,
       items: proposal.items.map(item => ({ itemNumber: item.itemNumber, description: item.description })) },
   }, { status: 200 });
@@ -126,6 +127,9 @@ export async function POST(request: Request, context: RouteContext) {
   }
 
   const input = parsed.data;
+  if (input.paymentMethod === "PPD" && !isPpdCaptureEnabled()) {
+    return NextResponse.json({ error: "PPD aún no está habilitado" }, { status: 403 });
+  }
   if (currency !== "MXN") return NextResponse.json({ error: "La facturación en otra moneda requiere tipo de cambio y aún no está habilitada" }, { status: 422 });
   if (invoiceBasisFingerprint(proposal) !== input.itemsFingerprint) {
     return NextResponse.json({ error: "La propuesta cambió. Recarga y revisa las claves fiscales de sus partidas" }, { status: 409 });

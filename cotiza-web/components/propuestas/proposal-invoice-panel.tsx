@@ -1,6 +1,7 @@
 "use client";
 
 import { useEffect, useState } from "react";
+import { ProposalPaymentPanel } from "./proposal-payment-panel";
 
 const PAYMENT_FORM_OPTIONS = [
   { label: "01 - Efectivo", value: "01" },
@@ -33,7 +34,7 @@ type FormState = {
   customerUseCfdi: string;
   customerZip: string;
   paymentForm: string;
-  paymentMethod: "PUE";
+  paymentMethod: "PUE" | "PPD";
   saveToClient: boolean;
 };
 
@@ -54,6 +55,7 @@ type ProposalInvoicePanelProps = {
 };
 
 export function ProposalInvoicePanel({ proposalId, recipientCompany }: ProposalInvoicePanelProps) {
+  const [ppdEnabled, setPpdEnabled] = useState(false);
   const [loading, setLoading] = useState(true);
   const [invoice, setInvoice] = useState<InvoiceStatus | null>(null);
   const [form, setForm] = useState<FormState>(EMPTY_FORM);
@@ -75,6 +77,7 @@ export function ProposalInvoicePanel({ proposalId, recipientCompany }: ProposalI
       try {
         const res = await fetch(`/api/proposals/${proposalId}/invoice`);
         const data = (await res.json()) as {
+          ppdEnabled?: boolean;
           clientFiscalData?: ClientFiscalData | null;
           error?: string;
           invoice?: InvoiceStatus;
@@ -88,6 +91,7 @@ export function ProposalInvoicePanel({ proposalId, recipientCompany }: ProposalI
           return;
         }
 
+        setPpdEnabled(data.ppdEnabled === true);
         if (data.invoice) {
           setInvoice(data.invoice);
         }
@@ -272,6 +276,7 @@ export function ProposalInvoicePanel({ proposalId, recipientCompany }: ProposalI
         >
           Descargar PDF
         </a>
+        {ppdEnabled ? <ProposalPaymentPanel proposalId={proposalId} /> : null}
       </div>
     );
   }
@@ -282,7 +287,7 @@ export function ProposalInvoicePanel({ proposalId, recipientCompany }: ProposalI
       <p className="mt-1 text-xs text-zinc-500">
         Datos del receptor para timbrar. Se prellenan si ya están capturados en el cliente.
       </p>
-      <p className="mt-2 text-xs text-zinc-600">Escenario disponible: factura nacional en MXN, PUE e IVA 16%. Revisa la clasificación fiscal de cada partida.</p>
+      <p className="mt-2 text-xs text-zinc-600">Factura nacional en MXN e IVA 16%. Revisa la clasificación fiscal de cada partida. PPD solo se habilita para pruebas del ciclo de pagos.</p>
       {invoiceCurrency !== "MXN" ? <p className="mt-2 text-xs text-amber-800">La moneda de esta propuesta aún no está habilitada para facturación. No se convertirá automáticamente.</p> : null}
 
       <fieldset disabled={generating || stamping}>
@@ -334,19 +339,25 @@ export function ProposalInvoicePanel({ proposalId, recipientCompany }: ProposalI
           Método de pago
           <select
             className="mt-1 w-full rounded-lg border border-zinc-300 bg-white px-3 py-2 text-sm text-zinc-900"
-            onChange={() => setField("paymentMethod", "PUE")}
+            onChange={event => {
+              const method = event.target.value === "PPD" ? "PPD" : "PUE";
+              setDraftDirty(true); setForm(previous => ({ ...previous, paymentMethod: method, paymentForm: method === "PPD" ? "99" : "03" }));
+            }}
             value={form.paymentMethod}
           >
             <option value="PUE">PUE - Pago en una sola exhibición</option>
+            {ppdEnabled ? <option value="PPD">PPD - Parcialidades o diferido (pruebas)</option> : null}
           </select>
         </label>
         <label className="text-xs font-medium text-zinc-700">
           Forma de pago
           <select
             className="mt-1 w-full rounded-lg border border-zinc-300 bg-white px-3 py-2 text-sm text-zinc-900"
+            disabled={form.paymentMethod === "PPD"}
             onChange={(e) => setField("paymentForm", e.target.value)}
             value={form.paymentForm}
           >
+            {form.paymentMethod === "PPD" ? <option value="99">99 - Por definir</option> : null}
             {PAYMENT_FORM_OPTIONS.map((option) => (
               <option key={option.value} value={option.value}>
                 {option.label}
