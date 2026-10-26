@@ -86,6 +86,14 @@ No ejecutar migrations, depuración o despliegue productivo por esta nota.
 
 ## Preparación antes de solicitar la liberación
 
+Revalidación del candidato fijado en [crm-release-candidate-revalidation.md](crm-release-candidate-revalidation.md).
+Antes del preflight de datos, ejecutar también
+`scripts/audit_crm_schema_requirements.sql` (solo catálogos y transacción read-only).
+Sus contadores missing/wrong_type deben ser cero; comprobar en particular
+`proposal_approvals.executed_by_user_id`, documentado fuera del modelo Prisma.
+Este chequeo adicional no sustituye el inventario completo, las 13 FK,
+preflight, auditoría fiscal, respaldos ni aprobación de corte.
+
 La preparación actual está en docs/crm-release-preparation-20261023.md: fuente
 e122c48a restaurada (425 archivos), CI success, cuenta de Salvador activa y
 SHA desplegado de Digestor 9e251d76 atribuido por Railway. Siguen pendientes
