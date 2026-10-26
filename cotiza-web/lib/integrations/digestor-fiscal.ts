@@ -558,3 +558,32 @@ export async function validateReceptorFiscalData(
     valid: raw.valid,
   };
 }
+
+export type BillingPayment = {
+  id: string; sequence: number; reference: string; amount: string; paid_at: string; payment_form: string;
+  balance_before: string; balance_after: string;
+  receipt_status: "not_sent" | "processing" | "unknown" | "rejected" | "stamped";
+  receipt_uuid: string | null; xml_base64: string | null; bank_verification: "not_performed";
+};
+export type BillingPayments = {
+  supported: boolean; reason?: string; currency?: string; invoice_uuid?: string; total?: string;
+  paid?: string; balance?: string; receipt_stamp_enabled?: boolean; payments: BillingPayment[];
+};
+const paymentPath = (draftId: string) => `/v1/billing/drafts/${encodeURIComponent(draftId)}/payments`;
+export function getBillingPayments(draftId: string): Promise<BillingPayments> {
+  return request(paymentPath(draftId), { method: "GET" });
+}
+export function registerBillingPayment(draftId: string, input: {
+  idempotency_key: string; reference: string; amount: string; paid_at: string; payment_form: string;
+}): Promise<BillingPayment> {
+  return request(paymentPath(draftId), { method: "POST", body: JSON.stringify(input) });
+}
+export function getPaymentReceipt(draftId: string, paymentId: string): Promise<BillingPayment> {
+  return request(`${paymentPath(draftId)}/${encodeURIComponent(paymentId)}/receipt`, { method: "GET" });
+}
+export function preparePaymentReceipt(draftId: string, paymentId: string): Promise<{ preliminary: true; xml_base64: string }> {
+  return request(`${paymentPath(draftId)}/${encodeURIComponent(paymentId)}/receipt/prepare`, { method: "POST" });
+}
+export function stampPaymentReceipt(draftId: string, paymentId: string): Promise<BillingPayment & { ok: boolean }> {
+  return request(`${paymentPath(draftId)}/${encodeURIComponent(paymentId)}/receipt/stamp`, { method: "POST" });
+}

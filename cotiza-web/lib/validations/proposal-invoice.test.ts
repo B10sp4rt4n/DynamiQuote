@@ -6,10 +6,11 @@ const valid = { customerName: "Synthetic", customerRegimen: "601", customerRfc: 
   customerUseCfdi: "G03", customerZip: "01000", paymentMethod: "PUE", paymentForm: "03",
   itemsFingerprint: "a".repeat(64), fiscalItems: [{ itemNumber: 1, satProductCode: "80101500", unitCode: "E48" }] };
 describe("explicit first fiscal scenario", () => {
+  it("accepts PPD only paired with form 99", () => expect(createProposalInvoiceSchema.safeParse({ ...valid, paymentMethod: "PPD", paymentForm: "99" }).success).toBe(true));
   it("accepts a named national customer and explicit classifications", () => expect(createProposalInvoiceSchema.safeParse(valid).success).toBe(true));
   it.each([
     { ...valid, customerRfc: "BAD" }, { ...valid, customerZip: "X" },
-    { ...valid, paymentMethod: "PPD", paymentForm: "99" }, { ...valid, paymentForm: "99" },
+    { ...valid, paymentMethod: "PPD", paymentForm: "03" }, { ...valid, paymentForm: "99" },
     { ...valid, customerRfc: "XEXX010101000" }, { ...valid, customerRegimen: "BAD" },
     { ...valid, fiscalItems: [] }, { ...valid, fiscalItems: [{ itemNumber: 1, satProductCode: "", unitCode: "" }] },
     { ...valid, fiscalItems: [{ ...valid.fiscalItems[0], price: 1 }] },

@@ -1,4 +1,6 @@
-import { beforeEach, describe, expect, it, vi } from "vitest";
+import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
+
+vi.mock("server-only", () => ({}));
 
 const mocks = vi.hoisted(() => ({
   visible: vi.fn(),
@@ -71,6 +73,15 @@ describe("no regenerar prefacturas timbradas", () => {
   ].map(fiscalItems => ({ fiscalItems })))("rejects incomplete, unknown, duplicated or injected fields ($fiscalItems)", async ({ fiscalItems }) => {
     expect((await POST(request({ fiscalItems }), ctx)).status).toBe(422);
     expect(mocks.createDraft).not.toHaveBeenCalled();
+  });
+
+  afterEach(() => { delete process.env["DIGESTOR_FISCAL_PPD_ENABLED"]; });
+  it("rejects PPD by default and accepts the explicit feature gate", async () => {
+    expect((await POST(request({ paymentMethod: "PPD", paymentForm: "99" }), ctx)).status).toBe(403);
+    mocks.createDraft.mockClear();
+    process.env["DIGESTOR_FISCAL_PPD_ENABLED"] = "true";
+    expect((await POST(request({ paymentMethod: "PPD", paymentForm: "99" }), ctx)).status).toBe(201);
+    expect(mocks.createDraft.mock.calls[0][0]).toMatchObject({ paymentMethod: "PPD", paymentForm: "99" });
   });
 
   it("bloquea prefactura cuando ya fue timbrada", async () => {
