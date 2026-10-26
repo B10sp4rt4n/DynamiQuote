@@ -11,10 +11,11 @@ import { prepareCommercialProposalExport } from "./commercial-proposal-export";
 const request = { startUtc: "2025-01-01T06:00:00.000Z", endUtcExclusive: "2026-01-01T06:00:00.000Z" };
 const owner = { id: "tenant-a", userId: "seller-a", userRole: "owner", authMode: "clerk", isSuperAdmin: false };
 function row(overrides: Partial<CommercialSourceRow> = {}): CommercialSourceRow {
-  return { proposal_id: "p1", tenant_id: "tenant-a", seller_id: "seller-a",
+  return { proposal_id: "p1", tenant_id: "tenant-a", seller_id: "seller-a", origin_quote_id: "q1", opportunity_id: null,
     outcome_at: new Date("2025-08-01T06:00:00Z"), reporting_at: new Date("2025-08-01T06:00:00Z"),
     legacy_act_ref: null, revenue: "0.30", cost: "0.10",
-    links: [{ quote_id: "q1", lineage_id: "lineage-1", version: 1, client_id: "client-a", currency: "MXN" }],
+    links: [{ quote_id: "q1", lineage_id: "lineage-1", version: 1, client_id: "client-a", currency: "MXN",
+      opportunity_id: null, opportunity_exists: false, opportunity_client_id: null, won_peer_count: 1 }],
     ...overrides };
 }
 beforeEach(() => {
@@ -27,7 +28,8 @@ describe("commercial proposal export preparation", () => {
     expect(result.status).toBe("prepared");
     if (result.status !== "prepared") throw Error("expected payload");
     expect(result.payload.records[0]).toMatchObject({ revenue_before_vat: "0.30", cost: "0.10", gross_profit: "0.20" });
-    expect(result.payload).toMatchObject({ coverage: "not_certified", selection: "won_proposal_candidates_not_deduplicated" });
+    expect(result.payload).toMatchObject({ coverage: "not_certified", selection: "unique_won_deal_or_unresolved" });
+    expect(result.payload.records[0].sale_selection.state).toBe("selected");
     expect(result.digest.sha256).toMatch(/^[a-f0-9]{64}$/);
     expect(mocks.enabled).toHaveBeenCalledWith("tenant-a", "commercial_chat_read");
   });
@@ -86,11 +88,16 @@ describe("commercial proposal export preparation", () => {
     expect(result.payload.records[0].date_basis).toBe("legacy_creation_reference");
   });
   it("preserves alternatives as candidates rather than inventing a winning version", async () => {
-    mocks.read.mockResolvedValue([row(), row({ proposal_id: "p2" })]);
+    const links = row().links.map(link => ({ ...link, won_peer_count: 2 }));
+    mocks.read.mockResolvedValue([row({ links }), row({ proposal_id: "p2", links })]);
     const result = await prepareCommercialProposalExport(request);
     if (result.status !== "prepared") throw Error("expected payload");
     expect(result.payload.records).toHaveLength(2);
-    expect(result.payload.selection).toContain("not_deduplicated");
+    expect(result.payload.records.every(record => record.sale_selection.state === "unresolved")).toBe(true);
+  });
+  it("rejects duplicate selected sale identities even if source counts contradict the rows", async () => {
+    mocks.read.mockResolvedValue([row(), row({ proposal_id: "p2" })]);
+    expect(await prepareCommercialProposalExport(request)).toEqual({ status: "invalid_source" });
   });
   it.each(["NaN", "Infinity", "1.001", "not-a-number"])("rejects incompatible source amounts: %s", async revenue => {
     mocks.read.mockResolvedValue([row({ revenue })]);

@@ -1,5 +1,10 @@
 # Preparación del exportador interno v0.1
 
+Este documento conserva el incremento del PR #31. La continuación
+[selección por trato](commercial-sale-selection.md) evoluciona el sobre a
+`cotiza-proposal-export/0.2`, con selección única o incidencias sin conciliación
+automática. Las condiciones operativas de G0 permanecen vigentes.
+
 Implementación aislada sobre PR #29: lectura SQL y exportación interna de
 candidatos de propuestas ganadas. Sin endpoint, UI, jobs, migración, habilitación
 de capacidades, consumo de IA ni conexión productiva durante las pruebas.

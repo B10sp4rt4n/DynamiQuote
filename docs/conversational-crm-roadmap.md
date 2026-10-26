@@ -132,6 +132,10 @@ Implementa lectura SQL y sobre local con pruebas sintéticas, sin endpoint ni
 habilitación. No sustituye `commercial_snapshot`, no selecciona versiones por
 venta y no cierra G0/G1. La integración productiva conserva sus compuertas.
 
+Continuación en preparación: [selección única de propuesta ganada por trato](commercial-sale-selection.md).
+Usa vínculos del origen y conteo de ganadas anterior al filtro de periodo;
+conflictos quedan pendientes. No sustituye el schema universal ni habilita ranking.
+
 Conservar esta propuesta separada del PR de liberación. Respuesta v0.1, fixtures de estados/errores y oráculo sintético ya preparados; tras G0, acordar el schema universal fuente y atestación, implementar exportador aislado y consulta anual por cliente, y verificar el contrato contra autorización y reglas financieras reales. Después demostrar el caso real a Salvador en un tenant habilitado y con datos conciliados. Habilitación del chat, creación de borradores y envío permanecen compuertas posteriores.
 
 ## Fuentes revisadas
