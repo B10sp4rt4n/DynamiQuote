@@ -1,9 +1,10 @@
-import { afterAll, beforeAll, beforeEach, describe, expect, it, vi } from "vitest";
+import { afterAll, afterEach, beforeAll, beforeEach, describe, expect, it, vi } from "vitest";
 import type { Prisma } from "@prisma/client";
 const mock = vi.hoisted(() => ({ $queryRaw: vi.fn() }));
 vi.mock("server-only", () => ({}));
 vi.mock("@/lib/db/prisma", () => ({ prisma: mock }));
 import { readCommercialExportRows } from "./commercial-export-source";
+import { selectCommercialSale } from "@/lib/domain/commercial-sale-selection";
 
 const suite = process.env.PGLITE_MODULE ? describe : describe.skip;
 let db: { exec(sql: string): Promise<unknown>; query(sql: string, params: unknown[]): Promise<{ rows: unknown[] }>; close(): Promise<void> };
@@ -16,14 +17,15 @@ suite("commercial source SELECT against disposable PostgreSQL", () => {
     db = new PGlite();
     await db.exec(`
       CREATE TABLE proposals (proposal_id text PRIMARY KEY, tenant_id text, created_by_user_id text,
-        outcome text, outcome_at timestamp, created_at timestamp);
+        outcome text, outcome_at timestamp, created_at timestamp, origin text, opportunity_id text);
       CREATE TABLE proposal_items (item_id text PRIMARY KEY, tenant_id text, proposal_id text,
         status text, subtotal_price numeric, subtotal_cost numeric);
       CREATE TABLE proposal_audit_events (event_id text PRIMARY KEY, tenant_id text, proposal_id text, event_type text);
       CREATE TABLE formal_proposals (proposal_doc_id text PRIMARY KEY, tenant_id text, proposal_id text, quote_id text, currency text);
-      CREATE TABLE quotes (quote_id text PRIMARY KEY, tenant_id text, quote_group_id text, version int, client_id text);
+      CREATE TABLE quotes (quote_id text PRIMARY KEY, tenant_id text, quote_group_id text, version int, client_id text, opportunity_id text);
       CREATE TABLE clients (client_id text PRIMARY KEY, tenant_id text);
-      INSERT INTO proposals VALUES
+      CREATE TABLE opportunities (opportunity_id text PRIMARY KEY, tenant_id text, client_id text);
+      INSERT INTO proposals (proposal_id, tenant_id, created_by_user_id, outcome, outcome_at, created_at) VALUES
         ('own','a','seller','won','2025-08-01','2024-01-01'),
         ('peer','a','other','won','2025-08-01','2025-01-01'),
         ('orphan','a',NULL,'won','2025-08-01','2025-01-01'),
@@ -47,16 +49,19 @@ suite("commercial source SELECT against disposable PostgreSQL", () => {
         ('partial-one','a','legacy','active',100,50),
         ('partial-two','a','legacy','active',NULL,NULL);
       INSERT INTO clients VALUES ('client','a'),('foreign-client','b');
-      INSERT INTO quotes VALUES ('q','a','lineage',1,'client'), ('q-foreign','b','foreign-lineage',1,'foreign-client');
+      INSERT INTO quotes (quote_id,tenant_id,quote_group_id,version,client_id) VALUES ('q','a','lineage',1,'client'), ('q-foreign','b','foreign-lineage',1,'foreign-client');
+      UPDATE proposals SET origin = 'q' WHERE proposal_id = 'own';
       INSERT INTO formal_proposals VALUES
         ('f1','a','own','q','MXN'), ('f2','a','own','q','MXN'),
         ('f3','b','own','q-foreign','USD');
     `);
   }, 30_000);
-  beforeEach(() => {
+  beforeEach(async () => {
+    await db.exec('BEGIN');
     mock.$queryRaw.mockClear();
     mock.$queryRaw.mockImplementation(async (query: Prisma.Sql) => (await db.query(query.text, query.values)).rows);
   });
+  afterEach(async () => { await db.exec('ROLLBACK'); });
   afterAll(async () => { if (db) await db.close(); });
   it("isolates tenant and exact seller, excluding orphan ownership", async () => {
     const rows = await readCommercialExportRows(scope, start, end);
@@ -70,12 +75,14 @@ suite("commercial source SELECT against disposable PostgreSQL", () => {
   it("keeps decimal amounts exact without multiplying duplicated formal documents", async () => {
     const row = (await readCommercialExportRows({ ...scope, includeCosts: true }, start, end)).find(r => r.proposal_id === "own")!;
     expect(row.revenue).toBe("0.30"); expect(row.cost).toBe("0.10");
-    expect(row.links).toEqual([{ quote_id: "q", lineage_id: "lineage", version: 1, client_id: "client", currency: "MXN" }]);
+    expect(row.links).toEqual([{ quote_id: "q", lineage_id: "lineage", version: 1, client_id: "client", currency: "MXN",
+      opportunity_id: null, opportunity_exists: false, opportunity_client_id: null, won_peer_count: null }]);
   });
   it("does not query cost columns for a seller", async () => {
     expect((await readCommercialExportRows(scope, start, end)).find(r => r.proposal_id === "own")?.cost).toBeNull();
     const query = mock.$queryRaw.mock.calls[0][0] as Prisma.Sql;
     expect(query.text).not.toContain("subtotal_cost");
+    expect(query.text).not.toContain("COUNT(DISTINCT w.proposal_id)");
     expect(query.text).not.toMatch(/\b(INSERT|UPDATE|DELETE)\b/);
   });
   it("preserves missing and partially missing financials as null", async () => {
@@ -97,5 +104,62 @@ suite("commercial source SELECT against disposable PostgreSQL", () => {
   it("binds hostile identity text as values, never SQL", async () => {
     expect(await readCommercialExportRows({ ...scope, tenantId: "a' OR 1=1 --" }, start, end)).toEqual([]);
     expect(await readCommercialExportRows({ ...scope, userId: "seller' OR 1=1 --" }, start, end)).toEqual([]);
+  });
+  it("counts a won revision outside the query period before selecting a sale", async () => {
+    await db.exec(`
+      INSERT INTO quotes VALUES ('q2','a','lineage',2,'client',NULL);
+      INSERT INTO proposals VALUES ('prior-won','a','other','won','2024-01-01','2024-01-01','q2',NULL);
+    `);
+    const rows = await readCommercialExportRows({ ...scope, allSellers: true }, start, end);
+    expect(rows.some(row => row.proposal_id === 'prior-won')).toBe(false);
+    expect(rows.find(row => row.proposal_id === 'own')?.links[0].won_peer_count).toBe(2);
+  });
+  it("does not count an unaccepted higher version or a foreign tenant peer", async () => {
+    await db.exec(`
+      INSERT INTO quotes VALUES ('q2','a','lineage',2,'client',NULL), ('q3','b','lineage',3,'foreign-client',NULL);
+      INSERT INTO proposals VALUES ('open','a','seller',NULL,NULL,'2025-01-01','q2',NULL),
+        ('foreign-won','b','seller','won','2025-01-01','2025-01-01','q3',NULL);
+    `);
+    const rows = await readCommercialExportRows({ ...scope, allSellers: true }, start, end);
+    expect(rows.find(row => row.proposal_id === 'own')?.links[0].won_peer_count).toBe(1);
+  });
+  it("finds won peers via formal links even if origin is missing", async () => {
+    await db.exec(`
+      INSERT INTO quotes VALUES ('q2','a','lineage',2,'client',NULL);
+      INSERT INTO proposals VALUES ('peer-formal','a','other','won','2024-01-01','2024-01-01',NULL,NULL);
+      INSERT INTO formal_proposals VALUES ('peer-f','a','peer-formal','q2','MXN');
+    `);
+    const rows = await readCommercialExportRows({ ...scope, allSellers: true }, start, end);
+    expect(rows.find(row => row.proposal_id === 'own')?.links[0].won_peer_count).toBe(2);
+  });
+  it("counts another won proposal in the same opportunity, even from another quote group", async () => {
+    await db.exec(`
+      INSERT INTO opportunities VALUES ('opp','a','client');
+      UPDATE proposals SET opportunity_id = 'opp' WHERE proposal_id = 'own';
+      UPDATE quotes SET opportunity_id = 'opp' WHERE quote_id = 'q';
+      INSERT INTO quotes VALUES ('q2','a','different-lineage',1,'client','opp');
+      INSERT INTO proposals VALUES ('same-deal','a','other','won','2024-01-01','2024-01-01','q2','opp');
+    `);
+    const link = (await readCommercialExportRows({ ...scope, allSellers: true }, start, end)).find(row => row.proposal_id === 'own')!.links[0];
+    expect(link).toMatchObject({ opportunity_id: 'opp', opportunity_exists: true, opportunity_client_id: 'client', won_peer_count: 2 });
+  });
+  it("never exposes other-seller conflict counts to a seller", async () => {
+    await db.exec(`INSERT INTO proposals VALUES ('hidden','a','other','won','2024-01-01','2024-01-01','q',NULL)`);
+    const rows = await readCommercialExportRows(scope, start, end);
+    expect(rows.find(row => row.proposal_id === 'own')?.links[0].won_peer_count).toBeNull();
+    expect(rows.some(row => row.proposal_id === 'hidden')).toBe(false);
+  });
+  it("feeds SQL evidence into the actual selector and refuses a later-discovered conflict", async () => {
+    const fullScope = { ...scope, allSellers: true };
+    const readOwn = async () => (await readCommercialExportRows(fullScope, start, end)).find(row => row.proposal_id === 'own')!;
+    expect(selectCommercialSale(await readOwn(), fullScope)).toMatchObject({ state: 'selected', identity_basis: 'legacy_quote_lineage' });
+    await db.exec(`
+      INSERT INTO opportunities VALUES ('opp','a','client');
+      UPDATE quotes SET opportunity_id = 'opp' WHERE quote_id = 'q';
+      UPDATE proposals SET opportunity_id = 'opp' WHERE proposal_id = 'own';
+    `);
+    expect(selectCommercialSale(await readOwn(), fullScope)).toMatchObject({ state: 'selected', identity_basis: 'opportunity' });
+    await db.exec(`INSERT INTO proposals VALUES ('conflict','a','other','won','2024-01-01','2024-01-01','q','opp')`);
+    expect(selectCommercialSale(await readOwn(), fullScope)).toMatchObject({ state: 'unresolved', reason: 'AMBIGUOUS_WON_SELECTION' });
   });
 });

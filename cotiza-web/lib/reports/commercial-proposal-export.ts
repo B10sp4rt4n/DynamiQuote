@@ -5,6 +5,7 @@ import { Prisma } from "@prisma/client";
 import { getCurrentTenantContext, type TenantContext } from "@/lib/auth/tenant-context";
 import { isTenantCapabilityEnabled } from "@/lib/db/tenant-capabilities";
 import { readCommercialExportRows, type CommercialSourceRow } from "@/lib/db/commercial-export-source";
+import { selectCommercialSale } from "@/lib/domain/commercial-sale-selection";
 
 // Deliberately no endpoint, capability setter, scheduled job, or runtime caller.
 export const COMMERCIAL_EXPORT_READ = "commercial_chat_read";
@@ -52,6 +53,8 @@ function project(row: CommercialSourceRow, grant: Grant) {
   }
   return {
     proposal_id: row.proposal_id, seller_id: row.seller_id,
+    origin_quote_id: row.origin_quote_id, opportunity_id: row.opportunity_id,
+    sale_selection: selectCommercialSale(row, grant),
     outcome_at: row.outcome_at?.toISOString() ?? null,
     reporting_at: row.reporting_at?.toISOString() ?? null,
     date_basis: row.outcome_at ? "recorded_close" : row.legacy_act_ref ? "legacy_creation_reference" : "unknown",
@@ -87,13 +90,15 @@ export async function prepareCommercialProposalExport(request: Request) {
   try {
     const records = rows.map(row => project(row, grant)).sort((a, b) => a.proposal_id.localeCompare(b.proposal_id));
     if (new Set(records.map(row => row.proposal_id)).size !== records.length) throw new Error("INVALID_SOURCE");
-    // Rule selection by sale/lineage is deliberately unresolved. Returning
-    // candidates never certifies zero activity, period completeness, or totals.
+    const selected = records.filter(row => row.sale_selection.state === "selected");
+    if (new Set(selected.map(row => row.sale_selection.sale_ref)).size !== selected.length) throw new Error("INVALID_SOURCE");
+    // Unique source selection is separate from date/amount eligibility.
+    // Returning candidates never certifies completeness or ranking totals.
     const payload = {
-      format: "cotiza-proposal-export/0.1" as const,
+      format: "cotiza-proposal-export/0.2" as const,
       observed_at: observedAt, period: { start_utc: request.startUtc, end_utc_exclusive: request.endUtcExclusive },
       scope: grant, basis: "proposal_items.subtotal_price/cost" as const,
-      selection: "won_proposal_candidates_not_deduplicated" as const,
+      selection: "unique_won_deal_or_unresolved" as const,
       coverage: "not_certified" as const, records,
       provenance: { integrity: "integrity_only", custody: "local_only", source_authentication: "not_attested" },
     };
