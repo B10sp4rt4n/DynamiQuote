@@ -102,6 +102,8 @@ async function request<T>(path: string, init: RequestInit = {}): Promise<T> {
 export type DigestorFiscalDraftItem = {
   description: string;
   quantity: number;
+  satProductCode: string;
+  unitCode: string;
   taxRate?: number;
   unitPrice: number;
 };
@@ -173,6 +175,9 @@ export async function createBillingDraft(input: CreateBillingDraftInput): Promis
       items: input.items.map((item) => ({
         description: item.description,
         quantity: item.quantity,
+        sat_product_code: item.satProductCode,
+        unit_code: item.unitCode,
+        tax_object: "02",
         tax_rate: item.taxRate ?? 0.16,
         unit_price: item.unitPrice,
       })),
