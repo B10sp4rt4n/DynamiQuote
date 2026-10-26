@@ -205,8 +205,8 @@ const styles = StyleSheet.create({
   },
 });
 
-function formatCurrency(value: number, currency: string): string {
-  return new Intl.NumberFormat("es-MX", { currency, style: "currency" }).format(value);
+function formatCurrency(value: number, currency: string, unit = false): string {
+  return new Intl.NumberFormat("es-MX", { currency, style: "currency", maximumFractionDigits: unit ? 6 : 2 }).format(value);
 }
 
 function formatDate(iso: string): string {
@@ -275,8 +275,8 @@ export function CfdiDocument({ cfdi, proposalNumber, qrDataUrl }: CfdiDocumentPr
           <View key={`${concepto.claveProdServ}-${index}`} style={styles.tableBody}>
             <Text style={styles.cellClave}>{concepto.claveProdServ}</Text>
             <Text style={styles.cellDescripcion}>{concepto.descripcion}</Text>
-            <Text style={styles.cellCant}>{concepto.cantidad.toFixed(2)}</Text>
-            <Text style={styles.cellPUnit}>{formatCurrency(concepto.valorUnitario, cfdi.moneda)}</Text>
+            <Text style={styles.cellCant}>{new Intl.NumberFormat("es-MX", { maximumFractionDigits: 6 }).format(concepto.cantidad)}</Text>
+            <Text style={styles.cellPUnit}>{formatCurrency(concepto.valorUnitario, cfdi.moneda, true)}</Text>
             <Text style={styles.cellImporte}>{formatCurrency(concepto.importe, cfdi.moneda)}</Text>
           </View>
         ))}

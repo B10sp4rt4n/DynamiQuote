@@ -14,6 +14,7 @@ import {
 import { getProposalWorkflowByTenant, isProposalVisibleToViewer } from "@/lib/db/proposals";
 import { getTenantProfileByTenant } from "@/lib/db/tenants";
 import { createProposalInvoiceSchema } from "@/lib/validations/proposal-invoice";
+import { invoiceBasisFingerprint } from "@/lib/domain/invoice-profile";
 
 type RouteContext = {
   params: Promise<{ proposalId: string }>;
@@ -34,16 +35,21 @@ export async function GET(_: Request, context: RouteContext) {
   if (!await isProposalVisibleToViewer(tenant.id, proposalId, tenant.userId, canSeeAll)) {
     return NextResponse.json({ error: "Propuesta no encontrada" }, { status: 404 });
   }
-  const [invoice, clientFiscalData] = await Promise.all([
+  const [invoice, clientFiscalData, proposal] = await Promise.all([
     getProposalInvoiceStatusByTenant(tenant.id, proposalId),
     getClientFiscalDataForProposalByTenant(tenant.id, proposalId),
+    getProposalWorkflowByTenant(tenant.id, proposalId),
   ]);
 
   if (!invoice) {
     return NextResponse.json({ error: "Propuesta no encontrada" }, { status: 404 });
   }
 
-  return NextResponse.json({ clientFiscalData, invoice }, { status: 200 });
+  if (!proposal) return NextResponse.json({ error: "Propuesta no encontrada" }, { status: 404 });
+  return NextResponse.json({ clientFiscalData, invoice,
+    fiscalBasis: { fingerprint: invoiceBasisFingerprint(proposal), currency: proposal.formal?.currency,
+      items: proposal.items.map(item => ({ itemNumber: item.itemNumber, description: item.description })) },
+  }, { status: 200 });
 }
 
 export async function POST(request: Request, context: RouteContext) {
@@ -120,6 +126,16 @@ export async function POST(request: Request, context: RouteContext) {
   }
 
   const input = parsed.data;
+  if (currency !== "MXN") return NextResponse.json({ error: "La facturación en otra moneda requiere tipo de cambio y aún no está habilitada" }, { status: 422 });
+  if (invoiceBasisFingerprint(proposal) !== input.itemsFingerprint) {
+    return NextResponse.json({ error: "La propuesta cambió. Recarga y revisa las claves fiscales de sus partidas" }, { status: 409 });
+  }
+  const classifications = new Map(input.fiscalItems.map(item => [item.itemNumber, item]));
+  if (classifications.size !== input.fiscalItems.length || classifications.size !== proposal.items.length ||
+      new Set(proposal.items.map(item => item.itemNumber)).size !== proposal.items.length ||
+      proposal.items.some(item => !classifications.has(item.itemNumber))) {
+    return NextResponse.json({ error: "Las claves fiscales deben corresponder exactamente a las partidas de la propuesta" }, { status: 422 });
+  }
 
   try {
     const draft = await createBillingDraft({
@@ -135,6 +151,9 @@ export async function POST(request: Request, context: RouteContext) {
       items: proposal.items.map((item) => ({
         description: item.description,
         quantity: item.quantity,
+        satProductCode: classifications.get(item.itemNumber)!.satProductCode,
+        unitCode: classifications.get(item.itemNumber)!.unitCode,
+        taxRate: 0.16,
         unitPrice: item.priceUnit,
       })),
       notes: input.notes ?? `Propuesta ${proposal.proposalId}`,

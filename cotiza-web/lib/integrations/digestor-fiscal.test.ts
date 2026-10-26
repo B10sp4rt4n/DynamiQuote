@@ -261,3 +261,24 @@ describe("digestor-fiscal: CSF + validacion de receptor", () => {
     );
   });
 });
+
+
+describe("explicit fiscal classification transport", () => {
+  const originalFetch = global.fetch;
+  afterEach(() => { clearConfigEnv(); global.fetch = originalFetch; vi.restoreAllMocks(); });
+  it("transmits each reviewed SAT code, unit and full unit precision", async () => {
+    vi.resetModules(); setConfigEnv();
+    const fetchMock = vi.fn()
+      .mockResolvedValueOnce(jsonResponse({ access_token: "synthetic-token", expires_in: 3600 }))
+      .mockResolvedValueOnce(jsonResponse({ id: "d1", missing_fields: [], ready_to_stamp: true }));
+    global.fetch = fetchMock as unknown as typeof fetch;
+    const { createBillingDraft } = await import("./digestor-fiscal");
+    await createBillingDraft({ currency: "MXN", customerName: "Synthetic", customerRfc: "AAA010101AAA",
+      customerRegimen: "601", customerUseCfdi: "G03", customerZip: "01000", emitterName: "Synthetic",
+      emitterRfc: "EKU9003173C9", emitterRegimen: "601", placeOfIssue: "01000", paymentMethod: "PUE", paymentForm: "03",
+      items: [{ description: "Synthetic service", quantity: 1.234567, unitPrice: 12.345678, satProductCode: "80101500", unitCode: "E48" }] });
+    expect(JSON.parse(fetchMock.mock.calls[1][1].body).items).toEqual([
+      { description: "Synthetic service", quantity: 1.234567, unit_price: 12.345678, sat_product_code: "80101500", unit_code: "E48", tax_object: "02", tax_rate: 0.16 }
+    ]);
+  });
+});

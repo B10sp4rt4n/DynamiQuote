@@ -2,14 +2,21 @@ import { z } from "zod";
 
 export const createProposalInvoiceSchema = z.object({
   customerName: z.string().trim().min(1, "Falta el nombre/razón social del receptor").max(200),
-  customerRegimen: z.string().trim().min(1, "Falta el régimen fiscal del receptor").max(10),
-  customerRfc: z.string().trim().min(1, "Falta el RFC del receptor").max(20),
-  customerUseCfdi: z.string().trim().min(1, "Falta el uso de CFDI").max(10),
-  customerZip: z.string().trim().min(1, "Falta el código postal del receptor").max(10),
+  customerRegimen: z.string().trim().regex(/^\d{3}$/, "El régimen debe tener tres dígitos"),
+  customerRfc: z.string().trim().toUpperCase().regex(/^[A-ZÑ&]{3,4}\d{6}[A-Z0-9]{3}$/, "Revisa el formato del RFC")
+    .refine(value => !["XAXX010101000", "XEXX010101000"].includes(value), "El escenario de RFC genérico aún no está habilitado"),
+  customerUseCfdi: z.string().trim().regex(/^[GIDS]\d{2}$/, "Revisa el formato del uso CFDI"),
+  customerZip: z.string().trim().regex(/^\d{5}$/, "El código postal debe tener cinco dígitos"),
   notes: z.string().trim().max(500).optional().nullable(),
-  paymentForm: z.string().trim().min(1, "Falta la forma de pago").max(5),
-  paymentMethod: z.enum(["PUE", "PPD"]),
+  paymentForm: z.enum(["01", "02", "03", "04", "28"]),
+  paymentMethod: z.literal("PUE", { error: "PPD requiere el ciclo de complementos de pago; aún no está habilitado" }),
+  itemsFingerprint: z.string().regex(/^[a-f0-9]{64}$/),
+  fiscalItems: z.array(z.object({
+    itemNumber: z.number().int().positive(),
+    satProductCode: z.string().trim().regex(/^\d{8}$/, "Captura la clave SAT de ocho dígitos"),
+    unitCode: z.string().trim().regex(/^[A-Z0-9]{2,3}$/, "Captura la clave de unidad SAT"),
+  }).strict()).min(1).max(500),
   saveToClient: z.boolean().optional(),
-});
+}).strict();
 
 export type CreateProposalInvoiceInput = z.infer<typeof createProposalInvoiceSchema>;
