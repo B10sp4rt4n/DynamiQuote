@@ -23,7 +23,7 @@ El diseño CRM Agent AUP v0.1 existente sigue vigente. Esta preparación concret
 | G4 — Cotización conversacional | PDF de fabricante → extracción revisable → borrador versionado en Cotiza | Procedencia por página/campo, precio/costo explícitos, cálculo oficial, moneda, vigencia, revisión e idempotencia |
 | G5 — Correo | Destinatario verificado, texto completo y adjunto exacto | Autorización explícita ligada al contenido final, permisos, caducidad, prevención de duplicados y resultado registrado |
 
-Preparado en este cambio: diseño G1–G5, esquema de solicitud de G2 y ejemplo sintético. Pendientes: implementación y todas las compuertas operativas. No hay servicios nuevos, compras ni consumo de IA adicional habilitados.
+Preparado en este cambio: diseño G1–G5, esquemas de solicitud/respuesta de G2 y fixtures con pruebas locales reproducibles. El contrato de respuesta se detalla en [conversational-client-ranking-response.md](conversational-client-ranking-response.md). Pendientes: implementación y todas las compuertas operativas. No hay servicios nuevos, compras ni consumo de IA adicional habilitados.
 
 ## Estado actual comprobado y brechas
 
@@ -67,9 +67,9 @@ Con top 4 + Otros hay como máximo cinco porciones. Empates se resuelven con ID 
 Solicitud inicial: `contracts/conversational-client-ranking.request.schema.json`.
 Ejemplo: `contracts/conversational-client-ranking.example.json`.
 
-## Sobre de respuesta que deberá implementar el adaptador
+## Sobre de respuesta propuesto para el futuro adaptador
 
-Contrato de respuesta todavía pendiente de publicar como JSON Schema. Debe contener:
+Contrato publicado como propuesta v0.1 en `contracts/conversational-client-ranking.response.schema.json`, con fixtures y pruebas sintéticas en `tests/contracts/`. Su validación exige schema **y** invariantes semánticas/conciliación descritas en [el contrato](conversational-client-ranking-response.md). Contiene:
 
 - request_id, query/metric versionadas y estado (`ok`, `partial`, `no_data`, `insufficient_evidence`, `forbidden`, `stale`). La API evita revelar existencia de objetos no autorizados.
 - Contexto efectivo: tenant y alcance resueltos por autorización, no copiados del texto del usuario.
@@ -79,7 +79,7 @@ Contrato de respuesta todavía pendiente de publicar como JSON Schema. Debe cont
 - Faltantes y exclusiones por motivo, conteo y monto cuando se conozca. No publicar métricas parciales como totales completos.
 - Evidencia de regla financiera y de autorización; hash de integridad con canonicalización acordada en el contrato universal. Un hash solo no autentica la fuente ni acredita custodia externa.
 
-El ejemplo adjunto es una maqueta, no un snapshot universal válido ni una respuesta productiva firmada.
+El ejemplo original es una maqueta. Los nuevos fixtures reproducen los seis estados, permisos y conciliación con datos ficticios; tampoco son snapshots universales válidos ni respuestas productivas firmadas. El contrato universal `commercial_snapshot` y la atestación autenticada del origen siguen pendientes.
 
 ## Permisos, aislamiento y habilitación
 
@@ -123,11 +123,11 @@ Estos nombres son intención de diseño, no herramientas disponibles ni endpoint
 15. Envío sin aprobación válida o con contenido cambiado queda bloqueado.
 16. Caída/desconexión del agente permite seguir usando Cotiza; responde solo sobre última fotografía autorizada con antigüedad visible.
 
-Estas son pruebas de aceptación pendientes de implementación, no resultados aprobados.
+La suite `tests/contracts/` cubre únicamente el contrato de consulta/respuesta con un oráculo local y contexto de autorización ficticio. Las pruebas de aceptación del adaptador real, UI, caché, bases, borradores y correo siguen pendientes; esta suite no las acredita.
 
 ## Próximo incremento autorizado de preparación
 
-Conservar esta propuesta separada del PR de liberación. Tras G0: publicar schema universal fuente/respuesta, fixtures de errores, exportador aislado y consulta anual por cliente, con pruebas sobre datos sintéticos. Después demostrar el caso real a Salvador en un tenant habilitado y con datos conciliados. Habilitación del chat, creación de borradores y envío permanecen compuertas posteriores.
+Conservar esta propuesta separada del PR de liberación. Respuesta v0.1, fixtures de estados/errores y oráculo sintético ya preparados; tras G0, acordar el schema universal fuente y atestación, implementar exportador aislado y consulta anual por cliente, y verificar el contrato contra autorización y reglas financieras reales. Después demostrar el caso real a Salvador en un tenant habilitado y con datos conciliados. Habilitación del chat, creación de borradores y envío permanecen compuertas posteriores.
 
 ## Fuentes revisadas
 

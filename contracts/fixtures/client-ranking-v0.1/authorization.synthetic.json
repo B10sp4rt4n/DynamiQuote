@@ -1,0 +1,16 @@
+{
+  "tenant_ref": "tenant:alfa",
+  "principal_ref": "seller:one",
+  "mode": "tenant",
+  "seller_refs": [],
+  "permissions": [
+    "ranking.read",
+    "revenue.read",
+    "gross_profit.read",
+    "evidence.read"
+  ],
+  "enabled": true,
+  "active": true,
+  "valid_until": "2026-10-25T19:00:00Z",
+  "max_age_seconds": 86400
+}

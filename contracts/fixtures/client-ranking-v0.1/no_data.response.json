@@ -1,0 +1,125 @@
+{
+  "schema_version": "0.1",
+  "operation": "client_ranking",
+  "metric_version": "cotiza-client-ranking/0.1",
+  "request_id": "request:fixture",
+  "response_id": "response:fixture",
+  "status": "no_data",
+  "query": {
+    "schema_version": "0.1",
+    "operation": "client_ranking",
+    "metric": "won_revenue",
+    "period": {
+      "start_date": "2023-01-01",
+      "end_date_exclusive": "2024-01-01",
+      "timezone": "America/Mexico_City"
+    },
+    "currency": "MXN",
+    "tax_basis": "before_vat",
+    "date_policy": "recorded_close_only",
+    "top_n": 4,
+    "presentation": "pie"
+  },
+  "generated_at": "2026-10-25T18:00:00Z",
+  "authorization": {
+    "decision": "allowed",
+    "decision_ref": "auth:fixture",
+    "policy_version": "fixture-auth/0.1",
+    "evaluated_at": "2026-10-25T18:00:00Z",
+    "valid_until": "2026-10-25T19:00:00Z",
+    "effective_scope": {
+      "tenant_ref": "tenant:alfa",
+      "principal_ref": "seller:one",
+      "mode": "tenant",
+      "seller_refs": []
+    },
+    "capabilities": [
+      "commercial_chat_read"
+    ],
+    "permissions": [
+      "evidence.read",
+      "gross_profit.read",
+      "ranking.read",
+      "revenue.read"
+    ],
+    "scope_fingerprint": "6c7b847d64401e72574bc81c12a5ce65983cca069f5781797c7ccd5514b02cdb",
+    "revalidate_on_access": true
+  },
+  "snapshot": {
+    "snapshot_id": "snapshot:fictional",
+    "snapshot_contract_version": "ranking-fixture/0.1",
+    "source_system": "cotiza",
+    "source_schema_version": "fictional-commercial/0.1",
+    "source_revision": "fictional-revision:2",
+    "as_of": "2026-10-25T17:00:00Z",
+    "exported_at": "2026-10-25T17:00:01Z",
+    "data_until": "2026-10-25T17:00:00Z",
+    "scope_fingerprint": "6c7b847d64401e72574bc81c12a5ce65983cca069f5781797c7ccd5514b02cdb",
+    "source_attestation_ref": "attestation:fixture-not-authenticated",
+    "integrity": {
+      "canonicalization": "sorted-json-utf8/v1",
+      "sha256": "c672a600c293501bd16558fa5049b37d9f74d03579c78f91aa302eb7aed4d414",
+      "assurance": "integrity_only"
+    }
+  },
+  "freshness": {
+    "state": "fresh",
+    "age_seconds": 3600,
+    "max_age_seconds": 86400
+  },
+  "coverage": {
+    "state": "complete",
+    "assessed_scope": "effective_authorized_scope_only",
+    "period_complete": true,
+    "candidate_count": 0,
+    "eligible_count": 0,
+    "excluded_count": 0,
+    "issues": [],
+    "legacy_reference_count": 0,
+    "legacy_reference_amount_decimal": "0.00"
+  },
+  "result": {
+    "currency": "MXN",
+    "tax_basis": "before_vat",
+    "total_kind": "authorized_total",
+    "official_total_decimal": "0.00",
+    "revenue_decimal": "0.00",
+    "cost_decimal": "0.00",
+    "gross_profit_decimal": "0.00",
+    "margin_pct": null,
+    "rows": [],
+    "reconciliation": {
+      "top_decimal": "0.00",
+      "others_decimal": "0.00",
+      "difference_decimal": "0.00"
+    },
+    "presentation": {
+      "requested": "pie",
+      "actual": "table",
+      "reason": "no_data"
+    }
+  },
+  "financial_rule": {
+    "authority": "cotiza",
+    "rule_id": "fixture-financial",
+    "version": "0.1",
+    "selection_rule_ref": "selection:source-asserted",
+    "amount_basis": "official_before_vat",
+    "fx_policy": "none"
+  },
+  "evidence": [],
+  "errors": [],
+  "warnings": [
+    {
+      "code": "PRESENTATION_FALLBACK",
+      "retryable": false
+    }
+  ],
+  "trace": {
+    "audit_ref": "audit:fixture",
+    "request_sha256": "d255d61d5dcaaa242cf1e6ee5ca7b3a331165ca93380b9feab51a1860eec35bf",
+    "cache_policy": "private_revalidate",
+    "provenance": "synthetic",
+    "custody": "local_only"
+  }
+}
