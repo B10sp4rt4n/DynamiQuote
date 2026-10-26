@@ -1,0 +1,914 @@
+{
+  "recordia_version": "1.0",
+  "case_id": "case-crm-g0-20261025",
+  "user_facing_date": "2026-10-25",
+  "timezone": "America/Mexico_City",
+  "recorded_at_utc": "2026-10-26T02:03:16.643Z",
+  "status": "audit_completed_release_blocked",
+  "scope": "Current release-readiness evidence audit only; no database connection, production mutation or deployment.",
+  "candidates": {
+    "crm": "694dedb523957945e6b3740d8f84e0305e3b2f58",
+    "fiscal": "38f064a706461a9fcbad541bd9e421e2f73545da"
+  },
+  "sources": [
+    {
+      "author_or_origin": "provider_api",
+      "access_scope": "authorized_source",
+      "integrity_status": "not_verified",
+      "source_id": "src-pr28",
+      "source_type": "api_record",
+      "title": "PR CRM actual",
+      "locator": "https://github.com/B10sp4rt4n/DynamiQuote/pull/28",
+      "version": "694dedb523957945e6b3740d8f84e0305e3b2f58",
+      "observed": {
+        "state": "open",
+        "draft": true,
+        "merged": false,
+        "base": "main",
+        "head": "fix/multitenant-foundation"
+      }
+    },
+    {
+      "author_or_origin": "provider_api",
+      "access_scope": "authorized_source",
+      "integrity_status": "not_verified",
+      "source_id": "src-pr-fiscal",
+      "source_type": "api_record",
+      "title": "PR fiscal actual",
+      "locator": "https://github.com/B10sp4rt4n/digestor__fiscal/pull/2",
+      "version": "38f064a706461a9fcbad541bd9e421e2f73545da",
+      "observed": {
+        "state": "open",
+        "draft": true,
+        "merged": false
+      }
+    },
+    {
+      "author_or_origin": "repository_file",
+      "access_scope": "authorized_source",
+      "integrity_status": "not_verified",
+      "source_id": "src-prev-release",
+      "source_type": "file",
+      "title": "Preparación previa, conservada sin reescribir",
+      "locator": "https://github.com/B10sp4rt4n/DynamiQuote/blob/694dedb523957945e6b3740d8f84e0305e3b2f58/docs/evidence/crm-release-preparation-20261023.json",
+      "version": "694dedb523957945e6b3740d8f84e0305e3b2f58",
+      "original_timestamp": "2026-10-23T16:14:33.702Z",
+      "observed": {
+        "historical_cotiza_deployment": "1e21faa5-0be3-4ceb-9235-12eacd65c925",
+        "historical_fiscal_deployment": "fced17d8-aa0b-4ca1-a1c5-692c138de8e5",
+        "reported_status_at_that_time": "SUCCESS",
+        "operator_scope": "Salvador only proposed, not approved",
+        "independent_production_backup_performed": false
+      }
+    },
+    {
+      "author_or_origin": "provider_api",
+      "access_scope": "authorized_source",
+      "integrity_status": "not_verified",
+      "source_id": "src-ci-crm",
+      "source_type": "api_record",
+      "title": "CI del SHA actual CRM y logs de job",
+      "locator": "https://github.com/B10sp4rt4n/DynamiQuote/actions/runs/39985386781",
+      "version": "694dedb523957945e6b3740d8f84e0305e3b2f58",
+      "retrieved_at_utc": "2026-10-26T01:59:13.297Z",
+      "observed": {
+        "run_id": 39985386781,
+        "head_sha": "694dedb523957945e6b3740d8f84e0305e3b2f58",
+        "event": "push",
+        "conclusion": "success",
+        "general": {
+          "passed": 544,
+          "skipped": 65
+        },
+        "integration": {
+          "passed": 51,
+          "skipped": 0
+        },
+        "jobs": [
+          {
+            "id": 120523085657,
+            "name": "Encrypted backup/restore with REAL disposable PostgreSQL 17",
+            "conclusion": "success"
+          },
+          {
+            "id": 120523085887,
+            "name": "TS, unit and disposable PostgreSQL",
+            "conclusion": "success"
+          }
+        ],
+        "limits": "General and integration counts are distinct suite executions; do not infer unique totals or subtract skipped cases. Synthetic databases only."
+      }
+    },
+    {
+      "author_or_origin": "provider_api",
+      "access_scope": "authorized_source",
+      "integrity_status": "not_verified",
+      "source_id": "src-ci-fiscal",
+      "source_type": "api_record",
+      "title": "CI fiscal actual, suite completa y mantenimiento",
+      "locator": "https://github.com/B10sp4rt4n/digestor__fiscal/actions/runs/40067635386",
+      "version": "38f064a706461a9fcbad541bd9e421e2f73545da",
+      "retrieved_at_utc": "2026-10-26T01:59:13.004Z",
+      "observed": {
+        "run_id": 40067635386,
+        "head_sha": "38f064a706461a9fcbad541bd9e421e2f73545da",
+        "event": "push",
+        "conclusion": "success",
+        "summary": "56 passed, 109 warnings, 54 subtests passed in 3.64s",
+        "job_id": 120794113456,
+        "limits": "Do not sum subtests as independent top-level tests. No live PAC or credentials validated."
+      }
+    },
+    {
+      "author_or_origin": "provider_api",
+      "access_scope": "authorized_source",
+      "integrity_status": "not_verified",
+      "source_id": "src-fiscal-diff",
+      "source_type": "api_record",
+      "title": "Diferencias desde la referencia fiscal histórica de 32 pruebas",
+      "locator": "https://github.com/B10sp4rt4n/digestor__fiscal/compare/074523e5d6647f8b4b92d34a590b13525d966d91...38f064a706461a9fcbad541bd9e421e2f73545da",
+      "version": "38f064a706461a9fcbad541bd9e421e2f73545da",
+      "retrieved_at_utc": "2026-10-26T01:57:21.396Z",
+      "observed": {
+        "files": [
+          ".github/workflows/fiscal-safety.yml",
+          "app/core/config.py",
+          "app/core/maintenance.py",
+          "app/main.py",
+          "docs/evidence/fiscal-safety-validation-20261023.json",
+          "docs/fiscal-release-plan-20261023.md",
+          "docs/fiscal-safety-validation-20261023.md",
+          "scripts/inspect_release_storage.py",
+          "tests/test_maintenance_asgi_unittest.py",
+          "tests/test_maintenance_full_app.py",
+          "tests/test_maintenance_reads_unittest.py",
+          "tests/test_maintenance_unittest.py"
+        ],
+        "limits": "Current candidate changes app/main.py and app/core/config.py and adds maintenance middleware; older unchanged-startup statements apply only to their historical candidate."
+      }
+    },
+    {
+      "author_or_origin": "provider_api",
+      "access_scope": "authorized_source",
+      "integrity_status": "not_verified",
+      "source_id": "src-railway-cotiza",
+      "source_type": "api_record",
+      "title": "Inventario de despliegues del servicio Cotiza histórico",
+      "locator": "https://railway.com/project/1980096f-8e39-416b-8a12-45b5815af5a6/service/7b8c668c-d093-42e0-a418-ce2ddc7c652d?environmentId=79506dd6-a076-4104-911a-9167da50040d",
+      "retrieved_at_utc": "2026-10-26T01:56:49.198Z",
+      "observed": {
+        "deployment_id": "1e21faa5-0be3-4ceb-9235-12eacd65c925",
+        "status": "REMOVED",
+        "createdAt": "2026-09-15T03:06:38.052Z",
+        "updatedAt": "2026-10-24T01:18:59.503Z",
+        "success_filtered_deployments": [],
+        "service_state": "live",
+        "describe_service_latest": {
+          "id": "8fd87cb4-ba84-4df8-83ce-403cf9cbdc30",
+          "status": "FAILED",
+          "createdAt": "2026-07-30T03:00:16.585Z",
+          "url": null
+        },
+        "mounted_volumes": 0
+      }
+    },
+    {
+      "author_or_origin": "provider_api",
+      "access_scope": "authorized_source",
+      "integrity_status": "not_verified",
+      "source_id": "src-railway-fiscal",
+      "source_type": "api_record",
+      "title": "Inventario del despliegue fiscal histórico",
+      "locator": "https://railway.com/project/911f84ed-a4df-40ec-a122-f77d26da261c/service/ef6c5593-5099-48e0-9da5-b78bcd66a845?environmentId=f8cd837c-8769-46c8-9f1f-c84fbbdc7cdc",
+      "retrieved_at_utc": "2026-10-26T01:56:49.538Z",
+      "observed": {
+        "deployment_id": "fced17d8-aa0b-4ca1-a1c5-692c138de8e5",
+        "status": "REMOVED",
+        "createdAt": "2026-09-15T03:12:08.248Z",
+        "updatedAt": "2026-10-24T01:19:05.052Z",
+        "attributed_commit": "9e251d761a23dccc554c11ba0a22274fd4f8e269",
+        "success_filtered_deployments": [],
+        "service_state": "live",
+        "describe_service_latest": {
+          "id": "27fdea2c-5e24-4d85-8a1b-ae97e64583ae",
+          "status": "FAILED",
+          "createdAt": "2026-03-30T02:45:37.345Z",
+          "url": null
+        },
+        "mounted_volumes": 0
+      }
+    },
+    {
+      "author_or_origin": "provider_api",
+      "access_scope": "authorized_source",
+      "integrity_status": "not_verified",
+      "source_id": "src-neon",
+      "source_type": "api_record",
+      "title": "Metadatos de protección del proyecto/branch CRM",
+      "locator": "https://console.neon.tech/app/projects/cool-resonance-22906937",
+      "retrieved_at_utc": "2026-10-26T01:56:49.872Z",
+      "observed": {
+        "project_id": "cool-resonance-22906937",
+        "branch_id": "br-quiet-morning-ahkomhhi",
+        "branch_name": "production",
+        "current_state": "ready",
+        "history_retention_seconds": 21600,
+        "snapshots": [],
+        "snapshot_schedule": [],
+        "limits": "Metadata API reads only. No SQL, DB connection, export or restore. Empty snapshots do not prove absence of backups stored elsewhere."
+      }
+    },
+    {
+      "author_or_origin": "provider_api",
+      "access_scope": "authorized_source",
+      "integrity_status": "not_verified",
+      "source_id": "src-vercel",
+      "source_type": "api_record",
+      "title": "Lectura autorizada del alias, bloqueada por el proveedor",
+      "locator": "https://vercel.com/salvador-ruiz-esparzas-projects/dynami-quote",
+      "retrieved_at_utc": "2026-10-26T01:56:11.626Z",
+      "observed": {
+        "operation": "GET /v4/aliases/dynami-quote.vercel.app",
+        "status": 403,
+        "code": "forbidden",
+        "team_id": "team_wCPRqvRGXWpRT4eUvfAz38jF",
+        "scope": "salvador-ruiz-esparzas-projects",
+        "required_action": "authorize_team_access on same connection",
+        "authorization_helper_now_available": true,
+        "limits": "Current alias/runtime SHA not verified. No alternate account, CLI or browser bypass attempted."
+      }
+    },
+    {
+      "author_or_origin": "provider_api",
+      "access_scope": "authorized_source",
+      "integrity_status": "not_verified",
+      "source_id": "src-vercel-status",
+      "source_type": "api_record",
+      "title": "Status separado Vercel del candidato CRM",
+      "locator": "https://github.com/B10sp4rt4n/DynamiQuote/commit/694dedb523957945e6b3740d8f84e0305e3b2f58",
+      "version": "694dedb523957945e6b3740d8f84e0305e3b2f58",
+      "observed": {
+        "statuses": [
+          {
+            "context": "Vercel",
+            "state": "failure",
+            "target_url": "https://vercel.com/salvador-ruiz-esparzas-projects?upgradeToPro=build-rate-limit"
+          }
+        ],
+        "limits": "Commit-status context is separate from successful Actions check runs; failure links to build-rate-limit, not proof of a source-code test failure."
+      }
+    },
+    {
+      "author_or_origin": "repository_file",
+      "access_scope": "authorized_source",
+      "integrity_status": "not_verified",
+      "source_id": "src-current-fiscal-source",
+      "source_type": "file",
+      "title": "Límite de mantenimiento fiscal actual y arranque",
+      "locator": "https://github.com/B10sp4rt4n/digestor__fiscal/blob/38f064a706461a9fcbad541bd9e421e2f73545da/app/main.py",
+      "version": "38f064a706461a9fcbad541bd9e421e2f73545da",
+      "retrieved_at_utc": "2026-10-26T01:57:55.901Z",
+      "observed": {
+        "maintenance_mode_suppresses": [
+          "create_all",
+          "admin_seed",
+          "document_worker",
+          "outbound_worker",
+          "autopoll_task"
+        ],
+        "default_mode_still_starts_existing_workflows": true,
+        "maintenance_flag_enabled_in_production": "not_verified",
+        "limits": "Source inspection and synthetic CI only; no import/lifespan run in production."
+      }
+    },
+    {
+      "source_id": "src-source-recovery",
+      "source_type": "other",
+      "title": "Ensayo local de recuperación de fuente del SHA actual",
+      "author_or_origin": "scripts/prepare_crm_recovery.mjs",
+      "retrieved_at_utc": "2026-10-26T02:05:32.110547Z",
+      "version": "694dedb523957945e6b3740d8f84e0305e3b2f58",
+      "locator": "scripts/prepare_crm_recovery.mjs at 694dedb523957945e6b3740d8f84e0305e3b2f58",
+      "access_scope": "authorized_source",
+      "integrity_status": "hash_verified",
+      "observed": {
+        "schema_version": 1,
+        "commit": "694dedb523957945e6b3740d8f84e0305e3b2f58",
+        "tree": "e3c65297c9ede99ed5a3a4f02646ce02327b4cea",
+        "source_archive_sha256": "c9604247b068b346d68993d9c7b7d3c3fe28f8fa9e80667cfeb18acd96301da1",
+        "verified_files": 428,
+        "restored_source_verified": true,
+        "dependencies_included": false,
+        "build_included": false,
+        "database_backup_included": false,
+        "production_rollback_tested": false,
+        "file_manifest_sha256": "1bfd2166842532bdc32362916d1ee4130ad4e602741a2674941129a3b47bfd4f",
+        "reproduction_script": "scripts/prepare_crm_recovery.mjs"
+      }
+    }
+  ],
+  "events": [
+    {
+      "recordia_version": "1.0",
+      "event_id": "evt-ci-current",
+      "case_id": "case-crm-g0-20261025",
+      "event_type": "test.result_observed",
+      "recorded_at_utc": "2026-10-26T02:03:16.643Z",
+      "actors": [
+        {
+          "actor_id": "audit-codex",
+          "role": "observer",
+          "identity_status": "declared"
+        }
+      ],
+      "subject": {
+        "entity_id": "DynamiQuote-PR28",
+        "entity_type": "release_candidate"
+      },
+      "action_or_state": "CI actual CRM y fiscal observada success",
+      "epistemic_class": "observed_fact",
+      "support_status": "supported",
+      "source_refs": [
+        "src-ci-crm",
+        "src-ci-fiscal"
+      ],
+      "notes": "Time of observation/recording; provider updatedAt is not attributed to a human action."
+    },
+    {
+      "recordia_version": "1.0",
+      "event_id": "evt-old-cotiza-removed",
+      "case_id": "case-crm-g0-20261025",
+      "event_type": "deployment.state_observed",
+      "recorded_at_utc": "2026-10-26T02:03:16.643Z",
+      "actors": [
+        {
+          "actor_id": "audit-codex",
+          "role": "observer",
+          "identity_status": "declared"
+        }
+      ],
+      "subject": {
+        "entity_id": "DynamiQuote-PR28",
+        "entity_type": "release_candidate"
+      },
+      "action_or_state": "Deployment Cotiza histórico observado REMOVED; no SUCCESS en consulta filtrada",
+      "epistemic_class": "observed_fact",
+      "support_status": "supported",
+      "source_refs": [
+        "src-railway-cotiza",
+        "src-prev-release"
+      ],
+      "notes": "Time of observation/recording; provider updatedAt is not attributed to a human action.",
+      "relations": [
+        {
+          "predicate": "supersedes",
+          "target_id": "src-prev-release"
+        }
+      ]
+    },
+    {
+      "recordia_version": "1.0",
+      "event_id": "evt-old-fiscal-removed",
+      "case_id": "case-crm-g0-20261025",
+      "event_type": "deployment.state_observed",
+      "recorded_at_utc": "2026-10-26T02:03:16.643Z",
+      "actors": [
+        {
+          "actor_id": "audit-codex",
+          "role": "observer",
+          "identity_status": "declared"
+        }
+      ],
+      "subject": {
+        "entity_id": "DynamiQuote-PR28",
+        "entity_type": "release_candidate"
+      },
+      "action_or_state": "Deployment fiscal histórico observado REMOVED; ubicación actual de ejecución sin establecer",
+      "epistemic_class": "observed_fact",
+      "support_status": "supported",
+      "source_refs": [
+        "src-railway-fiscal",
+        "src-prev-release"
+      ],
+      "notes": "Time of observation/recording; provider updatedAt is not attributed to a human action.",
+      "relations": [
+        {
+          "predicate": "supersedes",
+          "target_id": "src-prev-release"
+        }
+      ]
+    },
+    {
+      "recordia_version": "1.0",
+      "event_id": "evt-snapshot-protection",
+      "case_id": "case-crm-g0-20261025",
+      "event_type": "backup.metadata_observed",
+      "recorded_at_utc": "2026-10-26T02:03:16.643Z",
+      "actors": [
+        {
+          "actor_id": "audit-codex",
+          "role": "observer",
+          "identity_status": "declared"
+        }
+      ],
+      "subject": {
+        "entity_id": "DynamiQuote-PR28",
+        "entity_type": "release_candidate"
+      },
+      "action_or_state": "Neon conserva 6h de historia; snapshots y programación vacíos",
+      "epistemic_class": "observed_fact",
+      "support_status": "supported",
+      "source_refs": [
+        "src-neon"
+      ],
+      "notes": "Time of observation/recording; provider updatedAt is not attributed to a human action."
+    },
+    {
+      "recordia_version": "1.0",
+      "event_id": "evt-vercel-denied",
+      "case_id": "case-crm-g0-20261025",
+      "event_type": "access.denial_observed",
+      "recorded_at_utc": "2026-10-26T02:03:16.643Z",
+      "actors": [
+        {
+          "actor_id": "audit-codex",
+          "role": "observer",
+          "identity_status": "declared"
+        }
+      ],
+      "subject": {
+        "entity_id": "DynamiQuote-PR28",
+        "entity_type": "release_candidate"
+      },
+      "action_or_state": "403 al consultar alias; hay herramienta oficial de consentimiento ahora disponible",
+      "epistemic_class": "observed_fact",
+      "support_status": "supported",
+      "source_refs": [
+        "src-vercel"
+      ],
+      "notes": "Time of observation/recording; provider updatedAt is not attributed to a human action."
+    },
+    {
+      "recordia_version": "1.0",
+      "event_id": "evt-fiscal-candidate-change",
+      "case_id": "case-crm-g0-20261025",
+      "event_type": "source.version_observed",
+      "recorded_at_utc": "2026-10-26T02:03:16.643Z",
+      "actors": [
+        {
+          "actor_id": "audit-codex",
+          "role": "observer",
+          "identity_status": "declared"
+        }
+      ],
+      "subject": {
+        "entity_id": "DynamiQuote-PR28",
+        "entity_type": "release_candidate"
+      },
+      "action_or_state": "El candidato fiscal añade mantenimiento y cambia arranque respecto de la versión histórica validada",
+      "epistemic_class": "observed_fact",
+      "support_status": "supported",
+      "source_refs": [
+        "src-fiscal-diff",
+        "src-current-fiscal-source"
+      ],
+      "notes": "Time of observation/recording; provider updatedAt is not attributed to a human action."
+    },
+    {
+      "recordia_version": "1.0",
+      "event_id": "evt-source-recovery",
+      "case_id": "case-crm-g0-20261025",
+      "event_type": "source.restore_verified",
+      "recorded_at_utc": "2026-10-26T02:05:32.110547Z",
+      "actors": [
+        {
+          "actor_id": "audit-codex",
+          "role": "operator_local_only",
+          "identity_status": "declared"
+        }
+      ],
+      "subject": {
+        "entity_id": "694dedb523957945e6b3740d8f84e0305e3b2f58",
+        "entity_type": "git_source_checkpoint"
+      },
+      "action_or_state": "428 files restored and hashes matched exact source commit; not a database or hosting recovery",
+      "epistemic_class": "observed_fact",
+      "support_status": "supported",
+      "source_refs": [
+        "src-source-recovery"
+      ],
+      "notes": "No productive backup or rollback approval inferred."
+    }
+  ],
+  "evidence": [
+    {
+      "evidence_id": "evd-1",
+      "source_id": "src-pr28",
+      "proposition": "PR CRM actual",
+      "relation": "supports",
+      "support_status": "supported",
+      "integrity_status": "not_verified",
+      "verification_method": "Read identified API metadata or pinned repository source. Local manifest hashes the derived report files only.",
+      "limitations": [
+        "Does not establish production release approval."
+      ]
+    },
+    {
+      "evidence_id": "evd-2",
+      "source_id": "src-pr-fiscal",
+      "proposition": "PR fiscal actual",
+      "relation": "supports",
+      "support_status": "supported",
+      "integrity_status": "not_verified",
+      "verification_method": "Read identified API metadata or pinned repository source. Local manifest hashes the derived report files only.",
+      "limitations": [
+        "Does not establish production release approval."
+      ]
+    },
+    {
+      "evidence_id": "evd-3",
+      "source_id": "src-prev-release",
+      "proposition": "Preparación previa, conservada sin reescribir",
+      "relation": "supports",
+      "support_status": "supported",
+      "integrity_status": "not_verified",
+      "verification_method": "Read identified API metadata or pinned repository source. Local manifest hashes the derived report files only.",
+      "limitations": [
+        "Does not establish production release approval."
+      ]
+    },
+    {
+      "evidence_id": "evd-4",
+      "source_id": "src-ci-crm",
+      "proposition": "CI del SHA actual CRM y logs de job",
+      "relation": "supports",
+      "support_status": "supported",
+      "integrity_status": "not_verified",
+      "verification_method": "Read identified API metadata or pinned repository source. Local manifest hashes the derived report files only.",
+      "limitations": [
+        "General and integration counts are distinct suite executions; do not infer unique totals or subtract skipped cases. Synthetic databases only."
+      ]
+    },
+    {
+      "evidence_id": "evd-5",
+      "source_id": "src-ci-fiscal",
+      "proposition": "CI fiscal actual, suite completa y mantenimiento",
+      "relation": "supports",
+      "support_status": "supported",
+      "integrity_status": "not_verified",
+      "verification_method": "Read identified API metadata or pinned repository source. Local manifest hashes the derived report files only.",
+      "limitations": [
+        "Do not sum subtests as independent top-level tests. No live PAC or credentials validated."
+      ]
+    },
+    {
+      "evidence_id": "evd-6",
+      "source_id": "src-fiscal-diff",
+      "proposition": "Diferencias desde la referencia fiscal histórica de 32 pruebas",
+      "relation": "supports",
+      "support_status": "supported",
+      "integrity_status": "not_verified",
+      "verification_method": "Read identified API metadata or pinned repository source. Local manifest hashes the derived report files only.",
+      "limitations": [
+        "Current candidate changes app/main.py and app/core/config.py and adds maintenance middleware; older unchanged-startup statements apply only to their historical candidate."
+      ]
+    },
+    {
+      "evidence_id": "evd-7",
+      "source_id": "src-railway-cotiza",
+      "proposition": "Inventario de despliegues del servicio Cotiza histórico",
+      "relation": "supports",
+      "support_status": "supported",
+      "integrity_status": "not_verified",
+      "verification_method": "Read identified API metadata or pinned repository source. Local manifest hashes the derived report files only.",
+      "limitations": [
+        "Does not establish production release approval."
+      ]
+    },
+    {
+      "evidence_id": "evd-8",
+      "source_id": "src-railway-fiscal",
+      "proposition": "Inventario del despliegue fiscal histórico",
+      "relation": "supports",
+      "support_status": "supported",
+      "integrity_status": "not_verified",
+      "verification_method": "Read identified API metadata or pinned repository source. Local manifest hashes the derived report files only.",
+      "limitations": [
+        "Does not establish production release approval."
+      ]
+    },
+    {
+      "evidence_id": "evd-9",
+      "source_id": "src-neon",
+      "proposition": "Metadatos de protección del proyecto/branch CRM",
+      "relation": "supports",
+      "support_status": "supported",
+      "integrity_status": "not_verified",
+      "verification_method": "Read identified API metadata or pinned repository source. Local manifest hashes the derived report files only.",
+      "limitations": [
+        "Metadata API reads only. No SQL, DB connection, export or restore. Empty snapshots do not prove absence of backups stored elsewhere."
+      ]
+    },
+    {
+      "evidence_id": "evd-10",
+      "source_id": "src-vercel",
+      "proposition": "Lectura autorizada del alias, bloqueada por el proveedor",
+      "relation": "supports",
+      "support_status": "supported",
+      "integrity_status": "not_verified",
+      "verification_method": "Read identified API metadata or pinned repository source. Local manifest hashes the derived report files only.",
+      "limitations": [
+        "Current alias/runtime SHA not verified. No alternate account, CLI or browser bypass attempted."
+      ]
+    },
+    {
+      "evidence_id": "evd-11",
+      "source_id": "src-vercel-status",
+      "proposition": "Status separado Vercel del candidato CRM",
+      "relation": "supports",
+      "support_status": "supported",
+      "integrity_status": "not_verified",
+      "verification_method": "Read identified API metadata or pinned repository source. Local manifest hashes the derived report files only.",
+      "limitations": [
+        "Commit-status context is separate from successful Actions check runs; failure links to build-rate-limit, not proof of a source-code test failure."
+      ]
+    },
+    {
+      "evidence_id": "evd-12",
+      "source_id": "src-current-fiscal-source",
+      "proposition": "Límite de mantenimiento fiscal actual y arranque",
+      "relation": "supports",
+      "support_status": "supported",
+      "integrity_status": "not_verified",
+      "verification_method": "Read identified API metadata or pinned repository source. Local manifest hashes the derived report files only.",
+      "limitations": [
+        "Source inspection and synthetic CI only; no import/lifespan run in production."
+      ]
+    },
+    {
+      "evidence_id": "evd-source-recovery",
+      "source_id": "src-source-recovery",
+      "proposition": "Restored source bytes matched pinned commit for all 428 tracked files",
+      "relation": "supports",
+      "support_status": "supported",
+      "integrity_status": "hash_verified",
+      "verification_method": "Existing prepare_crm_recovery.mjs executed locally, git archive extracted, every file compared SHA-256 with git show, all 428 matched",
+      "verified_at_utc": "2026-10-26T02:05:32.110547Z",
+      "limitations": [
+        "No dependencies, build, database backup or production rollback included."
+      ]
+    }
+  ],
+  "inferences": [
+    {
+      "inference_id": "inf-not-release-ready",
+      "statement": "G0 cannot be declared closed from this evidence.",
+      "basis_refs": [
+        "src-vercel",
+        "src-railway-cotiza",
+        "src-railway-fiscal",
+        "src-prev-release",
+        "src-neon",
+        "src-ci-fiscal",
+        "src-current-fiscal-source",
+        "src-pr28",
+        "src-pr-fiscal"
+      ],
+      "reasoning": "Independent production recovery, actual topology, operator acceptance and final cutover verification remain unsupported or blocked.",
+      "alternative_explanations": [
+        "An operator may hold additional evidence outside the sources reviewed."
+      ],
+      "confidence": "high",
+      "confidence_basis": "Multiple release conditions have no current qualifying evidence."
+    },
+    {
+      "inference_id": "inf-writer-change",
+      "statement": "The historical Railway deployments must no longer be described as active SUCCESS deployments.",
+      "basis_refs": [
+        "src-railway-cotiza",
+        "src-railway-fiscal",
+        "src-prev-release"
+      ],
+      "reasoning": "The same deployment IDs now report REMOVED; filtered SUCCESS queries return no rows for those service/environment scopes.",
+      "alternative_explanations": [
+        "Other services/platforms may host their replacements; runtime health and intentional drain were not checked."
+      ],
+      "confidence": "high",
+      "confidence_basis": "Two independent bounded API inventory queries agree on the identified deployment states."
+    }
+  ],
+  "gates": [
+    {
+      "gate_id": "G0-CODE",
+      "name": "Validación técnica de candidatos",
+      "state": "satisfied_for_code_only",
+      "source_refs": [
+        "src-ci-crm",
+        "src-ci-fiscal"
+      ],
+      "next_evidence": "Conservar SHA exactos y evidencias. La liberación operacional no deriva del éxito CI.",
+      "release_condition_changed": false
+    },
+    {
+      "gate_id": "G0-TOPOLOGY",
+      "name": "Destino real de Cotiza/Digestor y dependencias",
+      "state": "blocked_by_provider_access",
+      "source_refs": [
+        "src-vercel",
+        "src-railway-cotiza",
+        "src-railway-fiscal"
+      ],
+      "next_evidence": "Autorizar lectura del equipo Vercel en la misma conexión; fijar deployment, SHA, entorno y destino Digestor actuales.",
+      "release_condition_changed": false
+    },
+    {
+      "gate_id": "G0-FISCAL-STORAGE",
+      "name": "Backend y persistencia de la base fiscal",
+      "state": "pending_verification",
+      "source_refs": [
+        "src-prev-release",
+        "src-railway-fiscal"
+      ],
+      "next_evidence": "Localizar el runtime actual y verificar tipo/destino fiscal por metadatos de un operador, sin redeploy para inspeccionar.",
+      "release_condition_changed": false
+    },
+    {
+      "gate_id": "G0-RECOVERY",
+      "name": "Recuperación independiente de ambas bases",
+      "state": "pending_verification",
+      "source_refs": [
+        "src-neon",
+        "src-prev-release"
+      ],
+      "next_evidence": "Elegir equipo/almacén privado y custodio de clave; aportar copia consistente cifrada y restore verificado de CRM y fiscal.",
+      "release_condition_changed": false
+    },
+    {
+      "gate_id": "G0-WRITERS",
+      "name": "Inventario y drenado completo de escritores",
+      "state": "partially_supported",
+      "source_refs": [
+        "src-railway-cotiza",
+        "src-railway-fiscal",
+        "src-prev-release"
+      ],
+      "next_evidence": "No volver a parar deployments ya REMOVED. Inventariar runtime actual, scripts, workers y clientes directos; probar drenado en ventana.",
+      "release_condition_changed": false
+    },
+    {
+      "gate_id": "G0-OPERATORS",
+      "name": "Operadores reales e identidades",
+      "state": "historical_proposal_only",
+      "source_refs": [
+        "src-prev-release"
+      ],
+      "next_evidence": "Confirmar lista de lanzamiento y probar ID/login/tenant/rol y denegación cruzada de cada incluido. No reasignar ni invitar cuentas de prueba.",
+      "release_condition_changed": false
+    },
+    {
+      "gate_id": "G0-PAC",
+      "name": "Compatibilidad con evidencia fiscal anterior real redactada",
+      "state": "pending_verification",
+      "source_refs": [
+        "src-ci-fiscal",
+        "src-prev-release"
+      ],
+      "next_evidence": "Contrastar una respuesta real previa por canal autorizado, sin enviar otro CFDI ni desbloquear unknown por inferencia.",
+      "release_condition_changed": false
+    },
+    {
+      "gate_id": "G0-PREFLIGHT",
+      "name": "Preflight/auditoría fiscal y smoke del candidato",
+      "state": "required_at_cutover",
+      "source_refs": [
+        "src-prev-release",
+        "src-current-fiscal-source"
+      ],
+      "next_evidence": "Ejecutar en destino y ventana aprobada con los escritores controlados. GET sin timbrar; no POST stamp de prueba.",
+      "release_condition_changed": false
+    },
+    {
+      "gate_id": "G0-APPROVAL",
+      "name": "Ventana, responsables, recuperación y aprobación de liberación",
+      "state": "requires_explicit_release_approval",
+      "source_refs": [
+        "src-pr28",
+        "src-pr-fiscal",
+        "src-prev-release"
+      ],
+      "next_evidence": "Presentar corte concreto solo después de cerrar bloqueos; autorización de auditoría no autoriza despliegue.",
+      "release_condition_changed": false
+    }
+  ],
+  "gaps": [
+    {
+      "gap_id": "gap-G0-TOPOLOGY",
+      "statement": "Destino real de Cotiza/Digestor y dependencias",
+      "needed_evidence": "Autorizar lectura del equipo Vercel en la misma conexión; fijar deployment, SHA, entorno y destino Digestor actuales.",
+      "source_refs": [
+        "src-vercel",
+        "src-railway-cotiza",
+        "src-railway-fiscal"
+      ]
+    },
+    {
+      "gap_id": "gap-G0-FISCAL-STORAGE",
+      "statement": "Backend y persistencia de la base fiscal",
+      "needed_evidence": "Localizar el runtime actual y verificar tipo/destino fiscal por metadatos de un operador, sin redeploy para inspeccionar.",
+      "source_refs": [
+        "src-prev-release",
+        "src-railway-fiscal"
+      ]
+    },
+    {
+      "gap_id": "gap-G0-RECOVERY",
+      "statement": "Recuperación independiente de ambas bases",
+      "needed_evidence": "Elegir equipo/almacén privado y custodio de clave; aportar copia consistente cifrada y restore verificado de CRM y fiscal.",
+      "source_refs": [
+        "src-neon",
+        "src-prev-release"
+      ]
+    },
+    {
+      "gap_id": "gap-G0-WRITERS",
+      "statement": "Inventario y drenado completo de escritores",
+      "needed_evidence": "No volver a parar deployments ya REMOVED. Inventariar runtime actual, scripts, workers y clientes directos; probar drenado en ventana.",
+      "source_refs": [
+        "src-railway-cotiza",
+        "src-railway-fiscal",
+        "src-prev-release"
+      ]
+    },
+    {
+      "gap_id": "gap-G0-OPERATORS",
+      "statement": "Operadores reales e identidades",
+      "needed_evidence": "Confirmar lista de lanzamiento y probar ID/login/tenant/rol y denegación cruzada de cada incluido. No reasignar ni invitar cuentas de prueba.",
+      "source_refs": [
+        "src-prev-release"
+      ]
+    },
+    {
+      "gap_id": "gap-G0-PAC",
+      "statement": "Compatibilidad con evidencia fiscal anterior real redactada",
+      "needed_evidence": "Contrastar una respuesta real previa por canal autorizado, sin enviar otro CFDI ni desbloquear unknown por inferencia.",
+      "source_refs": [
+        "src-ci-fiscal",
+        "src-prev-release"
+      ]
+    },
+    {
+      "gap_id": "gap-G0-PREFLIGHT",
+      "statement": "Preflight/auditoría fiscal y smoke del candidato",
+      "needed_evidence": "Ejecutar en destino y ventana aprobada con los escritores controlados. GET sin timbrar; no POST stamp de prueba.",
+      "source_refs": [
+        "src-prev-release",
+        "src-current-fiscal-source"
+      ]
+    },
+    {
+      "gap_id": "gap-G0-APPROVAL",
+      "statement": "Ventana, responsables, recuperación y aprobación de liberación",
+      "needed_evidence": "Presentar corte concreto solo después de cerrar bloqueos; autorización de auditoría no autoriza despliegue.",
+      "source_refs": [
+        "src-pr28",
+        "src-pr-fiscal",
+        "src-prev-release"
+      ]
+    }
+  ],
+  "mutations": {
+    "database_connections": false,
+    "sql": false,
+    "production_exports": false,
+    "production_restore": false,
+    "deployments": false,
+    "services_stopped": false,
+    "variables_changed": false,
+    "membership_changes": false,
+    "pac_calls": false,
+    "new_infrastructure": false,
+    "additional_ai_service_calls": false,
+    "source_checkpoint_rehearsal_only": true,
+    "repository_documentation_only": true
+  },
+  "custody": {
+    "status": "local_only_prepared_for_custody",
+    "hotvault_receipt": false,
+    "signature_verified": false,
+    "limits": "Derived evidence and hashes do not certify authenticity, immutability, commercial truth or external custody."
+  },
+  "source_recovery": {
+    "schema_version": 1,
+    "commit": "694dedb523957945e6b3740d8f84e0305e3b2f58",
+    "tree": "e3c65297c9ede99ed5a3a4f02646ce02327b4cea",
+    "source_archive_sha256": "c9604247b068b346d68993d9c7b7d3c3fe28f8fa9e80667cfeb18acd96301da1",
+    "verified_files": 428,
+    "restored_source_verified": true,
+    "dependencies_included": false,
+    "build_included": false,
+    "database_backup_included": false,
+    "production_rollback_tested": false,
+    "file_manifest_sha256": "1bfd2166842532bdc32362916d1ee4130ad4e602741a2674941129a3b47bfd4f",
+    "reproduction_script": "scripts/prepare_crm_recovery.mjs"
+  }
+}

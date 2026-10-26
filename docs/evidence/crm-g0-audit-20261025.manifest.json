@@ -1,0 +1,21 @@
+{
+  "recordia_manifest_version": "1.0",
+  "status": "prepared_for_custody",
+  "created_at_utc": "2026-10-26T02:05:32.149002Z",
+  "hash_algorithm": "sha256",
+  "entry_count": 2,
+  "entries": [
+    {
+      "logical_path": "docs/crm-g0-audit-20261025.md",
+      "size_bytes": 10490,
+      "sha256": "cdd15e2efd645ae76936b6f8d5f8f24a971123bdaf4eaa069ccf1bd237f4a63f",
+      "modified_at_utc": "2026-10-26T02:05:31.957777Z"
+    },
+    {
+      "logical_path": "docs/evidence/crm-g0-audit-20261025.json",
+      "size_bytes": 36056,
+      "sha256": "267eff52adcd58285e82fde32a7cdad943de56f4d25ec34d3b089e89ff11e84b",
+      "modified_at_utc": "2026-10-26T02:05:32.111297Z"
+    }
+  ]
+}
