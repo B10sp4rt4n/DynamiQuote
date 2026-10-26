@@ -1500,6 +1500,8 @@ export async function getProposalWorkflowByTenant(
           recipient_contact_title: true,
           recipient_email: true,
           status: true,
+          sent_at: true,
+          updated_at: true,
           subject: true,
           terms_and_conditions: true,
           valid_until: true,

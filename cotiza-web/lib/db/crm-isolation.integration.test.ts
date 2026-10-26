@@ -395,10 +395,14 @@ suite("CRM workflow and authorization against disposable PostgreSQL", () => {
       proposal_number: "SYNTHETIC-DELIVERY", issued_date: new Date(), issuer_company: "Synthetic", recipient_company: "Synthetic", status: "approved", created_at: updated, updated_at: updated } });
     const input = { tenantId: a, proposalId: id, documentId: id, expectedUpdatedAt: updated.toISOString(),
       actorUserId: seller, providerId: "synthetic-provider-only", pdfSha256: "a".repeat(64) };
+    const snapshot = await proposalService.getProposalWorkflowByTenant(a, id);
+    expect(snapshot?.formal?.updatedAt).toBe(updated.toISOString());
+    expect(await service.isProposalDeliveryAuthorizedByTenant({ ...input, expectedUpdatedAt: snapshot!.formal!.updatedAt ?? null })).toBe(true);
     expect(await service.isProposalDeliveryAuthorizedByTenant(input)).toBe(true);
     expect((await service.recordProposalDeliveryByTenant(input)).recordedForCurrentRevision).toBe(true);
     expect((await db.proposals.findUniqueOrThrow({ where: { proposal_id: id } })).status).toBe("approved");
     expect((await db.formal_proposals.findUniqueOrThrow({ where: { proposal_doc_id: id } })).sent_at).not.toBeNull();
+    expect((await proposalService.getProposalWorkflowByTenant(a, id))?.formal?.sentAt).toBeTruthy();
     expect((await proposalService.getProposalSummariesByTenant(a)).find(row => row.proposalId === id)?.formal?.sentAt).toBeTruthy();
     await expect(service.recordProposalDeliveryByTenant({ ...input, tenantId: b })).rejects.toThrow("no encontrada");
     await db.formal_proposals.update({ where: { proposal_doc_id: id }, data: { updated_at: new Date("2026-10-21T12:00:00Z"), sent_at: null } });
