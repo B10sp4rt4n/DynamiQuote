@@ -61,6 +61,9 @@ jobs:
       - name: PostgreSQL constraints, safe writes and rollback on synthetic data
         run: node scripts/check_multitenant_migration.mjs
 
+      - name: Read-only critical schema preflight with negative fixtures
+        run: node scripts/check_crm_schema_requirements.mjs
+
       - name: Handler, Prisma and fiscal-concurrency integration in disposable database
         run: node scripts/check_crm_isolation.mjs
 

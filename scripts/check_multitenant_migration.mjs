@@ -23,6 +23,15 @@ const sql=readFileSync(new URL('../cotiza-web/prisma/manual/20261022_multitenant
 await db.exec(sql); await db.exec(sql);
 const docSql=readFileSync(new URL('../cotiza-web/prisma/manual/20261022_multitenant_documents.sql', import.meta.url),'utf8');
 await db.exec(docSql); await db.exec(docSql);
+const constraints = (await db.query(`SELECT conname, convalidated FROM pg_constraint
+  WHERE conname IN ('crm_opportunities_tenant_fk','crm_opportunities_client_fk',
+    'crm_contacts_client_fk','crm_tasks_client_fk','crm_tasks_opportunity_fk',
+    'crm_interactions_client_fk','crm_interactions_opportunity_fk','crm_quotes_client_fk',
+    'crm_quotes_opportunity_fk','crm_proposals_opportunity_fk','document_items_proposal_tenant_fk',
+    'document_formal_proposal_tenant_fk','document_audit_proposal_tenant_fk')`)).rows;
+assert.equal(constraints.length,13);
+assert.ok(constraints.every(row=>row.convalidated===true));
+console.log('All 13 expected composite/tenant foreign keys exist and are validated.');
 await db.exec("INSERT INTO proposals VALUES('pa','a','oa'); INSERT INTO proposal_items VALUES('valid-item','a','pa'); INSERT INTO formal_proposals VALUES('valid-document','a','pa')");
 let count=0;
 async function rejects(sql) { await assert.rejects(db.exec(sql), e=>e.code==='23503'); count++; }
