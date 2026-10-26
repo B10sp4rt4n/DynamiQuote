@@ -28,7 +28,7 @@ Un fallo de proveedor no marca enviada. Si el proveedor aceptó y falla la escri
 
 El código sent se conserva para lectura compatible y se muestra “Autorización por verificar”. Sus contadores identifican registros anteriores, no un estado alternativo al autorizado. No se convierten masivamente en autorizados: el código histórico podía alcanzarse sin aprobación. Se requiere revisar/autorizarlos con las reglas vigentes antes de volver a enviar o registrar Ganada/Perdida. No se ejecutaron cambios sobre datos reales.
 
-Las etiquetas son coherentes en propuestas, detalle, portada, cliente y KPIs. No se declara que “Enviadas” sea un conteo de entregas: el contador legado sent describe exclusivamente filas antiguas por revisar. Una propuesta autorizada con excepción de margen no se muestra simultáneamente como bloqueada.
+Las etiquetas son coherentes en propuestas, detalle, portada, cliente, KPIs y sus PDF. No se declara que “Enviadas” sea un conteo de entregas: el contador legado sent describe exclusivamente filas antiguas por revisar. Una propuesta autorizada con excepción de margen no se muestra simultáneamente como bloqueada.
 
 ## Verificación y alcance de entrega
 

@@ -89,7 +89,7 @@ function Row({ cells, header = false }: { cells: string[]; header?: boolean }) {
 function RankingTable({ ranking }: { ranking: ProposalKpiReportData["ranking"] }) {
   return <View style={{ marginTop: 15 }}>
         <Text style={styles.chartTitle}>Vendedores por monto aprobado (historico)</Text>
-        <Row header cells={["Vendedor", "Propuestas", "Aprobadas", "Monto aprobado"]} />
+        <Row header cells={["Vendedor", "Propuestas", "Autorizadas", "Monto autorizado"]} />
         {ranking.map((p) => <Row key={p.userId} cells={[p.displayName, String(p.totalCount), String(p.approvedCount), money(p.approvedAmount)]} />)}
       </View>;
 }
@@ -156,10 +156,10 @@ export function ProposalKpiPdfDocument({ report, generatedAt }: { report: Propos
         { name: "Ganado", color: colors.green, values: report.outcomeTimeline.map((p) => p.wonAmount) },
         { name: "Perdido", color: colors.red, values: report.outcomeTimeline.map((p) => p.lostAmount) },
       ]} />
-      <Text style={styles.chartTitle}>Propuestas por estado (historico)</Text>
+      <Text style={styles.chartTitle}>Autorización interna (histórico)</Text>
       <Row header cells={["Estado", "Propuestas", "Estado", "Propuestas"]} />
-      <Row cells={["Borrador", String(summary.draftCount), "Enviada", String(summary.sentCount)]} />
-      <Row cells={["En revision", String(summary.inReviewCount), "Aprobada", String(summary.approvedCount)]} />
+      <Row cells={["Borrador", String(summary.draftCount), "Por verificar", String(summary.sentCount)]} />
+      <Row cells={["En revision", String(summary.inReviewCount), "Autorizada", String(summary.approvedCount)]} />
       <Row cells={["Rechazada", String(summary.rejectedCount), "Vencida", String(summary.expiredCount)]} />
       {report.canSeeAll && report.ranking.length > 0 && report.ranking.length <= 4 ? <RankingTable ranking={ranking} /> : null}
     </Frame>
