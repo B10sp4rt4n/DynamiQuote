@@ -30,12 +30,12 @@ function formatCurrency(value: number | null): string {
 }
 
 const PROPOSAL_STATUS_LABELS: Record<ProposalStatus, string> = {
-  approved: "Aprobada",
+  approved: "Autorizada",
   draft: "Borrador",
   expired: "Vencida",
   in_review: "En revisión",
   rejected: "Rechazada",
-  sent: "Enviada",
+  sent: "Autorización por verificar",
 };
 
 const PROPOSAL_STATUS_CLASSES: Record<ProposalStatus, string> = {
@@ -44,7 +44,7 @@ const PROPOSAL_STATUS_CLASSES: Record<ProposalStatus, string> = {
   expired: "bg-zinc-200 text-zinc-600",
   in_review: "bg-amber-100 text-amber-800",
   rejected: "bg-rose-100 text-rose-800",
-  sent: "bg-blue-100 text-blue-800",
+  sent: "bg-amber-100 text-amber-800",
 };
 
 const OUTCOME_LABELS: Record<NonNullable<ClientProposalHistoryItem["outcome"]>, string> = {

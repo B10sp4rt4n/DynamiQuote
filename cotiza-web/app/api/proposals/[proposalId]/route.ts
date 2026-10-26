@@ -219,7 +219,7 @@ export async function PATCH(request: Request, context: RouteContext) {
 
   if (result === "invalid_status") {
     return NextResponse.json(
-      { error: "Solo se puede etiquetar ganada/perdida cuando la propuesta esta Enviada o Aprobada" },
+      { error: "Solo se puede registrar Ganada o Perdida cuando la propuesta está autorizada" },
       { status: 409 },
     );
   }

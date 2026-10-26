@@ -1,0 +1,30 @@
+name: Authorization and contact delivery release
+on:
+  push:
+    branches: [fix/approval-delivery-production]
+permissions:
+  contents: read
+jobs:
+  verify:
+    runs-on: ubuntu-24.04
+    timeout-minutes: 20
+    env:
+      DATABASE_URL: postgresql://unused:unused@127.0.0.1:1/unused
+      NEXT_TELEMETRY_DISABLED: "1"
+    steps:
+      - uses: actions/checkout@11bd71901bbe5b1630ceea73d27597364c9af683
+        with:
+          persist-credentials: false
+      - uses: actions/setup-node@49933ea5288caeca8642d1e84afbd3f7d6820020
+        with:
+          node-version: "22"
+      - run: npm ci --no-audit --no-fund
+      - run: npm --prefix cotiza-web run db:generate
+      - run: ./cotiza-web/node_modules/.bin/tsc --noEmit -p cotiza-web/tsconfig.json
+      - run: npm --prefix cotiza-web test -- --exclude validate-quote-lifecycle.e2e.test.ts
+      - name: Disposable PostgreSQL dependencies
+        run: |
+          npm install --prefix "$RUNNER_TEMP/contact-delivery-pg" --no-audit --no-fund --save-exact @electric-sql/pglite@0.5.11 @electric-sql/pglite-socket@0.2.14
+          echo "PGLITE_MODULE=$RUNNER_TEMP/contact-delivery-pg/node_modules/@electric-sql/pglite/dist/index.js" >> "$GITHUB_ENV"
+          echo "PGLITE_SOCKET_MODULE=$RUNNER_TEMP/contact-delivery-pg/node_modules/@electric-sql/pglite-socket/dist/index.js" >> "$GITHUB_ENV"
+      - run: node scripts/check_proposal_delivery.mjs
