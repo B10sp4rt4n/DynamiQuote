@@ -1,0 +1,260 @@
+{
+  "schema_version": "0.1",
+  "operation": "client_ranking",
+  "metric_version": "cotiza-client-ranking/0.1",
+  "request_id": "request:fixture",
+  "response_id": "response:fixture",
+  "status": "partial",
+  "query": {
+    "schema_version": "0.1",
+    "operation": "client_ranking",
+    "metric": "won_gross_profit",
+    "period": {
+      "start_date": "2025-01-01",
+      "end_date_exclusive": "2026-01-01",
+      "timezone": "America/Mexico_City"
+    },
+    "currency": "MXN",
+    "tax_basis": "before_vat",
+    "date_policy": "recorded_close_only",
+    "top_n": 4,
+    "presentation": "pie"
+  },
+  "generated_at": "2026-10-25T18:00:00Z",
+  "authorization": {
+    "decision": "allowed",
+    "decision_ref": "auth:fixture",
+    "policy_version": "fixture-auth/0.1",
+    "evaluated_at": "2026-10-25T18:00:00Z",
+    "valid_until": "2026-10-25T19:00:00Z",
+    "effective_scope": {
+      "tenant_ref": "tenant:alfa",
+      "principal_ref": "seller:one",
+      "mode": "tenant",
+      "seller_refs": []
+    },
+    "capabilities": [
+      "commercial_chat_read"
+    ],
+    "permissions": [
+      "evidence.read",
+      "gross_profit.read",
+      "ranking.read",
+      "revenue.read"
+    ],
+    "scope_fingerprint": "6c7b847d64401e72574bc81c12a5ce65983cca069f5781797c7ccd5514b02cdb",
+    "revalidate_on_access": true
+  },
+  "snapshot": {
+    "snapshot_id": "snapshot:fictional",
+    "snapshot_contract_version": "ranking-fixture/0.1",
+    "source_system": "cotiza",
+    "source_schema_version": "fictional-commercial/0.1",
+    "source_revision": "fictional-revision:2",
+    "as_of": "2026-10-25T17:00:00Z",
+    "exported_at": "2026-10-25T17:00:01Z",
+    "data_until": "2026-10-25T17:00:00Z",
+    "scope_fingerprint": "6c7b847d64401e72574bc81c12a5ce65983cca069f5781797c7ccd5514b02cdb",
+    "source_attestation_ref": "attestation:fixture-not-authenticated",
+    "integrity": {
+      "canonicalization": "sorted-json-utf8/v1",
+      "sha256": "60171af052ad8434bb5a6704dc9e4894acf965b831cfa8ad89cd9deac102c562",
+      "assurance": "integrity_only"
+    }
+  },
+  "freshness": {
+    "state": "fresh",
+    "age_seconds": 3600,
+    "max_age_seconds": 86400
+  },
+  "coverage": {
+    "state": "partial",
+    "assessed_scope": "effective_authorized_scope_only",
+    "period_complete": true,
+    "candidate_count": 7,
+    "eligible_count": 6,
+    "excluded_count": 1,
+    "issues": [
+      {
+        "reason": "missing_cost",
+        "count": 1,
+        "known_amount_decimal": "1500000.00",
+        "known_amount_basis": "revenue_before_vat",
+        "currency": "MXN"
+      }
+    ],
+    "legacy_reference_count": 0,
+    "legacy_reference_amount_decimal": "0.00"
+  },
+  "result": {
+    "currency": "MXN",
+    "tax_basis": "before_vat",
+    "total_kind": "known_subtotal",
+    "official_total_decimal": "1090000.00",
+    "revenue_decimal": "3500000.00",
+    "cost_decimal": "2410000.00",
+    "gross_profit_decimal": "1090000.00",
+    "margin_pct": "31.142857",
+    "rows": [
+      {
+        "kind": "client",
+        "client_ref": "client:beta",
+        "label": "client:beta",
+        "amount_decimal": "400000.00",
+        "share_pct": "36.697248",
+        "source_refs": [
+          "evidence:sale:b:v1"
+        ],
+        "breakdown_ref": null
+      },
+      {
+        "kind": "client",
+        "client_ref": "client:delta",
+        "label": "client:delta",
+        "amount_decimal": "200000.00",
+        "share_pct": "18.348624",
+        "source_refs": [
+          "evidence:sale:d:v1"
+        ],
+        "breakdown_ref": null
+      },
+      {
+        "kind": "client",
+        "client_ref": "client:epsilon",
+        "label": "client:epsilon",
+        "amount_decimal": "200000.00",
+        "share_pct": "18.348624",
+        "source_refs": [
+          "evidence:sale:e:v1"
+        ],
+        "breakdown_ref": null
+      },
+      {
+        "kind": "client",
+        "client_ref": "client:gamma",
+        "label": "client:gamma",
+        "amount_decimal": "200000.00",
+        "share_pct": "18.348624",
+        "source_refs": [
+          "evidence:sale:c:v1"
+        ],
+        "breakdown_ref": null
+      },
+      {
+        "kind": "others",
+        "client_ref": null,
+        "label": "Otros",
+        "amount_decimal": "90000.00",
+        "share_pct": "8.256881",
+        "source_refs": [],
+        "breakdown_ref": "breakdown:opaque-authorized"
+      }
+    ],
+    "reconciliation": {
+      "top_decimal": "1000000.00",
+      "others_decimal": "90000.00",
+      "difference_decimal": "0.00"
+    },
+    "presentation": {
+      "requested": "pie",
+      "actual": "table",
+      "reason": "incomplete_coverage"
+    }
+  },
+  "financial_rule": {
+    "authority": "cotiza",
+    "rule_id": "fixture-financial",
+    "version": "0.1",
+    "selection_rule_ref": "selection:source-asserted",
+    "amount_basis": "official_before_vat",
+    "fx_policy": "none"
+  },
+  "evidence": [
+    {
+      "ref": "evidence:sale:b:v1",
+      "client_ref": "client:beta",
+      "sale_ref": "sale:b",
+      "proposal_ref": "proposal:sale:b",
+      "lineage_ref": "lineage:sale:b",
+      "source_version": "v1",
+      "recorded_at": "2025-08-01T12:00:00Z",
+      "date_basis": "recorded_close",
+      "reporting_at": "2025-09-15T12:00:00Z",
+      "date_evidence_ref": "date:sale:b",
+      "financial_evidence_ref": "financial:sale:b",
+      "selection_evidence_ref": "selection:source-asserted",
+      "currency": "MXN",
+      "revenue_decimal": "1200000.00",
+      "cost_decimal": "800000.00",
+      "metric_amount_decimal": "400000.00"
+    },
+    {
+      "ref": "evidence:sale:d:v1",
+      "client_ref": "client:delta",
+      "sale_ref": "sale:d",
+      "proposal_ref": "proposal:sale:d",
+      "lineage_ref": "lineage:sale:d",
+      "source_version": "v1",
+      "recorded_at": "2025-08-01T12:00:00Z",
+      "date_basis": "recorded_close",
+      "reporting_at": "2025-09-15T12:00:00Z",
+      "date_evidence_ref": "date:sale:d",
+      "financial_evidence_ref": "financial:sale:d",
+      "selection_evidence_ref": "selection:source-asserted",
+      "currency": "MXN",
+      "revenue_decimal": "550000.00",
+      "cost_decimal": "350000.00",
+      "metric_amount_decimal": "200000.00"
+    },
+    {
+      "ref": "evidence:sale:e:v1",
+      "client_ref": "client:epsilon",
+      "sale_ref": "sale:e",
+      "proposal_ref": "proposal:sale:e",
+      "lineage_ref": "lineage:sale:e",
+      "source_version": "v1",
+      "recorded_at": "2025-08-01T12:00:00Z",
+      "date_basis": "recorded_close",
+      "reporting_at": "2025-09-15T12:00:00Z",
+      "date_evidence_ref": "date:sale:e",
+      "financial_evidence_ref": "financial:sale:e",
+      "selection_evidence_ref": "selection:source-asserted",
+      "currency": "MXN",
+      "revenue_decimal": "500000.00",
+      "cost_decimal": "300000.00",
+      "metric_amount_decimal": "200000.00"
+    },
+    {
+      "ref": "evidence:sale:c:v1",
+      "client_ref": "client:gamma",
+      "sale_ref": "sale:c",
+      "proposal_ref": "proposal:sale:c",
+      "lineage_ref": "lineage:sale:c",
+      "source_version": "v1",
+      "recorded_at": "2025-08-01T12:00:00Z",
+      "date_basis": "recorded_close",
+      "reporting_at": "2025-09-15T12:00:00Z",
+      "date_evidence_ref": "date:sale:c",
+      "financial_evidence_ref": "financial:sale:c",
+      "selection_evidence_ref": "selection:source-asserted",
+      "currency": "MXN",
+      "revenue_decimal": "900000.00",
+      "cost_decimal": "700000.00",
+      "metric_amount_decimal": "200000.00"
+    }
+  ],
+  "errors": [],
+  "warnings": [
+    {
+      "code": "PRESENTATION_FALLBACK",
+      "retryable": false
+    }
+  ],
+  "trace": {
+    "audit_ref": "audit:fixture",
+    "request_sha256": "6bf23b6fa86e6988350f58856d64fc5efa0462c801ccbbaefa644bf23f65f92c",
+    "cache_policy": "private_revalidate",
+    "provenance": "synthetic",
+    "custody": "local_only"
+  }
+}

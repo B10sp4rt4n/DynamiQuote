@@ -1,0 +1,1577 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "urn:cotiza:conversational-client-ranking:response:0.1",
+  "title": "Commercial client ranking response v0.1",
+  "description": "Design-only read contract. Structural validation MUST be followed by the semantic checks in docs/conversational-client-ranking-response.md. No endpoint or universal snapshot export is enabled.",
+  "type": "object",
+  "additionalProperties": false,
+  "properties": {
+    "schema_version": {
+      "const": "0.1"
+    },
+    "operation": {
+      "const": "client_ranking"
+    },
+    "metric_version": {
+      "const": "cotiza-client-ranking/0.1"
+    },
+    "request_id": {
+      "type": "string",
+      "minLength": 1,
+      "maxLength": 160,
+      "pattern": "^[A-Za-z0-9][A-Za-z0-9:._/-]*$"
+    },
+    "response_id": {
+      "type": "string",
+      "minLength": 1,
+      "maxLength": 160,
+      "pattern": "^[A-Za-z0-9][A-Za-z0-9:._/-]*$"
+    },
+    "status": {
+      "enum": [
+        "ok",
+        "partial",
+        "no_data",
+        "insufficient_evidence",
+        "forbidden",
+        "stale"
+      ]
+    },
+    "query": {
+      "anyOf": [
+        {
+          "$ref": "urn:cotiza:conversational-client-ranking:request:0.1"
+        },
+        {
+          "type": "null"
+        }
+      ]
+    },
+    "generated_at": {
+      "type": "string",
+      "format": "date-time",
+      "pattern": "^\\d{4}-\\d{2}-\\d{2}T\\d{2}:\\d{2}:\\d{2}(?:\\.\\d{1,6})?Z$"
+    },
+    "authorization": {
+      "$ref": "#/$defs/authorization"
+    },
+    "snapshot": {
+      "anyOf": [
+        {
+          "$ref": "#/$defs/snapshot"
+        },
+        {
+          "type": "null"
+        }
+      ]
+    },
+    "freshness": {
+      "anyOf": [
+        {
+          "type": "object",
+          "additionalProperties": false,
+          "required": [
+            "state",
+            "age_seconds",
+            "max_age_seconds"
+          ],
+          "properties": {
+            "state": {
+              "enum": [
+                "fresh",
+                "stale",
+                "unknown"
+              ]
+            },
+            "age_seconds": {
+              "type": "integer",
+              "minimum": 0
+            },
+            "max_age_seconds": {
+              "type": "integer",
+              "minimum": 1
+            }
+          }
+        },
+        {
+          "type": "null"
+        }
+      ]
+    },
+    "coverage": {
+      "anyOf": [
+        {
+          "$ref": "#/$defs/coverage"
+        },
+        {
+          "type": "null"
+        }
+      ]
+    },
+    "result": {
+      "anyOf": [
+        {
+          "$ref": "#/$defs/result"
+        },
+        {
+          "type": "null"
+        }
+      ]
+    },
+    "financial_rule": {
+      "anyOf": [
+        {
+          "type": "object",
+          "additionalProperties": false,
+          "required": [
+            "authority",
+            "rule_id",
+            "version",
+            "selection_rule_ref",
+            "amount_basis",
+            "fx_policy"
+          ],
+          "properties": {
+            "authority": {
+              "const": "cotiza"
+            },
+            "rule_id": {
+              "type": "string",
+              "minLength": 1,
+              "maxLength": 160,
+              "pattern": "^[A-Za-z0-9][A-Za-z0-9:._/-]*$"
+            },
+            "version": {
+              "type": "string",
+              "minLength": 1,
+              "maxLength": 160,
+              "pattern": "^[A-Za-z0-9][A-Za-z0-9:._/-]*$"
+            },
+            "selection_rule_ref": {
+              "type": "string",
+              "minLength": 1,
+              "maxLength": 160,
+              "pattern": "^[A-Za-z0-9][A-Za-z0-9:._/-]*$"
+            },
+            "amount_basis": {
+              "const": "official_before_vat"
+            },
+            "fx_policy": {
+              "const": "none"
+            }
+          }
+        },
+        {
+          "type": "null"
+        }
+      ]
+    },
+    "evidence": {
+      "type": "array",
+      "items": {
+        "$ref": "#/$defs/evidence"
+      }
+    },
+    "errors": {
+      "type": "array",
+      "items": {
+        "$ref": "#/$defs/issue"
+      }
+    },
+    "warnings": {
+      "type": "array",
+      "items": {
+        "$ref": "#/$defs/issue"
+      }
+    },
+    "trace": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": [
+        "audit_ref",
+        "request_sha256",
+        "cache_policy",
+        "provenance",
+        "custody"
+      ],
+      "properties": {
+        "audit_ref": {
+          "type": "string",
+          "minLength": 1,
+          "maxLength": 160,
+          "pattern": "^[A-Za-z0-9][A-Za-z0-9:._/-]*$"
+        },
+        "request_sha256": {
+          "type": "string",
+          "pattern": "^[a-f0-9]{64}$"
+        },
+        "cache_policy": {
+          "const": "private_revalidate"
+        },
+        "provenance": {
+          "enum": [
+            "synthetic",
+            "source_asserted"
+          ]
+        },
+        "custody": {
+          "const": "local_only"
+        }
+      }
+    }
+  },
+  "required": [
+    "schema_version",
+    "operation",
+    "metric_version",
+    "request_id",
+    "response_id",
+    "status",
+    "query",
+    "generated_at",
+    "authorization",
+    "snapshot",
+    "freshness",
+    "coverage",
+    "result",
+    "financial_rule",
+    "evidence",
+    "errors",
+    "warnings",
+    "trace"
+  ],
+  "allOf": [
+    {
+      "if": {
+        "properties": {
+          "status": {
+            "const": "forbidden"
+          }
+        }
+      },
+      "then": {
+        "properties": {
+          "authorization": {
+            "properties": {
+              "decision": {
+                "const": "denied"
+              }
+            }
+          },
+          "query": {
+            "type": "null"
+          },
+          "snapshot": {
+            "type": "null"
+          },
+          "freshness": {
+            "type": "null"
+          },
+          "coverage": {
+            "type": "null"
+          },
+          "result": {
+            "type": "null"
+          },
+          "financial_rule": {
+            "type": "null"
+          },
+          "evidence": {
+            "maxItems": 0
+          },
+          "warnings": {
+            "maxItems": 0
+          },
+          "errors": {
+            "minItems": 1,
+            "maxItems": 1,
+            "items": {
+              "properties": {
+                "code": {
+                  "const": "FORBIDDEN"
+                },
+                "retryable": {
+                  "const": false
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    {
+      "if": {
+        "properties": {
+          "status": {
+            "const": "ok"
+          }
+        }
+      },
+      "then": {
+        "properties": {
+          "coverage": {
+            "allOf": [
+              {
+                "$ref": "#/$defs/coverage"
+              },
+              {
+                "properties": {
+                  "state": {
+                    "const": "complete"
+                  },
+                  "period_complete": {
+                    "const": true
+                  },
+                  "excluded_count": {
+                    "const": 0
+                  },
+                  "issues": {
+                    "maxItems": 0
+                  }
+                }
+              }
+            ]
+          },
+          "result": {
+            "allOf": [
+              {
+                "$ref": "#/$defs/result"
+              },
+              {
+                "properties": {
+                  "total_kind": {
+                    "const": "authorized_total"
+                  },
+                  "rows": {
+                    "minItems": 1
+                  }
+                }
+              }
+            ]
+          },
+          "errors": {
+            "maxItems": 0
+          }
+        }
+      }
+    },
+    {
+      "if": {
+        "properties": {
+          "status": {
+            "const": "partial"
+          }
+        }
+      },
+      "then": {
+        "properties": {
+          "coverage": {
+            "allOf": [
+              {
+                "$ref": "#/$defs/coverage"
+              },
+              {
+                "properties": {
+                  "state": {
+                    "const": "partial"
+                  }
+                }
+              }
+            ]
+          },
+          "result": {
+            "allOf": [
+              {
+                "$ref": "#/$defs/result"
+              },
+              {
+                "properties": {
+                  "total_kind": {
+                    "const": "known_subtotal"
+                  },
+                  "rows": {
+                    "minItems": 1
+                  }
+                }
+              }
+            ]
+          },
+          "errors": {
+            "maxItems": 0
+          }
+        }
+      }
+    },
+    {
+      "if": {
+        "properties": {
+          "status": {
+            "const": "no_data"
+          }
+        }
+      },
+      "then": {
+        "properties": {
+          "coverage": {
+            "allOf": [
+              {
+                "$ref": "#/$defs/coverage"
+              },
+              {
+                "properties": {
+                  "state": {
+                    "const": "complete"
+                  },
+                  "period_complete": {
+                    "const": true
+                  },
+                  "eligible_count": {
+                    "const": 0
+                  },
+                  "excluded_count": {
+                    "const": 0
+                  },
+                  "issues": {
+                    "maxItems": 0
+                  }
+                }
+              }
+            ]
+          },
+          "result": {
+            "allOf": [
+              {
+                "$ref": "#/$defs/result"
+              },
+              {
+                "properties": {
+                  "total_kind": {
+                    "const": "authorized_total"
+                  },
+                  "official_total_decimal": {
+                    "const": "0.00"
+                  },
+                  "revenue_decimal": {
+                    "const": "0.00"
+                  },
+                  "cost_decimal": {
+                    "enum": [
+                      "0.00",
+                      null
+                    ]
+                  },
+                  "gross_profit_decimal": {
+                    "enum": [
+                      "0.00",
+                      null
+                    ]
+                  },
+                  "margin_pct": {
+                    "type": "null"
+                  },
+                  "rows": {
+                    "maxItems": 0
+                  }
+                }
+              }
+            ]
+          },
+          "evidence": {
+            "maxItems": 0
+          },
+          "errors": {
+            "maxItems": 0
+          }
+        }
+      }
+    },
+    {
+      "if": {
+        "properties": {
+          "status": {
+            "const": "insufficient_evidence"
+          }
+        }
+      },
+      "then": {
+        "properties": {
+          "result": {
+            "type": "null"
+          },
+          "evidence": {
+            "maxItems": 0
+          },
+          "errors": {
+            "minItems": 1
+          }
+        }
+      }
+    },
+    {
+      "if": {
+        "properties": {
+          "status": {
+            "const": "stale"
+          }
+        }
+      },
+      "then": {
+        "properties": {
+          "freshness": {
+            "allOf": [
+              {
+                "type": "object",
+                "additionalProperties": false,
+                "required": [
+                  "state",
+                  "age_seconds",
+                  "max_age_seconds"
+                ],
+                "properties": {
+                  "state": {
+                    "enum": [
+                      "fresh",
+                      "stale",
+                      "unknown"
+                    ]
+                  },
+                  "age_seconds": {
+                    "type": "integer",
+                    "minimum": 0
+                  },
+                  "max_age_seconds": {
+                    "type": "integer",
+                    "minimum": 1
+                  }
+                }
+              },
+              {
+                "properties": {
+                  "state": {
+                    "const": "stale"
+                  }
+                }
+              }
+            ]
+          },
+          "warnings": {
+            "contains": {
+              "properties": {
+                "code": {
+                  "const": "STALE_SNAPSHOT"
+                }
+              },
+              "required": [
+                "code"
+              ]
+            }
+          }
+        }
+      }
+    },
+    {
+      "if": {
+        "properties": {
+          "status": {
+            "enum": [
+              "ok",
+              "partial",
+              "no_data",
+              "stale"
+            ]
+          }
+        }
+      },
+      "then": {
+        "properties": {
+          "query": {
+            "$ref": "urn:cotiza:conversational-client-ranking:request:0.1"
+          },
+          "authorization": {
+            "properties": {
+              "decision": {
+                "const": "allowed"
+              }
+            }
+          },
+          "snapshot": {
+            "$ref": "#/$defs/snapshot"
+          },
+          "financial_rule": {
+            "type": "object",
+            "additionalProperties": false,
+            "required": [
+              "authority",
+              "rule_id",
+              "version",
+              "selection_rule_ref",
+              "amount_basis",
+              "fx_policy"
+            ],
+            "properties": {
+              "authority": {
+                "const": "cotiza"
+              },
+              "rule_id": {
+                "type": "string",
+                "minLength": 1,
+                "maxLength": 160,
+                "pattern": "^[A-Za-z0-9][A-Za-z0-9:._/-]*$"
+              },
+              "version": {
+                "type": "string",
+                "minLength": 1,
+                "maxLength": 160,
+                "pattern": "^[A-Za-z0-9][A-Za-z0-9:._/-]*$"
+              },
+              "selection_rule_ref": {
+                "type": "string",
+                "minLength": 1,
+                "maxLength": 160,
+                "pattern": "^[A-Za-z0-9][A-Za-z0-9:._/-]*$"
+              },
+              "amount_basis": {
+                "const": "official_before_vat"
+              },
+              "fx_policy": {
+                "const": "none"
+              }
+            }
+          },
+          "coverage": {
+            "$ref": "#/$defs/coverage"
+          },
+          "freshness": {
+            "type": "object",
+            "additionalProperties": false,
+            "required": [
+              "state",
+              "age_seconds",
+              "max_age_seconds"
+            ],
+            "properties": {
+              "state": {
+                "enum": [
+                  "fresh",
+                  "stale",
+                  "unknown"
+                ]
+              },
+              "age_seconds": {
+                "type": "integer",
+                "minimum": 0
+              },
+              "max_age_seconds": {
+                "type": "integer",
+                "minimum": 1
+              }
+            }
+          }
+        }
+      }
+    },
+    {
+      "if": {
+        "properties": {
+          "status": {
+            "enum": [
+              "ok",
+              "partial",
+              "no_data"
+            ]
+          }
+        }
+      },
+      "then": {
+        "properties": {
+          "freshness": {
+            "properties": {
+              "state": {
+                "const": "fresh"
+              }
+            }
+          }
+        }
+      }
+    },
+    {
+      "if": {
+        "properties": {
+          "status": {
+            "not": {
+              "const": "forbidden"
+            }
+          }
+        }
+      },
+      "then": {
+        "properties": {
+          "authorization": {
+            "properties": {
+              "decision": {
+                "const": "allowed"
+              }
+            }
+          }
+        }
+      }
+    }
+  ],
+  "$defs": {
+    "authorization": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": [
+        "decision",
+        "decision_ref",
+        "policy_version",
+        "evaluated_at",
+        "valid_until",
+        "effective_scope",
+        "capabilities",
+        "permissions",
+        "scope_fingerprint",
+        "revalidate_on_access"
+      ],
+      "properties": {
+        "decision": {
+          "enum": [
+            "allowed",
+            "denied"
+          ]
+        },
+        "decision_ref": {
+          "type": "string",
+          "minLength": 1,
+          "maxLength": 160,
+          "pattern": "^[A-Za-z0-9][A-Za-z0-9:._/-]*$"
+        },
+        "policy_version": {
+          "type": "string",
+          "minLength": 1,
+          "maxLength": 160,
+          "pattern": "^[A-Za-z0-9][A-Za-z0-9:._/-]*$"
+        },
+        "evaluated_at": {
+          "type": "string",
+          "format": "date-time",
+          "pattern": "^\\d{4}-\\d{2}-\\d{2}T\\d{2}:\\d{2}:\\d{2}(?:\\.\\d{1,6})?Z$"
+        },
+        "valid_until": {
+          "type": "string",
+          "format": "date-time",
+          "pattern": "^\\d{4}-\\d{2}-\\d{2}T\\d{2}:\\d{2}:\\d{2}(?:\\.\\d{1,6})?Z$"
+        },
+        "effective_scope": {
+          "anyOf": [
+            {
+              "type": "object",
+              "additionalProperties": false,
+              "required": [
+                "tenant_ref",
+                "principal_ref",
+                "mode",
+                "seller_refs"
+              ],
+              "properties": {
+                "tenant_ref": {
+                  "type": "string",
+                  "minLength": 1,
+                  "maxLength": 160,
+                  "pattern": "^[A-Za-z0-9][A-Za-z0-9:._/-]*$"
+                },
+                "principal_ref": {
+                  "type": "string",
+                  "minLength": 1,
+                  "maxLength": 160,
+                  "pattern": "^[A-Za-z0-9][A-Za-z0-9:._/-]*$"
+                },
+                "mode": {
+                  "enum": [
+                    "tenant",
+                    "seller"
+                  ]
+                },
+                "seller_refs": {
+                  "type": "array",
+                  "items": {
+                    "type": "string",
+                    "minLength": 1,
+                    "maxLength": 160,
+                    "pattern": "^[A-Za-z0-9][A-Za-z0-9:._/-]*$"
+                  },
+                  "uniqueItems": true
+                }
+              }
+            },
+            {
+              "type": "null"
+            }
+          ]
+        },
+        "capabilities": {
+          "type": "array",
+          "items": {
+            "enum": [
+              "commercial_chat_read"
+            ]
+          },
+          "uniqueItems": true
+        },
+        "permissions": {
+          "type": "array",
+          "items": {
+            "enum": [
+              "ranking.read",
+              "revenue.read",
+              "gross_profit.read",
+              "evidence.read"
+            ]
+          },
+          "uniqueItems": true
+        },
+        "scope_fingerprint": {
+          "anyOf": [
+            {
+              "type": "string",
+              "pattern": "^[a-f0-9]{64}$"
+            },
+            {
+              "type": "null"
+            }
+          ]
+        },
+        "revalidate_on_access": {
+          "const": true
+        }
+      },
+      "allOf": [
+        {
+          "if": {
+            "properties": {
+              "decision": {
+                "const": "denied"
+              }
+            }
+          },
+          "then": {
+            "properties": {
+              "effective_scope": {
+                "type": "null"
+              },
+              "scope_fingerprint": {
+                "type": "null"
+              },
+              "capabilities": {
+                "maxItems": 0
+              },
+              "permissions": {
+                "maxItems": 0
+              }
+            }
+          },
+          "else": {
+            "properties": {
+              "effective_scope": {
+                "type": "object",
+                "additionalProperties": false,
+                "required": [
+                  "tenant_ref",
+                  "principal_ref",
+                  "mode",
+                  "seller_refs"
+                ],
+                "properties": {
+                  "tenant_ref": {
+                    "type": "string",
+                    "minLength": 1,
+                    "maxLength": 160,
+                    "pattern": "^[A-Za-z0-9][A-Za-z0-9:._/-]*$"
+                  },
+                  "principal_ref": {
+                    "type": "string",
+                    "minLength": 1,
+                    "maxLength": 160,
+                    "pattern": "^[A-Za-z0-9][A-Za-z0-9:._/-]*$"
+                  },
+                  "mode": {
+                    "enum": [
+                      "tenant",
+                      "seller"
+                    ]
+                  },
+                  "seller_refs": {
+                    "type": "array",
+                    "items": {
+                      "type": "string",
+                      "minLength": 1,
+                      "maxLength": 160,
+                      "pattern": "^[A-Za-z0-9][A-Za-z0-9:._/-]*$"
+                    },
+                    "uniqueItems": true
+                  }
+                }
+              },
+              "scope_fingerprint": {
+                "type": "string",
+                "pattern": "^[a-f0-9]{64}$"
+              },
+              "capabilities": {
+                "contains": {
+                  "const": "commercial_chat_read"
+                }
+              },
+              "permissions": {
+                "allOf": [
+                  {
+                    "contains": {
+                      "const": "ranking.read"
+                    }
+                  },
+                  {
+                    "contains": {
+                      "const": "revenue.read"
+                    }
+                  },
+                  {
+                    "contains": {
+                      "const": "evidence.read"
+                    }
+                  }
+                ]
+              }
+            }
+          }
+        }
+      ]
+    },
+    "snapshot": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": [
+        "snapshot_id",
+        "snapshot_contract_version",
+        "source_system",
+        "source_schema_version",
+        "source_revision",
+        "as_of",
+        "exported_at",
+        "data_until",
+        "scope_fingerprint",
+        "source_attestation_ref",
+        "integrity"
+      ],
+      "properties": {
+        "snapshot_id": {
+          "type": "string",
+          "minLength": 1,
+          "maxLength": 160,
+          "pattern": "^[A-Za-z0-9][A-Za-z0-9:._/-]*$"
+        },
+        "snapshot_contract_version": {
+          "type": "string",
+          "minLength": 1,
+          "maxLength": 160,
+          "pattern": "^[A-Za-z0-9][A-Za-z0-9:._/-]*$"
+        },
+        "source_system": {
+          "const": "cotiza"
+        },
+        "source_schema_version": {
+          "type": "string",
+          "minLength": 1,
+          "maxLength": 160,
+          "pattern": "^[A-Za-z0-9][A-Za-z0-9:._/-]*$"
+        },
+        "source_revision": {
+          "type": "string",
+          "minLength": 1,
+          "maxLength": 160,
+          "pattern": "^[A-Za-z0-9][A-Za-z0-9:._/-]*$"
+        },
+        "as_of": {
+          "type": "string",
+          "format": "date-time",
+          "pattern": "^\\d{4}-\\d{2}-\\d{2}T\\d{2}:\\d{2}:\\d{2}(?:\\.\\d{1,6})?Z$"
+        },
+        "exported_at": {
+          "type": "string",
+          "format": "date-time",
+          "pattern": "^\\d{4}-\\d{2}-\\d{2}T\\d{2}:\\d{2}:\\d{2}(?:\\.\\d{1,6})?Z$"
+        },
+        "data_until": {
+          "type": "string",
+          "format": "date-time",
+          "pattern": "^\\d{4}-\\d{2}-\\d{2}T\\d{2}:\\d{2}:\\d{2}(?:\\.\\d{1,6})?Z$"
+        },
+        "scope_fingerprint": {
+          "type": "string",
+          "pattern": "^[a-f0-9]{64}$"
+        },
+        "source_attestation_ref": {
+          "type": "string",
+          "minLength": 1,
+          "maxLength": 160,
+          "pattern": "^[A-Za-z0-9][A-Za-z0-9:._/-]*$"
+        },
+        "integrity": {
+          "type": "object",
+          "additionalProperties": false,
+          "required": [
+            "canonicalization",
+            "sha256",
+            "assurance"
+          ],
+          "properties": {
+            "canonicalization": {
+              "const": "sorted-json-utf8/v1"
+            },
+            "sha256": {
+              "type": "string",
+              "pattern": "^[a-f0-9]{64}$"
+            },
+            "assurance": {
+              "const": "integrity_only"
+            }
+          }
+        }
+      }
+    },
+    "coverage": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": [
+        "state",
+        "assessed_scope",
+        "period_complete",
+        "candidate_count",
+        "eligible_count",
+        "excluded_count",
+        "issues",
+        "legacy_reference_count",
+        "legacy_reference_amount_decimal"
+      ],
+      "properties": {
+        "state": {
+          "enum": [
+            "complete",
+            "partial",
+            "unknown"
+          ]
+        },
+        "assessed_scope": {
+          "const": "effective_authorized_scope_only"
+        },
+        "period_complete": {
+          "type": "boolean"
+        },
+        "candidate_count": {
+          "type": "integer",
+          "minimum": 0
+        },
+        "eligible_count": {
+          "type": "integer",
+          "minimum": 0
+        },
+        "excluded_count": {
+          "type": "integer",
+          "minimum": 0
+        },
+        "issues": {
+          "type": "array",
+          "items": {
+            "type": "object",
+            "additionalProperties": false,
+            "required": [
+              "reason",
+              "count",
+              "known_amount_decimal",
+              "known_amount_basis",
+              "currency"
+            ],
+            "properties": {
+              "reason": {
+                "enum": [
+                  "missing_date",
+                  "missing_currency",
+                  "missing_client",
+                  "missing_revenue",
+                  "missing_cost",
+                  "missing_evidence"
+                ]
+              },
+              "count": {
+                "type": "integer",
+                "minimum": 0
+              },
+              "known_amount_decimal": {
+                "anyOf": [
+                  {
+                    "type": "string",
+                    "pattern": "^-?(0|[1-9][0-9]*)\\.[0-9]{2}$",
+                    "description": "Canonical decimal, 2 fractional digits; v0.1 supports source-approved MXN/USD only. No binary floats or implicit FX."
+                  },
+                  {
+                    "type": "null"
+                  }
+                ]
+              },
+              "known_amount_basis": {
+                "const": "revenue_before_vat"
+              },
+              "currency": {
+                "anyOf": [
+                  {
+                    "enum": [
+                      "MXN",
+                      "USD"
+                    ]
+                  },
+                  {
+                    "type": "null"
+                  }
+                ]
+              }
+            }
+          }
+        },
+        "legacy_reference_count": {
+          "type": "integer",
+          "minimum": 0
+        },
+        "legacy_reference_amount_decimal": {
+          "type": "string",
+          "pattern": "^-?(0|[1-9][0-9]*)\\.[0-9]{2}$",
+          "description": "Canonical decimal, 2 fractional digits; v0.1 supports source-approved MXN/USD only. No binary floats or implicit FX."
+        }
+      }
+    },
+    "result": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": [
+        "currency",
+        "tax_basis",
+        "total_kind",
+        "official_total_decimal",
+        "revenue_decimal",
+        "cost_decimal",
+        "gross_profit_decimal",
+        "margin_pct",
+        "rows",
+        "reconciliation",
+        "presentation"
+      ],
+      "properties": {
+        "currency": {
+          "enum": [
+            "MXN",
+            "USD"
+          ]
+        },
+        "tax_basis": {
+          "const": "before_vat"
+        },
+        "total_kind": {
+          "enum": [
+            "authorized_total",
+            "known_subtotal"
+          ]
+        },
+        "official_total_decimal": {
+          "type": "string",
+          "pattern": "^-?(0|[1-9][0-9]*)\\.[0-9]{2}$",
+          "description": "Canonical decimal, 2 fractional digits; v0.1 supports source-approved MXN/USD only. No binary floats or implicit FX."
+        },
+        "revenue_decimal": {
+          "type": "string",
+          "pattern": "^-?(0|[1-9][0-9]*)\\.[0-9]{2}$",
+          "description": "Canonical decimal, 2 fractional digits; v0.1 supports source-approved MXN/USD only. No binary floats or implicit FX."
+        },
+        "cost_decimal": {
+          "anyOf": [
+            {
+              "type": "string",
+              "pattern": "^-?(0|[1-9][0-9]*)\\.[0-9]{2}$",
+              "description": "Canonical decimal, 2 fractional digits; v0.1 supports source-approved MXN/USD only. No binary floats or implicit FX."
+            },
+            {
+              "type": "null"
+            }
+          ]
+        },
+        "gross_profit_decimal": {
+          "anyOf": [
+            {
+              "type": "string",
+              "pattern": "^-?(0|[1-9][0-9]*)\\.[0-9]{2}$",
+              "description": "Canonical decimal, 2 fractional digits; v0.1 supports source-approved MXN/USD only. No binary floats or implicit FX."
+            },
+            {
+              "type": "null"
+            }
+          ]
+        },
+        "margin_pct": {
+          "anyOf": [
+            {
+              "type": "string",
+              "pattern": "^-?(0|[1-9][0-9]*)\\.[0-9]{6}$"
+            },
+            {
+              "type": "null"
+            }
+          ]
+        },
+        "rows": {
+          "type": "array",
+          "items": {
+            "type": "object",
+            "additionalProperties": false,
+            "required": [
+              "kind",
+              "client_ref",
+              "label",
+              "amount_decimal",
+              "share_pct",
+              "source_refs",
+              "breakdown_ref"
+            ],
+            "properties": {
+              "kind": {
+                "enum": [
+                  "client",
+                  "others"
+                ]
+              },
+              "client_ref": {
+                "anyOf": [
+                  {
+                    "type": "string",
+                    "minLength": 1,
+                    "maxLength": 160,
+                    "pattern": "^[A-Za-z0-9][A-Za-z0-9:._/-]*$"
+                  },
+                  {
+                    "type": "null"
+                  }
+                ]
+              },
+              "label": {
+                "type": "string",
+                "minLength": 1,
+                "maxLength": 160
+              },
+              "amount_decimal": {
+                "type": "string",
+                "pattern": "^-?(0|[1-9][0-9]*)\\.[0-9]{2}$",
+                "description": "Canonical decimal, 2 fractional digits; v0.1 supports source-approved MXN/USD only. No binary floats or implicit FX."
+              },
+              "share_pct": {
+                "anyOf": [
+                  {
+                    "type": "string",
+                    "pattern": "^-?(0|[1-9][0-9]*)\\.[0-9]{6}$"
+                  },
+                  {
+                    "type": "null"
+                  }
+                ]
+              },
+              "source_refs": {
+                "type": "array",
+                "items": {
+                  "type": "string",
+                  "minLength": 1,
+                  "maxLength": 160,
+                  "pattern": "^[A-Za-z0-9][A-Za-z0-9:._/-]*$"
+                },
+                "uniqueItems": true
+              },
+              "breakdown_ref": {
+                "anyOf": [
+                  {
+                    "type": "string",
+                    "minLength": 1,
+                    "maxLength": 160,
+                    "pattern": "^[A-Za-z0-9][A-Za-z0-9:._/-]*$"
+                  },
+                  {
+                    "type": "null"
+                  }
+                ]
+              }
+            },
+            "allOf": [
+              {
+                "if": {
+                  "properties": {
+                    "kind": {
+                      "const": "others"
+                    }
+                  }
+                },
+                "then": {
+                  "properties": {
+                    "client_ref": {
+                      "type": "null"
+                    },
+                    "source_refs": {
+                      "maxItems": 0
+                    },
+                    "breakdown_ref": {
+                      "type": "string",
+                      "minLength": 1,
+                      "maxLength": 160,
+                      "pattern": "^[A-Za-z0-9][A-Za-z0-9:._/-]*$"
+                    },
+                    "label": {
+                      "const": "Otros"
+                    }
+                  }
+                },
+                "else": {
+                  "properties": {
+                    "client_ref": {
+                      "type": "string",
+                      "minLength": 1,
+                      "maxLength": 160,
+                      "pattern": "^[A-Za-z0-9][A-Za-z0-9:._/-]*$"
+                    },
+                    "source_refs": {
+                      "minItems": 1
+                    },
+                    "breakdown_ref": {
+                      "type": "null"
+                    }
+                  }
+                }
+              }
+            ]
+          },
+          "maxItems": 5
+        },
+        "reconciliation": {
+          "type": "object",
+          "additionalProperties": false,
+          "required": [
+            "top_decimal",
+            "others_decimal",
+            "difference_decimal"
+          ],
+          "properties": {
+            "top_decimal": {
+              "type": "string",
+              "pattern": "^-?(0|[1-9][0-9]*)\\.[0-9]{2}$",
+              "description": "Canonical decimal, 2 fractional digits; v0.1 supports source-approved MXN/USD only. No binary floats or implicit FX."
+            },
+            "others_decimal": {
+              "type": "string",
+              "pattern": "^-?(0|[1-9][0-9]*)\\.[0-9]{2}$",
+              "description": "Canonical decimal, 2 fractional digits; v0.1 supports source-approved MXN/USD only. No binary floats or implicit FX."
+            },
+            "difference_decimal": {
+              "const": "0.00"
+            }
+          }
+        },
+        "presentation": {
+          "type": "object",
+          "additionalProperties": false,
+          "required": [
+            "requested",
+            "actual",
+            "reason"
+          ],
+          "properties": {
+            "requested": {
+              "enum": [
+                "pie",
+                "bar",
+                "table"
+              ]
+            },
+            "actual": {
+              "enum": [
+                "pie",
+                "bar",
+                "table"
+              ]
+            },
+            "reason": {
+              "anyOf": [
+                {
+                  "enum": [
+                    "non_positive_total",
+                    "negative_rows",
+                    "incomplete_coverage",
+                    "stale_data",
+                    "no_data"
+                  ]
+                },
+                {
+                  "type": "null"
+                }
+              ]
+            }
+          }
+        }
+      }
+    },
+    "evidence": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": [
+        "ref",
+        "client_ref",
+        "sale_ref",
+        "proposal_ref",
+        "lineage_ref",
+        "source_version",
+        "recorded_at",
+        "date_basis",
+        "reporting_at",
+        "date_evidence_ref",
+        "financial_evidence_ref",
+        "selection_evidence_ref",
+        "currency",
+        "revenue_decimal",
+        "cost_decimal",
+        "metric_amount_decimal"
+      ],
+      "properties": {
+        "ref": {
+          "type": "string",
+          "minLength": 1,
+          "maxLength": 160,
+          "pattern": "^[A-Za-z0-9][A-Za-z0-9:._/-]*$"
+        },
+        "client_ref": {
+          "type": "string",
+          "minLength": 1,
+          "maxLength": 160,
+          "pattern": "^[A-Za-z0-9][A-Za-z0-9:._/-]*$"
+        },
+        "sale_ref": {
+          "type": "string",
+          "minLength": 1,
+          "maxLength": 160,
+          "pattern": "^[A-Za-z0-9][A-Za-z0-9:._/-]*$"
+        },
+        "proposal_ref": {
+          "type": "string",
+          "minLength": 1,
+          "maxLength": 160,
+          "pattern": "^[A-Za-z0-9][A-Za-z0-9:._/-]*$"
+        },
+        "lineage_ref": {
+          "type": "string",
+          "minLength": 1,
+          "maxLength": 160,
+          "pattern": "^[A-Za-z0-9][A-Za-z0-9:._/-]*$"
+        },
+        "source_version": {
+          "type": "string",
+          "minLength": 1,
+          "maxLength": 160,
+          "pattern": "^[A-Za-z0-9][A-Za-z0-9:._/-]*$"
+        },
+        "recorded_at": {
+          "type": "string",
+          "format": "date-time",
+          "pattern": "^\\d{4}-\\d{2}-\\d{2}T\\d{2}:\\d{2}:\\d{2}(?:\\.\\d{1,6})?Z$"
+        },
+        "date_basis": {
+          "enum": [
+            "recorded_close",
+            "audited_legacy_creation"
+          ]
+        },
+        "reporting_at": {
+          "type": "string",
+          "format": "date-time",
+          "pattern": "^\\d{4}-\\d{2}-\\d{2}T\\d{2}:\\d{2}:\\d{2}(?:\\.\\d{1,6})?Z$"
+        },
+        "date_evidence_ref": {
+          "type": "string",
+          "minLength": 1,
+          "maxLength": 160,
+          "pattern": "^[A-Za-z0-9][A-Za-z0-9:._/-]*$"
+        },
+        "financial_evidence_ref": {
+          "type": "string",
+          "minLength": 1,
+          "maxLength": 160,
+          "pattern": "^[A-Za-z0-9][A-Za-z0-9:._/-]*$"
+        },
+        "selection_evidence_ref": {
+          "type": "string",
+          "minLength": 1,
+          "maxLength": 160,
+          "pattern": "^[A-Za-z0-9][A-Za-z0-9:._/-]*$"
+        },
+        "currency": {
+          "enum": [
+            "MXN",
+            "USD"
+          ]
+        },
+        "revenue_decimal": {
+          "type": "string",
+          "pattern": "^-?(0|[1-9][0-9]*)\\.[0-9]{2}$",
+          "description": "Canonical decimal, 2 fractional digits; v0.1 supports source-approved MXN/USD only. No binary floats or implicit FX."
+        },
+        "cost_decimal": {
+          "anyOf": [
+            {
+              "type": "string",
+              "pattern": "^-?(0|[1-9][0-9]*)\\.[0-9]{2}$",
+              "description": "Canonical decimal, 2 fractional digits; v0.1 supports source-approved MXN/USD only. No binary floats or implicit FX."
+            },
+            {
+              "type": "null"
+            }
+          ]
+        },
+        "metric_amount_decimal": {
+          "type": "string",
+          "pattern": "^-?(0|[1-9][0-9]*)\\.[0-9]{2}$",
+          "description": "Canonical decimal, 2 fractional digits; v0.1 supports source-approved MXN/USD only. No binary floats or implicit FX."
+        }
+      }
+    },
+    "issue": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": [
+        "code",
+        "retryable"
+      ],
+      "properties": {
+        "code": {
+          "enum": [
+            "INVALID_REQUEST",
+            "UNSUPPORTED_CURRENCY",
+            "FORBIDDEN",
+            "MISSING_DATE",
+            "MISSING_CURRENCY",
+            "MISSING_CLIENT",
+            "MISSING_REVENUE",
+            "MISSING_COST",
+            "MISSING_EVIDENCE",
+            "VERSION_SELECTION_INVALID",
+            "INCOMPLETE_SNAPSHOT",
+            "STALE_SNAPSHOT",
+            "FUTURE_SNAPSHOT",
+            "INTEGRITY_FAILURE",
+            "LEGACY_REFERENCE_USED",
+            "PRESENTATION_FALLBACK"
+          ]
+        },
+        "retryable": {
+          "type": "boolean"
+        }
+      }
+    }
+  }
+}

@@ -1,0 +1,31 @@
+{
+  "simulation": true,
+  "note": "Datos sinteticos. No son registros de clientes, respuesta productiva ni snapshot universal firmado.",
+  "request": {
+    "schema_version": "0.1",
+    "operation": "client_ranking",
+    "metric": "won_revenue",
+    "period": { "start_date": "2025-01-01", "end_date_exclusive": "2026-01-01", "timezone": "America/Mexico_City" },
+    "currency": "MXN",
+    "tax_basis": "before_vat",
+    "date_policy": "recorded_close_only",
+    "top_n": 4,
+    "presentation": "pie"
+  },
+  "illustrative_result": {
+    "effective_scope": "synthetic_single_tenant",
+    "as_of": "2026-10-23T18:00:00Z",
+    "coverage": "complete_for_synthetic_fixture_only",
+    "official_total_decimal": "5000000.00",
+    "rows": [
+      { "client_id": "synthetic-alfa", "label": "Cliente Alfa", "amount_decimal": "1600000.00", "share_pct": 32, "source_refs": ["synthetic:won-sale-alfa:v1"] },
+      { "client_id": "synthetic-beta", "label": "Cliente Beta", "amount_decimal": "1200000.00", "share_pct": 24, "source_refs": ["synthetic:won-sale-beta:v1"] },
+      { "client_id": "synthetic-gamma", "label": "Cliente Gamma", "amount_decimal": "900000.00", "share_pct": 18, "source_refs": ["synthetic:won-sale-gamma:v1"] },
+      { "client_id": "synthetic-delta", "label": "Cliente Delta", "amount_decimal": "550000.00", "share_pct": 11, "source_refs": ["synthetic:won-sale-delta:v1"] },
+      { "client_id": null, "label": "Otros clientes", "amount_decimal": "750000.00", "share_pct": 15, "source_refs": ["synthetic:remaining-clients:v1"] }
+    ],
+    "missing_close_count": 0,
+    "legacy_reference_count": 0,
+    "unknown_currency_count": 0
+  }
+}

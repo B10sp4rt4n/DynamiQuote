@@ -1,0 +1,15 @@
+{
+  "schema_version": "0.1",
+  "operation": "client_ranking",
+  "metric": "won_revenue",
+  "period": {
+    "start_date": "2025-01-01",
+    "end_date_exclusive": "2026-01-01",
+    "timezone": "America/Mexico_City"
+  },
+  "currency": "MXN",
+  "tax_basis": "before_vat",
+  "date_policy": "recorded_close_only",
+  "top_n": 4,
+  "presentation": "pie"
+}
