@@ -39,14 +39,14 @@ describe("proposal-issuance-gate", () => {
     expect(result).toEqual({ kind: "allowed", watermark: false, forced: true });
   });
 
-  it("permite enviada sin marca de agua cuando el margen ya calificaba", () => {
+  it("un envío anterior no acredita autorización aunque el margen califique", () => {
     const result = resolveProposalIssuanceGate({
       issuanceStatus: "normal",
       marginCanAuthorizeFinal: true,
       status: "sent",
     });
 
-    expect(result).toEqual({ kind: "allowed", watermark: false, forced: false });
+    expect(result.kind).toBe("blocked");
   });
 
   it("bloquea enviada si el margen no calificaba, aunque no haya forzamiento", () => {
@@ -71,14 +71,14 @@ describe("resolveProposalEmailReleaseGate", () => {
     expect(result).toEqual({ kind: "allowed", watermark: false, forced: false });
   });
 
-  it("permite enviar por correo un borrador cuyo margen ya calificaba", () => {
+  it("bloquea correo sin autorización aunque el margen califique", () => {
     const result = resolveProposalEmailReleaseGate({
       issuanceStatus: "normal",
       marginCanAuthorizeFinal: true,
       status: "draft",
     });
 
-    expect(result).toEqual({ kind: "allowed", watermark: false, forced: false });
+    expect(result.kind).toBe("blocked");
   });
 
   it("bloquea enviar por correo un borrador fuera de politica de margen -- a diferencia de PDF/Excel, que si se puede descargar", () => {
@@ -101,14 +101,14 @@ describe("resolveProposalEmailReleaseGate", () => {
     expect(result.kind).toBe("blocked");
   });
 
-  it("permite enviar por correo con un forzamiento activo del dueño", () => {
+  it("el forzamiento de PDF no autoriza el envío de correo", () => {
     const result = resolveProposalEmailReleaseGate({
       issuanceStatus: "force_pending",
       marginCanAuthorizeFinal: false,
       status: "draft",
     });
 
-    expect(result).toEqual({ kind: "allowed", watermark: false, forced: true });
+    expect(result.kind).toBe("blocked");
   });
 
   it("bloquea rechazada aunque el margen calificara", () => {

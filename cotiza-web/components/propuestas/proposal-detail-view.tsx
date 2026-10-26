@@ -6,12 +6,12 @@ import type { ProposalDerivationInfo, ProposalWorkflowDetail } from "@/lib/db/pr
 import type { ProposalStatus } from "@/lib/validations/proposals";
 
 const STATUS_LABELS: Record<ProposalStatus, string> = {
-  approved: "Aprobada",
+  approved: "Autorizada",
   draft: "Borrador",
   expired: "Vencida",
   in_review: "En revision",
   rejected: "Rechazada",
-  sent: "Enviada",
+  sent: "Autorización por verificar",
 };
 
 const STATUS_BADGE_CLASS: Record<ProposalStatus, string> = {
@@ -20,7 +20,7 @@ const STATUS_BADGE_CLASS: Record<ProposalStatus, string> = {
   expired: "bg-zinc-200 text-zinc-600",
   in_review: "bg-amber-100 text-amber-800",
   rejected: "bg-rose-100 text-rose-800",
-  sent: "bg-blue-100 text-blue-800",
+  sent: "bg-amber-100 text-amber-800",
 };
 
 function formatCurrency(value: number, currency: string | null): string {
@@ -94,7 +94,7 @@ export function ProposalDetailView({
           <span className={`rounded-full px-3 py-1 text-sm font-medium ${STATUS_BADGE_CLASS[status]}`}>
             {STATUS_LABELS[status]}
           </span>
-          {marginEvaluation && !marginEvaluation.canAuthorizeFinal ? (
+          {status !== "approved" && marginEvaluation && !marginEvaluation.canAuthorizeFinal ? (
             <span className="rounded-full border border-rose-300 bg-rose-50 px-3 py-1 text-xs font-medium text-rose-700">
               Bloqueada por margen
             </span>
@@ -102,6 +102,10 @@ export function ProposalDetailView({
         </div>
       </div>
 
+      <div className="rounded-lg border border-zinc-200 p-3 text-sm">
+        <p><strong>Envío del PDF:</strong> {formal?.sentAt ? `Registrado al vendedor · ${formatDate(formal.sentAt)}` : "Sin envío registrado"}</p>
+        <p className="mt-1 text-xs text-zinc-500">El envío al vendedor no confirma recepción ni aceptación del cliente. El resultado comercial se registra por separado.</p>
+      </div>
       <div className="grid gap-4 sm:grid-cols-2 lg:grid-cols-4">
         <div className="rounded-lg border border-zinc-200 bg-zinc-50 p-3">
           <p className="text-xs uppercase tracking-[0.12em] text-zinc-500">Vendedor</p>

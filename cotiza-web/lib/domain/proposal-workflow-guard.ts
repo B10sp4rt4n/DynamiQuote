@@ -3,11 +3,11 @@ import type { ProposalStatus } from "@/lib/validations/proposals";
 export type ProposalApproverRole = "superadmin" | "owner" | "admin" | "user";
 
 const allowedTransitions: Record<ProposalStatus, ProposalStatus[]> = {
-  // approved puede retroceder a revisión o reenvío para correcciones, o
+  // approved puede retroceder a revisión para correcciones, o
   // reabrirse a borrador para editar contenido
-  approved: ["approved", "in_review", "sent", "draft"],
-  // draft puede avanzar a enviada, solicitar revisión interna, o aprobarse automáticamente cuando el margen lo permite
-  draft: ["draft", "sent", "in_review", "approved"],
+  approved: ["approved", "in_review", "draft"],
+  // draft puede solicitar revisión interna o autorizarse cuando la política lo permite
+  draft: ["draft", "in_review", "approved"],
   // expirada puede reactivarse para revisión o reabrirse a borrador
   expired: ["expired", "in_review", "draft"],
   // in_review puede reabrirse a borrador para editar contenido
@@ -54,14 +54,11 @@ export function assertProposalWorkflowGuard(input: ProposalWorkflowGuardInput): 
     throw new Error(`Transicion invalida: ${input.currentStatus} -> ${input.nextStatus}`);
   }
 
-  // El guard de margen NO aplica cuando la propuesta ya fue enviada al cliente (estado "sent").
-  // En ese escenario, "aprobada" registra la aceptación del cliente; la propuesta ya pasó
-  // validación de margen cuando fue aprobada internamente antes de enviarse.
+  // A historical delivery never bypasses authorization policy.
   if (
     input.nextStatus === "approved" &&
     input.currentStatus !== "approved" &&
     !input.marginCanAuthorizeFinal &&
-    input.currentStatus !== "sent" &&
     !input.bypassMarginGuard
   ) {
     throw new Error("La politica de margen bloquea la autorizacion final de esta propuesta.");

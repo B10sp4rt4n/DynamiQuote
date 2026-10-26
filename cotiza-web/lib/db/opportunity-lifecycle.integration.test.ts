@@ -32,7 +32,7 @@ suite("commercial dates against disposable Postgres", () => {
       password_hash: "unused", role: "owner", tenant_id: "lifecycle-a", created_at: new Date() } });
     await db.opportunities.create({ data: { opportunity_id: "lifecycle-opp", opportunity_number: "OPP-TEST", title: "Lifecycle test",
       tenant_id: "lifecycle-a", owner_user_id: actor.userId, created_at: new Date("2026-01-01T12:00:00Z") } });
-    await db.proposals.create({ data: { proposal_id: "lifecycle-proposal", tenant_id: "lifecycle-a", status: "sent",
+    await db.proposals.create({ data: { proposal_id: "lifecycle-proposal", tenant_id: "lifecycle-a", status: "approved",
       created_by: actor.userId, created_by_user_id: actor.userId, created_at: new Date("2026-02-01T12:00:00Z"), opportunity_id: "lifecycle-opp" } });
     await db.proposal_items.create({ data: { item_id: "lifecycle-item", proposal_id: "lifecycle-proposal", tenant_id: "lifecycle-a",
       item_number: 1, quantity: 1, cost_unit: 60, price_unit: 100, subtotal_cost: 60, subtotal_price: 100, status: "active", created_at: new Date() } });

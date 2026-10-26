@@ -1,3 +1,5 @@
+import { createHash } from "node:crypto";
+import { recordProposalDeliveryByTenant, isProposalDeliveryAuthorizedByTenant } from "@/lib/db/proposal-delivery";
 import { renderToBuffer } from "@react-pdf/renderer";
 import { NextResponse } from "next/server";
 import { auth, clerkClient } from "@clerk/nextjs/server";
@@ -5,10 +7,8 @@ import { auth, clerkClient } from "@clerk/nextjs/server";
 import { getCurrentTenantContext } from "@/lib/auth/tenant-context";
 import { prisma } from "@/lib/db/prisma";
 import {
-  autoApproveProposalByMarginPolicy,
-  consumeProposalIssuanceForce,
   getProposalWorkflowByTenant,
-  updateProposalWorkflowByTenant,
+  isProposalVisibleToViewer,
 } from "@/lib/db/proposals";
 import { recordProposalAuditEvent } from "@/lib/db/proposal-audit";
 import { getTenantProfileByTenant } from "@/lib/db/tenants";
@@ -184,18 +184,17 @@ export async function POST(request: Request, context: RouteContext) {
   // Ignorar cualquier email del body — el destino se resuelve server-side
   await request.json().catch(() => null);
 
+  const canSeeAll = tenant.isSuperAdmin || tenant.userRole === "owner" || tenant.userRole === "admin";
+  if (!await isProposalVisibleToViewer(tenant.id, proposalId, tenant.userId, canSeeAll)) {
+    return NextResponse.json({ error: "Propuesta no encontrada" }, { status: 404 });
+  }
   const proposal = await getProposalWorkflowByTenant(tenant.id, proposalId, { includeLogoData: true });
 
   if (!proposal) {
     return NextResponse.json({ error: "Propuesta no encontrada" }, { status: 404 });
   }
 
-  // A diferencia de PDF/Excel (vista previa interna, un borrador se puede
-  // descargar con marca de agua para revision), el correo libera la
-  // propuesta de verdad -- exige que ya este aprobada (o que el margen
-  // califique, que se autoaprueba antes de enviar). Salvador, 2026-10-01:
-  // "no puedes enviar algo que no se aprobo, si puedes emitir un borrador
-  // pero no puedes liberarlo por correo".
+  // Dispatch requires recorded authorization before the provider is called.
   const issuanceGate = resolveProposalEmailReleaseGate({
     issuanceStatus: proposal.issuanceStatus,
     marginCanAuthorizeFinal: proposal.marginEvaluation.canAuthorizeFinal,
@@ -213,13 +212,8 @@ export async function POST(request: Request, context: RouteContext) {
     return NextResponse.json({ error: issuanceGate.reason }, { status: 403 });
   }
 
-  if (issuanceGate.forced) {
-    await consumeProposalIssuanceForce({
-      consumedBy: tenant.userId ?? null,
-      consumedVia: "email",
-      proposalId,
-      tenantId: tenant.id,
-    });
+  if (!proposal.formal?.proposalDocId) {
+    return NextResponse.json({ error: "Falta la revisión del documento formal; recarga la propuesta" }, { status: 409 });
   }
 
   // Resolver el correo del vendedor con fallbacks robustos:
@@ -307,6 +301,10 @@ export async function POST(request: Request, context: RouteContext) {
     sellerName,
   });
 
+  if (!await isProposalDeliveryAuthorizedByTenant({ tenantId: tenant.id, proposalId,
+    documentId: proposal.formal.proposalDocId, expectedUpdatedAt: proposal.formal.updatedAt ?? null })) {
+    return NextResponse.json({ error: "La propuesta cambió o perdió su autorización. Recarga antes de enviar." }, { status: 409 });
+  }
   const result = await resendClient.client.emails.send({
     attachments: [pdfAttachment],
     ...(ccRecipients.length > 0 ? { cc: ccRecipients } : {}),
@@ -345,36 +343,16 @@ export async function POST(request: Request, context: RouteContext) {
     tenantId: tenant.id,
   });
 
-  await recordProposalAuditEvent({
-    actorUserId: tenant.userId,
-    eventType: "document_issued",
-    payload: {
-      forced: issuanceGate.forced,
-      status: proposal.status,
-      via: "email",
-      watermark: issuanceGate.watermark,
-    },
-    proposalId,
-    tenantId: tenant.id,
-  });
-
-  // Si el margen ya calificaba para autorizacion final, el envio equivale a
-  // una aprobacion de facto -- se deja ese rastro en proposal_approvals en
-  // vez de solo marcar "sent" sin aprobacion registrada (ver
-  // autoApproveProposalByMarginPolicy). Cuando el margen NO califica
-  // (borrador enviado como vista previa sin validar, o un forzamiento de
-  // Owner/Superadmin -- ese ya tiene su propio registro aparte via
-  // consumeProposalIssuanceForce), se conserva el comportamiento previo.
-  if (proposal.marginEvaluation.canAuthorizeFinal) {
-    await autoApproveProposalByMarginPolicy({
-      actor: { isSuperAdmin: tenant.isSuperAdmin, userId: tenant.userId, userRole: tenant.userRole },
-      proposalId,
-      reason: "Auto-aprobado: margen dentro de politica al enviarse la propuesta por correo.",
-      tenantId: tenant.id,
-    }).catch(() => null);
-  } else {
-    await updateProposalWorkflowByTenant(tenant.id, proposalId, { status: "sent" }).catch(() => null);
+  try {
+    const delivery = await recordProposalDeliveryByTenant({ tenantId: tenant.id, proposalId,
+      documentId: proposal.formal.proposalDocId, expectedUpdatedAt: proposal.formal.updatedAt ?? null,
+      actorUserId: tenant.userId, providerId: result.data?.id ?? null,
+      pdfSha256: createHash("sha256").update(pdfBuffer).digest("hex"),
+    });
+    return NextResponse.json({ ok: true, success: true, ...delivery,
+      warning: delivery.recordedForCurrentRevision ? null : "El proveedor aceptó el correo, pero la propuesta cambió. Revisa el historial; no reenvíes por este aviso." });
+  } catch {
+    return NextResponse.json({ ok: true, success: true, sentAt: null, recordedForCurrentRevision: false,
+      warning: "El proveedor aceptó el correo, pero no se pudo guardar su registro. No lo reenvíes por este aviso." });
   }
-
-  return NextResponse.json({ ok: true, success: true }, { status: 200 });
 }

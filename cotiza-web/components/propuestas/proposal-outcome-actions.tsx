@@ -34,7 +34,7 @@ export function ProposalOutcomeActions({ initialOutcome, initialOutcomeAt, creat
   const [closedOn, setClosedOn] = useState("");
   const [saving, setSaving] = useState(false);
   const [error, setError] = useState<string | null>(null);
-  const canAssignWonLost = status === "sent" || status === "approved";
+  const canAssignWonLost = status === "approved";
   const start = opportunityCreatedAt ?? createdAt;
   const minimumDay = closeDateMinimum ?? (start ? mexicoCalendarDate(start) : undefined);
   const dateId = `close-date-${proposalId}`;
@@ -126,7 +126,7 @@ export function ProposalOutcomeActions({ initialOutcome, initialOutcomeAt, creat
         </div>
       </form> : null}
 
-      {!canAssignWonLost ? <p className="mt-2 text-xs text-zinc-500">Ganada/perdida solo aplican mientras la propuesta está Enviada o Aprobada.</p> : null}
+      {!canAssignWonLost ? <p className="mt-2 text-xs text-zinc-500">Ganada o Perdida requieren autorización interna. El envío se registra por separado.</p> : null}
       {error ? <p className="mt-2 text-sm font-medium text-rose-700" role="alert">{error}</p> : null}
     </div>
   );
