@@ -29,7 +29,7 @@ export type QuoteVersionSaved = QuoteVersionResponse;
 type QuoteLineEditorProps = {
   threatDownImportEnabled?: boolean;
   forcedSelectedQuoteId?: string | null;
-  onSelectedQuoteChange?: (quoteId: string) => void;
+  onSelectedQuoteChange?: (quoteId: string, quote?: QuoteGroupSummary) => void;
   onQuoteVersionSaved?: (quote: QuoteVersionSaved) => void;
   quotes: QuoteGroupSummary[];
 };
@@ -452,7 +452,9 @@ export function QuoteLineEditor({
 }: QuoteLineEditorProps) {
   const router = useRouter();
   const descriptionInputRefs = useRef<Record<string, HTMLInputElement | null>>({});
-  const [selectedQuoteId, setSelectedQuoteId] = useState<string>(quotes[0]?.quoteId ?? "");
+  const [selectedQuoteId, setSelectedQuoteId] = useState<string>(forcedSelectedQuoteId ?? quotes[0]?.quoteId ?? "");
+  const lineRequestRef = useRef(0);
+  const versionRequestRef = useRef(0);
   const [lines, setLines] = useState<EditableQuoteLine[]>([]);
   const savedLinesRef = useRef<string>("[]");
   const [loadedQuoteId, setLoadedQuoteId] = useState<string | null>(null);
@@ -462,6 +464,7 @@ export function QuoteLineEditor({
   const [lineDiffMap, setLineDiffMap] = useState<LineDiffMap>({});
   const [lineDeltaMap, setLineDeltaMap] = useState<LineDeltaMap>({});
   const [versions, setVersions] = useState<QuoteVersionHistoryItem[]>([]);
+  const [versionGroupId, setVersionGroupId] = useState<string | null>(null);
   const [compareState, setCompareState] = useState<VersionCompareState | null>(null);
   const [loading, setLoading] = useState(false);
   const [saving, setSaving] = useState(false);
@@ -505,22 +508,31 @@ export function QuoteLineEditor({
   }, [forcedSelectedQuoteId]);
 
   async function loadVersions(quoteId: string) {
+    const requestId = ++versionRequestRef.current;
     try {
       const response = await fetch(`/api/quotes/${quoteId}/versions`, { method: "GET" });
       const data = (await response.json()) as QuoteVersionsResponse | ApiErrorResponse;
       const hasVersions = "versions" in data;
 
+      if (requestId !== versionRequestRef.current) return;
       if (!response.ok || !hasVersions) {
+        setVersions([]);
+        setVersionGroupId(null);
         return;
       }
 
       setVersions(data.versions);
+      setVersionGroupId(data.quoteGroupId);
     } catch {
-      setVersions([]);
+      if (requestId === versionRequestRef.current) {
+        setVersions([]);
+        setVersionGroupId(null);
+      }
     }
   }
 
   async function loadLines(quoteId: string) {
+    const requestId = ++lineRequestRef.current;
     setLoadedQuoteId(null);
     if (!quoteId) {
       setLines([]);
@@ -538,6 +550,7 @@ export function QuoteLineEditor({
     try {
       const response = await fetch(`/api/quotes/${quoteId}/lines`, { method: "GET" });
       const data = (await response.json()) as QuoteLinesGetResponse | ApiErrorResponse;
+      if (requestId !== lineRequestRef.current) return;
       const hasLines = "lines" in data;
 
       if (!response.ok || !hasLines) {
@@ -556,23 +569,32 @@ export function QuoteLineEditor({
       setCostDrafts({});
       setPriceDrafts({});
     } catch {
+      if (requestId !== lineRequestRef.current) return;
       setMessage("Error de red al cargar lineas");
       setLines([]);
       setQuantityDrafts({});
       setCostDrafts({});
       setPriceDrafts({});
     } finally {
-      setLoading(false);
+      if (requestId === lineRequestRef.current) setLoading(false);
     }
   }
 
   async function handleQuoteChange(nextQuoteId: string) {
+    if (nextQuoteId === selectedQuoteId || saving || versioningNow || creatingProposal) return;
+    const version = versionGroupId === selectedQuote?.quoteGroupId
+      ? versions.find((item) => item.quoteId === nextQuoteId) : undefined;
+    const nextQuote = quotes.find((quote) => quote.quoteId === nextQuoteId)
+      ?? (version && selectedQuote ? { ...selectedQuote, ...version, versionCount: versions.length } : null);
+    if (!nextQuote) return;
+    if (loadedQuoteId === selectedQuoteId && hasUnsavedTemplateChanges &&
+      !window.confirm("Hay cambios sin guardar. ¿Quieres descartarlos para revisar otra versión?")) return;
     setCompareState(null);
     setLineDeltaMap({});
     setCostDrafts({});
     setPriceDrafts({});
     setSelectedQuoteId(nextQuoteId);
-    onSelectedQuoteChange?.(nextQuoteId);
+    onSelectedQuoteChange?.(nextQuoteId, nextQuote);
   }
 
   function updateLine(lineId: string, patch: Partial<EditableQuoteLine>) {
@@ -1510,7 +1532,7 @@ export function QuoteLineEditor({
         </div>
       ) : null}
 
-      {versions.length > 0 ? (
+      {versions.length > 0 && versionGroupId === selectedQuote?.quoteGroupId ? (
         <div className="mt-4 rounded-xl border border-zinc-200 bg-zinc-50 p-4">
           <div className="flex items-center justify-between">
             <p className="text-sm font-semibold text-zinc-700">Historial de versiones</p>

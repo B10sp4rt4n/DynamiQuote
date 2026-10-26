@@ -83,6 +83,45 @@ function dateToIso(value: Date | null): string | null {
   return value ? value.toISOString() : null;
 }
 
+// Resolve an exact version for deep links, independently of the latest-groups list.
+// Apply the same tenant and seller scope before returning any commercial fields.
+export async function getQuoteVersionSummaryByTenant(
+  tenantId: string,
+  quoteId: string,
+  viewerUserId: string | null,
+  canSeeAll: boolean,
+): Promise<QuoteGroupSummary | null> {
+  const quote = await prisma.quote.findFirst({
+    select: {
+      avg_margin: true, client_name: true, createdAt: true, playbook_name: true,
+      proposal_name: true, quote_group_id: true, quote_id: true, status: true,
+      total_revenue: true, version: true,
+    },
+    where: {
+      quote_id: quoteId,
+      tenantId,
+      ...(canSeeAll ? {} : { OR: [{ created_by_user_id: viewerUserId }, { created_by_user_id: null }] }),
+    },
+  });
+
+  if (!quote?.quote_group_id) return null;
+
+  const versionCount = await prisma.quote.count({ where: { tenantId, quote_group_id: quote.quote_group_id } });
+  return {
+    avgMargin: decimalToNumber(quote.avg_margin),
+    clientName: quote.client_name ?? "Sin cliente",
+    createdAt: dateToIso(quote.createdAt),
+    playbookName: quote.playbook_name,
+    proposalName: quote.proposal_name ?? "Sin propuesta",
+    quoteGroupId: quote.quote_group_id,
+    quoteId: quote.quote_id,
+    status: quote.status ?? "draft",
+    totalRevenue: decimalToNumber(quote.total_revenue),
+    version: quote.version ?? 1,
+    versionCount,
+  };
+}
+
 async function nextQuoteGroupId(tenantId: string): Promise<string> {
   const rows = await prisma.quote.findMany({
     select: { quote_group_id: true },
