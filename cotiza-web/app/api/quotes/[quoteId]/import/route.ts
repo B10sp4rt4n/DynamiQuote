@@ -242,6 +242,7 @@ export async function POST(request: Request, context: RouteContext) {
   return NextResponse.json({
     importedCount: result.importedCount,
     quoteId: result.quoteId,
+    version: result.version, versionCount: result.versionCount, versionCreated: result.versionCreated,
     replayed: result.replayed,
     skipped,
     skippedCount: skipped.length,

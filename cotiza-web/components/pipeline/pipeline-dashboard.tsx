@@ -291,6 +291,8 @@ export function PipelineDashboard({
         <VendorFilter onChange={setSelectedVendorIds} selectedIds={selectedVendorIds} vendors={effectiveVendors} viewerUserId={viewerUserId} />
       ) : null}
 
+      {filteredOpportunities.some(o=>o.commercialOptions?.reviewRequired) ? <p role="alert" className="rounded-lg border border-red-300 bg-red-50 p-3 text-sm text-red-900">Hay alternativas de una misma oportunidad marcadas ganadas a la vez. Sus importes requieren conciliación y se excluyen del total de esta vista.</p> : null}
+      {filteredOpportunities.some(o=>o.stage === "open" && o.commercialOptions && !o.commercialOptions.selectedOptionId) ? <p className="rounded-lg border border-amber-300 bg-amber-50 p-3 text-sm text-amber-950">Las oportunidades con alternativas sin elegir muestran un rango en la tabla. Sus importes no se suman al total abierto hasta elegir una opción.</p> : null}
       <div className="grid gap-4 sm:grid-cols-3">
         <StatTile
           accentClassName="border-blue-200 bg-blue-50"
@@ -357,6 +359,7 @@ export function PipelineDashboard({
         </div>
       ) : (
         <PipelineTable
+          canChooseOptions={canSeeAll}
           closeFilter={closeFilter}
           onCloseFilterChange={setCloseFilter}
           onSearchChange={setSearch}

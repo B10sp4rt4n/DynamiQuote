@@ -520,7 +520,7 @@ export type QuoteImportLineInput = {
 // al caller para que el cliente pueda navegar a la nueva versión.
 export async function importQuoteLinesByTenant(
   tenantId: string, quoteId: string, items: QuoteImportLineInput[], operationId: string = randomUUID(),
-): Promise<{ importedCount: number; quoteId: string; replayed: boolean } | null> {
+): Promise<{ importedCount: number; quoteId: string; replayed: boolean; version: number; versionCount: number; versionCreated: boolean } | null> {
   const result = await createDraftFromQuoteInput({ tenantId, quoteId, operationId, mode: "replace",
     source: { kind: "excel" }, lines: items.map((i) => ({
       sku: i.sku, description: i.description || "Sin descripción", quantity: i.quantity,
@@ -528,5 +528,5 @@ export async function importQuoteLinesByTenant(
       lineType: i.lineType === "service" ? "service" : "product", serviceOrigin: "",
     })),
   });
-  return result ? { importedCount: items.length, quoteId: result.quote.quoteId, replayed: result.replayed } : null;
+  return result ? { importedCount: items.length, quoteId: result.quote.quoteId, replayed: result.replayed, version: result.quote.version, versionCount: result.quote.versionCount, versionCreated: result.versionCreated } : null;
 }

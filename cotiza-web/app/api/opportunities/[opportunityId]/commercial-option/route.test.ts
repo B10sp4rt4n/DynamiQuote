@@ -1,0 +1,10 @@
+import {beforeEach,expect,it,vi} from "vitest";
+const m=vi.hoisted(()=>({tenant:vi.fn(),select:vi.fn(),rate:vi.fn()}));
+vi.mock("@/lib/auth/tenant-context",()=>({getCurrentTenantContext:m.tenant}));vi.mock("@/lib/db/commercial-options",()=>({selectCommercialOption:m.select}));vi.mock("@/lib/utils/rate-limit",()=>({enforceRateLimit:m.rate,getRequestIdentity:()=>"u1"}));
+import {PATCH} from "./route";
+const req=(body:unknown)=>new Request("http://localhost/api/opportunities/opp1/commercial-option",{method:"PATCH",headers:{"Content-Type":"application/json"},body:JSON.stringify(body)});const params=()=>({params:Promise.resolve({opportunityId:"opp1"})});
+beforeEach(()=>{vi.clearAllMocks();m.tenant.mockResolvedValue({id:"t1",userId:"u1",isSuperAdmin:true,userRole:"admin"});m.rate.mockReturnValue({allowed:true});m.select.mockResolvedValue(true);});
+it("uses session tenant and actor, never accepts them from the body",async()=>{expect((await PATCH(req({optionId:"a"}),params())).status).toBe(200);expect(m.select).toHaveBeenCalledWith("t1","opp1","a",{userId:"u1",isSuperAdmin:true,userRole:"admin"});expect((await PATCH(req({optionId:"a",tenantId:"foreign"}),params())).status).toBe(422);});
+it("denies a missing session before business access",async()=>{m.tenant.mockResolvedValue(null);expect((await PATCH(req({optionId:"a"}),params())).status).toBe(401);expect(m.select).not.toHaveBeenCalled();});
+it("allows clearing a preference without changing approval or outcome",async()=>{expect((await PATCH(req({optionId:null}),params())).status).toBe(200);expect(m.select.mock.calls[0][2]).toBeNull();});
+it("returns a generic denial for a foreign or missing option",async()=>{m.select.mockResolvedValue(false);expect((await PATCH(req({optionId:"foreign"}),params())).status).toBe(404);});

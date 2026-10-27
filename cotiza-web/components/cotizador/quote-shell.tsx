@@ -89,6 +89,7 @@ export function QuoteShell({
   const pathname = usePathname();
   const searchParams = useSearchParams();
   const [quoteItems, setQuoteItems] = useState<QuoteGroupSummary[]>(() => sortQuotes(items));
+  const [editorReload, setEditorReload] = useState(0);
   const [activeQuoteId, setActiveQuoteId] = useState<string | null>(requestedQuote?.quoteId ?? items[0]?.quoteId ?? null);
   const [selectedVersion, setSelectedVersion] = useState<QuoteGroupSummary | null>(null);
   // The list stays one row per group; the editor also accepts the exact version
@@ -508,6 +509,7 @@ export function QuoteShell({
       const data = (await response.json()) as {
         error?: string;
         importedCount?: number;
+        version?: number; versionCount?: number; versionCreated?: boolean;
         quoteId?: string | null;
         skipped?: { reason: string; row: number }[];
         skippedCount?: number;
@@ -517,6 +519,7 @@ export function QuoteShell({
         throw new Error(data.error ?? "No fue posible importar el archivo");
       }
 
+      setEditorReload(value => value + 1);
       setImportStatus("success");
       let skippedNote = "";
       if (data.skippedCount && data.skippedCount > 0) {
@@ -545,8 +548,8 @@ export function QuoteShell({
           quoteId: data.quoteId,
           status: "draft",
           totalRevenue: null,
-          version: Math.max(currentEntry.version, ...quoteItems.filter((q) => q.quoteGroupId === currentEntry.quoteGroupId).map((q) => q.version)) + 1,
-          versionCount: currentEntry.versionCount + 1,
+          version: data.version ?? (data.quoteId === activeQuoteId ? currentEntry.version : currentEntry.version + 1),
+          versionCount: data.versionCount ?? currentEntry.versionCount + (data.quoteId === activeQuoteId ? 0 : 1),
         };
         setQuoteItems((prev) =>
           sortQuotes([optimisticEntry, ...prev.filter((q) => q.quoteGroupId !== optimisticEntry.quoteGroupId)]),
@@ -560,6 +563,7 @@ export function QuoteShell({
         const params = new URLSearchParams(searchParams.toString());
         params.set("quoteId", data.quoteId);
         router.push(`${pathname}?${params.toString()}`);
+        router.refresh();
       } else {
         router.refresh();
       }
@@ -841,6 +845,7 @@ export function QuoteShell({
       </div>
       {editorQuotes.length > 0 ? (
         <QuoteLineEditor
+        key={editorReload}
           threatDownImportEnabled={threatDownImportEnabled}
           forcedSelectedQuoteId={activeQuoteId}
           guidedQuotingEnabled={guidedQuotingEnabled}

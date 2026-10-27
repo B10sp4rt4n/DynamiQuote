@@ -1,6 +1,7 @@
 "use client";
 
 import Link from "next/link";
+import { OpportunityAmount } from "./opportunity-amount";
 import { useMemo } from "react";
 
 import type { OpportunityStage, OpportunityWithStage } from "@/lib/db/opportunities";
@@ -39,11 +40,9 @@ function formatDate(iso: string | null, timeZone = "UTC"): string {
   );
 }
 
-function formatCurrency(value: number): string {
-  return new Intl.NumberFormat("es-MX", { style: "currency", currency: "MXN" }).format(value);
-}
 
 export function PipelineTable({
+  canChooseOptions = false,
   closeFilter,
   onCloseFilterChange,
   onSearchChange,
@@ -52,6 +51,7 @@ export function PipelineTable({
   search,
   stageFilter,
 }: {
+  canChooseOptions?: boolean;
   closeFilter: PipelineCloseFilter;
   onCloseFilterChange: (next: PipelineCloseFilter) => void;
   onSearchChange: (next: string) => void;
@@ -158,7 +158,7 @@ export function PipelineTable({
                       <span className="text-zinc-400">Sin cliente</span>
                     )}
                   </td>
-                  <td className="px-4 py-2.5 text-zinc-700">{formatCurrency(opp.amount)}</td>
+                  <td className="px-4 py-2.5 text-zinc-700"><OpportunityAmount amount={opp.amount} options={opp.commercialOptions} opportunityId={opp.opportunityId} canChoose={canChooseOptions} stage={opp.stage} /></td>
                   <td className="whitespace-nowrap px-4 py-2.5 text-zinc-500">{formatDate(opp.createdAt, "America/Mexico_City")}</td>
                   <td className="whitespace-nowrap px-4 py-2.5 text-zinc-500">
                     {opp.stage === "open" ? "Pendiente" : opp.closedAt ? formatDate(opp.closedAt, "America/Mexico_City") : "Sin fecha registrada"}
