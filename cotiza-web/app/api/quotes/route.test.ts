@@ -1,13 +1,25 @@
 import { beforeEach, describe, expect, it, vi } from "vitest";
-const m = vi.hoisted(() => ({ tenant: vi.fn(), create: vi.fn() }));
+const m = vi.hoisted(() => ({ tenant: vi.fn(), create: vi.fn(), capability: vi.fn() }));
 vi.mock("@/lib/auth/tenant-context", () => ({ getCurrentTenantContext: m.tenant }));
 vi.mock("@/lib/db/quotes", () => ({ createQuoteForTenant: m.create, QuoteCreationError: class extends Error { constructor(message: string, public status = 422) { super(message); } } }));
 vi.mock("@/lib/utils/rate-limit", () => ({ getRequestIdentity: () => "test", enforceRateLimit: () => ({ allowed: true }) }));
+vi.mock("@/lib/db/tenant-capabilities", () => ({ isTenantCapabilityEnabled: m.capability }));
 import { POST } from "./route";
 import { QuoteCreationError } from "@/lib/db/quotes";
 const request = (body: unknown) => new Request("http://localhost/api/quotes", { method: "POST", body: JSON.stringify(body) });
-beforeEach(() => { vi.clearAllMocks(); m.tenant.mockResolvedValue({ id: "tenant-a", userId: "seller-a", userRole: "user", isSuperAdmin: false }); m.create.mockResolvedValue({ quoteId: "quote-a" }); });
+beforeEach(() => { vi.clearAllMocks(); m.tenant.mockResolvedValue({ id: "tenant-a", userId: "seller-a", userRole: "user", isSuperAdmin: false }); m.create.mockResolvedValue({ quoteId: "quote-a" }); m.capability.mockResolvedValue(false); });
 describe("quote opportunity declaration", () => {
+  it("rejects a variable playbook when the tenant capability is off, including for superadmin", async () => {
+    m.tenant.mockResolvedValueOnce({ id: "tenant-a", userId: "root", userRole: "superadmin", isSuperAdmin: true });
+    expect((await POST(request({ clientName: "Synthetic", playbookName: "Renovación" }))).status).toBe(403);
+    expect(m.capability).toHaveBeenCalledWith("tenant-a", "quote_playbook_field");
+    expect(m.create).not.toHaveBeenCalled();
+  });
+  it("accepts the variable field only when enabled in the session tenant", async () => {
+    m.capability.mockResolvedValue(true);
+    expect((await POST(request({ clientName: "Synthetic", playbookName: "Renovación" }))).status).toBe(201);
+    expect(m.create).toHaveBeenCalledWith("tenant-a", { clientName: "Synthetic", playbookName: "Renovación" }, "seller-a", false);
+  });
   it("creates a declared new opportunity without requiring CRM intake fields", async () => {
     const response = await POST(request({ clientName: "Synthetic company", opportunityMode: "new", creationId: "3bc17bc9-ae42-4a73-81b7-793e938ea4c6" }));
     expect(response.status).toBe(201); expect(m.create).toHaveBeenCalledWith("tenant-a", expect.objectContaining({ opportunityMode: "new" }), "seller-a", false);

@@ -40,3 +40,9 @@ it("enables CRM pilot only in the session tenant", async () => {
   expect((await PATCH(request({ capabilityKey: "crm_workspace_pilot", enabled: true }))).status).toBe(200);
   expect(m.set).toHaveBeenCalledWith({ tenantId: "sys", capabilityKey: "crm_workspace_pilot", enabled: true, actor: { userId: "u1", isSuperAdmin: true } });
 });
+
+ it("declares the optional playbook field through the existing superadmin control", async () => {
+  vi.clearAllMocks(); m.tenant.mockResolvedValue({ id: "sys", userId: "u1", isSuperAdmin: true }); m.rate.mockReturnValue({ allowed: true }); m.set.mockResolvedValue(false);
+  expect((await PATCH(request({ capabilityKey: "quote_playbook_field", enabled: false }))).status).toBe(200);
+  expect(m.set).toHaveBeenCalledWith({ tenantId: "sys", capabilityKey: "quote_playbook_field", enabled: false, actor: { userId: "u1", isSuperAdmin: true } });
+});

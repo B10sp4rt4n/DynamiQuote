@@ -24,6 +24,7 @@ type TenantOption = {
 };
 
 type QuoteShellProps = {
+  playbookFieldEnabled?: boolean;
   guidedQuotingEnabled?: boolean;
   threatDownImportEnabled?: boolean;
   canSwitchTenant?: boolean;
@@ -77,6 +78,7 @@ function sortQuotes(items: QuoteGroupSummary[]): QuoteGroupSummary[] {
 }
 
 export function QuoteShell({
+  playbookFieldEnabled = false,
   guidedQuotingEnabled = false,
   threatDownImportEnabled = false,
   canSwitchTenant = false,
@@ -480,7 +482,8 @@ export function QuoteShell({
     setCreateMessage(null);
 
     try {
-      const payload = { clientId: selectedClientId ?? null, clientName, playbookName, proposalName,
+      const payload = { clientId: selectedClientId ?? null, clientName, proposalName,
+        ...(playbookFieldEnabled ? { playbookName } : {}),
         opportunityMode, ...(opportunityMode === "existing" ? { opportunityId } : {}) };
       const fingerprint = JSON.stringify(payload);
       if (createRequestRef.current?.fingerprint !== fingerprint) createRequestRef.current = { fingerprint, id: crypto.randomUUID() };
@@ -682,7 +685,7 @@ export function QuoteShell({
             Crea la cotizacion base y despues edita lineas o genera su propuesta formal.
           </p>
         </div>
-        <div className="mt-4 grid gap-3 md:grid-cols-2 xl:grid-cols-3">
+        <div className={`mt-4 grid gap-3 md:grid-cols-2 ${playbookFieldEnabled ? "xl:grid-cols-3" : ""}`}>
           {/* Selector de cliente con búsqueda */}
           <div className="relative" ref={clientDropdownRef}>
             <div className="flex items-center gap-1">
@@ -746,13 +749,17 @@ export function QuoteShell({
             placeholder="Nombre de propuesta"
             value={proposalName}
           />
-          <input
-            className="rounded-lg border border-zinc-300 bg-white px-3 py-2 text-sm text-zinc-900"
-            onChange={(event) => setPlaybookName(event.target.value)}
-            disabled={createState === "saving"}
-            placeholder="Playbook"
-            value={playbookName}
-          />
+          {playbookFieldEnabled ? <label className="grid gap-1 text-sm font-medium text-zinc-900">Guía comercial (opcional)
+            <input
+              className="rounded-lg border border-zinc-300 bg-white px-3 py-2 text-sm text-zinc-900"
+              onChange={(event) => setPlaybookName(event.target.value)}
+              disabled={createState === "saving"}
+              maxLength={120}
+              placeholder="Ej. Renovación"
+              value={playbookName}
+            />
+            <span className="text-xs font-normal text-zinc-600">Etiqueta comercial; no modifica precios ni aprobaciones.</span>
+          </label> : null}
         </div>
         <fieldset className="mt-4 space-y-3 rounded-lg border border-zinc-300 bg-white p-4 text-zinc-900" disabled={createState === "saving"}>
           <legend className="px-1 text-sm font-semibold">¿A qué oportunidad corresponde?</legend>
