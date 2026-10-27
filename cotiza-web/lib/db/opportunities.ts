@@ -6,6 +6,7 @@ import { Prisma } from "@prisma/client";
 import { prisma } from "@/lib/db/prisma";
 import { getCommercialOpportunityOverrides } from "@/lib/db/commercial-options";
 import type { CommercialOptionsSummary } from "@/lib/domain/commercial-options";
+import { intakeSummary } from "@/lib/domain/opportunity-intake-summary";
 import { opportunityLifetimeDays } from "@/lib/domain/opportunity-lifetime";
 
 type PrismaClientOrTx = Prisma.TransactionClient | typeof prisma;
@@ -35,8 +36,8 @@ function toNumber(value: unknown): number {
 
 // Folio atomico/consecutivo por tenant, igual que COT-XXXX y PKG-XXXX (ver
 // CLAUDE.md "Convenciones de codigo").
-async function nextOpportunityNumber(tenantId: string): Promise<string> {
-  const rows = await prisma.opportunities.findMany({
+async function nextOpportunityNumber(tenantId: string, client: PrismaClientOrTx): Promise<string> {
+  const rows = await client.opportunities.findMany({
     select: { opportunity_number: true },
     where: {
       opportunity_number: { startsWith: "OPP-" },
@@ -52,22 +53,23 @@ async function nextOpportunityNumber(tenantId: string): Promise<string> {
   return `OPP-${String(lastNumber + 1).padStart(4, "0")}`;
 }
 
-// Identidad propia del trato -- nace automaticamente con cada cotizacion
-// nueva (v1 de un quote_group_id nuevo). Sin UI todavia: solo plomeria de
-// backend para que quotes/proposals ya nazcan enlazados a una Oportunidad.
+// Identidad propia del trato. El creador de cotizaciones llama este helper
+// al declarar una oportunidad nueva; una cotización de un trato existente
+// reutiliza su identidad. El alta comercial puede completarse después.
 // Acepta un cliente de transaccion opcional para crearse atomicamente junto
 // con la cotizacion que la origina.
 export async function createOpportunityForTenant(
   tenantId: string,
-  input: { clientId: string | null; createdByUserId: string | null; title: string },
+  input: { clientId: string | null; createdByUserId: string | null; title: string; intakeMetadata?: Prisma.InputJsonObject },
   client: PrismaClientOrTx = prisma,
 ): Promise<string> {
   const opportunityId = randomUUID();
-  const opportunityNumber = await nextOpportunityNumber(tenantId);
+  const opportunityNumber = await nextOpportunityNumber(tenantId, client);
   const now = new Date();
 
   await client.opportunities.create({
     data: {
+      intake_metadata: input.intakeMetadata,
       client_id: input.clientId,
       created_at: now,
       opportunity_id: opportunityId,
@@ -86,6 +88,8 @@ export type OpportunityStage = "open" | "won" | "lost";
 
 export type OpportunityWithStage = {
   commercialOptions?: CommercialOptionsSummary;
+  intakePending?: boolean;
+  intakeQuoteId?: string;
   amount: number;
   clientCompany: string | null;
   clientId: string | null;
@@ -209,6 +213,7 @@ async function attachDerivedStage(
   tenantId: string,
   opportunities: Array<{
     client_id: string | null;
+    intake_metadata?: Prisma.JsonValue | null;
     created_at: Date;
     expected_close_date: Date | null;
     opportunity_id: string;
@@ -250,6 +255,7 @@ async function attachDerivedStage(
       const startedAt = option ? opportunities.filter(member=>option.memberOpportunityIds.includes(member.opportunity_id)).reduce((earliest,member)=>member.created_at < earliest ? member.created_at : earliest,o.created_at) : o.created_at;
       return {
         amount,
+        ...intakeSummary(o.intake_metadata),
         ...(option ? { commercialOptions: option.summary } : {}),
         clientCompany: o.client_id ? (clientCompanyById.get(o.client_id) ?? null) : null,
         clientId: o.client_id,

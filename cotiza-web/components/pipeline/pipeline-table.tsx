@@ -147,7 +147,9 @@ export function PipelineTable({
             <tbody className="divide-y divide-zinc-100">
               {filtered.map((opp) => (
                 <tr key={opp.opportunityId}>
-                  <td className="max-w-[220px] truncate px-4 py-2.5 font-medium text-zinc-900">{opp.title}</td>
+                  <td className="max-w-[220px] px-4 py-2.5 font-medium text-zinc-900"><span className="block truncate">{opp.title}</span>
+                    {opp.intakePending && opp.intakeQuoteId ? <Link className="mt-1 inline-block rounded bg-amber-100 px-2 py-1 text-xs font-semibold text-amber-950 hover:underline"
+                      href={`/cotizaciones?quoteId=${encodeURIComponent(opp.intakeQuoteId)}`}>Completar datos de oportunidad</Link> : null}</td>
                   <td className="px-4 py-2.5 text-zinc-500">{opp.opportunityNumber}</td>
                   <td className="px-4 py-2.5">
                     {opp.clientId ? (

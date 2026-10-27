@@ -63,6 +63,7 @@ beforeEach(() => {
   });
   m.fetch.mockImplementation(async (url: string, init?: RequestInit) => {
     const id = url.split("/")[3];
+    if (url.endsWith("/opportunity")) return { ok: true, json: async () => ({ opportunity: null }) };
     if (url.endsWith("/versions")) return { ok: true, json: async () => ({ currentQuoteId: id, quoteGroupId: "COT-0066", versions }) };
     if (url.endsWith("/lines") && init?.method === "PUT") {
       return { ok: true, json: async () => ({ quote: quote(2), lines: [line(id)], versionCreated: false,

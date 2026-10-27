@@ -270,9 +270,9 @@ model proposal_audit_events {
 }
 
 // Identidad propia del trato comercial -- por encima del enlace pairwise
-// de proposal_derivations. Nace automaticamente con cada cotizacion nueva
-// (v1 de un quote_group_id nuevo); las versiones siguientes heredan la
-// misma Oportunidad. Sin backfill: toda cotizacion/propuesta previa a este
+// de proposal_derivations. Una cotización puede crear una nueva o vincularse
+// explícitamente a una existente; sus versiones heredan la misma identidad.
+// Sin backfill: toda cotizacion/propuesta previa a este
 // cambio queda sin opportunity_id, permanentemente.
 model opportunities {
   opportunity_id       String    @id
@@ -284,6 +284,7 @@ model opportunities {
   owner_user_id        String?
   estimated_value      Decimal?  @db.Decimal
   expected_close_date  DateTime? @db.Date
+  intake_metadata      Json?     @db.JsonB
   created_at           DateTime  @db.Timestamp(6)
   closed_at            DateTime? @db.Timestamp(6)
 

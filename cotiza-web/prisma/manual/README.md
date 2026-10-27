@@ -104,3 +104,10 @@ Validar primero en una copia de producción, comparar conteos/importes y el hash
 de los campos originales; ejecutar dos veces para comprobar idempotencia. La
 etiqueta es compatible con el código anterior; aplicar antes del despliegue
 del código que la consume. No hay DDL ni dependencias nuevas.
+
+## Alta comercial diferida (27 de octubre de 2026)
+
+`20261027_opportunity_intake.sql` agrega `opportunities.intake_metadata` nullable,
+sin modificar históricos. Aplicar antes del código del alta desde cotizaciones;
+los lectores Prisma ya esperan la columna. Ver `docs/quote-opportunity-intake.md`
+en la raíz para pruebas, orden de publicación y reversión compatible.
