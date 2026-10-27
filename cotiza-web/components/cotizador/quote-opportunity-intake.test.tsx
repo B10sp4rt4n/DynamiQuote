@@ -42,15 +42,25 @@ beforeEach(() => {
   container = document.createElement("div"); document.body.append(container); root = createRoot(container);
 });
 afterEach(async () => { await act(async () => root.unmount()); container.remove(); vi.unstubAllGlobals(); });
-async function renderShell() { await act(async () => root.render(<QuoteShell currentTenantSlug="test" items={[]} tenantName="Test" tenantOptions={[]} />)); }
+async function renderShell(playbookFieldEnabled = false) { await act(async () => root.render(<QuoteShell playbookFieldEnabled={playbookFieldEnabled} currentTenantSlug="test" items={[]} tenantName="Test" tenantOptions={[]} />)); }
 async function renderPanel() { await act(async () => root.render(<QuoteOpportunityPanel key="new-quote" quoteId="new-quote" />)); await settle(); }
 function field(label: string) { const element = [...container.querySelectorAll("label")].find(item => item.textContent?.startsWith(label))?.querySelector("input, textarea"); if (!element) throw Error(`No field ${label}`); return element as HTMLInputElement; }
 
 describe("deferred opportunity intake from quotation", () => {
+  it("shows and submits the variable field when the tenant explicitly enables it", async () => {
+    await renderShell(true);
+    await input(container.querySelector('[aria-label="Cliente de la cotización"]')!, "Synthetic company");
+    await input(field("Guía comercial (opcional)"), "Renovación");
+    await click("Crear cotizacion");
+    expect(JSON.parse(m.fetch.mock.calls.find(([url]) => url === "/api/quotes")![1].body)).toMatchObject({ playbookName: "Renovación" });
+  });
   it("creates immediately without CRM fields and shows the linked persistent reminder", async () => {
     await renderShell(); await input(container.querySelector('[aria-label="Cliente de la cotización"]')!, "Synthetic company");
     await click("Crear cotizacion");
+    expect(container.querySelector('input[placeholder="Playbook"]')).toBeNull();
+    expect(container.textContent).not.toContain("Guía comercial (opcional)");
     const post = m.fetch.mock.calls.find(([url]) => url === "/api/quotes")!;
+    expect(JSON.parse(post[1].body)).not.toHaveProperty("playbookName");
     expect(JSON.parse(post[1].body)).toMatchObject({ opportunityMode: "new", clientName: "Synthetic company", proposalName: "", creationId: expect.any(String) });
     expect(container.textContent).toContain("Datos de oportunidad pendientes");
     expect(container.textContent).toContain("Puedes seguir cotizando");

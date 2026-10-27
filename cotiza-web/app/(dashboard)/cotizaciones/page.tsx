@@ -22,11 +22,12 @@ export default async function QuotesPage({ searchParams }: {
   const canSeeAll = tenant.isSuperAdmin || tenant.userRole === "owner" || tenant.userRole === "admin";
   const query = await searchParams;
   const quoteId = typeof query.quoteId === "string" ? query.quoteId : null;
-  const [items, threatDownImportEnabled, requestedQuote, guidedQuotingEnabled] = await Promise.all([
+  const [items, threatDownImportEnabled, requestedQuote, guidedQuotingEnabled, playbookFieldEnabled] = await Promise.all([
     getQuoteGroupsSummaryByTenant(tenant.id, 12, tenant.userId, canSeeAll),
     isTenantCapabilityEnabled(tenant.id, THREATDOWN_PDF_IMPORT),
     quoteId ? getQuoteVersionSummaryByTenant(tenant.id, quoteId, tenant.userId, canSeeAll) : null,
     isTenantCapabilityEnabled(tenant.id, "cpq_guided_preview"),
+    isTenantCapabilityEnabled(tenant.id, "quote_playbook_field"),
   ]);
   const canSwitchTenant = tenant.isSuperAdmin;
   const tenantOptions = canSwitchTenant
@@ -35,6 +36,7 @@ export default async function QuotesPage({ searchParams }: {
 
   return (
     <QuoteShell
+      playbookFieldEnabled={playbookFieldEnabled}
       guidedQuotingEnabled={guidedQuotingEnabled}
       threatDownImportEnabled={threatDownImportEnabled}
       canSwitchTenant={canSwitchTenant}

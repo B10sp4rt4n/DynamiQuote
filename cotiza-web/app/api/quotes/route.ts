@@ -3,6 +3,7 @@ import { NextResponse } from "next/server";
 import { getCurrentTenantContext } from "@/lib/auth/tenant-context";
 import { createQuoteForTenant, QuoteCreationError } from "@/lib/db/quotes";
 import { enforceRateLimit, getRequestIdentity } from "@/lib/utils/rate-limit";
+import { isTenantCapabilityEnabled } from "@/lib/db/tenant-capabilities";
 import { createQuoteSchema } from "@/lib/validations/quotes";
 
 export async function POST(request: Request) {
@@ -34,6 +35,10 @@ export async function POST(request: Request) {
   }
 
   try {
+    if (parsed.data.playbookName && parsed.data.playbookName !== "General"
+      && !await isTenantCapabilityEnabled(tenant.id, "quote_playbook_field")) {
+      return NextResponse.json({ error: "El campo de guía comercial está desactivado para esta empresa." }, { status: 403 });
+    }
     const canSeeAll = tenant.isSuperAdmin || tenant.userRole === "owner" || tenant.userRole === "admin";
     const quote = await createQuoteForTenant(tenant.id, parsed.data, tenant.userId, canSeeAll);
     return NextResponse.json({ quote }, { status: 201 });

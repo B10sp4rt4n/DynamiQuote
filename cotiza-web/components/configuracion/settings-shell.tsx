@@ -9,6 +9,7 @@ import type { AppUserSummary, IssuerProfileSummary } from "@/lib/db/settings";
 import type { ActiveTenantOption, ClosingContactLevel, TenantProfile } from "@/lib/db/tenants";
 
 type SettingsShellProps = {
+  playbookFieldEnabled?: boolean;
   crmWorkspaceEnabled?: boolean;
   guidedQuotingEnabled?: boolean;
   threatDownImportEnabled?: boolean;
@@ -2233,6 +2234,7 @@ function IssuerProfilesTab({
 const VALID_TABS: Tab[] = ["tenant", "users", "issuer", "policy"];
 
 export function SettingsShell({
+  playbookFieldEnabled = false,
   guidedQuotingEnabled = false,
   crmWorkspaceEnabled = false,
   threatDownImportEnabled = false,
@@ -2377,6 +2379,7 @@ export function SettingsShell({
               initialEnabled={threatDownImportEnabled} /> : null}
             {canManageAllTenants ? <TenantCapabilitiesPanel key={`${tenantId}-cpq`} tenantName={tenantName} initialEnabled={guidedQuotingEnabled} capabilityKey="cpq_guided_preview" /> : null}
             {canManageAllTenants ? <TenantCapabilitiesPanel key={`${tenantId}-crm`} tenantName={tenantName} initialEnabled={crmWorkspaceEnabled} capabilityKey="crm_workspace_pilot" /> : null}
+            {canManageAllTenants ? <TenantCapabilitiesPanel key={`${tenantId}-playbook`} tenantName={tenantName} initialEnabled={playbookFieldEnabled} capabilityKey="quote_playbook_field" /> : null}
             <TenantConfigurationTab
               issuerProfiles={issuerProfilesState}
               marginPolicy={marginPolicyState}
