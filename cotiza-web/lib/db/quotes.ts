@@ -4,7 +4,7 @@ import { randomUUID } from "crypto";
 import { Prisma } from "@prisma/client";
 
 import { prisma } from "@/lib/db/prisma";
-import { createOpportunityForTenant } from "@/lib/db/opportunities";
+import { createOpportunityForTenant, getOpportunityPipelineByTenant } from "@/lib/db/opportunities";
 import { createDraftFromQuoteInput } from "@/lib/db/quote-input";
 
 type QuoteSummaryRow = {
@@ -73,6 +73,9 @@ export type CreateQuoteInput = {
   playbookName?: string;
   proposalName?: string;
   quotedBy?: string;
+  creationId?: string;
+  opportunityMode?: "new" | "existing";
+  opportunityId?: string;
 };
 
 function decimalToNumber(value: Prisma.Decimal | null): number | null {
@@ -122,8 +125,8 @@ export async function getQuoteVersionSummaryByTenant(
   };
 }
 
-async function nextQuoteGroupId(tenantId: string): Promise<string> {
-  const rows = await prisma.quote.findMany({
+async function nextQuoteGroupId(tenantId: string, client: Prisma.TransactionClient): Promise<string> {
+  const rows = await client.quote.findMany({
     select: { quote_group_id: true },
     where: {
       quote_group_id: {
@@ -226,85 +229,89 @@ export async function deleteQuoteGroupByTenant(
   return "deleted";
 }
 
+export class QuoteCreationError extends Error {
+  constructor(message: string, public status = 422) { super(message); }
+}
+
 export async function createQuoteForTenant(
   tenantId: string,
   input: CreateQuoteInput,
   createdByUserId: string | null = null,
+  canSeeAll = false,
 ): Promise<QuoteGroupSummary> {
-  const quoteGroupId = await nextQuoteGroupId(tenantId);
-  const quoteId = randomUUID();
+  if (input.opportunityMode === "existing") {
+    const available = await getOpportunityPipelineByTenant(tenantId, createdByUserId, canSeeAll);
+    if (!available.some(opportunity => opportunity.opportunityId === input.opportunityId
+      && opportunity.clientId === input.clientId && opportunity.stage === "open")) {
+      throw new QuoteCreationError("Oportunidad no disponible para este cliente", 404);
+    }
+  }
+  const quoteId = input.creationId ?? randomUUID();
   const now = new Date();
-
-  await prisma.$transaction(async (tx) => {
-    // Cada cotizacion nueva (v1 de un quote_group_id nuevo) nace con su
-    // propia Oportunidad -- identidad del trato por encima de esta
-    // cotizacion y de cualquier propuesta que salga de ella. Las versiones
-    // siguientes (v2, v3...) heredan esta misma Oportunidad al copiarse
-    // desde v1 (ver updateQuoteLinesByTenant).
-    const opportunityId = await createOpportunityForTenant(
-      tenantId,
-      {
-        clientId: input.clientId ?? null,
-        createdByUserId,
+  return prisma.$transaction(async (tx) => {
+    // Shared by all initial quote/opportunity allocations in this writer.
+    await tx.$executeRaw`SELECT pg_advisory_xact_lock(hashtextextended(${`quote-create:${tenantId}`}, 0))`;
+    const prior = await tx.quote.findFirst({ where: { quote_id: quoteId, tenantId, created_by_user_id: createdByUserId } });
+    if (prior) {
+      const originalOpportunity = prior.opportunity_id ? await tx.opportunities.findFirst({
+        where: { opportunity_id: prior.opportunity_id, tenant_id: tenantId }, select: { intake_metadata: true },
+      }) : null;
+      const originalIntake = originalOpportunity?.intake_metadata as Record<string, unknown> | null;
+      if ((input.opportunityMode === "new" && originalIntake?.sourceQuoteId !== quoteId)
+        || prior.client_id !== (input.clientId ?? null) || prior.client_name !== input.clientName
+        || prior.proposal_name !== (input.proposalName?.trim() || "Sin propuesta")
+        || prior.playbook_name !== (input.playbookName?.trim() || "General")
+        || prior.quoted_by !== (input.quotedBy?.trim() || null)
+        || (input.opportunityMode === "existing" && prior.opportunity_id !== input.opportunityId)) {
+        throw new QuoteCreationError("Esta solicitud ya se usó con otros datos. Revisa y vuelve a intentarlo.", 409);
+      }
+      const versionCount = await tx.quote.count({ where: { tenantId, quote_group_id: prior.quote_group_id } });
+      return { avgMargin: decimalToNumber(prior.avg_margin), clientName: prior.client_name!, createdAt: dateToIso(prior.createdAt),
+        playbookName: prior.playbook_name, proposalName: prior.proposal_name!, quoteGroupId: prior.quote_group_id!,
+        quoteId: prior.quote_id, status: prior.status ?? "draft", totalRevenue: decimalToNumber(prior.total_revenue),
+        version: prior.version ?? 1, versionCount };
+    }
+    if (input.clientId && !await tx.client.findFirst({ where: { client_id: input.clientId, tenant_id: tenantId, active: true } })) {
+      throw new QuoteCreationError("Cliente no disponible", 404);
+    }
+    let opportunityId: string;
+    if (input.opportunityMode === "existing") {
+      if (!input.opportunityId || !input.clientId) throw new QuoteCreationError("Selecciona cliente y oportunidad existente");
+      const opportunity = await tx.opportunities.findFirst({ where: { opportunity_id: input.opportunityId, tenant_id: tenantId,
+        client_id: input.clientId, ...(canSeeAll ? {} : { owner_user_id: createdByUserId }) } });
+      if (!opportunity || await tx.proposals.count({ where: { tenant_id: tenantId, opportunity_id: input.opportunityId,
+        outcome: { in: ["won", "lost"] } } })) throw new QuoteCreationError("Oportunidad no disponible para este cliente", 404);
+      opportunityId = opportunity.opportunity_id;
+    } else {
+      if (input.opportunityId) throw new QuoteCreationError("La nueva oportunidad no puede incluir un ID existente");
+      opportunityId = await createOpportunityForTenant(tenantId, {
+        clientId: input.clientId ?? null, createdByUserId,
         title: input.proposalName?.trim() || input.clientName,
-      },
-      tx,
-    );
-
-    await tx.quote.create({
-      data: {
-        avg_margin: 0,
-        client_id: input.clientId ?? null,
-        client_name: input.clientName,
-        createdAt: now,
-        created_by_user_id: createdByUserId,
-        gross_profit: 0,
-        opportunity_id: opportunityId,
-        playbook_name: input.playbookName?.trim() || "General",
-        proposal_name: input.proposalName?.trim() || "Sin propuesta",
-        quote_group_id: quoteGroupId,
-        quote_id: quoteId,
-        quoted_by: input.quotedBy?.trim() || null,
-        status: "draft",
-        tenantId,
-        total_cost: 0,
-        total_revenue: 0,
-        version: 1,
-      },
-    });
-
-    await tx.quote_lines.create({
-      data: {
-        cost_unit: 0,
-        created_at: now,
-        description_final: "",
-        description_original: "",
-        final_price_unit: 0,
-        import_source: "manual",
-        line_id: randomUUID(),
-        line_type: "product",
-        margin_pct: 0,
-        quantity: 1,
-        quote_id: quoteId,
-        service_origin: null,
-        sku: null,
-      },
-    });
+        // Explicit opt-in only: historical and legacy callers are not marked incomplete.
+        ...(input.opportunityMode === "new" ? { intakeMetadata: {
+          version: 1, kind: "quote-origin", sourceQuoteId: quoteId, companyName: input.clientName,
+          confirmedTitle: input.proposalName?.trim() || "", need: "", source: "", nextStep: "", revision: 0,
+          createdAt: now.toISOString(), createdBy: createdByUserId,
+        } } : {}),
+      }, tx);
+    }
+    const quoteGroupId = await nextQuoteGroupId(tenantId, tx);
+    await tx.quote.create({ data: {
+      avg_margin: 0, client_id: input.clientId ?? null, client_name: input.clientName,
+      createdAt: now, created_by_user_id: createdByUserId, gross_profit: 0, opportunity_id: opportunityId,
+      playbook_name: input.playbookName?.trim() || "General", proposal_name: input.proposalName?.trim() || "Sin propuesta",
+      quote_group_id: quoteGroupId, quote_id: quoteId, quoted_by: input.quotedBy?.trim() || null,
+      status: "draft", tenantId, total_cost: 0, total_revenue: 0, version: 1,
+    } });
+    await tx.quote_lines.create({ data: {
+      cost_unit: 0, created_at: now, description_final: "", description_original: "", final_price_unit: 0,
+      import_source: "manual", line_id: randomUUID(), line_type: "product", margin_pct: 0, quantity: 1,
+      quote_id: quoteId, service_origin: null, sku: null,
+    } });
+    return { avgMargin: 0, clientName: input.clientName, createdAt: now.toISOString(),
+      playbookName: input.playbookName?.trim() || "General", proposalName: input.proposalName?.trim() || "Sin propuesta",
+      quoteGroupId, quoteId, status: "draft", totalRevenue: 0, version: 1, versionCount: 1 };
   });
-
-  return {
-    avgMargin: 0,
-    clientName: input.clientName,
-    createdAt: now.toISOString(),
-    playbookName: input.playbookName?.trim() || "General",
-    proposalName: input.proposalName?.trim() || "Sin propuesta",
-    quoteGroupId,
-    quoteId,
-    status: "draft",
-    totalRevenue: 0,
-    version: 1,
-    versionCount: 1,
-  };
 }
 
 export async function getQuoteGroupsSummaryByTenant(

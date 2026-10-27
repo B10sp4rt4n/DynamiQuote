@@ -1,6 +1,7 @@
 "use client";
 
 import Link from "next/link";
+import { QuoteOpportunityPanel } from "./quote-opportunity-panel";
 import { useEffect, useMemo, useRef, useState } from "react";
 import { usePathname, useRouter, useSearchParams } from "next/navigation";
 
@@ -119,6 +120,13 @@ export function QuoteShell({
   const [clientOptions, setClientOptions] = useState<{ clientId: string; company: string; contactName: string | null }[]>([]);
   const [showClientDropdown, setShowClientDropdown] = useState(false);
   const [proposalName, setProposalName] = useState("");
+  const [opportunityMode, setOpportunityMode] = useState<"new" | "existing">("new");
+  const [opportunityId, setOpportunityId] = useState("");
+  const [opportunityOptions, setOpportunityOptions] = useState<{ opportunityId: string; opportunityNumber: string; title: string }[]>([]);
+  const [opportunityLoading, setOpportunityLoading] = useState(false);
+  const [opportunityError, setOpportunityError] = useState<string | null>(null);
+  const createRequestRef = useRef<{ fingerprint: string; id: string } | null>(null);
+  const creatingRef = useRef(false);
   const [playbookName, setPlaybookName] = useState("General");
   const [createState, setCreateState] = useState<"idle" | "saving" | "error">("idle");
   const [createMessage, setCreateMessage] = useState<string | null>(null);
@@ -388,7 +396,28 @@ export function QuoteShell({
     return () => document.removeEventListener("mousedown", handleClickOutside);
   }, []);
 
+  useEffect(() => {
+    if (opportunityMode !== "existing" || !selectedClientId) return;
+    const controller = new AbortController();
+    void (async () => {
+      try {
+        const response = await fetch(`/api/opportunities?clientId=${encodeURIComponent(selectedClientId)}`, { signal: controller.signal });
+        if (!response.ok) throw new Error("No se pudieron consultar las oportunidades. Cambia a nueva o vuelve a seleccionar el cliente.");
+        const data = await response.json() as { opportunities: typeof opportunityOptions };
+        if (!controller.signal.aborted) setOpportunityOptions(data.opportunities);
+      } catch (error) {
+        if (!controller.signal.aborted) setOpportunityError(error instanceof Error ? error.message : "No disponible");
+      } finally { if (!controller.signal.aborted) setOpportunityLoading(false); }
+    })();
+    return () => controller.abort();
+  }, [opportunityMode, selectedClientId]);
+  function resetOpportunitySelection(clientSelected: boolean) {
+    setOpportunityId(""); setOpportunityOptions([]); setOpportunityError(null);
+    setOpportunityLoading(clientSelected && opportunityMode === "existing");
+  }
+
   function handleSelectClient(option: { clientId: string; company: string; contactName: string | null }) {
+    if (option.clientId !== selectedClientId) resetOpportunitySelection(true);
     setSelectedClientId(option.clientId);
     setClientName(option.company);
     setClientSearch(option.company);
@@ -396,6 +425,7 @@ export function QuoteShell({
   }
 
   function handleClearClient() {
+    resetOpportunitySelection(false);
     setSelectedClientId(null);
     setClientSearch("");
     setClientName("");
@@ -404,6 +434,7 @@ export function QuoteShell({
   }
 
   function handleClientSearchChange(value: string) {
+    resetOpportunitySelection(false);
     setClientSearch(value);
     setClientName(value);
     // Si el usuario edita manualmente, desvincula el cliente seleccionado
@@ -443,17 +474,18 @@ export function QuoteShell({
   }
 
   async function handleCreateQuote() {
+    if (creatingRef.current) return;
+    creatingRef.current = true;
     setCreateState("saving");
     setCreateMessage(null);
 
     try {
+      const payload = { clientId: selectedClientId ?? null, clientName, playbookName, proposalName,
+        opportunityMode, ...(opportunityMode === "existing" ? { opportunityId } : {}) };
+      const fingerprint = JSON.stringify(payload);
+      if (createRequestRef.current?.fingerprint !== fingerprint) createRequestRef.current = { fingerprint, id: crypto.randomUUID() };
       const response = await fetch("/api/quotes", {
-        body: JSON.stringify({
-          clientId: selectedClientId ?? null,
-          clientName,
-          playbookName,
-          proposalName,
-        }),
+        body: JSON.stringify({ ...payload, creationId: createRequestRef.current.id }),
         headers: {
           "Content-Type": "application/json",
         },
@@ -474,12 +506,16 @@ export function QuoteShell({
       setClientOptions([]);
       setProposalName("");
       setPlaybookName("General");
+      setOpportunityMode("new"); resetOpportunitySelection(false);
+      createRequestRef.current = null;
       setCreateState("idle");
-      setCreateMessage(`Cotizacion ${data.quote.quoteGroupId} creada.`);
+      setCreateMessage(opportunityMode === "new"
+        ? `Cotización ${data.quote.quoteGroupId} y nueva oportunidad creadas. Puedes completar sus datos después.`
+        : `Cotización ${data.quote.quoteGroupId} vinculada a la oportunidad existente.`);
     } catch (error) {
       setCreateState("error");
       setCreateMessage(error instanceof Error ? error.message : "Error interno");
-    }
+    } finally { creatingRef.current = false; }
   }
 
   // Importa partidas desde un Excel y las carga en la cotización activa,
@@ -651,6 +687,8 @@ export function QuoteShell({
           <div className="relative" ref={clientDropdownRef}>
             <div className="flex items-center gap-1">
               <input
+                aria-label="Cliente de la cotización"
+                disabled={createState === "saving"}
                 autoComplete="off"
                 className="w-full rounded-lg border border-zinc-300 bg-white px-3 py-2 text-sm text-zinc-900"
                 onChange={(event) => handleClientSearchChange(event.target.value)}
@@ -703,20 +741,36 @@ export function QuoteShell({
           <input
             className="rounded-lg border border-zinc-300 bg-white px-3 py-2 text-sm text-zinc-900"
             onChange={(event) => setProposalName(event.target.value)}
+            aria-label="Nombre de propuesta"
+            disabled={createState === "saving"}
             placeholder="Nombre de propuesta"
             value={proposalName}
           />
           <input
             className="rounded-lg border border-zinc-300 bg-white px-3 py-2 text-sm text-zinc-900"
             onChange={(event) => setPlaybookName(event.target.value)}
+            disabled={createState === "saving"}
             placeholder="Playbook"
             value={playbookName}
           />
         </div>
+        <fieldset className="mt-4 space-y-3 rounded-lg border border-zinc-300 bg-white p-4 text-zinc-900" disabled={createState === "saving"}>
+          <legend className="px-1 text-sm font-semibold">¿A qué oportunidad corresponde?</legend>
+          <div className="flex flex-wrap gap-4">{([{ value: "new", label: "Nueva oportunidad" }, { value: "existing", label: "Oportunidad existente" }] as const).map(option =>
+            <label key={option.value} className="flex items-center gap-2 text-sm"><input type="radio" name="opportunity-mode" value={option.value}
+              checked={opportunityMode === option.value} onChange={() => { setOpportunityMode(option.value); setOpportunityId(""); setOpportunityOptions([]); setOpportunityError(null); setOpportunityLoading(option.value === "existing" && Boolean(selectedClientId)); }} />{option.label}</label>)}</div>
+          {opportunityMode === "new" ? <p className="text-sm text-zinc-700">Se creará al guardar esta cotización. No necesitas llenar el alta ahora: quedará un aviso para completar nombre, necesidad y origen después.</p> :
+            !selectedClientId ? <p className="text-sm text-zinc-700">Selecciona un cliente del catálogo para ver sus oportunidades abiertas.</p> :
+            <label className="grid gap-1 text-sm font-medium">Oportunidad abierta<select className="rounded-lg border border-zinc-400 bg-white px-3 py-2 text-zinc-900" value={opportunityId} disabled={opportunityLoading}
+              onChange={event => setOpportunityId(event.target.value)}><option value="">{opportunityLoading ? "Consultando…" : "Seleccionar oportunidad"}</option>
+              {opportunityOptions.map(option => <option key={option.opportunityId} value={option.opportunityId}>{option.opportunityNumber} · {option.title}</option>)}</select>
+              {!opportunityLoading && !opportunityError && opportunityOptions.length === 0 ? <span>No hay oportunidades abiertas disponibles. Puedes declarar una nueva.</span> : null}</label>}
+          {opportunityError ? <p className="text-sm text-rose-700" role="alert">{opportunityError}</p> : null}
+        </fieldset>
         <div className="mt-4 flex items-center gap-3">
           <button
             className="rounded-lg bg-zinc-900 px-4 py-2 text-sm font-medium text-white disabled:opacity-50"
-            disabled={createState === "saving" || clientName.trim().length === 0}
+            disabled={createState === "saving" || clientName.trim().length === 0 || (opportunityMode === "existing" && (!selectedClientId || !opportunityId || opportunityLoading))}
             onClick={() => {
               void handleCreateQuote();
             }}
@@ -731,6 +785,7 @@ export function QuoteShell({
           ) : null}
         </div>
       </div>
+      {activeQuoteId ? <QuoteOpportunityPanel key={activeQuoteId} quoteId={activeQuoteId} /> : null}
       <div className="mt-6 rounded-xl border border-zinc-200 bg-white">
         <button
           aria-expanded={isQuotesPanelOpen}
