@@ -105,7 +105,7 @@ export default async function ClientDetailPage({ params }: ClientDetailPageProps
   ]);
 
   return (
-    <div className="space-y-4">
+    <div className="space-y-4 text-zinc-900">
       <Link className="text-sm font-medium text-zinc-600 hover:text-zinc-900" href="/configuracion/clientes">
         ← Volver a Clientes
       </Link>
