@@ -1335,7 +1335,7 @@ export function QuoteLineEditor({
           >
             {quotes.map((quote) => (
               <option key={quote.quoteId} value={quote.quoteId}>
-                {quote.quoteGroupId} · v{quote.version} · {STATUS_LABELS[quote.status] ?? quote.status} — {quote.clientName}
+                {quote.quoteGroupId} · {versions.find(v=>v.quoteId===quote.quoteId)?.commercialOption ? `Opción ${versions.find(v=>v.quoteId===quote.quoteId)!.commercialOption!.ordinal}` : `v${quote.version}`} · {STATUS_LABELS[quote.status] ?? quote.status} — {quote.clientName}
               </option>
             ))}
           </select>
@@ -1351,7 +1351,7 @@ export function QuoteLineEditor({
           </button>
           <button
             className="rounded-lg bg-zinc-900 px-3 py-2 text-sm font-semibold text-white hover:bg-zinc-700 disabled:opacity-60"
-            disabled={saving || versioningNow || loading || lines.length === 0}
+            disabled={saving || versioningNow || loading || lines.length === 0 || currentVersion?.emptyPlaceholder === true}
             onClick={() => {
               void saveLines();
             }}
@@ -1361,7 +1361,7 @@ export function QuoteLineEditor({
           </button>
           <button
             className="rounded-lg border border-indigo-300 bg-indigo-50 px-3 py-2 text-sm font-semibold text-indigo-800 hover:bg-indigo-100 disabled:opacity-50"
-            disabled={saving || versioningNow || loading || lines.length === 0}
+            disabled={saving || versioningNow || loading || lines.length === 0 || currentVersion?.emptyPlaceholder === true}
             onClick={() => {
               const confirmed = window.confirm(
                 "Se creara una nueva version en borrador con el estado actual. \n\n¿Deseas continuar?",
@@ -1422,7 +1422,7 @@ export function QuoteLineEditor({
           <div className="flex items-center gap-2 rounded-lg bg-zinc-50 px-3 py-2 text-sm">
             <span className="font-mono text-xs font-semibold text-zinc-900">{selectedQuote.quoteGroupId}</span>
             <span className="text-zinc-400">·</span>
-            <span className="text-xs text-zinc-500">v{currentVersion?.version ?? selectedQuote.version} de {selectedQuote.versionCount}</span>
+            <span className="text-xs text-zinc-500">{currentVersion?.commercialOption ? `Opción ${currentVersion.commercialOption.ordinal} · ${currentVersion.commercialOption.label} · revisión ${currentVersion.commercialOption.revision}` : `v${currentVersion?.version ?? selectedQuote.version} de ${selectedQuote.versionCount}`}</span>
             <StatusBadge status={currentStatus} />
           </div>
         )}
@@ -1544,14 +1544,15 @@ export function QuoteLineEditor({
       {versions.length > 0 && versionGroupId === selectedQuote?.quoteGroupId ? (
         <div className="mt-4 rounded-xl border border-zinc-200 bg-zinc-50 p-4">
           <div className="flex items-center justify-between">
-            <p className="text-sm font-semibold text-zinc-700">Historial de versiones</p>
-            <span className="text-xs text-zinc-400">{versions.length} versión{versions.length !== 1 ? "es" : ""}</span>
+            {versions.filter(v=>v.emptyPlaceholder).map(v=><button key={v.quoteId} type="button" className="rounded border border-zinc-300 bg-white px-2 py-1 text-xs text-zinc-700" onClick={()=>void handleQuoteChange(v.quoteId)}>Ver registro inicial vacío</button>)}
+            <p className="text-sm font-semibold text-zinc-700">{versions.some(v=>v.commercialOption) ? "Opciones comerciales y revisiones" : "Historial de versiones"}</p>
+            <span className="text-xs text-zinc-400">{versions.some(v=>v.commercialOption) ? `${new Set(versions.filter(v=>v.commercialOption).map(v=>v.commercialOption!.optionId)).size} opciones · registros históricos conservados` : `${versions.length} versiones`}</span>
           </div>
           <div className="mt-3 overflow-x-auto">
             <table className="min-w-full text-sm">
               <thead>
                 <tr className="text-left text-xs text-zinc-500">
-                  <th className="pb-2 pr-6 font-medium">Versión</th>
+                  <th className="pb-2 pr-6 font-medium">{versions.some(v=>v.commercialOption) ? "Opción / revisión" : "Versión"}</th>
                   <th className="pb-2 pr-6 font-medium">Estado</th>
                   <th className="pb-2 pr-6 font-medium">Fecha</th>
                   <th className="pb-2 pr-6 font-medium">Total</th>
@@ -1560,12 +1561,13 @@ export function QuoteLineEditor({
                 </tr>
               </thead>
               <tbody className="divide-y divide-zinc-100">
-                {versions.map((version) => {
+                {versions.filter(v=>!v.emptyPlaceholder).sort((a,b)=>(a.commercialOption?.ordinal ?? 0)-(b.commercialOption?.ordinal ?? 0) || b.version-a.version).map((version) => {
                   const isActive = version.quoteId === selectedQuoteId;
                   return (
                     <tr key={version.quoteId} className={isActive ? "bg-white" : ""}>
                       <td className="py-2 pr-6">
-                        <span className="font-mono text-xs font-semibold text-zinc-900">v{version.version}</span>
+                        <span className="font-mono text-xs font-semibold text-zinc-900">{version.commercialOption ? `Opción ${version.commercialOption.ordinal} · ${version.commercialOption.label} · revisión ${version.commercialOption.revision}` : `v${version.version}`}</span>
+                        {version.commercialOption ? <span className="ml-2 text-xs text-zinc-500">registro histórico v{version.version}</span> : null}
                         {isActive && <span className="ml-1.5 text-xs text-zinc-400">(actual)</span>}
                       </td>
                       <td className="py-2 pr-6">

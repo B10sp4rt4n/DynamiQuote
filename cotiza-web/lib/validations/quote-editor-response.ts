@@ -43,6 +43,8 @@ export const quoteLinesPutResponseSchema = z.object({
 });
 
 export const quoteVersionHistoryItemSchema = z.object({
+  commercialOption: z.object({optionId:z.string(),ordinal:z.number(),label:z.string(),revision:z.number()}).nullable().optional(),
+  emptyPlaceholder:z.boolean().optional(),
   avgMargin: z.number().nullable(),
   closedAt: z.string().nullable(),
   createdAt: z.string().nullable(),

@@ -1,4 +1,5 @@
 import Link from "next/link";
+import { OpportunityAmount } from "@/components/pipeline/opportunity-amount";
 
 import { ClientTasksPanel } from "@/components/clientes/client-tasks-panel";
 import { getCurrentTenantContext } from "@/lib/auth/tenant-context";
@@ -169,10 +170,10 @@ export default async function ClientDetailPage({ params }: ClientDetailPageProps
                   <p className="truncate font-medium text-zinc-900">
                     {opp.opportunityNumber} — {opp.title}
                   </p>
-                  <p className="text-xs text-zinc-500">
-                    {formatCurrency(opp.amount)}
+                  <div className="text-xs text-zinc-500">
+                    <OpportunityAmount amount={opp.amount} options={opp.commercialOptions} opportunityId={opp.opportunityId} canChoose={canSeeAll} stage={opp.stage} />
                     {opp.expectedCloseDate ? ` · cierre esperado ${formatDate(opp.expectedCloseDate)}` : ""}
-                  </p>
+                  </div>
                   <p className="text-xs text-zinc-500">
                     Inicio: {new Intl.DateTimeFormat("es-MX", { dateStyle: "medium", timeZone: "America/Mexico_City" }).format(new Date(opp.createdAt))}
                     {" · Cierre: "}{opp.stage === "open" ? "pendiente" : opp.closedAt

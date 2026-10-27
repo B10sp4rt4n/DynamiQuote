@@ -7,6 +7,7 @@ import {
   resolveBidirectionalPricing,
   type BidirectionalPricingInput,
 } from "@/lib/domain/pricing-engine";
+import { optionSetSchema, labelOptionQuote, isOptionPlaceholder, type OptionLabel } from "@/lib/domain/commercial-options";
 import { prisma } from "@/lib/db/prisma";
 import type { QuoteLineEditorInput } from "@/lib/validations/quote-editor";
 
@@ -44,6 +45,8 @@ export type UpdatedQuoteVersion = {
 };
 
 export type QuoteVersionHistoryItem = {
+  commercialOption?: OptionLabel | null;
+  emptyPlaceholder?: boolean;
   avgMargin: number | null;
   closedAt: string | null;
   createdAt: string | null;
@@ -128,8 +131,9 @@ function resolvePricingInput(line: QuoteLineEditorInput): BidirectionalPricingIn
 export async function getEditableQuoteLinesByTenant(
   tenantId: string,
   quoteId: string,
+  client: Prisma.TransactionClient | typeof prisma = prisma,
 ): Promise<EditableQuoteLine[] | null> {
-  const quote = await prisma.quote.findFirst({
+  const quote = await client.quote.findFirst({
     select: { quote_id: true },
     where: {
       quote_id: quoteId,
@@ -141,7 +145,7 @@ export async function getEditableQuoteLinesByTenant(
     return null;
   }
 
-  const lines = await prisma.quote_lines.findMany({
+  const lines = await client.quote_lines.findMany({
     orderBy: [{ created_at: "asc" }, { line_id: "asc" }],
     select: {
       cost_unit: true,
@@ -186,8 +190,13 @@ export async function updateQuoteLinesByTenant(
     versionCreated: boolean;
   } | null
 > {
-  const quote = await prisma.quote.findFirst({
+  return prisma.$transaction(async (tx) => {
+    const source = await tx.quote.findFirst({ where: { quote_id: quoteId, tenantId }, select: { quote_group_id: true } });
+    if (!source) return null;
+    await tx.$executeRaw`SELECT pg_advisory_xact_lock(hashtextextended(${`quote-group:${tenantId}:${source.quote_group_id ?? quoteId}`}, 0))`;
+  const quote = await tx.quote.findFirst({
     select: {
+      input_metadata: true,
       client_id: true,
       client_name: true,
       created_by_user_id: true,
@@ -210,9 +219,10 @@ export async function updateQuoteLinesByTenant(
     return null;
   }
 
+  if (isOptionPlaceholder(quote.input_metadata,quote.quote_id)) throw new Error("Este registro inicial vacío es histórico. Abre una opción comercial para trabajar.");
   const quoteGroupId = quote.quote_group_id ?? quote.quote_id;
 
-  const latestInGroup = await prisma.quote.findFirst({
+  const latestInGroup = await tx.quote.findFirst({
     orderBy: [{ version: "desc" }, { createdAt: "desc" }],
     select: { version: true },
     where: {
@@ -223,7 +233,7 @@ export async function updateQuoteLinesByTenant(
 
   const nextVersion = (latestInGroup?.version ?? quote.version ?? 1) + 1;
   const newQuoteId = buildVersionedQuoteId(quoteGroupId, nextVersion);
-  const quoteCountInGroup = await prisma.quote.count({
+  const quoteCountInGroup = await tx.quote.count({
     where: {
       quote_group_id: quoteGroupId,
       tenantId,
@@ -232,7 +242,7 @@ export async function updateQuoteLinesByTenant(
 
   const lineIds = inputLines.map((line) => line.lineId);
 
-  const existing = await prisma.quote_lines.findMany({
+  const existing = await tx.quote_lines.findMany({
     select: {
       created_at: true,
       description_corrections: true,
@@ -292,7 +302,7 @@ export async function updateQuoteLinesByTenant(
   const resultQuoteId = shouldCreateNewVersion ? newQuoteId : quoteId;
   const resultVersion = shouldCreateNewVersion ? nextVersion : (quote.version ?? 1);
 
-  await prisma.$transaction(async (tx) => {
+  {
     if (!shouldCreateNewVersion) {
       await tx.quote.update({
         data: {
@@ -418,9 +428,9 @@ export async function updateQuoteLinesByTenant(
         }
       }
     }
-  });
+  }
 
-  const freshLines = await getEditableQuoteLinesByTenant(tenantId, resultQuoteId);
+  const freshLines = await getEditableQuoteLinesByTenant(tenantId, resultQuoteId, tx);
 
   if (!freshLines) {
     return null;
@@ -449,6 +459,7 @@ export async function updateQuoteLinesByTenant(
     },
       versionCreated: shouldCreateNewVersion,
   };
+  });
 }
 
 export async function getQuoteVersionsByTenant(
@@ -475,6 +486,7 @@ export async function getQuoteVersionsByTenant(
   const versions = await prisma.quote.findMany({
     orderBy: [{ version: "desc" }, { createdAt: "desc" }],
     select: {
+      input_metadata: true, parent_quote_id: true,
       avg_margin: true,
       closed_at: true,
       createdAt: true,
@@ -491,10 +503,15 @@ export async function getQuoteVersionsByTenant(
     },
   });
 
+  const configured = versions.map(v=>optionSetSchema.safeParse((v.input_metadata as Record<string,unknown>|null)?.commercialOptionsSet)).find(p=>p.success);
+  const set = configured?.success ? configured.data : null;
+  const optionQuotes = versions.map(v=>({quoteId:v.quote_id,parentQuoteId:v.parent_quote_id,opportunityId:null,clientId:null,revenue:Number(v.total_revenue??0),createdAt:v.createdAt?.toISOString()??""}));
   return {
     currentQuoteId: quote.quote_id,
     quoteGroupId,
     versions: versions.map((item) => ({
+      commercialOption: set ? labelOptionQuote(set,item.quote_id,optionQuotes) : null,
+      emptyPlaceholder: set?.placeholderQuoteIds.includes(item.quote_id) ?? false,
       avgMargin: item.avg_margin ? item.avg_margin.toNumber() : null,
       closedAt: item.closed_at ? item.closed_at.toISOString() : null,
       createdAt: item.createdAt ? item.createdAt.toISOString() : null,
