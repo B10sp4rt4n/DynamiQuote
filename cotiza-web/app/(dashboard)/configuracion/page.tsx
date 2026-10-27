@@ -21,7 +21,7 @@ export default async function SettingsPage() {
   const canSwitchTenant = tenant.isSuperAdmin;
   const canManageUsers = tenant.isSuperAdmin || tenant.userRole === "owner" || tenant.userRole === "admin";
 
-  const [users, issuerProfiles, marginPolicy, tenantOptions, tenantProfile, threatDownImportEnabled] = await Promise.all([
+  const [users, issuerProfiles, marginPolicy, tenantOptions, tenantProfile, threatDownImportEnabled, guidedQuotingEnabled] = await Promise.all([
     canManageUsers
       ? tenant.isSuperAdmin
         ? getAppUsersForSuperAdmin()
@@ -32,11 +32,13 @@ export default async function SettingsPage() {
     canSwitchTenant ? getActiveTenants() : Promise.resolve([{ id: tenant.id, name: tenant.name, slug: tenant.slug }]),
     getTenantProfileByTenant(tenant.id),
     isTenantCapabilityEnabled(tenant.id, THREATDOWN_PDF_IMPORT),
+    isTenantCapabilityEnabled(tenant.id, "cpq_guided_preview"),
   ]);
 
   return (
     <SettingsShell
       threatDownImportEnabled={threatDownImportEnabled}
+      guidedQuotingEnabled={guidedQuotingEnabled}
       canSwitchTenant={canSwitchTenant}
       canManageAllTenants={tenant.isSuperAdmin}
       canViewTenantConfig={tenant.isSuperAdmin || tenant.userRole === "owner"}

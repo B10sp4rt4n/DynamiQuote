@@ -9,6 +9,7 @@ import type { AppUserSummary, IssuerProfileSummary } from "@/lib/db/settings";
 import type { ActiveTenantOption, ClosingContactLevel, TenantProfile } from "@/lib/db/tenants";
 
 type SettingsShellProps = {
+  guidedQuotingEnabled?: boolean;
   threatDownImportEnabled?: boolean;
   canSwitchTenant?: boolean;
   canViewTenantConfig?: boolean;
@@ -2231,6 +2232,7 @@ function IssuerProfilesTab({
 const VALID_TABS: Tab[] = ["tenant", "users", "issuer", "policy"];
 
 export function SettingsShell({
+  guidedQuotingEnabled = false,
   threatDownImportEnabled = false,
   canSwitchTenant = false,
   users,
@@ -2371,6 +2373,7 @@ export function SettingsShell({
             {canManageAllTenants ? <CreateTenantForm /> : null}
             {canManageAllTenants ? <TenantCapabilitiesPanel key={tenantId} tenantName={tenantName}
               initialEnabled={threatDownImportEnabled} /> : null}
+            {canManageAllTenants ? <TenantCapabilitiesPanel key={`${tenantId}-cpq`} tenantName={tenantName} initialEnabled={guidedQuotingEnabled} capabilityKey="cpq_guided_preview" /> : null}
             <TenantConfigurationTab
               issuerProfiles={issuerProfilesState}
               marginPolicy={marginPolicyState}

@@ -23,6 +23,7 @@ type TenantOption = {
 };
 
 type QuoteShellProps = {
+  guidedQuotingEnabled?: boolean;
   threatDownImportEnabled?: boolean;
   canSwitchTenant?: boolean;
   currentTenantSlug: string;
@@ -75,6 +76,7 @@ function sortQuotes(items: QuoteGroupSummary[]): QuoteGroupSummary[] {
 }
 
 export function QuoteShell({
+  guidedQuotingEnabled = false,
   threatDownImportEnabled = false,
   canSwitchTenant = false,
   currentTenantSlug,
@@ -841,6 +843,7 @@ export function QuoteShell({
         <QuoteLineEditor
           threatDownImportEnabled={threatDownImportEnabled}
           forcedSelectedQuoteId={activeQuoteId}
+          guidedQuotingEnabled={guidedQuotingEnabled}
           onSelectedQuoteChange={handleSelectedQuoteChange}
           onQuoteVersionSaved={handleQuoteVersionSaved}
           quotes={editorQuotes}

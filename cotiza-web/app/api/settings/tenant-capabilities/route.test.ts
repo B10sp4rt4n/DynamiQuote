@@ -21,6 +21,15 @@ describe("tenant capability administration", () => {
     expect(m.set).toHaveBeenCalledWith({ tenantId: "current-tenant", ...body, actor: { userId: "u1", isSuperAdmin: true } });
   });
   it("allows superadmin to disable", async () => { m.set.mockResolvedValue(false); const result = await PATCH(request({ ...body, enabled: false })); expect(await result.json()).toEqual({ ...body, enabled: false }); });
+  it("enables the CPQ preview only in the authenticated tenant", async () => {
+    expect((await PATCH(request({ capabilityKey: "cpq_guided_preview", enabled: true }))).status).toBe(200);
+    expect(m.set).toHaveBeenCalledWith({ tenantId: "current-tenant", capabilityKey: "cpq_guided_preview", enabled: true, actor: { userId: "u1", isSuperAdmin: true } });
+  });
+  it("does not let an owner enable CPQ", async () => {
+    m.tenant.mockResolvedValue({ id: "current-tenant", userId: "u1", isSuperAdmin: false });
+    expect((await PATCH(request({ capabilityKey: "cpq_guided_preview", enabled: true }))).status).toBe(403);
+    expect(m.set).not.toHaveBeenCalled();
+  });
   it.each([{ ...body, tenantId: "other" }, { ...body, enabled: "true" }, { ...body, capabilityKey: "other" }, null])("rejects invalid or cross-tenant payload %j", async (payload) => { expect((await PATCH(request(payload))).status).toBe(422); expect(m.set).not.toHaveBeenCalled(); });
   it("rate limits changes", async () => { m.rate.mockReturnValue({ allowed: false }); expect((await PATCH(request())).status).toBe(429); expect(m.set).not.toHaveBeenCalled(); });
   it("rejects inactive tenants", async () => { m.set.mockResolvedValue(null); expect((await PATCH(request())).status).toBe(404); });

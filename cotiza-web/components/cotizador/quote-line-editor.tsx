@@ -2,6 +2,7 @@
 
 import { useEffect, useMemo, useRef, useState } from "react";
 import { useRouter } from "next/navigation";
+import Link from "next/link";
 import { Cell, Pie, PieChart, ResponsiveContainer, Tooltip } from "recharts";
 
 import type { QuoteGroupSummary } from "@/lib/db/quotes";
@@ -27,6 +28,7 @@ type ApiErrorResponse = {
 export type QuoteVersionSaved = QuoteVersionResponse;
 
 type QuoteLineEditorProps = {
+  guidedQuotingEnabled?: boolean;
   threatDownImportEnabled?: boolean;
   forcedSelectedQuoteId?: string | null;
   onSelectedQuoteChange?: (quoteId: string, quote?: QuoteGroupSummary) => void;
@@ -444,6 +446,7 @@ function StatusBadge({ status }: { status: string }) {
 }
 
 export function QuoteLineEditor({
+  guidedQuotingEnabled = false,
   threatDownImportEnabled = false,
   forcedSelectedQuoteId,
   onSelectedQuoteChange,
@@ -1305,6 +1308,7 @@ export function QuoteLineEditor({
 
   return (
     <section className="mt-6 rounded-xl border border-zinc-200 bg-white p-6 shadow-sm text-zinc-900">
+      {guidedQuotingEnabled && selectedQuoteId ? <Link className="inline-block rounded-lg border border-indigo-300 px-3 py-2 text-indigo-800" href={`/cotizaciones/guiada/${encodeURIComponent(selectedQuoteId)}`} onClick={(e: React.MouseEvent<HTMLAnchorElement>) => { if (hasUnsavedTemplateChanges && !window.confirm("La simulación usa la versión guardada. ¿Quieres abrirla?")) e.preventDefault(); }}>Cotización guiada · Simular alternativas</Link> : null}
       <div className="space-y-4">
         <div className="max-w-2xl">
           <h2 className="text-xl font-semibold text-zinc-900">Editor de lineas</h2>

@@ -4,7 +4,7 @@ import { getCurrentTenantContext } from "@/lib/auth/tenant-context";
 import { setTenantCapability, THREATDOWN_PDF_IMPORT } from "@/lib/db/tenant-capabilities";
 import { enforceRateLimit, getRequestIdentity } from "@/lib/utils/rate-limit";
 
-const schema = z.object({ capabilityKey: z.literal(THREATDOWN_PDF_IMPORT), enabled: z.boolean() }).strict();
+const schema = z.object({ capabilityKey: z.enum([THREATDOWN_PDF_IMPORT, "cpq_guided_preview"]), enabled: z.boolean() }).strict();
 
 export async function PATCH(request: Request) {
   const tenant = await getCurrentTenantContext();
