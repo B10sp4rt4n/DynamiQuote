@@ -9,6 +9,7 @@ import type { AppUserSummary, IssuerProfileSummary } from "@/lib/db/settings";
 import type { ActiveTenantOption, ClosingContactLevel, TenantProfile } from "@/lib/db/tenants";
 
 type SettingsShellProps = {
+  crmWorkspaceEnabled?: boolean;
   guidedQuotingEnabled?: boolean;
   threatDownImportEnabled?: boolean;
   canSwitchTenant?: boolean;
@@ -2233,6 +2234,7 @@ const VALID_TABS: Tab[] = ["tenant", "users", "issuer", "policy"];
 
 export function SettingsShell({
   guidedQuotingEnabled = false,
+  crmWorkspaceEnabled = false,
   threatDownImportEnabled = false,
   canSwitchTenant = false,
   users,
@@ -2374,6 +2376,7 @@ export function SettingsShell({
             {canManageAllTenants ? <TenantCapabilitiesPanel key={tenantId} tenantName={tenantName}
               initialEnabled={threatDownImportEnabled} /> : null}
             {canManageAllTenants ? <TenantCapabilitiesPanel key={`${tenantId}-cpq`} tenantName={tenantName} initialEnabled={guidedQuotingEnabled} capabilityKey="cpq_guided_preview" /> : null}
+            {canManageAllTenants ? <TenantCapabilitiesPanel key={`${tenantId}-crm`} tenantName={tenantName} initialEnabled={crmWorkspaceEnabled} capabilityKey="crm_workspace_pilot" /> : null}
             <TenantConfigurationTab
               issuerProfiles={issuerProfilesState}
               marginPolicy={marginPolicyState}

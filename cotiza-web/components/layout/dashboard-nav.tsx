@@ -14,9 +14,10 @@ const navigation = [
   { href: "/configuracion", label: "Configuracion" },
 ];
 
-export function DashboardNav() {
+export function DashboardNav({ crmWorkspaceEnabled = false }: { crmWorkspaceEnabled?: boolean }) {
+  const links = crmWorkspaceEnabled ? [navigation[0], navigation[1], { href: "/crm", label: "CRM · Piloto" }, ...navigation.slice(2)] : navigation;
   const pathname = usePathname();
-  const activeHref = navigation
+  const activeHref = links
     .filter(({ href }) => pathname === href || pathname.startsWith(`${href}/`))
     .reduce<string | undefined>(
       (active, { href }) => (!active || href.length > active.length ? href : active),
@@ -25,7 +26,7 @@ export function DashboardNav() {
 
   return (
     <nav aria-label="Menu principal" className="flex flex-wrap gap-2">
-      {navigation.map(({ href, label }) => (
+      {links.map(({ href, label }) => (
         <Link
           aria-current={activeHref === href ? "page" : undefined}
           className={`inline-flex min-h-11 items-center rounded-lg px-3 py-2 text-sm font-medium transition focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-zinc-900 ${

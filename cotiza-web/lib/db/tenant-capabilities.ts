@@ -13,12 +13,12 @@ export async function isTenantCapabilityEnabled(tenantId: string, capabilityKey:
 
 export async function setTenantCapability(input: {
   tenantId: string;
-  capabilityKey: typeof THREATDOWN_PDF_IMPORT | "cpq_guided_preview";
+  capabilityKey: typeof THREATDOWN_PDF_IMPORT | "cpq_guided_preview" | "crm_workspace_pilot";
   enabled: boolean;
   actor: { userId: string; isSuperAdmin: boolean };
 }): Promise<boolean | null> {
   if (!input.actor.isSuperAdmin) throw new Error("Solo superadmin puede habilitar capacidades");
-  if (input.capabilityKey !== THREATDOWN_PDF_IMPORT && input.capabilityKey !== "cpq_guided_preview") throw new Error("Capacidad no soportada");
+  if (input.capabilityKey !== THREATDOWN_PDF_IMPORT && input.capabilityKey !== "cpq_guided_preview" && input.capabilityKey !== "crm_workspace_pilot") throw new Error("Capacidad no soportada");
   return prisma.$transaction(async (tx) => {
     // Serialize writes per tenant/key so concurrent changes retain the correct previous state.
     await tx.$queryRaw`SELECT pg_advisory_xact_lock(hashtextextended(${input.tenantId + ":" + input.capabilityKey}, 0))::text`;
