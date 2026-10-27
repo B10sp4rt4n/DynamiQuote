@@ -1308,7 +1308,12 @@ export function QuoteLineEditor({
 
   return (
     <section className="mt-6 rounded-xl border border-zinc-200 bg-white p-6 shadow-sm text-zinc-900">
-      {guidedQuotingEnabled && selectedQuoteId ? <Link className="inline-block rounded-lg border border-indigo-300 px-3 py-2 text-indigo-800" href={`/cotizaciones/guiada/${encodeURIComponent(selectedQuoteId)}`} onClick={(e: React.MouseEvent<HTMLAnchorElement>) => { if (hasUnsavedTemplateChanges && !window.confirm("La simulación usa la versión guardada. ¿Quieres abrirla?")) e.preventDefault(); }}>Cotización guiada · Simular alternativas</Link> : null}
+      {guidedQuotingEnabled && selectedQuoteId ? (
+        <aside className="mb-5 flex flex-wrap items-center justify-between gap-4 rounded-xl border-2 border-indigo-300 bg-indigo-50 p-4 text-zinc-900">
+          <div><h3 className="font-semibold">Compara opciones antes de cotizar</h3><p className="mt-1 text-sm text-zinc-700">Prueba distintas cantidades y precios, y compara venta, utilidad y margen sin modificar esta cotización.</p></div>
+          <Link className="rounded-lg bg-indigo-700 px-5 py-3 font-semibold text-white hover:bg-indigo-800 focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-indigo-700" href={`/cotizaciones/guiada/${encodeURIComponent(selectedQuoteId)}`} onClick={(e: React.MouseEvent<HTMLAnchorElement>) => { if (hasUnsavedTemplateChanges && !window.confirm("La comparación usa la versión guardada. Guarda tus cambios antes si quieres incluirlos. ¿Abrir la comparación?")) e.preventDefault(); }}>Comparar opciones</Link>
+        </aside>
+      ) : null}
       <div className="space-y-4">
         <div className="max-w-2xl">
           <h2 className="text-xl font-semibold text-zinc-900">Editor de lineas</h2>

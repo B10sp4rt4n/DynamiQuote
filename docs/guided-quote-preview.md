@@ -11,3 +11,9 @@ El cálculo usa centavos enteros, rechaza totales no seguros y compara el margen
 Esta entrega es una simulación: no guarda alternativas, cotizaciones ni propuestas, no envía mensajes ni invoca facturación. El editor existente sigue siendo el recorrido operativo. Falta integrar una selección con el escritor común idempotente, persistir procedencia y revisión, validar catálogo/tarifario por tenant y ejecutar el piloto interactivo antes de habilitar generación de propuestas desde aquí.
 
 No se habilitaron tenants ni se modificaron datos productivos durante su preparación.
+
+## Acceso y legibilidad
+
+El editor muestra una tarjeta destacada «Comparar opciones». El panel y sus campos fijan fondo y color de texto para conservar contraste con la preferencia oscura del navegador. Las opciones se inicializan con copias de la partida guardada y se reinician al elegir otra partida.
+
+La modalidad inicial permite una simulación hipotética con esos importes editables, sin afirmar vigencia y con `validUntil: null`. No consulta ni inventa precios vigentes. La modalidad «Usar una nueva referencia de precios» conserva la validación de referencia y fecha. No se persisten simulaciones; para aplicar resultados se usa el editor existente y la autorización normal.

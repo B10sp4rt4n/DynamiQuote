@@ -1,5 +1,5 @@
 import { describe, it, expect } from "vitest";
-import { previewGuidedQuote } from "./guided-quote";
+import { previewGuidedQuote, previewSavedQuote } from "./guided-quote";
 const input = () => ({ currency: "MXN", term: "Anual", source: "Fixture histórico COT-0066; no tarifario vigente", validUntil: "2026-10-30", asOf: "2026-10-26", minMarginPct: 19,
   fixed: [{ sku: "TDADV12N250", quantity: 480, costUnit: 395, priceUnit: 470 }, { sku: "TDADVS12N1", quantity: 20, costUnit: 1290, priceUnit: 1900 }],
   alternatives: [{ name: "100 buzones", sku: "TDEMS12N100", quantity: 100, costUnit: 310, priceUnit: 390 }, { name: "250 buzones", sku: "TDEMS12N250", quantity: 250, costUnit: 295, priceUnit: 370 }, { name: "500 buzones", sku: "TDEMS12N500", quantity: 500, costUnit: 280, priceUnit: 350 }] });
@@ -43,5 +43,20 @@ describe("guided quote preview", () => {
   it("rejects unsafe totals", () => {
     const item = { sku: "X", quantity: 1000000, costUnit: 1e9, priceUnit: 1e9 };
     expect(() => previewGuidedQuote({ ...input(), fixed: Array(100).fill(item) })).toThrow("rango");
+  });
+});
+
+describe("saved-price hypothetical simulation", () => {
+  it("calculates edited saved prices without claiming a validity date", () => {
+    const saved = { ...input(), validUntil: undefined };
+    const result = previewSavedQuote(saved);
+    expect(result.map(r => r.totalRevenue)).toEqual([302600,356100,438600]);
+    expect(result.every(r => r.validUntil === null)).toBe(true);
+  });
+  it("still validates quantities and monetary precision", () => {
+    const data = input(); data.alternatives[0].quantity = 0;
+    expect(() => previewSavedQuote(data)).toThrow();
+    data.alternatives[0].quantity = 1; data.alternatives[0].priceUnit = 0.001;
+    expect(() => previewSavedQuote(data)).toThrow();
   });
 });

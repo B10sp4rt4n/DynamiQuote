@@ -17,5 +17,5 @@ export default async function Page({ params }: { params: Promise<{ quoteId: stri
   if (!lines?.length) notFound();
   const policy = await getMarginPolicyByTenant(tenant.id);
   const asOf = new Intl.DateTimeFormat("en-CA", { timeZone: "America/Mexico_City", year: "numeric", month: "2-digit", day: "2-digit" }).format(new Date());
-  return <><Link href={`/cotizaciones?quoteId=${encodeURIComponent(quoteId)}`}>Volver a la cotización</Link><p className="my-3">Versión de origen: {quoteId}</p><GuidedQuotePreview lines={lines} minMarginPct={policy.minMarginPct} asOf={asOf} /></>;
+  return <div className="text-zinc-900"><Link className="font-semibold text-indigo-800 underline" href={`/cotizaciones?quoteId=${encodeURIComponent(quoteId)}`}>Volver a la cotización</Link><p className="my-3">Versión de origen: {quoteId}</p><GuidedQuotePreview sourceQuoteId={quoteId} lines={lines} minMarginPct={policy.minMarginPct} asOf={asOf} /></div>;
 }

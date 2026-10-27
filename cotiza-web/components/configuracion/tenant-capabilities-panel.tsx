@@ -19,20 +19,20 @@ export function TenantCapabilitiesPanel({ tenantName, initialEnabled, capability
       const result = await response.json();
       if (!response.ok) throw new Error(result.error ?? "No se pudo guardar la capacidad.");
       setSaved(result.enabled); setEnabled(result.enabled);
-      setMessage(`${capabilityKey === "cpq_guided_preview" ? "Simulación CPQ" : "Importación ThreatDown"} ${result.enabled ? "habilitada" : "deshabilitada"} para ${tenantName}.`);
+      setMessage(`${capabilityKey === "cpq_guided_preview" ? "Comparación de opciones" : "Importación ThreatDown"} ${result.enabled ? "habilitada" : "deshabilitada"} para ${tenantName}.`);
       router.refresh();
     } catch (error) {
       setMessage(error instanceof Error ? error.message : "No se pudo guardar la capacidad.");
     } finally { setSaving(false); }
   }
   return (
-    <form onSubmit={save} className="rounded-xl border border-zinc-200 bg-white p-5">
+    <form onSubmit={save} className="rounded-xl border border-zinc-200 bg-white p-5 text-zinc-900">
       <h2 className="font-semibold text-zinc-900">Capacidades de {tenantName}</h2>
       <p className="mt-1 text-sm text-zinc-600">Sólo superadmin puede habilitar capacidades por empresa.</p>
       <label className="mt-4 flex items-center gap-3 text-sm">
         <input type="checkbox" checked={enabled} disabled={saving}
           onChange={(event) => { setEnabled(event.target.checked); setMessage(null); }} />
-        {capabilityKey === "cpq_guided_preview" ? "Cotización guiada: simulación de alternativas" : "Importar cotizaciones PDF de ThreatDown"}
+        {capabilityKey === "cpq_guided_preview" ? "Comparar opciones de cotización" : "Importar cotizaciones PDF de ThreatDown"}
       </label>
       <p className="mt-2 text-xs text-zinc-500">{capabilityKey === "cpq_guided_preview" ? "Permite comparar alternativas sin guardar cambios. Los permisos del vendedor siguen aplicando." : "Permite revisar el PDF y crear una nueva versión de cotización. Los permisos de cada usuario siguen aplicando."}</p>
       <button type="submit" disabled={saving || enabled === saved}

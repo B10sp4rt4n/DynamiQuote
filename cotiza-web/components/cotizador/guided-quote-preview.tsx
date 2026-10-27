@@ -1,43 +1,51 @@
 "use client";
 import { useState } from "react";
-import { previewGuidedQuote } from "@/lib/domain/guided-quote";
+import { z } from "zod";
+import { previewGuidedQuote, previewSavedQuote } from "@/lib/domain/guided-quote";
 import type { EditableQuoteLine } from "@/lib/db/quote-editor";
 
 const format = (n: number) => new Intl.NumberFormat("es-MX", { style: "currency", currency: "MXN" }).format(n);
-export function GuidedQuotePreview({ lines, minMarginPct, asOf }: { lines: EditableQuoteLine[]; minMarginPct: number; asOf: string }) {
+const fieldClass = "mt-1 block w-full rounded-lg border border-zinc-400 bg-white p-2 text-zinc-900 placeholder:text-zinc-500 focus:outline-2 focus:outline-indigo-700";
+function optionsFromLine(line?: EditableQuoteLine) {
+  return ["Opción actual", "Opción 2", "Opción 3"].map(name => ({ name, quantity: String(line?.quantity ?? 1), sku: line?.sku ?? "", costUnit: String(line?.costUnit ?? 0), priceUnit: String(line?.priceUnit ?? 0) }));
+}
+export function GuidedQuotePreview({ lines, minMarginPct, asOf, sourceQuoteId }: { lines: EditableQuoteLine[]; minMarginPct: number; asOf: string; sourceQuoteId: string }) {
   const [variable, setVariable] = useState(lines[lines.length - 1]?.lineId ?? "");
+  const [basis, setBasis] = useState("saved");
   const [source, setSource] = useState("");
   const [validUntil, setValidUntil] = useState("");
-  const [term, setTerm] = useState("Anual");
-  const [alternatives, setAlternatives] = useState([100,250,500].map(quantity => ({ name: `${quantity} unidades`, quantity: String(quantity), sku: "", costUnit: "", priceUnit: "" })));
+  const [term, setTerm] = useState("Mismo plazo que la versión guardada");
+  const [alternatives, setAlternatives] = useState(() => optionsFromLine(lines[lines.length - 1]));
   const [results, setResults] = useState<ReturnType<typeof previewGuidedQuote> | null>(null);
   const [error, setError] = useState<string | null>(null);
   function invalidate() { setResults(null); setError(null); }
   function calculate() {
     try {
-      if (!lines.some(l => l.lineId === variable)) throw new Error("Selecciona la partida que varía");
-      if (alternatives.some(a => !a.costUnit.trim() || !a.priceUnit.trim())) throw new Error("Captura costo y precio para cada alternativa");
-      setResults(previewGuidedQuote({ currency: "MXN", term, source, validUntil, asOf, minMarginPct,
+      if (!lines.some(l => l.lineId === variable)) throw new Error("Selecciona el producto que quieres comparar.");
+      if (alternatives.some(a => !a.sku.trim())) throw new Error("Completa el SKU de cada opción.");
+      if (alternatives.some(a => !a.costUnit.trim() || !a.priceUnit.trim())) throw new Error("Completa el costo y precio de cada opción.");
+      if (basis === "reference" && (!source.trim() || !validUntil)) throw new Error("Completa la referencia de precios y su fecha de vigencia.");
+      if (basis === "reference" && validUntil < asOf) throw new Error("La referencia de precios está vencida. Revisa su vigencia.");
+      const input = { currency: "MXN", term, source: basis === "saved" ? `Simulación basada en ${sourceQuoteId}; importes editables, sin validar vigencia` : source, validUntil, asOf, minMarginPct,
         fixed: lines.filter(l => l.lineId !== variable),
-        alternatives: alternatives.map(a => ({ ...a, quantity: Number(a.quantity), costUnit: Number(a.costUnit), priceUnit: Number(a.priceUnit) })) }));
+        alternatives: alternatives.map(a => ({ ...a, quantity: Number(a.quantity), costUnit: Number(a.costUnit), priceUnit: Number(a.priceUnit) })) };
+      setResults(basis === "saved" ? previewSavedQuote(input) : previewGuidedQuote(input));
       setError(null);
-    } catch (e) { setResults(null); setError(e instanceof Error ? e.message : "Revisa los datos"); }
+    } catch (e) {
+      setResults(null);
+      setError(e instanceof z.ZodError ? "Revisa que las cantidades sean enteros mayores que cero, los importes tengan hasta dos decimales y todos los campos estén completos." : e instanceof Error ? e.message : "Revisa los datos.");
+    }
   }
-  return <section className="space-y-5 rounded-xl border bg-white p-6">
-    <h1 className="text-xl font-semibold">Cotización guiada · Comparar alternativas</h1>
-    <p>Simulación en MXN con precios por la vigencia completa. La referencia capturada debe revisarse con el fabricante. La simulación no guarda cambios ni concede autorizaciones.</p>
-    <label className="block">Partida que cambia entre alternativas<select className="block w-full border p-2" value={variable} onChange={e => { invalidate(); setVariable(e.target.value); }}>{lines.map(l => <option key={l.lineId} value={l.lineId}>{l.sku} · {l.description}</option>)}</select></label>
-    <p>Las demás partidas conservan cantidades, costos y precios de esta versión guardada.</p>
-    <div className="overflow-x-auto"><table className="w-full text-left"><caption>Base fija de todas las alternativas</caption><thead><tr><th>SKU</th><th>Cantidad</th><th>Costo unitario MXN</th><th>Precio unitario MXN</th></tr></thead><tbody>{lines.filter(l => l.lineId !== variable).map(l => <tr key={l.lineId}><td>{l.sku}</td><td>{l.quantity}</td><td>{format(l.costUnit)}</td><td>{format(l.priceUnit)}</td></tr>)}</tbody></table></div>
-    <div className="grid gap-3 sm:grid-cols-3">
-      <label>Referencia de precios<input className="block w-full border p-2" value={source} onChange={e => { invalidate(); setSource(e.target.value); }} placeholder="Cotización del fabricante o tarifario" /></label>
-      <label>Referencia válida hasta<input className="block w-full border p-2" type="date" value={validUntil} onChange={e => { invalidate(); setValidUntil(e.target.value); }} /></label>
-      <label>Vigencia del servicio<input className="block w-full border p-2" value={term} onChange={e => { invalidate(); setTerm(e.target.value); }} /></label>
-    </div>
-    <p>Confirma el SKU y los precios de cada alternativa. Cambiar la cantidad no selecciona automáticamente otro SKU o tramo de precios.</p>
-    {alternatives.map((a,i) => <fieldset key={i} className="grid gap-2 rounded-lg border p-3 sm:grid-cols-5"><legend>Alternativa {i+1}</legend>{(["name","sku","quantity","costUnit","priceUnit"] as const).map((field,index) => <label key={field}>{["Nombre","SKU","Cantidad","Costo unitario MXN","Precio unitario MXN"][index]}<input className="block w-full border p-2" value={a[field]} onChange={e => { invalidate(); setAlternatives(old => old.map((item,j) => j === i ? { ...item, [field]: e.target.value } : item)); }} /></label>)}</fieldset>)}
-    <button className="rounded-lg bg-zinc-900 px-4 py-2 text-white" onClick={calculate} type="button">Comparar alternativas</button>
-    {error ? <p role="alert">Revisa la referencia, la vigencia y los importes. {error}</p> : null}
-    {results ? <div className="overflow-x-auto"><p>Referencia: {source} · {term} · válida hasta {validUntil}</p><table className="w-full text-left"><thead><tr>{["Alternativa","Costo","Venta","Utilidad","Margen","Evaluación orientativa"].map(h => <th key={h} className="p-2">{h}</th>)}</tr></thead><tbody>{results.map((r,i) => <tr key={i}><td className="p-2">{r.name}</td><td>{format(r.totalCost)}</td><td>{format(r.totalRevenue)}</td><td>{format(r.profit)}</td><td>{r.marginPct.toFixed(4)}%</td><td>{r.belowMinimum ? `Debajo del mínimo ${minMarginPct}%` : "Evaluar aprobación formal"}</td></tr>)}</tbody></table><p>La autorización final se resuelve en la propuesta y sus reglas vigentes.</p></div> : null}
+  return <section className="space-y-6 rounded-xl border border-zinc-300 bg-white p-6 text-zinc-900 shadow-sm">
+    <div><h1 className="text-2xl font-bold">Comparar opciones de cotización</h1><p className="mt-2 text-zinc-700">Cambia cantidades o precios para ver cuánto venderías y qué margen quedaría. Esta comparación no modifica la cotización.</p></div>
+    <div className="rounded-lg border border-indigo-200 bg-indigo-50 p-4 text-indigo-950"><p className="font-semibold">1. Elige el producto · 2. Ajusta las opciones · 3. Compara resultados</p><p className="mt-2 text-sm">Las tres opciones empiezan con los mismos valores guardados. Cambia los que quieras probar. Los importes son MXN y corresponden al plazo completo, antes de impuestos.</p></div>
+    <label className="block font-semibold">Producto que quieres comparar<select className={fieldClass} value={variable} onChange={e => { invalidate(); setVariable(e.target.value); setAlternatives(optionsFromLine(lines.find(l => l.lineId === e.target.value))); }}>{lines.map(l => <option key={l.lineId} value={l.lineId}>{l.sku} · {l.description}</option>)}</select></label>
+    <div className="grid gap-4 sm:grid-cols-2"><label className="font-semibold">Precios para la simulación<select className={fieldClass} value={basis} onChange={e => { invalidate(); setBasis(e.target.value); }}><option value="saved">Partir de los precios guardados</option><option value="reference">Usar una nueva referencia de precios</option></select></label><label className="font-semibold">Plazo del servicio<input className={fieldClass} value={term} onChange={e => { invalidate(); setTerm(e.target.value); }} /></label></div>
+    {basis === "reference" ? <div className="grid gap-4 sm:grid-cols-2"><label>Referencia de precios<input className={fieldClass} value={source} onChange={e => { invalidate(); setSource(e.target.value); }} placeholder="Número de cotización del fabricante o tarifario" /></label><label>Referencia válida hasta<input className={fieldClass} type="date" value={validUntil} onChange={e => { invalidate(); setValidUntil(e.target.value); }} /></label></div> : <p className="rounded-lg bg-amber-50 p-3 text-sm text-amber-950">Se copiaron los precios de esta versión como punto de partida. Puedes editarlos para simular; su vigencia no está verificada. Cambiar cantidad no aplica descuentos por volumen ni cambia el SKU.</p>}
+    {alternatives.map((a,i) => <fieldset key={i} className="grid gap-3 rounded-xl border border-zinc-300 bg-zinc-50 p-4 sm:grid-cols-2 lg:grid-cols-5"><legend className="px-2 font-semibold text-indigo-900">{i === 0 ? "Opción 1 · Punto de partida" : `Opción ${i+1} · Ajusta los valores`}</legend>{(["name","sku","quantity","costUnit","priceUnit"] as const).map((field,index) => <label key={field} className="text-sm font-medium">{["Nombre","SKU","Cantidad","Costo unitario MXN","Precio unitario MXN"][index]}<input className={fieldClass} type={index >= 2 ? "number" : "text"} min={index === 2 ? 1 : index > 2 ? 0 : undefined} step={index === 2 ? 1 : index > 2 ? "0.01" : undefined} value={a[field]} onChange={e => { invalidate(); setAlternatives(old => old.map((item,j) => j === i ? { ...item, [field]: e.target.value } : item)); }} /></label>)}</fieldset>)}
+    <button className="rounded-lg bg-indigo-700 px-6 py-3 font-semibold text-white hover:bg-indigo-800 focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-indigo-700" onClick={calculate} type="button">Comparar resultados</button>
+    {error ? <p role="alert" className="rounded-lg border border-red-300 bg-red-50 p-4 font-medium text-red-900">{error}</p> : null}
+    {results ? <div aria-live="polite" className="space-y-3 rounded-xl border border-zinc-300 p-4"><h2 className="text-xl font-bold">Resultado de la comparación</h2><p className="text-sm text-zinc-700">{results[0]?.source} · {term}{basis === "reference" ? ` · válida hasta ${validUntil}` : ""}</p><div className="overflow-x-auto"><table className="w-full text-left text-sm"><thead className="bg-zinc-100"><tr>{["Opción","Costo total","Venta total","Utilidad","Margen","Revisión de margen"].map(h => <th key={h} className="p-3">{h}</th>)}</tr></thead><tbody>{results.map((r,i) => <tr key={i} className="border-t border-zinc-200"><td className="p-3 font-semibold">{r.name}</td><td className="p-3 whitespace-nowrap">{format(r.totalCost)}</td><td className="p-3 whitespace-nowrap">{format(r.totalRevenue)}</td><td className="p-3 whitespace-nowrap">{format(r.profit)}</td><td className="p-3">{r.marginPct.toFixed(4)}%</td><td className={`p-3 font-semibold ${r.belowMinimum ? "text-amber-900" : "text-emerald-800"}`}>{r.belowMinimum ? `Requiere revisión: mínimo ${minMarginPct}%` : "Cumple mínimo de margen"}</td></tr>)}</tbody></table></div><p className="text-sm text-zinc-700">El costo y la venta incluyen las demás partidas de esta versión. Este resultado no autoriza una propuesta. Para usar una opción, registra los cambios en el editor y sigue el flujo habitual de autorización.</p></div> : null}
+    <details className="rounded-lg border border-zinc-300 p-4"><summary className="cursor-pointer font-semibold">Ver las demás partidas incluidas en todas las opciones</summary><div className="mt-3 overflow-x-auto"><table className="w-full text-left text-sm"><thead><tr>{["SKU","Cantidad","Costo unitario MXN","Precio unitario MXN"].map(h => <th key={h} className="p-2">{h}</th>)}</tr></thead><tbody>{lines.filter(l => l.lineId !== variable).map(l => <tr key={l.lineId} className="border-t"><td className="p-2">{l.sku}</td><td className="p-2">{l.quantity}</td><td className="p-2">{format(l.costUnit)}</td><td className="p-2">{format(l.priceUnit)}</td></tr>)}</tbody></table></div></details>
   </section>;
 }
