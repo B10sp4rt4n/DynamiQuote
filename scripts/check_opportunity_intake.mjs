@@ -48,6 +48,25 @@ try {
   await server.start();
   const connection = `postgresql://postgres:postgres@${server.getServerConn()}/postgres`;
   console.log('Disposable database ready on loopback; repository schema initialized.');
+  async function runRelease(mode, host = '127.0.0.1', expectedCode = 0) {
+    const child = spawn(process.execPath, [path.join(root, 'scripts/release_opportunity_intake.mjs'),
+      `--mode=${mode}`, `--expected-host=${host}`, '--database=postgres'], {
+      cwd: root, stdio: ['ignore', 'pipe', 'pipe'], env: { ...process.env, DATABASE_URL: connection },
+    });
+    let output = ''; child.stdout.on('data', chunk => { output += chunk; }); child.stderr.on('data', chunk => { output += chunk; });
+    const code = await new Promise((resolve, reject) => { child.once('error', reject); child.once('exit', resolve); });
+    if (code !== expectedCode) throw new Error(`Release helper ${mode} failed: ${output}`);
+    if (expectedCode === 0) console.log(output.trim());
+  }
+  await db.exec("ALTER TABLE opportunities DROP COLUMN intake_metadata");
+  await db.exec("INSERT INTO opportunities (opportunity_id, opportunity_number, tenant_id, title, created_at) VALUES ('release-fixture', 'OPP-RELEASE', 'fixture-tenant', 'Synthetic opportunity', '2026-01-01')");
+  await runRelease('apply', 'wrong.example', 1);
+  await runRelease('check');
+  if ((await db.query("SELECT 1 FROM information_schema.columns WHERE table_name='opportunities' AND column_name='intake_metadata'")).rows.length) throw new Error('Dry run changed the schema');
+  await runRelease('apply');
+  await runRelease('apply');
+  await runRelease('verify');
+  await db.exec("DELETE FROM opportunities WHERE opportunity_id='release-fixture'");
   const child = spawn(process.execPath, [
     resolveCli('vitest', 'vitest.mjs'), 'run',
     'lib/db/opportunity-intake.integration.test.ts',

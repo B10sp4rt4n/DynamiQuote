@@ -38,3 +38,30 @@ PGLITE_MODULE=/tmp/cotiza-intake-pg/node_modules/@electric-sql/pglite/dist/index
 PGLITE_SOCKET_MODULE=/tmp/cotiza-intake-pg/node_modules/@electric-sql/pglite-socket/dist/index.js \
 node scripts/check_opportunity_intake.mjs
 ```
+
+
+## Publicación desde el entorno existente de Vercel
+
+`release_opportunity_intake.mjs` es un comando de una sola liberación; el build
+normal nunca lo ejecuta. Recibe `--mode=check|apply|verify`, `--expected-host`
+y `--database` explícitos. Usa únicamente DATABASE_URL ya configurada en el
+entorno del despliegue; no recibe ni guarda contraseñas en argumentos o Git.
+Rechaza un destino distinto y usa conexión directa con verificación TLS.
+
+`check` copia oportunidades dentro de una tabla temporal privada de la misma
+sesión, prueba dos veces la adición de columna, compara huellas de los campos
+anteriores y hace ROLLBACK. Ninguna fila sale de la base. Es un ensayo aislado
+de esta migración aditiva, no un respaldo completo de la base.
+
+`apply` obtiene un lock con espera máxima de tres segundos, repite el ensayo,
+aplica exactamente el ALTER versionado, comprueba tipo JSONB nullable,
+conteo/huella de campos previos e históricos sin relleno y confirma la
+transacción. Un error revierte la operación. `verify` sólo consulta y revierte
+su transacción. Los logs contienen estados, conteos y huellas, sin contenidos
+comerciales ni credenciales. La aplicación anterior es compatible con la
+columna nullable para revertir hosting si se necesitara.
+
+El harness local valida rechazo de otro host, ensayo sin cambio de esquema,
+aplicación/repetición, consulta y preservación de un registro sintético antes
+de ejecutar las diez integraciones del flujo. La ejecución remota y la
+publicación sólo quedan acreditadas con sus logs y estado de despliegue.
