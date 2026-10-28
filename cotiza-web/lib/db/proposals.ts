@@ -794,6 +794,7 @@ export async function createProposalFromQuoteByTenant(
     select: {
       client_id: true,
       client_name: true,
+      status: true,
       opportunity_id: true,
       proposal_name: true,
       quote_group_id: true,
@@ -819,7 +820,7 @@ export async function createProposalFromQuoteByTenant(
     },
   });
 
-  if (!quote) {
+  if (!quote || quote.status === "archived") {
     return null;
   }
 
@@ -898,6 +899,9 @@ export async function createProposalFromQuoteByTenant(
   const subject = input.subject?.trim() || quote.proposal_name || "Propuesta Comercial";
 
   await prisma.$transaction(async (tx) => {
+    await tx.$executeRaw`SELECT pg_advisory_xact_lock(hashtextextended(${`quote-group:${tenantId}:${quote.quote_group_id ?? quote.quote_id}`}, 0))`;
+    const currentQuote = await tx.quote.findFirst({ where: { tenantId, quote_id: quote.quote_id }, select: { status: true } });
+    if (!currentQuote || currentQuote.status === "archived") throw new Error("Reactiva el borrador antes de crear una propuesta");
     await tx.proposals.create({
       data: {
         closed_at: null,

@@ -340,7 +340,8 @@ function CompareSummaryPanel({
   const diffMarginPp = targetMargin - baseMargin;
 
   const STATUS_PANEL: Record<string, string> = {
-    closed: "Cerrada", draft: "Borrador", rejected: "Rechazada", sent: "Enviada",
+    archived: "Archivada",
+  closed: "Cerrada", draft: "Borrador", rejected: "Rechazada", sent: "Enviada",
   };
 
   function fmtCur(v: number) {
@@ -421,6 +422,7 @@ function CompareSummaryPanel({
 }
 
 const STATUS_LABELS: Record<string, string> = {
+  archived: "Archivada",
   closed: "Cerrada",
   draft: "Borrador",
   rejected: "Rechazada",
@@ -584,7 +586,8 @@ export function QuoteLineEditor({
   }
 
   async function handleQuoteChange(nextQuoteId: string) {
-    if (nextQuoteId === selectedQuoteId || saving || versioningNow || creatingProposal) return;
+    if (nextQuoteId === selectedQuoteId || saving || versioningNow || creatingProposal || takingAction) return;
+    setShowArchive(false); setArchiveReason("");
     const version = versionGroupId === selectedQuote?.quoteGroupId
       ? versions.find((item) => item.quoteId === nextQuoteId) : undefined;
     const nextQuote = quotes.find((quote) => quote.quoteId === nextQuoteId)
@@ -1173,9 +1176,11 @@ export function QuoteLineEditor({
 
   const [actionMessage, setActionMessage] = useState<string | null>(null);
   const [takingAction, setTakingAction] = useState(false);
+  const [archiveReason, setArchiveReason] = useState("");
+  const [showArchive, setShowArchive] = useState(false);
 
-  async function handleQuoteAction(action: "send" | "close" | "reject", reason?: string) {
-    if (!selectedQuoteId) return;
+  async function handleQuoteAction(action: "send" | "close" | "reject" | "archive" | "restore", reason?: string) {
+    if (!selectedQuoteId || hasUnsavedTemplateChanges) return;
 
     setTakingAction(true);
     setActionMessage(null);
@@ -1216,9 +1221,11 @@ export function QuoteLineEditor({
           ? "Cotizacion marcada como Enviada"
           : action === "close"
             ? buildNudgeMessage()
-            : "Version rechazada",
+            : action === "archive" ? "Borrador archivado. La oportunidad conserva su estado." : action === "restore" ? "Borrador reactivado" : "Version rechazada",
       );
       await loadVersions(selectedQuoteId);
+      setShowArchive(false); setArchiveReason("");
+      router.refresh();
     } catch {
       setActionMessage("Error de red al ejecutar la accion");
     } finally {
@@ -1333,9 +1340,9 @@ export function QuoteLineEditor({
             }}
             value={selectedQuoteId}
           >
-            {quotes.map((quote) => (
+            {quotes.filter(quote => quote.quoteId === selectedQuoteId || quote.status !== "archived").map((quote) => (
               <option key={quote.quoteId} value={quote.quoteId}>
-                {quote.quoteGroupId} · {versions.find(v=>v.quoteId===quote.quoteId)?.commercialOption ? `Opción ${versions.find(v=>v.quoteId===quote.quoteId)!.commercialOption!.ordinal}` : `v${quote.version}`} · {STATUS_LABELS[quote.status] ?? quote.status} — {quote.clientName}
+                {quote.quoteGroupId} · {versions.find(v=>v.quoteId===quote.quoteId)?.commercialOption ? `Opción ${versions.find(v=>v.quoteId===quote.quoteId)!.commercialOption!.ordinal}` : `v${quote.version}`} · {STATUS_LABELS[versions.find(v => v.quoteId === quote.quoteId)?.status ?? quote.status] ?? quote.status} — {quote.clientName}
               </option>
             ))}
           </select>
@@ -1351,7 +1358,7 @@ export function QuoteLineEditor({
           </button>
           <button
             className="rounded-lg bg-zinc-900 px-3 py-2 text-sm font-semibold text-white hover:bg-zinc-700 disabled:opacity-60"
-            disabled={saving || versioningNow || loading || lines.length === 0 || currentVersion?.emptyPlaceholder === true}
+            disabled={saving || versioningNow || loading || lines.length === 0 || currentVersion?.emptyPlaceholder === true || currentStatus === "archived"}
             onClick={() => {
               void saveLines();
             }}
@@ -1361,7 +1368,7 @@ export function QuoteLineEditor({
           </button>
           <button
             className="rounded-lg border border-indigo-300 bg-indigo-50 px-3 py-2 text-sm font-semibold text-indigo-800 hover:bg-indigo-100 disabled:opacity-50"
-            disabled={saving || versioningNow || loading || lines.length === 0 || currentVersion?.emptyPlaceholder === true}
+            disabled={saving || versioningNow || loading || lines.length === 0 || currentVersion?.emptyPlaceholder === true || currentStatus === "archived"}
             onClick={() => {
               const confirmed = window.confirm(
                 "Se creara una nueva version en borrador con el estado actual. \n\n¿Deseas continuar?",
@@ -1387,7 +1394,7 @@ export function QuoteLineEditor({
           </button>
           <button
             className="rounded-lg border border-sky-300 px-3 py-2 text-sm font-medium text-sky-700 hover:bg-sky-50 disabled:opacity-50"
-            disabled={creatingProposal || !selectedQuoteId}
+            disabled={creatingProposal || !selectedQuoteId || currentStatus === "archived"}
             onClick={() => {
               void createProposalFromSelectedQuote();
             }}
@@ -1397,7 +1404,7 @@ export function QuoteLineEditor({
           </button>
           <button
             className="rounded-lg border border-emerald-400 px-3 py-2 text-sm font-medium text-emerald-700 hover:bg-emerald-50 disabled:opacity-50"
-            disabled={!selectedQuoteId || loading || saving || hasUnsavedTemplateChanges}
+            disabled={!selectedQuoteId || loading || saving || hasUnsavedTemplateChanges || currentStatus === "archived"}
             title={hasUnsavedTemplateChanges ? "Guarda los cambios antes de usar una plantilla" : undefined}
             onClick={() => setShowPackagePicker(true)}
             type="button"
@@ -1406,12 +1413,12 @@ export function QuoteLineEditor({
           </button>
           <SaveTemplateButton key={selectedQuoteId} quoteId={selectedQuoteId} disabled={!selectedQuoteId || loading || saving || lines.length === 0 || hasUnsavedTemplateChanges} />
           {threatDownImportEnabled ? <button className="min-h-11 rounded-lg border border-sky-300 px-3 py-2 text-sm font-medium text-sky-700 hover:bg-sky-50 disabled:opacity-50"
-            disabled={!selectedQuote || saving}
+            disabled={!selectedQuote || saving || currentStatus === "archived"}
             aria-haspopup="dialog"
             onClick={() => setShowThreatDownImport(true)} type="button">Importar PDF ThreatDown</button> : null}
           <button
             className="rounded-lg border border-zinc-300 px-3 py-2 text-sm font-medium text-zinc-700 hover:bg-zinc-100 disabled:opacity-50"
-            disabled={!selectedQuoteId}
+            disabled={!selectedQuoteId || currentStatus === "archived"}
             onClick={addPartida}
             type="button"
           >
@@ -1431,7 +1438,7 @@ export function QuoteLineEditor({
           {currentStatus === "draft" && (
             <button
               className="rounded-lg border border-sky-300 bg-sky-50 px-3 py-1.5 text-xs font-medium text-sky-800 hover:bg-sky-100 disabled:opacity-50"
-              disabled={takingAction}
+              disabled={takingAction || hasUnsavedTemplateChanges}
               onClick={() => { void handleQuoteAction("send"); }}
               type="button"
             >
@@ -1442,7 +1449,7 @@ export function QuoteLineEditor({
             <>
               <button
                 className="rounded-lg border border-emerald-300 bg-emerald-50 px-3 py-1.5 text-xs font-medium text-emerald-800 hover:bg-emerald-100 disabled:opacity-50"
-                disabled={takingAction}
+                disabled={takingAction || hasUnsavedTemplateChanges}
                 onClick={() => { void handleQuoteAction("close"); }}
                 type="button"
               >
@@ -1450,7 +1457,7 @@ export function QuoteLineEditor({
               </button>
               <button
                 className="rounded-lg border border-rose-300 bg-rose-50 px-3 py-1.5 text-xs font-medium text-rose-800 hover:bg-rose-100 disabled:opacity-50"
-                disabled={takingAction}
+                disabled={takingAction || hasUnsavedTemplateChanges}
                 onClick={() => { void handleQuoteAction("reject"); }}
                 type="button"
               >
@@ -1458,10 +1465,21 @@ export function QuoteLineEditor({
               </button>
             </>
           )}
+          {currentStatus === "draft" ? <button type="button" disabled={takingAction || hasUnsavedTemplateChanges} className="rounded-lg border border-zinc-400 bg-white px-3 py-2 text-xs font-semibold text-zinc-900 disabled:opacity-50" onClick={() => setShowArchive(!showArchive)}>Archivar borrador</button> : null}
+          {currentStatus === "archived" ? <button type="button" disabled={takingAction} className="rounded-lg border border-indigo-400 bg-white px-3 py-2 text-xs font-semibold text-indigo-900" onClick={() => void handleQuoteAction("restore")}>Reactivar borrador</button> : null}
+          {hasUnsavedTemplateChanges ? <p className="text-xs text-amber-900">Guarda o recarga tus cambios antes de cambiar el estado.</p> : null}
           {actionMessage && (
             <p className="text-xs text-zinc-600">{actionMessage}</p>
           )}
         </div>
+        {showArchive && currentStatus === "draft" ? <fieldset disabled={takingAction} className="mt-3 space-y-3 rounded-lg border border-zinc-300 bg-white p-4 text-sm text-zinc-900">
+          <legend className="px-1 font-semibold">Archivar este borrador</legend>
+          <p>Conserva esta versión y sus partidas. No cierra la oportunidad ni modifica propuestas. Los borradores con propuesta vinculada se conservan desde el flujo de Propuestas.</p>
+          <label className="block">Motivo<input aria-label="Motivo para archivar" className="mt-1 block w-full rounded-lg border border-zinc-400 bg-white p-2 text-zinc-900" maxLength={500} value={archiveReason} onChange={e => setArchiveReason(e.target.value)} /></label>
+          <button type="button" disabled={archiveReason.trim().length < 3 || takingAction || hasUnsavedTemplateChanges} className="rounded-lg bg-zinc-900 px-3 py-2 font-semibold text-white disabled:opacity-50" onClick={() => void handleQuoteAction("archive", archiveReason)}>Confirmar archivo</button>
+          <button type="button" className="ml-3 underline" onClick={() => setShowArchive(false)}>Cancelar</button>
+        </fieldset> : null}
+        {currentStatus === "archived" ? <p className="mt-3 rounded-lg border border-zinc-300 bg-zinc-50 p-4 text-sm text-zinc-900"><strong>Borrador archivado.</strong> Se conserva para consulta. Reactívalo antes de guardar, importar o crear una propuesta.{currentVersion?.archiveReason ? ` Motivo: ${currentVersion.archiveReason}` : ""}</p> : null}
         {currentStatus === "closed" && (
           <div className="mt-3 rounded-lg border border-amber-200 bg-amber-50 px-4 py-3 text-sm text-amber-800">
             <strong className="font-semibold">Versión cerrada</strong> — Esta versión se conserva como referencia comercial.
@@ -1715,7 +1733,7 @@ export function QuoteLineEditor({
         </div>
       )}
 
-      <div className="mt-6 overflow-x-auto rounded-xl border border-zinc-200">
+      <fieldset aria-label="Partidas de cotización" disabled={currentStatus === "archived"} className="mt-6 overflow-x-auto rounded-xl border border-zinc-200">
         <table className="min-w-full divide-y divide-zinc-200 text-sm">
           <thead className="bg-zinc-50 text-left text-zinc-600">
             <tr>
@@ -1958,7 +1976,7 @@ export function QuoteLineEditor({
             ) : null}
           </tbody>
         </table>
-      </div>
+      </fieldset>
     </section>
   );
 }

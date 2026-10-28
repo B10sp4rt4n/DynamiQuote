@@ -59,6 +59,8 @@ function buildEffectiveVendors(opportunities: OpportunityWithStage[], vendors: P
 
 function computeSummary(opportunities: OpportunityWithStage[]): PipelineSummary {
   const summary: PipelineSummary = {
+    paused: { amount: 0, count: 0 },
+    no_decision: { amount: 0, count: 0 },
     lost: { amount: 0, count: 0 },
     open: { amount: 0, count: 0 },
     won: { amount: 0, count: 0 },
@@ -351,6 +353,11 @@ export function PipelineDashboard({
         </div>
       </div>
 
+      <div className="flex flex-wrap gap-3 text-sm text-zinc-800">
+        <button type="button" className="rounded-lg border border-zinc-300 bg-white p-3" onClick={() => goToStage("paused")}>Pausadas: {summary.paused.count}</button>
+        <button type="button" className="rounded-lg border border-zinc-300 bg-white p-3" onClick={() => goToStage("no_decision")}>Cerradas sin decisión: {summary.no_decision.count}</button>
+        <span className="self-center text-xs">Fuera del total abierto y de la tasa de cierre ganado/perdido.</span>
+      </div>
       {filteredOpportunities.length === 0 ? (
         <div className="rounded-xl border border-dashed border-zinc-300 bg-white px-6 py-12 text-center">
           <p className="text-sm text-zinc-500">
@@ -360,6 +367,7 @@ export function PipelineDashboard({
       ) : (
         <PipelineTable
           canChooseOptions={canSeeAll}
+          viewerUserId={viewerUserId}
           closeFilter={closeFilter}
           onCloseFilterChange={setCloseFilter}
           onSearchChange={setSearch}
