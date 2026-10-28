@@ -302,12 +302,17 @@ export async function getOpportunityPipelineByTenant(
   tenantId: string,
   viewerUserId: string | null = null,
   canSeeAll = true,
+  // The CRM opts out; existing pipeline callers retain unassigned history.
+  includeUnassigned = true,
 ): Promise<OpportunityWithStage[]> {
+  if (!canSeeAll && !includeUnassigned && !viewerUserId) return [];
   const opportunities = await prisma.opportunities.findMany({
     orderBy: { created_at: "desc" },
     where: {
       tenant_id: tenantId,
-      ...(canSeeAll ? {} : { OR: [{ owner_user_id: viewerUserId }, { owner_user_id: null }] }),
+      ...(canSeeAll ? {} : includeUnassigned
+        ? { OR: [{ owner_user_id: viewerUserId }, { owner_user_id: null }] }
+        : { owner_user_id: viewerUserId }),
     },
   });
 

@@ -11,7 +11,7 @@ function formatDueDate(iso: string): string {
   );
 }
 
-export function PendingTasksPanel({ tasks: initialTasks }: { tasks: PendingTask[] }) {
+export function PendingTasksPanel({ tasks: initialTasks, linkClients = true }: { tasks: PendingTask[]; linkClients?: boolean }) {
   const [tasks, setTasks] = useState(initialTasks);
   const [completingId, setCompletingId] = useState<string | null>(null);
   const [error, setError] = useState<string | null>(null);
@@ -58,9 +58,9 @@ export function PendingTasksPanel({ tasks: initialTasks }: { tasks: PendingTask[
                 <div className="min-w-0">
                   <p className="truncate text-sm font-medium text-zinc-900">{task.description}</p>
                   <p className="text-xs text-zinc-500">
-                    <Link className="hover:underline" href={`/configuracion/clientes`}>
+                    {linkClients ? <Link className="hover:underline" href={`/configuracion/clientes`}>
                       {task.clientCompany}
-                    </Link>
+                    </Link> : task.clientCompany}
                     {task.opportunityNumber ? ` · ${task.opportunityNumber}` : ""}
                     {" · vence "}
                     {formatDueDate(task.dueDate)}

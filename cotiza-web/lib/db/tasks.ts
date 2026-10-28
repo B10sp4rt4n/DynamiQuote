@@ -49,13 +49,18 @@ export async function getPendingTasksByTenant(
   tenantId: string,
   viewerUserId: string | null = null,
   canSeeAll = true,
+  // The CRM opts out; existing callers retain unassigned history.
+  includeUnassigned = true,
 ): Promise<PendingTask[]> {
+  if (!canSeeAll && !includeUnassigned && !viewerUserId) return [];
   const rows = await prisma.tasks.findMany({
     orderBy: { due_date: "asc" },
     where: {
       completed_at: null,
       tenant_id: tenantId,
-      ...(canSeeAll ? {} : { OR: [{ created_by_user_id: viewerUserId }, { created_by_user_id: null }] }),
+      ...(canSeeAll ? {} : includeUnassigned
+        ? { OR: [{ created_by_user_id: viewerUserId }, { created_by_user_id: null }] }
+        : { created_by_user_id: viewerUserId }),
     },
   });
 
