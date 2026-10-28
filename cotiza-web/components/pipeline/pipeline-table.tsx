@@ -1,18 +1,21 @@
 "use client";
 
 import Link from "next/link";
+import { OpportunityDispositionControl } from "@/components/pipeline/opportunity-disposition";
 import { OpportunityAmount } from "./opportunity-amount";
 import { useMemo } from "react";
 
 import type { OpportunityStage, OpportunityWithStage } from "@/lib/db/opportunities";
 
 const STAGE_LABELS: Record<OpportunityStage, string> = {
+  paused: "Pausada", no_decision: "Cerrada sin decisión",
   lost: "Perdida",
   open: "Abierta",
   won: "Ganada",
 };
 
 const STAGE_BADGE_CLASSES: Record<OpportunityStage, string> = {
+  paused: "bg-amber-100 text-amber-900", no_decision: "bg-zinc-100 text-zinc-800",
   lost: "bg-rose-50 text-rose-700",
   open: "bg-blue-50 text-blue-700",
   won: "bg-emerald-50 text-emerald-700",
@@ -23,6 +26,8 @@ export type PipelineCloseFilter = "all" | "calculable" | "undated" | "review";
 
 const FILTER_OPTIONS: Array<{ value: PipelineStageFilter; label: string }> = [
   { label: "Todas", value: "all" },
+  { label: "Pausadas", value: "paused" },
+  { label: "Cerradas sin decisión", value: "no_decision" },
   { label: "Abiertas", value: "open" },
   { label: "Ganadas", value: "won" },
   { label: "Perdidas", value: "lost" },
@@ -43,6 +48,7 @@ function formatDate(iso: string | null, timeZone = "UTC"): string {
 
 export function PipelineTable({
   canChooseOptions = false,
+  viewerUserId = null,
   closeFilter,
   onCloseFilterChange,
   onSearchChange,
@@ -52,6 +58,7 @@ export function PipelineTable({
   stageFilter,
 }: {
   canChooseOptions?: boolean;
+  viewerUserId?: string | null;
   closeFilter: PipelineCloseFilter;
   onCloseFilterChange: (next: PipelineCloseFilter) => void;
   onSearchChange: (next: string) => void;
@@ -64,7 +71,7 @@ export function PipelineTable({
     const byStage = stageFilter === "all" ? opportunities : opportunities.filter((opp) => opp.stage === stageFilter);
     const byClose = byStage.filter((opp) => {
       if (closeFilter === "all") return true;
-      if (opp.stage === "open") return false;
+      if (opp.stage === "open" || opp.stage === "paused") return false;
       if (closeFilter === "calculable") return opp.lifetimeDays !== null;
       if (closeFilter === "undated") return opp.closedAt === null;
       return opp.closedAt !== null && opp.lifetimeDays === null;
@@ -163,10 +170,10 @@ export function PipelineTable({
                   <td className="px-4 py-2.5 text-zinc-700"><OpportunityAmount amount={opp.amount} options={opp.commercialOptions} opportunityId={opp.opportunityId} canChoose={canChooseOptions} stage={opp.stage} /></td>
                   <td className="whitespace-nowrap px-4 py-2.5 text-zinc-500">{formatDate(opp.createdAt, "America/Mexico_City")}</td>
                   <td className="whitespace-nowrap px-4 py-2.5 text-zinc-500">
-                    {opp.stage === "open" ? "Pendiente" : opp.closedAt ? formatDate(opp.closedAt, "America/Mexico_City") : "Sin fecha registrada"}
+                    {opp.stage === "paused" ? "En pausa" : opp.stage === "open" ? "Pendiente" : opp.closedAt ? formatDate(opp.closedAt, "America/Mexico_City") : "Sin fecha registrada"}
                   </td>
                   <td className="whitespace-nowrap px-4 py-2.5 text-zinc-700">
-                    {opp.lifetimeDays === null ? "Sin duración calculable" : `${opp.lifetimeDays} días${opp.stage === "open" ? " abierta" : " al cierre"}`}
+                    {opp.lifetimeDays === null ? "Sin duración calculable" : `${opp.lifetimeDays} días${opp.stage === "paused" ? " hasta la pausa" : opp.stage === "open" ? " abierta" : " al cierre"}`}
                   </td>
                   <td className="hidden px-4 py-2.5 text-zinc-500 sm:table-cell">
                     {formatDate(opp.expectedCloseDate)}
@@ -177,6 +184,7 @@ export function PipelineTable({
                     >
                       {STAGE_LABELS[opp.stage]}
                     </span>
+                    <OpportunityDispositionControl key={`${opp.opportunityId}:${opp.disposition?.revision ?? 0}`} opportunity={opp} canManage={canChooseOptions || Boolean(viewerUserId && opp.ownerUserId === viewerUserId)} />
                   </td>
                 </tr>
               ))}

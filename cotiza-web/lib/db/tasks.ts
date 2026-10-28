@@ -1,4 +1,5 @@
 import "server-only";
+import { getOpportunitiesByClientForTenant } from "./opportunities";
 
 import { randomUUID } from "crypto";
 
@@ -182,15 +183,6 @@ export async function getOpenOpportunitiesByClientForTenant(
   tenantId: string,
   clientId: string,
 ): Promise<OpenOpportunityOption[]> {
-  const rows = await prisma.opportunities.findMany({
-    orderBy: { created_at: "desc" },
-    select: { opportunity_id: true, opportunity_number: true, title: true },
-    where: { client_id: clientId, stage: "open", tenant_id: tenantId },
-  });
-
-  return rows.map((row) => ({
-    opportunityId: row.opportunity_id,
-    opportunityNumber: row.opportunity_number,
-    title: row.title,
-  }));
+  const rows = await getOpportunitiesByClientForTenant(tenantId, clientId);
+  return rows.filter(row => row.stage === "open").map(row => ({ opportunityId: row.opportunityId, opportunityNumber: row.opportunityNumber, title: row.title }));
 }

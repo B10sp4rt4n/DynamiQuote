@@ -6,7 +6,7 @@ import { mexicoCalendarDate } from "./commercial-close-date";
 export function opportunityLifetimeDays(
   createdAt: string,
   closedAt: string | null,
-  stage: "open" | "won" | "lost",
+  stage: "open" | "won" | "lost" | "no_decision",
   now: Date,
 ): number | null {
   const end = stage === "open" ? now.getTime() : closedAt ? Date.parse(closedAt) : NaN;

@@ -37,7 +37,7 @@ export default async function PipelinePage() {
       <div>
         <h1 className="text-2xl font-semibold tracking-tight text-slate-950">Pipeline</h1>
         <p className="mt-1 text-sm text-zinc-500">
-          Todas las oportunidades del tenant, agrupadas por su desenlace real (ganada/perdida según el outcome de sus propuestas).
+          Oportunidades activas, pausadas y cerradas. Las pausadas y las cerradas sin decisión quedan fuera del total abierto y de la tasa ganado/perdido.
         </p>
       </div>
 

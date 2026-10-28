@@ -1,3 +1,4 @@
+import { setQuoteArchived } from "@/lib/db/quote-archive";
 import { NextResponse } from "next/server";
 
 import { getCurrentTenantContext } from "@/lib/auth/tenant-context";
@@ -49,7 +50,7 @@ export async function PATCH(request: Request, context: RouteContext) {
     return NextResponse.json({ error: "Cotizacion no encontrada" }, { status: 404 });
   }
 
-  const parsed = quoteActionSchema.safeParse(await request.json());
+  const parsed = quoteActionSchema.safeParse(await request.json().catch(() => null));
 
   if (!parsed.success) {
     return NextResponse.json(
@@ -62,7 +63,10 @@ export async function PATCH(request: Request, context: RouteContext) {
 
   let result: Record<string, unknown> | null = null;
 
-  if (action === "send") {
+  if (action === "archive" || action === "restore") {
+    if (!tenant.userId) return NextResponse.json({ error: "No autorizado" }, { status: 401 });
+    result = await setQuoteArchived(tenant.id, quoteId, userId, canSeeAll, action === "archive", reason);
+  } else if (action === "send") {
     result = await markQuoteAsSentByTenant(tenant.id, quoteId, userId);
   } else if (action === "close") {
     result = await closeQuoteVersionByTenant(tenant.id, quoteId, userId, reason);
@@ -72,7 +76,7 @@ export async function PATCH(request: Request, context: RouteContext) {
 
   if (!result) {
     return NextResponse.json(
-      { error: "Cotizacion no encontrada o la transicion no esta permitida" },
+      { error: "Acción no permitida. Solo se archivan borradores sin propuesta vinculada; conserva el historial de las propuestas desde su propio flujo" },
       { status: 422 },
     );
   }

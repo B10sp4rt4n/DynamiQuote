@@ -1,4 +1,5 @@
 import Link from "next/link";
+import { OpportunityDispositionControl } from "@/components/pipeline/opportunity-disposition";
 import { OpportunityAmount } from "@/components/pipeline/opportunity-amount";
 
 import { ClientTasksPanel } from "@/components/clientes/client-tasks-panel";
@@ -61,12 +62,14 @@ const OUTCOME_CLASSES: Record<NonNullable<ClientProposalHistoryItem["outcome"]>,
 };
 
 const STAGE_LABELS: Record<OpportunityStage, string> = {
+  paused: "Pausada", no_decision: "Cerrada sin decisión",
   lost: "Perdida",
   open: "Abierta",
   won: "Ganada",
 };
 
 const STAGE_CLASSES: Record<OpportunityStage, string> = {
+  paused: "bg-amber-100 text-amber-900", no_decision: "bg-zinc-100 text-zinc-800",
   lost: "bg-rose-100 text-rose-800",
   open: "bg-blue-100 text-blue-800",
   won: "bg-emerald-100 text-emerald-800",
@@ -174,12 +177,13 @@ export default async function ClientDetailPage({ params }: ClientDetailPageProps
                     <OpportunityAmount amount={opp.amount} options={opp.commercialOptions} opportunityId={opp.opportunityId} canChoose={canSeeAll} stage={opp.stage} />
                     {opp.expectedCloseDate ? ` · cierre esperado ${formatDate(opp.expectedCloseDate)}` : ""}
                   </div>
+                  <OpportunityDispositionControl key={`${opp.opportunityId}:${opp.disposition?.revision ?? 0}`} opportunity={opp} canManage={canSeeAll || Boolean(tenant.userId && opp.ownerUserId === tenant.userId)} />
                   <p className="text-xs text-zinc-500">
                     Inicio: {new Intl.DateTimeFormat("es-MX", { dateStyle: "medium", timeZone: "America/Mexico_City" }).format(new Date(opp.createdAt))}
-                    {" · Cierre: "}{opp.stage === "open" ? "pendiente" : opp.closedAt
+                    {" · Cierre: "}{opp.stage === "paused" ? "en pausa" : opp.stage === "open" ? "pendiente" : opp.closedAt
                       ? new Intl.DateTimeFormat("es-MX", { dateStyle: "medium", timeZone: "America/Mexico_City" }).format(new Date(opp.closedAt))
                       : "sin fecha registrada"}
-                    {opp.lifetimeDays !== null ? ` · ${opp.lifetimeDays} días${opp.stage === "open" ? " abierta" : " al cierre"}` : " · duración desconocida"}
+                    {opp.lifetimeDays !== null ? ` · ${opp.lifetimeDays} días${opp.stage === "paused" ? " hasta la pausa" : opp.stage === "open" ? " abierta" : " al cierre"}` : " · duración desconocida"}
                   </p>
                 </div>
                 <span className={`shrink-0 rounded-full px-2.5 py-0.5 text-xs font-medium ${STAGE_CLASSES[opp.stage]}`}>

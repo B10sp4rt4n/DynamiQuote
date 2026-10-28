@@ -6,6 +6,7 @@ import { Prisma } from "@prisma/client";
 import { prisma } from "@/lib/db/prisma";
 import { getCommercialOpportunityOverrides } from "@/lib/db/commercial-options";
 import type { CommercialOptionsSummary } from "@/lib/domain/commercial-options";
+import { readDisposition, type OpportunityDisposition } from "@/lib/domain/opportunity-disposition";
 import { intakeSummary } from "@/lib/domain/opportunity-intake-summary";
 import { opportunityLifetimeDays } from "@/lib/domain/opportunity-lifetime";
 
@@ -84,9 +85,11 @@ export async function createOpportunityForTenant(
   return opportunityId;
 }
 
-export type OpportunityStage = "open" | "won" | "lost";
+export type OpportunityStage = "open" | "won" | "lost" | "paused" | "no_decision";
 
 export type OpportunityWithStage = {
+  disposition?: OpportunityDisposition;
+  canChangeDisposition?: boolean;
   commercialOptions?: CommercialOptionsSummary;
   intakePending?: boolean;
   intakeQuoteId?: string;
@@ -242,26 +245,31 @@ async function attachDerivedStage(
   const now = new Date();
 
   return opportunities
-    .filter((o) => !commercial.aliases.has(o.opportunity_id) && (!financials.get(o.opportunity_id)?.isFullyDiscarded || commercial.overrides.has(o.opportunity_id)))
+    .filter((o) => !commercial.aliases.has(o.opportunity_id) && (!financials.get(o.opportunity_id)?.isFullyDiscarded || commercial.overrides.has(o.opportunity_id) || readDisposition(o.intake_metadata) !== null))
     .map((o) => {
       const fin = financials.get(o.opportunity_id);
       const option = commercial.overrides.get(o.opportunity_id);
-      const stage: OpportunityStage = option?.stage ?? (fin?.hasWon ? "won" : fin?.hasLost ? "lost" : "open");
-      const amount = option ? option.amount : fin ? (stage === "won" ? fin.wonAmount : stage === "lost" ? fin.lostAmount : fin.openAmount) : 0;
+      const disposition = readDisposition(o.intake_metadata);
+      const derived = option?.stage ?? (fin?.hasWon ? "won" : fin?.hasLost ? "lost" : "open");
+      const stage: OpportunityStage = derived !== "open" ? derived : disposition?.state ?? "open";
+      const amount = option ? option.amount : fin ? (stage === "won" ? fin.wonAmount : derived === "lost" ? fin.lostAmount : fin.openAmount) : 0;
       // Same source as stage: first currently winning decision, otherwise
       // first losing one. An undated historical decision makes it unknown.
-      const closedAt = option ? option.closedAt : stage === "won" ? fin?.wonAt ?? null : stage === "lost" ? fin?.lostAt ?? null : null;
+      const closedAt = derived !== "open" ? (option ? option.closedAt : derived === "won" ? fin?.wonAt ?? null : fin?.lostAt ?? null)
+        : stage === "no_decision" || stage === "lost" ? disposition?.changedAt ?? null : null;
 
       const startedAt = option ? opportunities.filter(member=>option.memberOpportunityIds.includes(member.opportunity_id)).reduce((earliest,member)=>member.created_at < earliest ? member.created_at : earliest,o.created_at) : o.created_at;
       return {
         amount,
+        ...(disposition ? { disposition } : {}),
+        canChangeDisposition: derived === "open",
         ...intakeSummary(o.intake_metadata),
         ...(option ? { commercialOptions: option.summary } : {}),
         clientCompany: o.client_id ? (clientCompanyById.get(o.client_id) ?? null) : null,
         clientId: o.client_id,
         createdAt: startedAt.toISOString(),
         closedAt,
-        lifetimeDays: opportunityLifetimeDays(startedAt.toISOString(), closedAt, stage, now),
+        lifetimeDays: opportunityLifetimeDays(startedAt.toISOString(), closedAt, stage === "paused" ? "open" : stage, stage === "paused" && disposition ? new Date(disposition.changedAt) : now),
         expectedCloseDate: o.expected_close_date ? o.expected_close_date.toISOString() : null,
         opportunityId: o.opportunity_id,
         opportunityNumber: o.opportunity_number,

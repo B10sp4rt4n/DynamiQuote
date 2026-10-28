@@ -44,6 +44,7 @@ function formatCurrency(value: number | null): string {
 }
 
 const QUOTE_STATUS_LABELS: Record<string, string> = {
+  archived: "Archivada",
   closed: "Cerrada",
   draft: "Borrador",
   rejected: "Rechazada",
@@ -93,7 +94,7 @@ export function QuoteShell({
   const searchParams = useSearchParams();
   const [quoteItems, setQuoteItems] = useState<QuoteGroupSummary[]>(() => sortQuotes(items));
   const [editorReload, setEditorReload] = useState(0);
-  const [activeQuoteId, setActiveQuoteId] = useState<string | null>(requestedQuote?.quoteId ?? items[0]?.quoteId ?? null);
+  const [activeQuoteId, setActiveQuoteId] = useState<string | null>(requestedQuote?.quoteId ?? items.find(item => item.status !== "archived")?.quoteId ?? null);
   const [selectedVersion, setSelectedVersion] = useState<QuoteGroupSummary | null>(null);
   // The list stays one row per group; the editor also accepts the exact version
   // selected in history or resolved by the server from the URL.
@@ -113,6 +114,7 @@ export function QuoteShell({
   const lastHandledQuoteIdFromQueryRef = useRef<string | null>(null);
   const [isQuotesPanelOpen, setIsQuotesPanelOpen] = useState(false);
   const [quoteSearch, setQuoteSearch] = useState("");
+  const [showArchived, setShowArchived] = useState(false);
   const [quoteSort, setQuoteSort] = useState<QuoteSort>("date_desc");
   const [selectedTenantSlug, setSelectedTenantSlug] = useState(currentTenantSlug);
   const [switchingTenant, setSwitchingTenant] = useState(false);
@@ -178,6 +180,7 @@ export function QuoteShell({
   const filteredQuoteItems = useMemo(() => {
     const normalizedSearch = quoteSearch.trim().toLowerCase();
     const searchedItems = quoteItems.filter((item) => {
+      if (!showArchived && item.status === "archived") return false;
       if (normalizedSearch.length === 0) {
         return true;
       }
@@ -201,7 +204,7 @@ export function QuoteShell({
 
       return (right.totalRevenue ?? 0) - (left.totalRevenue ?? 0);
     });
-  }, [quoteItems, quoteSearch, quoteSort]);
+  }, [quoteItems, quoteSearch, quoteSort, showArchived]);
 
   // Sincroniza la lista cuando el servidor devuelve datos frescos (ej. post-importación Excel)
   useEffect(() => {
@@ -227,7 +230,7 @@ export function QuoteShell({
     }
 
     lastHandledQuoteIdFromQueryRef.current = nextQuoteId;
-    const validQuoteId = resolveSelectedQuoteId(editorQuotes, nextQuoteId);
+    const validQuoteId = resolveSelectedQuoteId(nextQuoteId ? editorQuotes : editorQuotes.filter(quote => quote.status !== "archived"), nextQuoteId);
 
     setActiveQuoteId((current) => (current === validQuoteId ? current : validQuoteId));
   }, [editorQuotes, searchParams]);
@@ -833,6 +836,7 @@ export function QuoteShell({
                 </select>
               </div>
             </div>
+            <label className="flex items-center gap-2 px-4 py-2 text-sm text-zinc-900"><input type="checkbox" checked={showArchived} onChange={e => setShowArchived(e.target.checked)} />Mostrar archivadas</label>
             {deleteError ? <p className="mt-2 text-sm font-medium text-rose-700">{deleteError}</p> : null}
             <div className="overflow-hidden">
               <table className="min-w-full divide-y divide-zinc-200 text-sm">

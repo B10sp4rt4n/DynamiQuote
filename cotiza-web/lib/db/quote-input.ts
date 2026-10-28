@@ -35,6 +35,7 @@ export async function createDraftFromQuoteInput(input: {
     // Refresh after acquiring the shared lock; manual edits use the same lock.
     base = await tx.quote.findFirst({ where: { quote_id: input.quoteId, tenantId: input.tenantId } });
     if (!base) return null;
+    if (base.status === "archived") throw new QuoteInputError("Reactiva el borrador antes de importar",409);
     if (isOptionPlaceholder(base.input_metadata,base.quote_id)) throw new QuoteInputError("Este registro inicial vacío es histórico. Abre una opción comercial para trabajar.",409);
     const latest = await tx.quote.findFirst({
       where: { tenantId: input.tenantId, OR: [{ quote_group_id: groupId }, { quote_id: groupId }] },

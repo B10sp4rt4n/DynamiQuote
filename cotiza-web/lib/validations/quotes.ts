@@ -21,8 +21,8 @@ export const createQuoteSchema = z.object({
 export type CreateQuoteInput = z.infer<typeof createQuoteSchema>;
 
 export const quoteActionSchema = z.object({
-  action: z.enum(["send", "close", "reject"]),
+  action: z.enum(["send", "close", "reject", "archive", "restore"]),
   reason: z.string().trim().max(500).optional(),
-});
+}).refine(data => data.action !== "archive" || (data.reason?.length ?? 0) >= 3, { message: "Indica el motivo para archivar", path: ["reason"] });
 
 export type QuoteActionInput = z.infer<typeof quoteActionSchema>;

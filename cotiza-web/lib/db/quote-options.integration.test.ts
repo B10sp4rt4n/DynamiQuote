@@ -21,6 +21,12 @@ suite("first-fill and commercial options with disposable local PostgreSQL",()=>{
    const actor={userId:"synthetic",isSuperAdmin:true,userRole:"admin"};expect(await options.selectCommercialOption(tenantId,canonical,"250",actor)).toBe(true);result=await opportunities.getOpportunityPipelineByTenant(tenantId);expect(result.find(o=>o.opportunityId===canonical)!.amount).toBe(356100);expect(await db.proposal_audit_events.count({where:{tenant_id:tenantId,event_type:"commercial_option_selected"}})).toBe(3);await options.selectCommercialOption(tenantId,canonical,null,actor);
    await expect(writer.createDraftFromQuoteInput({tenantId,quoteId:rootId,operationId:randomUUID(),mode:"replace",source:{kind:"excel"},lines:lines()})).rejects.toThrow("histórico");
    const history=await editor.getQuoteVersionsByTenant(tenantId,ids[0]);expect(history!.versions.filter(v=>v.commercialOption).map(v=>v.commercialOption!.ordinal).sort()).toEqual([1,2,3]);expect(history!.versions.find(v=>v.quoteId===rootId)!.emptyPlaceholder).toBe(true);
+   const {setOpportunityDisposition}=await import("./opportunity-disposition");
+   expect(await setOpportunityDisposition(tenantId,canonical,{userId:"synthetic",canSeeAll:true},{state:"no_decision",reason:"Proyecto pospuesto sin fecha",revision:0})).toBe("updated");
+   result=await opportunities.getOpportunityPipelineByTenant(tenantId);expect(result.find(o=>o.opportunityId===canonical)).toMatchObject({stage:"no_decision",commercialOptions:{optionCount:3}});
+   expect(result.some(o=>o.opportunityId===member)).toBe(false);
+   expect(await db.proposals.count({where:{tenant_id:tenantId,outcome:null,status:"approved"}})).toBe(3);
+   expect(await setOpportunityDisposition(tenantId,canonical,{userId:"synthetic",canSeeAll:true},{state:"open",reason:"Cliente retoma evaluación",revision:1})).toBe("updated");
    await db.proposals.update({where:{proposal_id:pids[0]},data:{outcome:"won",outcome_at:new Date()}});result=await opportunities.getOpportunityPipelineByTenant(tenantId);expect(result.find(o=>o.opportunityId===canonical)).toMatchObject({stage:"won",amount:302600});expect(await db.proposals.count({where:{tenant_id:tenantId,status:"approved"}})).toBe(3);
  },30000);
 });

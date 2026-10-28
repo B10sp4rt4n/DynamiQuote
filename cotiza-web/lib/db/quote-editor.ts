@@ -9,6 +9,7 @@ import {
 } from "@/lib/domain/pricing-engine";
 import { optionSetSchema, labelOptionQuote, isOptionPlaceholder, type OptionLabel } from "@/lib/domain/commercial-options";
 import { prisma } from "@/lib/db/prisma";
+import { archiveReasonFromMetadata } from "@/lib/domain/quote-archive";
 import type { QuoteLineEditorInput } from "@/lib/validations/quote-editor";
 
 export type EditableQuoteLine = {
@@ -47,6 +48,7 @@ export type UpdatedQuoteVersion = {
 export type QuoteVersionHistoryItem = {
   commercialOption?: OptionLabel | null;
   emptyPlaceholder?: boolean;
+  archiveReason?: string | null;
   avgMargin: number | null;
   closedAt: string | null;
   createdAt: string | null;
@@ -219,6 +221,7 @@ export async function updateQuoteLinesByTenant(
     return null;
   }
 
+  if (quote.status === "archived") throw new Error("Reactiva el borrador antes de modificarlo");
   if (isOptionPlaceholder(quote.input_metadata,quote.quote_id)) throw new Error("Este registro inicial vacío es histórico. Abre una opción comercial para trabajar.");
   const quoteGroupId = quote.quote_group_id ?? quote.quote_id;
 
@@ -510,6 +513,7 @@ export async function getQuoteVersionsByTenant(
     currentQuoteId: quote.quote_id,
     quoteGroupId,
     versions: versions.map((item) => ({
+      archiveReason: archiveReasonFromMetadata(item.input_metadata),
       commercialOption: set ? labelOptionQuote(set,item.quote_id,optionQuotes) : null,
       emptyPlaceholder: set?.placeholderQuoteIds.includes(item.quote_id) ?? false,
       avgMargin: item.avg_margin ? item.avg_margin.toNumber() : null,
@@ -579,11 +583,12 @@ export async function markQuoteAsSentByTenant(
 
   const sentAt = new Date();
 
-  await prisma.quote.update({
+  const changed = await prisma.quote.updateMany({
     data: { sent_at: sentAt, sent_by: userId, status: "sent" },
-    where: { quote_id: quoteId },
+    where: { quote_id: quoteId, tenantId, status: quote.status },
   });
 
+  if (changed.count !== 1) return null;
   return { sentAt: sentAt.toISOString(), status: "sent" };
 }
 
@@ -622,15 +627,17 @@ export async function closeQuoteVersionByTenant(
 
   const closedAt = new Date();
 
-  await prisma.quote.update({
+  const changed = await prisma.quote.updateMany({
     data: {
       closed_at: closedAt,
       closed_by: userId,
       closed_reason: reason ?? null,
       status: "closed",
     },
-    where: { quote_id: quoteId },
+    where: { quote_id: quoteId, tenantId, status: quote.status },
   });
+
+  if (changed.count !== 1) return null;
 
   // Efecto secundario: mover propuestas "sent" vinculadas al grupo a "in_review".
   // Si falla, no bloquea el cierre de la cotización.
@@ -662,16 +669,17 @@ export async function rejectQuoteVersionByTenant(
 
   const rejectedAt = new Date();
 
-  await prisma.quote.update({
+  const changed = await prisma.quote.updateMany({
     data: {
       closed_reason: reason ?? null,
       rejected_at: rejectedAt,
       rejected_by: userId,
       status: "rejected",
     },
-    where: { quote_id: quoteId },
+    where: { quote_id: quoteId, tenantId, status: quote.status },
   });
 
+  if (changed.count !== 1) return null;
   return { rejectedAt: rejectedAt.toISOString(), status: "rejected" };
 }
 
