@@ -1,5 +1,5 @@
 import Link from "next/link";
-import { OpportunityDispositionControl } from "@/components/pipeline/opportunity-disposition";
+import { OpportunityReview } from "@/components/pipeline/opportunity-review";
 import { OpportunityAmount } from "@/components/pipeline/opportunity-amount";
 
 import { ClientTasksPanel } from "@/components/clientes/client-tasks-panel";
@@ -177,7 +177,7 @@ export default async function ClientDetailPage({ params }: ClientDetailPageProps
                     <OpportunityAmount amount={opp.amount} options={opp.commercialOptions} opportunityId={opp.opportunityId} canChoose={canSeeAll} stage={opp.stage} />
                     {opp.expectedCloseDate ? ` · cierre esperado ${formatDate(opp.expectedCloseDate)}` : ""}
                   </div>
-                  <OpportunityDispositionControl key={`${opp.opportunityId}:${opp.disposition?.revision ?? 0}`} opportunity={opp} canManage={canSeeAll || Boolean(tenant.userId && opp.ownerUserId === tenant.userId)} />
+                  <OpportunityReview key={`${opp.opportunityId}:${opp.disposition?.revision ?? 0}`} opportunity={opp} canManage={canSeeAll || Boolean(tenant.userId && opp.ownerUserId === tenant.userId)} />
                   <p className="text-xs text-zinc-500">
                     Inicio: {new Intl.DateTimeFormat("es-MX", { dateStyle: "medium", timeZone: "America/Mexico_City" }).format(new Date(opp.createdAt))}
                     {" · Cierre: "}{opp.stage === "paused" ? "en pausa" : opp.stage === "open" ? "pendiente" : opp.closedAt
