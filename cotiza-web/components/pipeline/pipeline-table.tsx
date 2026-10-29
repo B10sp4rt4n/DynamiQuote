@@ -1,7 +1,7 @@
 "use client";
 
 import Link from "next/link";
-import { OpportunityDispositionControl } from "@/components/pipeline/opportunity-disposition";
+import { OpportunityReview } from "@/components/pipeline/opportunity-review";
 import { OpportunityAmount } from "./opportunity-amount";
 import { useMemo } from "react";
 
@@ -184,7 +184,7 @@ export function PipelineTable({
                     >
                       {STAGE_LABELS[opp.stage]}
                     </span>
-                    <OpportunityDispositionControl key={`${opp.opportunityId}:${opp.disposition?.revision ?? 0}`} opportunity={opp} canManage={canChooseOptions || Boolean(viewerUserId && opp.ownerUserId === viewerUserId)} />
+                    <OpportunityReview key={`${opp.opportunityId}:${opp.disposition?.revision ?? 0}`} opportunity={opp} canManage={canChooseOptions || Boolean(viewerUserId && opp.ownerUserId === viewerUserId)} />
                   </td>
                 </tr>
               ))}
