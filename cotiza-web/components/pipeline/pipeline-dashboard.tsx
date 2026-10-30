@@ -246,11 +246,13 @@ function VendorFilter({
 }
 
 export function PipelineDashboard({
+  linkClients = true,
   canSeeAll,
   opportunities,
   vendors,
   viewerUserId,
 }: {
+  linkClients?: boolean;
   canSeeAll: boolean;
   opportunities: OpportunityWithStage[];
   vendors: PipelineVendor[];
@@ -366,6 +368,7 @@ export function PipelineDashboard({
         </div>
       ) : (
         <PipelineTable
+          linkClients={linkClients}
           canChooseOptions={canSeeAll}
           viewerUserId={viewerUserId}
           closeFilter={closeFilter}

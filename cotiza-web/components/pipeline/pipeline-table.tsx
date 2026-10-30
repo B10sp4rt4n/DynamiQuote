@@ -47,6 +47,7 @@ function formatDate(iso: string | null, timeZone = "UTC"): string {
 
 
 export function PipelineTable({
+  linkClients = true,
   canChooseOptions = false,
   viewerUserId = null,
   closeFilter,
@@ -57,6 +58,7 @@ export function PipelineTable({
   search,
   stageFilter,
 }: {
+  linkClients?: boolean;
   canChooseOptions?: boolean;
   viewerUserId?: string | null;
   closeFilter: PipelineCloseFilter;
@@ -159,12 +161,12 @@ export function PipelineTable({
                       href={`/cotizaciones?quoteId=${encodeURIComponent(opp.intakeQuoteId)}`}>Completar datos de oportunidad</Link> : null}</td>
                   <td className="px-4 py-2.5 text-zinc-500">{opp.opportunityNumber}</td>
                   <td className="px-4 py-2.5">
-                    {opp.clientId ? (
+                    {opp.clientId && linkClients ? (
                       <Link className="font-medium text-zinc-600 hover:underline" href={`/clientes/${opp.clientId}`}>
                         {opp.clientCompany ?? "Ver cliente"}
                       </Link>
                     ) : (
-                      <span className="text-zinc-400">Sin cliente</span>
+                      <span className="text-zinc-600">{opp.clientCompany ?? "Sin cliente"}</span>
                     )}
                   </td>
                   <td className="px-4 py-2.5 text-zinc-700"><OpportunityAmount amount={opp.amount} options={opp.commercialOptions} opportunityId={opp.opportunityId} canChoose={canChooseOptions} stage={opp.stage} /></td>

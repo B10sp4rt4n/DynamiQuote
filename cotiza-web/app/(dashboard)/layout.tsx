@@ -5,7 +5,7 @@ import Link from "next/link";
 import { redirect } from "next/navigation";
 
 import { hasClerkCredentials } from "@/lib/auth/clerk";
-import { isTenantCapabilityEnabled } from "@/lib/db/tenant-capabilities";
+import { getCrmWorkspaceAccess } from "@/lib/auth/crm-workspace";
 import { getCurrentTenantContext } from "@/lib/auth/tenant-context";
 import { ExpiryAlertsBell } from "@/components/layout/expiry-alerts-bell";
 import { CotizaBrand } from "@/components/ui/cotiza-brand";
@@ -47,7 +47,7 @@ export default async function DashboardLayout({ children }: DashboardLayoutProps
     );
   }
 
-  const crmWorkspaceEnabled = tenant.isSuperAdmin && await isTenantCapabilityEnabled(tenant.id, "crm_workspace_pilot");
+  const crmWorkspaceEnabled = Boolean(await getCrmWorkspaceAccess(tenant));
 
   return (
     <div className="min-h-screen bg-zinc-100">
