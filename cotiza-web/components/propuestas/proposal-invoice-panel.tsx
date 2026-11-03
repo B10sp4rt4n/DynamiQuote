@@ -14,7 +14,7 @@ const PAYMENT_FORM_OPTIONS = [
 type InvoiceStatus = {
   draftId: string | null;
   stampedAt: string | null;
-  status: "draft" | "stamped" | "rejected" | null;
+  status: "draft" | "stamping" | "stamped" | "rejected" | null;
   uuid: string | null;
 };
 
@@ -60,6 +60,7 @@ export function ProposalInvoicePanel({ proposalId, recipientCompany }: ProposalI
   const [form, setForm] = useState<FormState>(EMPTY_FORM);
   const [generating, setGenerating] = useState(false);
   const [stamping, setStamping] = useState(false);
+  const [reconciling, setReconciling] = useState(false);
   const [error, setError] = useState<string | null>(null);
   const [missingFields, setMissingFields] = useState<string[]>([]);
   const [showPreview, setShowPreview] = useState(false);
@@ -178,8 +179,42 @@ export function ProposalInvoicePanel({ proposalId, recipientCompany }: ProposalI
       }));
     } catch (err) {
       setError(err instanceof Error ? err.message : "Error desconocido");
+      // Ante fallo de red o respuesta incierta, leer el estado persistido;
+      // jamas dejar el boton de timbrar habilitado por un error del cliente.
+      try {
+        const refreshed = await fetch(`/api/proposals/${proposalId}/invoice`);
+        const data = (await refreshed.json()) as { invoice?: InvoiceStatus };
+        if (refreshed.ok && data.invoice) {
+          setInvoice(data.invoice);
+        } else {
+          setInvoice((prev) => prev ? { ...prev, status: "stamping" } : prev);
+        }
+      } catch {
+        setInvoice((prev) => prev ? { ...prev, status: "stamping" } : prev);
+      }
     } finally {
       setStamping(false);
+    }
+  }
+
+  async function handleReconcile() {
+    setReconciling(true);
+    setError(null);
+    try {
+      const response = await fetch(`/api/proposals/${proposalId}/invoice/reconcile`, { method: "POST" });
+      const data = (await response.json()) as { error?: string };
+      if (!response.ok) {
+        throw new Error(data.error ?? "No se pudo confirmar el estado del CFDI");
+      }
+      const refreshed = await fetch(`/api/proposals/${proposalId}/invoice`);
+      const current = (await refreshed.json()) as { invoice?: InvoiceStatus };
+      if (refreshed.ok && current.invoice) {
+        setInvoice(current.invoice);
+      }
+    } catch (err) {
+      setError(err instanceof Error ? err.message : "Resultado aún no confirmado");
+    } finally {
+      setReconciling(false);
     }
   }
 
@@ -187,6 +222,27 @@ export function ProposalInvoicePanel({ proposalId, recipientCompany }: ProposalI
     return (
       <div className="rounded-lg border border-zinc-200 p-4">
         <p className="text-sm text-zinc-500">Cargando facturación...</p>
+      </div>
+    );
+  }
+
+  if (invoice?.status === "stamping") {
+    return (
+      <div className="rounded-lg border border-amber-300 bg-amber-50 p-4">
+        <p className="text-sm font-semibold text-amber-900">Timbrado pendiente de confirmación</p>
+        <p className="mt-2 text-sm text-amber-800">
+          El PAC pudo haber emitido un CFDI. No vuelvas a timbrar ni generes otra prefactura
+          hasta confirmar el resultado con Digestor Fiscal.
+        </p>
+        {error ? <p className="mt-2 text-xs font-medium text-rose-700">{error}</p> : null}
+        <button
+          className="mt-3 rounded-lg border border-amber-400 bg-white px-3 py-2 text-sm font-medium text-amber-900 disabled:opacity-60"
+          disabled={reconciling}
+          onClick={() => void handleReconcile()}
+          type="button"
+        >
+          {reconciling ? "Consultando..." : "Consultar estado (sin timbrar)"}
+        </button>
       </div>
     );
   }

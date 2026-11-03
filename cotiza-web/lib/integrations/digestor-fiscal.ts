@@ -247,6 +247,27 @@ export async function stampBillingDraft(draftId: string): Promise<StampBillingDr
   };
 }
 
+// Solo consulta el resultado guardado por Digestor. NO invoca al PAC ni
+// solicita nuevos timbres; necesario para recuperar un éxito tras un timeout.
+export type BillingStampResult = {
+  stampStatus: string;
+  uuid: string | null;
+  xmlBase64: string | null;
+};
+
+export async function getBillingDraftStampResult(draftId: string): Promise<BillingStampResult> {
+  const raw = await request<{
+    stamp_status: string;
+    uuid: string | null;
+    xml_base64: string | null;
+  }>(`/v1/billing/drafts/${encodeURIComponent(draftId)}/stamp-result`, { method: "GET" });
+  return {
+    stampStatus: raw.stamp_status,
+    uuid: raw.uuid,
+    xmlBase64: raw.xml_base64,
+  };
+}
+
 // Los endpoints de preview/pdf de Digestor Fiscal tambien exigen Bearer --
 // Cotiza los proxea (nunca expone el token al navegador).
 export async function fetchBillingDraftPreviewHtml(draftId: string): Promise<string> {
