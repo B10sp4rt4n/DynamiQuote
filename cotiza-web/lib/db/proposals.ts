@@ -1,6 +1,7 @@
 import "server-only";
 
 import { randomUUID } from "crypto";
+import { captureWonEvent } from "./won-notifications";
 import { Prisma } from "@prisma/client";
 
 import { getMarginPolicyByTenant } from "@/lib/db/margin-policies";
@@ -1880,6 +1881,9 @@ export async function setProposalOutcomeByTenant(
         tenant_id: tenantId,
       },
     });
+    if (outcome === "won" && row.outcome !== "won" && outcomeAt) {
+      await captureWonEvent(tx, row, actor.userId, outcomeAt, now);
+    }
     return "updated";
   });
 }
