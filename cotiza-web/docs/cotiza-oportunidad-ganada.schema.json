@@ -1,0 +1,359 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "title": "Cotiza — evento de oportunidad cerrada ganada",
+  "description": "Snapshot inmutable del cierre ganado.",
+  "x-estado": "propuesta_no_implementada",
+  "x-diseno": {
+    "objetivo": "Registrar el cierre ganado una sola vez y permitir su descarga JSON y consumo futuro por otros sistemas.",
+    "interfaz": "En la oportunidad: Actividad > Cierre ganado > Descargar JSON. En configuración del tenant: Notificaciones > Oportunidad ganada.",
+    "distincion_owner": "owner_user_id es el responsable comercial de la oportunidad. El owner del tenant administra las reglas de notificación; son roles distintos.",
+    "canales": "Notificación interna y correo, configurables por destinatario. Descargar JSON no realiza envíos.",
+    "documentacion": "Las descripciones de properties documentan cada campo; examples contiene un evento ficticio válido que se puede extraer como JSON operativo.",
+    "versionado": "Mantener 1.x para extensiones opcionales compatibles; cambiar versión mayor ante cambios de significado, tipos o campos obligatorios. El consumidor valida según schema_version.",
+    "configuracion_por_tenant": {
+      "include_opportunity_owner": true,
+      "designated_user_ids": [
+        "usr_operaciones_demo"
+      ],
+      "channels_by_user": {
+        "usr_comercial_demo": [
+          "in_app",
+          "email"
+        ],
+        "usr_operaciones_demo": [
+          "in_app",
+          "email"
+        ]
+      },
+      "nota": "Ejemplo conceptual. Resolver destinatarios al cerrar, guardar la versión de la política y validar pertenencia y permisos antes de cada entrega. No concede permisos sobre la oportunidad."
+    }
+  },
+  "x-reglas": [
+    "Crear el evento solamente al pasar de un estado distinto de closed_won a closed_won; guardar cierre y evento pendiente de procesamiento en la misma transacción.",
+    "Generar event_id y deduplication_key en el servidor. La clave única se forma con tenant_id, opportunity_id, closure_sequence y event_type.",
+    "Incrementar closure_sequence por cada nuevo cierre ganado tras reapertura. Registrar la reapertura con su propio evento para conservar la historia.",
+    "Editar una oportunidad ya ganada no genera otro cierre. Las correcciones relevantes deben tener un evento separado, sin sobrescribir el cierre original.",
+    "closed_on es la fecha comercial elegida por el usuario; occurred_at es el instante real en que el sistema registró el cambio. No confundirlos en notificaciones ni reportes.",
+    "Guardar los datos comerciales y destinatarios como snapshot del cierre. Una descarga posterior conserva ese snapshot.",
+    "Construir el payload desde relaciones verificadas en el servidor. Cliente, propuesta ganadora, oportunidad y usuarios deben pertenecer al tenant correcto.",
+    "Eliminar duplicados por usuario y unificar sus canales. Resolver correos internamente: el JSON no necesita exponer direcciones de correo.",
+    "Usar como clave de entrega event_id + user_id + channel. Registrar pendiente, enviado, entregado cuando sea confirmable, fallido o suprimido. Mantener el historial de intentos separado del evento inmutable.",
+    "Enviar asíncronamente con reintentos acotados. Un fallo de notificación no revierte el cierre. La entrega al proveedor de correo no demuestra lectura ni recepción final.",
+    "Antes de entregar, revalidar que cada destinatario siga activo y autorizado. Suprimir y registrar entregas que ya no correspondan.",
+    "Autorizar la descarga por tenant y acceso a la oportunidad, y registrar quién exportó y cuándo en la auditoría separada. Un enlace o un archivo JSON no concede acceso.",
+    "No incluir credenciales, costos internos, márgenes ni documentos adjuntos por defecto. El contenido exportado no debe superar lo que puede ver quien descarga.",
+    "El importe identifica explícitamente base y moneda. No sumar monedas distintas ni sustituir la propuesta ganadora por otra versión.",
+    "El esquema valida estructura; las relaciones, permisos, transiciones, fechas válidas y deduplicación requieren validaciones del servidor."
+  ],
+  "type": "object",
+  "properties": {
+    "schema_version": {
+      "type": "string",
+      "description": "Versión del contrato de datos.",
+      "const": "1.0.0"
+    },
+    "event_id": {
+      "type": "string",
+      "description": "Identificador global único del evento, estable en descargas y reintentos.",
+      "format": "uuid"
+    },
+    "event_type": {
+      "type": "string",
+      "description": "Nombre estable del evento comercial.",
+      "const": "opportunity.closed_won"
+    },
+    "tenant_id": {
+      "type": "string",
+      "description": "Identificador interno del tenant; nunca confiar en un tenant enviado sin validar.",
+      "minLength": 1
+    },
+    "opportunity_id": {
+      "type": "string",
+      "description": "Identificador interno estable de la oportunidad.",
+      "minLength": 1
+    },
+    "closure_sequence": {
+      "type": "integer",
+      "minimum": 1,
+      "description": "Número de cierre ganado de esta oportunidad. Aumenta tras reapertura y nuevo cierre."
+    },
+    "deduplication_key": {
+      "type": "string",
+      "description": "Clave única del cierre: tenant_id:opportunity_id:closure_sequence:event_type.",
+      "minLength": 1
+    },
+    "occurred_at": {
+      "type": "string",
+      "description": "Instante real del cambio registrado por el servidor, RFC 3339 con zona horaria.",
+      "format": "date-time"
+    },
+    "closed_on": {
+      "type": "string",
+      "description": "Fecha comercial del cierre en la zona horaria del tenant; puede ser histórica.",
+      "format": "date"
+    },
+    "tenant_timezone": {
+      "type": "string",
+      "description": "Zona IANA del tenant, para presentar fechas y horas.",
+      "minLength": 1
+    },
+    "actor_user_id": {
+      "type": "string",
+      "description": "Usuario autenticado que confirmó el cierre.",
+      "minLength": 1
+    },
+    "previous_status": {
+      "type": "string",
+      "description": "Código del estado inmediatamente anterior; no puede ser closed_won. Los estados reales deben alinearse con el catálogo de Cotiza.",
+      "minLength": 1,
+      "not": {
+        "const": "closed_won"
+      }
+    },
+    "current_status": {
+      "type": "string",
+      "description": "Estado resultante.",
+      "const": "closed_won"
+    },
+    "opportunity": {
+      "type": "object",
+      "description": "Datos comerciales al momento del cierre.",
+      "properties": {
+        "folio": {
+          "type": "string",
+          "description": "Folio visible; la identidad técnica sigue siendo opportunity_id.",
+          "minLength": 1
+        },
+        "title": {
+          "type": "string",
+          "description": "Nombre de la oportunidad.",
+          "minLength": 1
+        },
+        "owner_user_id": {
+          "type": "string",
+          "description": "Responsable comercial de la oportunidad, distinto del rol owner del tenant.",
+          "minLength": 1
+        },
+        "customer": {
+          "type": "object",
+          "description": "Cliente relacionado y validado dentro del tenant.",
+          "properties": {
+            "id": {
+              "type": "string",
+              "description": "ID interno del cliente.",
+              "minLength": 1
+            },
+            "name": {
+              "type": "string",
+              "description": "Nombre visible del cliente al cerrar.",
+              "minLength": 1
+            }
+          },
+          "required": [
+            "id",
+            "name"
+          ],
+          "additionalProperties": false
+        },
+        "winning_proposal": {
+          "type": "object",
+          "description": "Versión específica de la propuesta elegida como ganadora.",
+          "properties": {
+            "id": {
+              "type": "string",
+              "description": "ID interno estable de la propuesta ganadora.",
+              "minLength": 1
+            },
+            "folio": {
+              "type": "string",
+              "description": "Folio visible de la propuesta.",
+              "minLength": 1
+            },
+            "version": {
+              "type": "integer",
+              "minimum": 1,
+              "description": "Número de versión ganadora; no tomar automáticamente la última versión."
+            },
+            "amount": {
+              "type": "string",
+              "description": "Monto decimal serializado como texto para evitar errores de punto flotante; precisión hasta cuatro decimales.",
+              "pattern": "^[0-9]+(?:\\.[0-9]{1,4})?$"
+            },
+            "currency": {
+              "type": "string",
+              "description": "Código de moneda ISO 4217, validado contra catálogo en servidor.",
+              "pattern": "^[A-Z]{3}$"
+            },
+            "amount_basis": {
+              "type": "string",
+              "description": "El monto del contrato es neto antes de impuestos.",
+              "const": "net_before_tax"
+            }
+          },
+          "required": [
+            "id",
+            "folio",
+            "version",
+            "amount",
+            "currency",
+            "amount_basis"
+          ],
+          "additionalProperties": false
+        }
+      },
+      "required": [
+        "folio",
+        "title",
+        "owner_user_id",
+        "customer",
+        "winning_proposal"
+      ],
+      "additionalProperties": false
+    },
+    "notification": {
+      "type": "object",
+      "description": "Destinatarios y canales resueltos según la regla del tenant al cerrar; no constituye comprobante de envío.",
+      "properties": {
+        "policy_id": {
+          "type": "string",
+          "description": "Identificador de la política aplicada.",
+          "minLength": 1
+        },
+        "policy_version": {
+          "type": "integer",
+          "minimum": 1,
+          "description": "Versión de configuración aplicada para trazabilidad."
+        },
+        "recipients": {
+          "type": "array",
+          "description": "Usuarios internos autorizados; puede quedar vacío si no hay destinatarios válidos. Registrar ese caso para revisión.",
+          "items": {
+            "type": "object",
+            "description": "Usuario único y canales que le corresponden.",
+            "properties": {
+              "user_id": {
+                "type": "string",
+                "description": "ID de usuario del tenant. No sustituir por un correo arbitrario.",
+                "minLength": 1
+              },
+              "reasons": {
+                "type": "array",
+                "minItems": 1,
+                "uniqueItems": true,
+                "description": "Razones por las que recibe el aviso.",
+                "items": {
+                  "enum": [
+                    "opportunity_owner",
+                    "tenant_designated"
+                  ]
+                }
+              },
+              "channels": {
+                "type": "array",
+                "minItems": 1,
+                "uniqueItems": true,
+                "description": "Canales habilitados para este usuario.",
+                "items": {
+                  "enum": [
+                    "in_app",
+                    "email"
+                  ]
+                }
+              }
+            },
+            "required": [
+              "user_id",
+              "reasons",
+              "channels"
+            ],
+            "additionalProperties": false
+          }
+        }
+      },
+      "required": [
+        "policy_id",
+        "policy_version",
+        "recipients"
+      ],
+      "additionalProperties": false
+    }
+  },
+  "required": [
+    "schema_version",
+    "event_id",
+    "event_type",
+    "tenant_id",
+    "opportunity_id",
+    "closure_sequence",
+    "deduplication_key",
+    "occurred_at",
+    "closed_on",
+    "tenant_timezone",
+    "actor_user_id",
+    "previous_status",
+    "current_status",
+    "opportunity",
+    "notification"
+  ],
+  "additionalProperties": false,
+  "examples": [
+    {
+      "schema_version": "1.0.0",
+      "event_id": "869a19b9-fab6-45f7-a921-4ba91695e22b",
+      "event_type": "opportunity.closed_won",
+      "tenant_id": "tenant_demo",
+      "opportunity_id": "opt_demo_00042",
+      "closure_sequence": 1,
+      "deduplication_key": "tenant_demo:opt_demo_00042:1:opportunity.closed_won",
+      "occurred_at": "2026-11-07T09:30:00-06:00",
+      "closed_on": "2026-08-28",
+      "tenant_timezone": "America/Mexico_City",
+      "actor_user_id": "usr_comercial_demo",
+      "previous_status": "negotiation",
+      "current_status": "closed_won",
+      "opportunity": {
+        "folio": "OPT-2026-0042",
+        "title": "Renovación anual — ejemplo ficticio",
+        "owner_user_id": "usr_comercial_demo",
+        "customer": {
+          "id": "cli_demo_007",
+          "name": "Cliente de demostración"
+        },
+        "winning_proposal": {
+          "id": "prop_demo_0085_v1",
+          "folio": "PROP-2026-0085",
+          "version": 1,
+          "amount": "85000.00",
+          "currency": "MXN",
+          "amount_basis": "net_before_tax"
+        }
+      },
+      "notification": {
+        "policy_id": "policy_won_demo",
+        "policy_version": 1,
+        "recipients": [
+          {
+            "user_id": "usr_comercial_demo",
+            "reasons": [
+              "opportunity_owner"
+            ],
+            "channels": [
+              "in_app",
+              "email"
+            ]
+          },
+          {
+            "user_id": "usr_operaciones_demo",
+            "reasons": [
+              "tenant_designated"
+            ],
+            "channels": [
+              "in_app",
+              "email"
+            ]
+          }
+        ]
+      }
+    }
+  ]
+}
