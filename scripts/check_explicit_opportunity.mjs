@@ -19,7 +19,7 @@ try {
  const result=spawnSync(process.execPath,[path.join(root,'cotiza-web/node_modules/prisma/build/index.js'),'migrate','diff','--from-empty','--to-schema','prisma/schema.prisma','--script'],{cwd:path.join(root,'cotiza-web'),encoding:'utf8',env:{...process.env,DATABASE_URL:url}});
  if(result.status!==0)throw Error(result.stderr);
  await client.query(result.stdout);await client.query('ALTER TABLE proposal_approvals ADD COLUMN executed_by_user_id text');await client.end();
- const child=spawn(process.execPath,[path.join(root,'cotiza-web/node_modules/vitest/vitest.mjs'),'run','lib/db/explicit-opportunity.integration.test.ts','lib/db/opportunity-intake.integration.test.ts','lib/db/opportunity-workspace.integration.test.ts','--maxWorkers=1','--no-file-parallelism'],{cwd:path.join(root,'cotiza-web'),stdio:'inherit',env:{...process.env,DATABASE_URL:url,COTIZA_EXPLICIT_NATIVE:'1',COTIZA_INTAKE_INTEGRATION:'1',COTIZA_WORKSPACE_NATIVE:'1'}});
+ const child=spawn(process.execPath,[path.join(root,'cotiza-web/node_modules/vitest/vitest.mjs'),'run','lib/db/explicit-opportunity.integration.test.ts','lib/db/opportunity-intake.integration.test.ts','lib/db/opportunity-workspace.integration.test.ts','lib/db/commercial-journey.integration.test.ts','lib/db/opportunity-lifecycle.integration.test.ts','--maxWorkers=1','--no-file-parallelism'],{cwd:path.join(root,'cotiza-web'),stdio:'inherit',env:{...process.env,DATABASE_URL:url,COTIZA_EXPLICIT_NATIVE:'1',COTIZA_INTAKE_INTEGRATION:'1',COTIZA_WORKSPACE_NATIVE:'1',COTIZA_TEST_DATABASE_URL:url}});
  process.exitCode=await new Promise((resolve,reject)=>{child.once('error',reject);child.once('exit',code=>resolve(code??1));});
  if ((process.env.COTIZA_BROWSER_CHECK === '1' || process.env.COTIZA_HTTP_CHECK === '1') && process.exitCode === 0) {
   const fixture=pg.getPgClient();await fixture.connect();
@@ -42,6 +42,32 @@ try {
     const quoteResponse=await fetch(base+'/api/quotes',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({clientId:input.clientId,clientName:'Cliente de prueba',proposalName:input.title,creationId:crypto.randomUUID(),opportunityMode:'existing',opportunityId:data.opportunity.opportunityId})});const quoteData=await quoteResponse.json();if(quoteResponse.status!==201)throw Error(JSON.stringify(quoteData));
     const context=await fetch(base+'/api/commercial-context?quoteId='+quoteData.quote.quoteId);const contextData=await context.json();if(!context.ok || contextData.context.opportunityId!==data.opportunity.opportunityId || contextData.context.quoteId!==quoteData.quote.quoteId)throw Error('Document lost its business context');
     console.log('HTTP workspace and exact quote-to-business context passed.');
+    const jsonCall=async(route,method,body,expected=200)=>{
+     const res=await fetch(base+route,{method,headers:{'Content-Type':'application/json'},body:JSON.stringify(body)});
+     const data=await res.json();if(res.status!==expected)throw Error(`${method} ${route}: ${res.status} ${JSON.stringify(data)}`);return data;
+    };
+    const qid=quoteData.quote.quoteId;
+    const initialLines=await (await fetch(base+`/api/quotes/${qid}/lines`)).json();
+    const line={lineId:initialLines.lines[0].lineId,classification1:'product',sku:'SYN-HTTP',description:'Licencia sintética',quantity:10,costUnit:80,priceUnit:100,mode:'price'};
+    await jsonCall(`/api/quotes/${qid}/lines`,'PUT',{lines:[line]});
+    const original=await jsonCall('/api/proposals','POST',{quoteId:qid},201);
+    const revised=await jsonCall(`/api/quotes/${qid}/lines`,'PUT',{forceNewVersion:true,lines:[{...line,costUnit:88,priceUnit:110}]});
+    const accepted=await jsonCall('/api/proposals','POST',{quoteId:revised.quote.quoteId},201);
+    for(const p of [original.proposal,accepted.proposal]){
+     await jsonCall(`/api/proposals/${p.proposalId}`,'PUT',{status:'in_review'});
+     const approved=await jsonCall(`/api/proposals/${p.proposalId}/approvals`,'POST',{decision:'approved'});
+     if(approved.proposal.status!=='approved')throw Error('Approval did not authorize');
+    }
+    const closedOn=new Intl.DateTimeFormat('en-CA',{timeZone:'America/Mexico_City',year:'numeric',month:'2-digit',day:'2-digit'}).format(new Date());
+    await jsonCall(`/api/proposals/${accepted.proposal.proposalId}`,'PATCH',{outcome:'won',closedOn});
+    const blocked=await jsonCall(`/api/proposals/${original.proposal.proposalId}`,'PATCH',{outcome:'won',closedOn},409);
+    if(!blocked.error.includes('ya tiene una propuesta ganada'))throw Error('Missing duplicate-win explanation');
+    const resultDb=pg.getPgClient();await resultDb.connect();
+    const result=await resultDb.query("SELECT COUNT(DISTINCT p.proposal_id)::int AS wins,SUM(pi.subtotal_price)::float AS revenue FROM proposals p JOIN proposal_items pi ON pi.proposal_id=p.proposal_id AND pi.tenant_id=p.tenant_id AND pi.status!='deleted' WHERE p.tenant_id='flow-demo' AND p.outcome='won'");
+    if(result.rows[0].wins!==1 || result.rows[0].revenue!==1100)throw Error('HTTP close duplicated or mispriced revenue');await resultDb.end();
+    const kpiPage=await fetch(base+'/propuestas/kpis');const kpiHtml=await kpiPage.text();
+    if(!kpiPage.ok || !kpiHtml.includes('Revenue ganado (histórico)') || !kpiHtml.includes('1,100.00'))throw Error('KPI page did not render accepted revenue');
+    console.log('HTTP full journey: created proposal, revised quote, authorized both, closed accepted revision, rejected duplicate win, and rendered KPI revenue 1100.');
     console.log('HTTP: rendered declaration, created as session actor, recovered retry and prefilled existing opportunity successfully.');
    } finally {app.kill('SIGTERM');}
   } else await new Promise(resolve=>{process.once('SIGINT',resolve);process.once('SIGTERM',resolve);app.once('exit',resolve);});app.kill('SIGTERM');
