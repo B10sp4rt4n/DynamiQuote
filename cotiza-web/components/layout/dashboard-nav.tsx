@@ -4,18 +4,25 @@ import Link from "next/link";
 import { usePathname } from "next/navigation";
 
 const navigation = [
-  { href: "/propuestas/kpis", label: "KPIs" },
   { href: "/inicio", label: "Inicio" },
+  { href: "/configuracion/clientes", label: "Clientes" },
+  { href: "/pipeline", label: "Oportunidades" },
   { href: "/cotizaciones", label: "Cotizaciones" },
   { href: "/propuestas", label: "Propuestas" },
+  { href: "/propuestas/kpis", label: "KPIs" },
+];
+
+const supportingNavigation = [
   { href: "/paquetes", label: "Paquetes" },
-  { href: "/configuracion/clientes", label: "Clientes" },
-  { href: "/pipeline", label: "Pipeline" },
-  { href: "/configuracion", label: "Configuracion" },
+  { href: "/configuracion", label: "Configuración" },
 ];
 
 export function DashboardNav({ crmWorkspaceEnabled = false }: { crmWorkspaceEnabled?: boolean }) {
-  const links = crmWorkspaceEnabled ? [navigation[0], navigation[1], { href: "/crm", label: "CRM · Piloto" }, ...navigation.slice(2)] : navigation;
+  const links = [
+    ...navigation,
+    ...(crmWorkspaceEnabled ? [{ href: "/crm", label: "CRM · Piloto" }] : []),
+    ...supportingNavigation,
+  ];
   const pathname = usePathname();
   const activeHref = links
     .filter(({ href }) => pathname === href || pathname.startsWith(`${href}/`))
