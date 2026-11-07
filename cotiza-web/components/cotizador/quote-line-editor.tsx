@@ -1314,7 +1314,7 @@ export function QuoteLineEditor({
   }
 
   return (
-    <section className="mt-6 rounded-xl border border-zinc-200 bg-white p-6 shadow-sm text-zinc-900">
+    <section className="mt-6 min-w-0 max-w-full rounded-xl border border-zinc-200 bg-white p-3 shadow-sm text-zinc-900 sm:p-6">
       {guidedQuotingEnabled && selectedQuoteId ? (
         <aside className="mb-5 flex flex-wrap items-center justify-between gap-4 rounded-xl border-2 border-indigo-300 bg-indigo-50 p-4 text-zinc-900">
           <div><h3 className="font-semibold">Compara opciones antes de cotizar</h3><p className="mt-1 text-sm text-zinc-700">Prueba distintas cantidades y precios, y compara venta, utilidad y margen sin modificar esta cotización.</p></div>
@@ -1333,7 +1333,7 @@ export function QuoteLineEditor({
             Cotizacion
           </label>
           <select
-            className="min-w-[320px] flex-1 rounded-lg border border-zinc-300 bg-white px-3 py-2 text-sm text-zinc-900 lg:min-w-[520px]"
+            className="w-full min-w-0 max-w-full flex-1 rounded-lg border border-zinc-300 bg-white px-3 py-2 text-sm text-zinc-900 md:min-w-[320px] lg:min-w-[520px]"
             id="quote-selector"
             onChange={(event) => {
               void handleQuoteChange(event.target.value);
@@ -1561,7 +1561,7 @@ export function QuoteLineEditor({
 
       {versions.length > 0 && versionGroupId === selectedQuote?.quoteGroupId ? (
         <div className="mt-4 rounded-xl border border-zinc-200 bg-zinc-50 p-4">
-          <div className="flex items-center justify-between">
+          <div className="flex flex-wrap items-center justify-between gap-2">
             {versions.filter(v=>v.emptyPlaceholder).map(v=><button key={v.quoteId} type="button" className="rounded border border-zinc-300 bg-white px-2 py-1 text-xs text-zinc-700" onClick={()=>void handleQuoteChange(v.quoteId)}>Ver registro inicial vacío</button>)}
             <p className="text-sm font-semibold text-zinc-700">{versions.some(v=>v.commercialOption) ? "Opciones comerciales y revisiones" : "Historial de versiones"}</p>
             <span className="text-xs text-zinc-400">{versions.some(v=>v.commercialOption) ? `${new Set(versions.filter(v=>v.commercialOption).map(v=>v.commercialOption!.optionId)).size} opciones · registros históricos conservados` : `${versions.length} versiones`}</span>
@@ -1733,7 +1733,8 @@ export function QuoteLineEditor({
         </div>
       )}
 
-      <fieldset aria-label="Partidas de cotización" disabled={currentStatus === "archived"} className="mt-6 overflow-x-auto rounded-xl border border-zinc-200">
+      <p className="mt-5 text-xs text-zinc-600 sm:hidden">Desliza la tabla de partidas hacia los lados para ver todos los campos.</p>
+      <fieldset aria-label="Partidas de cotización" tabIndex={0} disabled={currentStatus === "archived"} className="mt-2 min-w-0 max-w-full overflow-x-auto rounded-xl border border-zinc-200 sm:mt-6">
         <table className="min-w-full divide-y divide-zinc-200 text-sm">
           <thead className="bg-zinc-50 text-left text-zinc-600">
             <tr>
