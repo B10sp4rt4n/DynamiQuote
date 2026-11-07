@@ -1,6 +1,7 @@
 "use client";
 
 import { CommercialFlow } from "@/components/commercial/commercial-flow";
+import { DocumentCommercialFlow } from "@/components/commercial/document-commercial-flow";
 import Link from "next/link";
 import { useEffect, useMemo, useRef, useState, type MouseEvent } from "react";
 import { usePathname, useRouter, useSearchParams } from "next/navigation";
@@ -1442,7 +1443,7 @@ export function ProposalShell({
 
   return (
     <section className="rounded-xl border border-zinc-200 bg-white p-6 shadow-sm">
-      <CommercialFlow current={3} completed={selectedProposal ? [1, 2] : []} next={selectedProposal ? "Revisa esta propuesta y utiliza la acción disponible según su autorización." : "Selecciona una propuesta para revisarla."} />
+      {selectedProposal ? <DocumentCommercialFlow key={selectedProposal.proposalId} kind="proposal" id={selectedProposal.proposalId}/> : <CommercialFlow current={3} next={selectedProposal ? "Revisa esta propuesta y utiliza la acción disponible según su autorización." : "Selecciona una propuesta para revisarla."} />}
       <div className="flex flex-col gap-2 border-b border-zinc-200 pb-4 sm:flex-row sm:items-center sm:justify-between">
         <div>
           <p className="text-sm uppercase tracking-[0.18em] text-zinc-500">Tenant activo</p>

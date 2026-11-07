@@ -1,5 +1,6 @@
 "use client";
 
+import { DocumentCommercialFlow } from "@/components/commercial/document-commercial-flow";
 import { CommercialFlow } from "@/components/commercial/commercial-flow";
 import Link from "next/link";
 import { QuoteOpportunityPanel } from "./quote-opportunity-panel";
@@ -687,7 +688,7 @@ export function QuoteShell({
       </p>
       <div className="mt-6 rounded-xl border border-zinc-200 bg-zinc-50 p-4">
         <div className="flex flex-col gap-2">
-          <CommercialFlow current={2} completed={activeQuoteId || (opportunityMode === "existing" && opportunityId) ? [1] : []} next={activeQuoteId ? "Completa las partidas y usa Crear propuesta en el editor." : "Prepara la cotización de la oportunidad seleccionada."} />
+          {activeQuoteId ? <DocumentCommercialFlow key={activeQuoteId} kind="quote" id={activeQuoteId}/> : <CommercialFlow current={2} context={initialOpportunity ? {opportunityId:initialOpportunity.opportunityId,title:initialOpportunity.title} : undefined} completed={activeQuoteId || (opportunityMode === "existing" && opportunityId) ? [1] : []} next={activeQuoteId ? "Completa las partidas y usa Crear propuesta en el editor." : "Prepara la cotización de la oportunidad seleccionada."} />}
           <h2 className="text-lg font-semibold text-zinc-900">Nueva cotización</h2>
           <p className="text-sm text-zinc-600">
             Crea la cotizacion base y despues edita lineas o genera su propuesta formal.

@@ -3,7 +3,7 @@ import { useEffect, useRef, useState } from "react";
 import { useRouter } from "next/navigation";
 import type { OpportunityIntake } from "@/lib/domain/opportunity-intake";
 
-export function QuoteOpportunityPanel({ quoteId }: { quoteId: string }) {
+export function QuoteOpportunityPanel({ quoteId, opportunityId }: { quoteId?: string; opportunityId?: string }) {
   const router = useRouter();
   const [opportunity, setOpportunity] = useState<OpportunityIntake | null>(null);
   const [loading, setLoading] = useState(true);
@@ -18,7 +18,7 @@ export function QuoteOpportunityPanel({ quoteId }: { quoteId: string }) {
     const controller = new AbortController();
     void (async () => {
       try {
-        const response = await fetch(`/api/quotes/${encodeURIComponent(quoteId)}/opportunity`, { method: "GET", signal: controller.signal });
+        const response = await fetch(opportunityId ? `/api/opportunities/${encodeURIComponent(opportunityId)}/intake` : `/api/quotes/${encodeURIComponent(quoteId ?? "")}/opportunity`, { method: "GET", signal: controller.signal });
         if (!response.ok) throw new Error("No disponible");
         const data = await response.json() as { opportunity: OpportunityIntake | null };
         if (controller.signal.aborted) return;
@@ -31,7 +31,7 @@ export function QuoteOpportunityPanel({ quoteId }: { quoteId: string }) {
       } finally { if (!controller.signal.aborted) setLoading(false); }
     })();
     return () => controller.abort();
-  }, [quoteId, retry]);
+  }, [quoteId, opportunityId, retry]);
   async function save(event: React.FormEvent<HTMLFormElement>) {
     event.preventDefault();
     if (!opportunity || savingRef.current) return;
@@ -57,7 +57,7 @@ export function QuoteOpportunityPanel({ quoteId }: { quoteId: string }) {
   </div>;
   if (!opportunity) return null;
   const pending = opportunity.managed && opportunity.missingFields.length > 0;
-  const formId = `opportunity-intake-${quoteId}`;
+  const formId = `opportunity-intake-${opportunityId ?? quoteId}`;
   return <section className={`mt-4 rounded-lg border p-4 ${pending ? "border-amber-300 bg-amber-50 text-amber-950" : "border-zinc-300 bg-white text-zinc-900"}`} aria-label="Oportunidad de la cotización">
     <div className="flex flex-wrap items-center justify-between gap-3">
       <div><p className="font-semibold">{opportunity.opportunityNumber} · {pending ? "Datos de oportunidad pendientes" : opportunity.title || "Oportunidad vinculada"}</p>
@@ -66,6 +66,7 @@ export function QuoteOpportunityPanel({ quoteId }: { quoteId: string }) {
       {opportunity.managed ? <button className="rounded-lg border border-zinc-500 bg-white px-4 py-2 text-sm font-semibold text-zinc-900" type="button"
         aria-expanded={expanded} aria-controls={formId} onClick={() => setExpanded(value => !value)}>{expanded ? "Cerrar datos" : pending ? "Completar datos de la oportunidad" : "Ver datos de la oportunidad"}</button> : null}
     </div>
+    {opportunityId ? <dl className="mt-4 grid gap-3 text-sm sm:grid-cols-2">{[{label:"Necesidad",value:opportunity.need},{label:"Origen",value:opportunity.source},{label:"Siguiente acción",value:opportunity.nextStep}].map(item=><div key={item.label}><dt className="font-semibold">{item.label}</dt><dd className="mt-1 whitespace-pre-wrap break-words">{item.value || "Sin registrar"}</dd></div>)}</dl> : null}
     {expanded ? <form id={formId} onSubmit={save} className="mt-4 space-y-3 text-zinc-900">
       <p className="text-sm">Empresa: {opportunity.clientCompany}. El nombre, la necesidad y el origen completan el registro; puedes guardar avances.</p>
       <div className="grid gap-3 md:grid-cols-2">

@@ -1,5 +1,6 @@
 "use client";
 
+import Link from "next/link";
 import { useId, useRef } from "react";
 import type { OpportunityWithStage } from "@/lib/db/opportunities";
 import { DISPOSITION_LABELS } from "@/lib/domain/opportunity-disposition";
@@ -15,6 +16,7 @@ export function OpportunityReview({ opportunity: opp, canManage }: { opportunity
       <h2 id={titleId} className="text-lg font-semibold">{opp.opportunityNumber} · {opp.title}</h2>
       <p className="mt-2 whitespace-normal text-sm">{opp.clientCompany ?? "Sin cliente"} · {DISPOSITION_LABELS[opp.stage]}</p>
       <div className="mt-4 whitespace-normal text-sm"><OpportunityAmount amount={opp.amount} options={opp.commercialOptions} opportunityId={opp.opportunityId} stage={opp.stage} /></div>
+      <Link className="mt-4 inline-block min-h-11 font-semibold text-blue-800 underline" href={`/oportunidades/${encodeURIComponent(opp.opportunityId)}`}>Abrir ficha del negocio →</Link>
       <OpportunityDispositionControl key={`${opp.opportunityId}:${opp.disposition?.revision ?? 0}`} opportunity={opp} canManage={canManage} />
       <div className="mt-5 border-t border-zinc-200 pt-4"><button type="button" onClick={() => dialog.current?.close()} className="min-h-11 rounded-lg border border-zinc-400 px-4 py-2 text-sm font-semibold">Cerrar revisión</button></div>
     </dialog>
