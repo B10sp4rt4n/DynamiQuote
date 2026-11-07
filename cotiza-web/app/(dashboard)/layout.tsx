@@ -52,9 +52,9 @@ export default async function DashboardLayout({ children }: DashboardLayoutProps
   return (
     <div className="min-h-screen bg-zinc-100">
       <header className="border-b border-zinc-200 bg-white">
-        <div className="mx-auto flex max-w-7xl flex-wrap items-center justify-between gap-4 px-6 py-4">
+        <div className="mx-auto grid max-w-7xl grid-cols-[minmax(0,1fr)_auto] items-center gap-3 px-4 py-3 sm:px-6 sm:py-4">
           <CotizaBrand href="/inicio" subtitle={`Tenant activo: ${tenant.name}`} />
-          <div className="flex shrink-0 items-center gap-4 text-sm text-zinc-600">
+          <div className="flex shrink-0 items-center gap-2 text-sm text-zinc-600 sm:gap-4">
             <ExpiryAlertsBell />
             {clerkEnabled ? (
               <UserButton
@@ -67,12 +67,12 @@ export default async function DashboardLayout({ children }: DashboardLayoutProps
               />
             ) : <Link href="/sign-in">Activar autenticacion</Link>}
           </div>
-          <div className="w-full">
+          <div className="col-span-2 min-w-0">
             <DashboardNav crmWorkspaceEnabled={crmWorkspaceEnabled} />
           </div>
         </div>
       </header>
-      <main className="mx-auto max-w-7xl px-6 py-8">{children}</main>
+      <main className="mx-auto min-w-0 max-w-7xl px-4 py-5 sm:px-6 sm:py-8">{children}</main>
     </div>
   );
 }
