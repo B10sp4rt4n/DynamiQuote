@@ -44,6 +44,7 @@ export default async function ProposalsPage({ searchParams }: ProposalsPageProps
 
   return (
     <ProposalShell
+      key={`${tenant.id}:${tenant.userId}`}
       canForceIssuance={canForceIssuance}
       counts={counts}
       hasMore={page.hasMore}

@@ -1,0 +1,28 @@
+import Link from "next/link";
+import { notFound, redirect } from "next/navigation";
+import { getCurrentTenantContext } from "@/lib/auth/tenant-context";
+import { getBusinessWorkspace } from "@/lib/db/opportunity-workspace";
+import { CommercialFlow } from "@/components/commercial/commercial-flow";
+import { QuoteOpportunityPanel } from "@/components/cotizador/quote-opportunity-panel";
+import { OpportunityReview } from "@/components/pipeline/opportunity-review";
+import { OpportunityAmount } from "@/components/pipeline/opportunity-amount";
+import { DISPOSITION_LABELS } from "@/lib/domain/opportunity-disposition";
+export const dynamic="force-dynamic";
+export default async function BusinessPage({params}:{params:Promise<{opportunityId:string}>}) {
+ const tenant=await getCurrentTenantContext();if(!tenant?.userId)notFound();
+ const {opportunityId}=await params;const canSeeAll=tenant.isSuperAdmin || ["owner","admin"].includes(tenant.userRole);
+ const workspace=await getBusinessWorkspace(tenant.id,opportunityId,{userId:tenant.userId,canSeeAll});if(!workspace)notFound();
+ const {opportunity:o,quotes,proposals,tasks,optionLabels,ownerName}=workspace;
+ if(o.opportunityId!==opportunityId)redirect(`/oportunidades/${encodeURIComponent(o.opportunityId)}`);
+ const context={opportunityId:o.opportunityId,opportunityNumber:o.opportunityNumber,title:o.title,quoteId:quotes[0]?.quote_id,proposalId:proposals[0]?.proposal_id};
+ return <div className="space-y-5 text-zinc-900">
+  <Link className="inline-block min-h-11 text-sm text-blue-800 underline" href="/pipeline">← Todas las oportunidades</Link>
+  <header className="rounded-xl border border-zinc-200 bg-white p-5"><p className="text-sm font-semibold">{o.opportunityNumber} · {DISPOSITION_LABELS[o.stage]}</p><h1 className="mt-2 break-words text-2xl font-semibold">{o.title}</h1><dl className="mt-4 grid gap-3 sm:grid-cols-2"><div><dt className="text-sm text-zinc-600">Cliente</dt><dd>{o.clientCompany ?? "Sin cliente asociado"}</dd></div><div><dt className="text-sm text-zinc-600">Responsable</dt><dd>{ownerName ?? (o.ownerUserId===tenant.userId ? tenant.userDisplayName : null) ?? "Sin responsable identificado en el directorio"}</dd></div></dl><div className="mt-4">{o.amountUnestimated?<p>Por estimar</p>:<OpportunityAmount opportunityId={o.opportunityId} amount={o.amount} options={o.commercialOptions} stage={o.stage} />}</div><OpportunityReview opportunity={o} canManage={canSeeAll || o.ownerUserId===tenant.userId}/></header>
+  <CommercialFlow current={1} context={context} next={quotes.length?"Retoma una cotización o revisa las propuestas de este negocio.":"Crea la primera cotización de esta oportunidad."}/>
+  {o.stage==="open" && o.clientId ? <Link className="inline-block min-h-11 rounded-lg bg-blue-700 px-5 py-3 font-semibold text-white" href={`/cotizaciones?opportunityId=${encodeURIComponent(o.opportunityId)}`}>{quotes.length?"Crear otra cotización del negocio":"Continuar: crear cotización →"}</Link>:null}
+  <QuoteOpportunityPanel opportunityId={o.opportunityId}/>
+  <section className="rounded-xl border border-zinc-200 bg-white p-5"><h2 className="text-xl font-semibold">Pendientes del negocio ({tasks.length})</h2>{tasks.length ? <ul className="mt-3 space-y-3">{tasks.map(t=><li key={t.task_id} className="rounded-lg border border-zinc-200 p-3"><p className="whitespace-pre-wrap break-words">{t.description}</p><p className="mt-1 text-sm text-zinc-600">Fecha: {t.due_date.toISOString().slice(0,10)}</p></li>)}</ul>:<p className="mt-3 text-zinc-600">Sin tareas abiertas vinculadas a esta oportunidad.</p>}</section>
+  <section className="rounded-xl border border-zinc-200 bg-white p-5" id="cotizaciones"><h2 className="text-xl font-semibold">Cotizaciones y revisiones ({quotes.length})</h2><p className="mt-1 text-sm text-zinc-600">Cada enlace abre la revisión indicada. Las alternativas pertenecen al mismo negocio y no se suman como ventas independientes.</p><div className="mt-4 grid gap-3 sm:grid-cols-2">{quotes.map(q=><Link key={q.quote_id} className="min-h-11 rounded-lg border border-zinc-300 p-4 hover:border-blue-600" href={`/cotizaciones?quoteId=${encodeURIComponent(q.quote_id)}`}><span className="block text-sm font-semibold text-blue-800">{optionLabels[q.quote_id] ? `Opción ${optionLabels[q.quote_id]!.ordinal} · ${optionLabels[q.quote_id]!.label}` : ""}</span><strong className="block break-words">{q.proposal_name || "Cotización"}</strong><span className="text-sm">{q.quote_group_id ?? "Sin folio"} · Revisión {q.version ?? 1} · {q.status ?? "Sin estado"}</span></Link>)}</div>{!quotes.length?<p className="mt-3 text-zinc-600">Todavía no hay cotizaciones vinculadas.</p>:null}</section>
+  <section className="rounded-xl border border-zinc-200 bg-white p-5" id="propuestas"><h2 className="text-xl font-semibold">Propuestas ({proposals.length})</h2><div className="mt-4 grid gap-3 sm:grid-cols-2">{proposals.map(p=><Link key={p.proposal_id} className="min-h-11 rounded-lg border border-zinc-300 p-4 hover:border-blue-600" href={`/propuestas?proposalId=${encodeURIComponent(p.proposal_id)}`}><strong className="block">{p.formal_proposals[0]?.proposal_number ?? "Propuesta sin folio formal"}</strong><span className="block text-sm">Estado: {p.formal_proposals[0]?.status ?? p.status}</span><span className="block text-sm">Resultado: {p.outcome==="won"?"Ganada":p.outcome==="lost"?"Perdida":p.outcome==="discarded"?"Descartada":"Sin desenlace registrado"}</span><span className="block text-sm">Envío: {p.formal_proposals[0]?.sent_at?"Registrado":"Sin envío registrado"}</span></Link>)}</div>{!proposals.length?<p className="mt-3 text-zinc-600">Prepara una cotización para generar la primera propuesta.</p>:null}</section>
+ </div>;
+}

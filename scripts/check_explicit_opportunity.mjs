@@ -19,7 +19,7 @@ try {
  const result=spawnSync(process.execPath,[path.join(root,'cotiza-web/node_modules/prisma/build/index.js'),'migrate','diff','--from-empty','--to-schema','prisma/schema.prisma','--script'],{cwd:path.join(root,'cotiza-web'),encoding:'utf8',env:{...process.env,DATABASE_URL:url}});
  if(result.status!==0)throw Error(result.stderr);
  await client.query(result.stdout);await client.query('ALTER TABLE proposal_approvals ADD COLUMN executed_by_user_id text');await client.end();
- const child=spawn(process.execPath,[path.join(root,'cotiza-web/node_modules/vitest/vitest.mjs'),'run','lib/db/explicit-opportunity.integration.test.ts','lib/db/opportunity-intake.integration.test.ts','--maxWorkers=1','--no-file-parallelism'],{cwd:path.join(root,'cotiza-web'),stdio:'inherit',env:{...process.env,DATABASE_URL:url,COTIZA_EXPLICIT_NATIVE:'1',COTIZA_INTAKE_INTEGRATION:'1'}});
+ const child=spawn(process.execPath,[path.join(root,'cotiza-web/node_modules/vitest/vitest.mjs'),'run','lib/db/explicit-opportunity.integration.test.ts','lib/db/opportunity-intake.integration.test.ts','lib/db/opportunity-workspace.integration.test.ts','--maxWorkers=1','--no-file-parallelism'],{cwd:path.join(root,'cotiza-web'),stdio:'inherit',env:{...process.env,DATABASE_URL:url,COTIZA_EXPLICIT_NATIVE:'1',COTIZA_INTAKE_INTEGRATION:'1',COTIZA_WORKSPACE_NATIVE:'1'}});
  process.exitCode=await new Promise((resolve,reject)=>{child.once('error',reject);child.once('exit',code=>resolve(code??1));});
  if ((process.env.COTIZA_BROWSER_CHECK === '1' || process.env.COTIZA_HTTP_CHECK === '1') && process.exitCode === 0) {
   const fixture=pg.getPgClient();await fixture.connect();
@@ -38,6 +38,10 @@ try {
     const response=await post();const data=await response.json();if(response.status!==201)throw Error(JSON.stringify(data));
     const retry=await (await post()).json();if(retry.opportunity.opportunityId!==data.opportunity.opportunityId)throw Error('HTTP retry duplicated');
     const quote=await fetch(base+'/cotizaciones?opportunityId='+data.opportunity.opportunityId);const quoteHtml=await quote.text();if(!quote.ok || !quoteHtml.includes(input.title) || !quoteHtml.includes('Oportunidad existente'))throw Error('Quote prefill missing');
+    const ficha=await fetch(base+'/oportunidades/'+data.opportunity.opportunityId);if(!ficha.ok || !(await ficha.text()).includes('Cotizaciones y revisiones'))throw Error('Workspace unavailable');
+    const quoteResponse=await fetch(base+'/api/quotes',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({clientId:input.clientId,clientName:'Cliente de prueba',proposalName:input.title,creationId:crypto.randomUUID(),opportunityMode:'existing',opportunityId:data.opportunity.opportunityId})});const quoteData=await quoteResponse.json();if(quoteResponse.status!==201)throw Error(JSON.stringify(quoteData));
+    const context=await fetch(base+'/api/commercial-context?quoteId='+quoteData.quote.quoteId);const contextData=await context.json();if(!context.ok || contextData.context.opportunityId!==data.opportunity.opportunityId || contextData.context.quoteId!==quoteData.quote.quoteId)throw Error('Document lost its business context');
+    console.log('HTTP workspace and exact quote-to-business context passed.');
     console.log('HTTP: rendered declaration, created as session actor, recovered retry and prefilled existing opportunity successfully.');
    } finally {app.kill('SIGTERM');}
   } else await new Promise(resolve=>{process.once('SIGINT',resolve);process.once('SIGTERM',resolve);app.once('exit',resolve);});app.kill('SIGTERM');
