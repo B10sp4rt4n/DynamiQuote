@@ -1333,7 +1333,7 @@ export function QuoteLineEditor({
             Cotizacion
           </label>
           <select
-            className="w-full min-w-0 max-w-full flex-1 rounded-lg border border-zinc-300 bg-white px-3 py-2 text-sm text-zinc-900 md:min-w-[320px] lg:min-w-[520px]"
+            className="w-full min-w-0 max-w-full rounded-lg border border-zinc-300 bg-white px-3 py-2 text-sm text-zinc-900 md:min-w-[320px] md:flex-1 lg:min-w-[520px]"
             id="quote-selector"
             onChange={(event) => {
               void handleQuoteChange(event.target.value);
