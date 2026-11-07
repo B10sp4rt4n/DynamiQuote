@@ -35,7 +35,7 @@ export default async function PipelinePage() {
   return (
     <div className="space-y-6">
       <div>
-        <h1 className="text-2xl font-semibold tracking-tight text-slate-950">Pipeline</h1>
+        <h1 className="text-2xl font-semibold tracking-tight text-slate-950">Oportunidades</h1>
         <p className="mt-1 text-sm text-zinc-500">
           Oportunidades activas, pausadas y cerradas. Las pausadas y las cerradas sin decisión quedan fuera del total abierto y de la tasa ganado/perdido.
         </p>
