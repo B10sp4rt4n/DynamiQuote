@@ -1,4 +1,5 @@
 import "server-only";
+import { enqueueWonDelivery } from "./won-delivery-queue";
 import { randomUUID } from "crypto";
 import { Prisma } from "@prisma/client";
 import { prisma } from "./prisma";
@@ -34,7 +35,7 @@ export async function saveWonPolicy(tenantId: string, actorId: string, input: un
 
 // Called only on a new won transition, under the existing tenant business-win lock.
 // Stores an immutable snapshot in the SAME transaction as the commercial decision.
-// This pilot has no transport: emails and internal notifications are previews only.
+// Delivery materialization is opt-in; all new channel flags default to off.
 export async function captureWonEvent(tx: Prisma.TransactionClient, proposal: {
   tenant_id: string; proposal_id: string; opportunity_id: string | null; origin: string | null;
   outcome: string | null;
@@ -85,4 +86,5 @@ export async function captureWonEvent(tx: Prisma.TransactionClient, proposal: {
   };
   await tx.proposal_audit_events.create({ data: { event_id: eventId, event_hash: randomUUID(), tenant_id: proposal.tenant_id,
     proposal_id: proposal.proposal_id, created_at: now, event_type: "opportunity.closed_won", payload: JSON.stringify(payload) } });
+  await enqueueWonDelivery(tx, payload);
 }

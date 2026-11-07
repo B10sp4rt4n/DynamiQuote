@@ -7,6 +7,8 @@ import { redirect } from "next/navigation";
 import { hasClerkCredentials } from "@/lib/auth/clerk";
 import { isTenantCapabilityEnabled } from "@/lib/db/tenant-capabilities";
 import { getCurrentTenantContext } from "@/lib/auth/tenant-context";
+import { deliveryFlags } from "@/lib/notifications/won-message";
+import { WonNoticeLink } from "@/components/layout/won-notifications";
 import { ExpiryAlertsBell } from "@/components/layout/expiry-alerts-bell";
 import { CotizaBrand } from "@/components/ui/cotiza-brand";
 import { DashboardNav } from "@/components/layout/dashboard-nav";
@@ -61,6 +63,7 @@ export default async function DashboardLayout({ children }: DashboardLayoutProps
         <div className="mx-auto grid max-w-7xl grid-cols-[minmax(0,1fr)_auto] items-center gap-3 px-4 py-3 sm:px-6 sm:py-4">
           <CotizaBrand href="/inicio" subtitle={showTenantSwitcher ? null : `Empresa activa: ${tenant.name}`} />
           <div className="flex shrink-0 items-center gap-2 text-sm text-zinc-600 sm:gap-4">
+            {deliveryFlags().inApp ? <WonNoticeLink key={tenant.id} processEmails={deliveryFlags().email && (tenant.isSuperAdmin || ["owner","admin"].includes(tenant.userRole))}/> : null}
             <ExpiryAlertsBell />
             {clerkEnabled ? (
               <UserButton

@@ -1,0 +1,14 @@
+import {afterEach,beforeEach,expect,it,vi} from "vitest";
+const m=vi.hoisted(()=>({tenant:vi.fn(),list:vi.fn(),mark:vi.fn()}));
+vi.mock("@/lib/auth/tenant-context",()=>({getCurrentTenantContext:m.tenant}));
+vi.mock("@/lib/db/won-inbox",()=>({getWonInbox:m.list,markWonNoticeRead:m.mark}));
+vi.mock("@/lib/utils/rate-limit",()=>({enforceRateLimit:()=>({allowed:true})}));
+import {GET,PATCH} from "./route";
+const request=(body:unknown)=>new Request("https://cotiza.example/api/notifications/won",{method:"PATCH",headers:{"Content-Type":"application/json"},body:JSON.stringify(body)});
+beforeEach(()=>{vi.resetAllMocks();vi.stubEnv("COTIZA_WON_EVENT_PILOT","true");vi.stubEnv("COTIZA_WON_IN_APP_ENABLED","true");m.tenant.mockResolvedValue({id:"t",userId:"u",userRole:"superadmin"});m.list.mockResolvedValue({notifications:[],unreadCount:0});m.mark.mockResolvedValue(true);});
+afterEach(()=>vi.unstubAllEnvs());
+it("requires authentication for both reads and writes",async()=>{m.tenant.mockResolvedValue(null);expect((await GET()).status).toBe(401);expect((await PATCH(request({notificationId:"n"}))).status).toBe(401);expect(m.list).not.toHaveBeenCalled();});
+it("scopes even a superadmin's inbox to their own tenant and recipient identity",async()=>{expect((await GET()).status).toBe(200);expect(m.list).toHaveBeenCalledWith("t","u");expect((await PATCH(request({notificationId:"n",tenantId:"foreign",userId:"other"}))).status).toBe(200);expect(m.mark).toHaveBeenCalledWith("t","u","n");});
+it("returns 404 for another recipient's notice",async()=>{m.mark.mockResolvedValue(false);expect((await PATCH(request({notificationId:"foreign"}))).status).toBe(404);});
+it("does not query optional delivery tables when paused",async()=>{vi.stubEnv("COTIZA_WON_IN_APP_ENABLED","false");expect((await (await GET()).json()).mode).toBe("paused");expect(m.list).not.toHaveBeenCalled();expect((await PATCH(request({notificationId:"n"}))).status).toBe(404);});
+it("rejects invalid read requests",async()=>{expect((await PATCH(request({notificationId:""}))).status).toBe(422);expect(m.mark).not.toHaveBeenCalled();});

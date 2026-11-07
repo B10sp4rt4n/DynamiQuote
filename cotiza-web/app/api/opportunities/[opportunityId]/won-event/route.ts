@@ -1,4 +1,7 @@
 import { NextResponse } from "next/server";
+import { renderWonMessage, wonEventSchema } from "@/lib/notifications/won-message";
+import { getPublicAppUrl } from "@/lib/utils/app-url";
+import { resolveResendConfig } from "@/lib/email/resend";
 import { getCurrentTenantContext } from "@/lib/auth/tenant-context";
 import { resolveBusiness } from "@/lib/db/opportunity-workspace";
 import { prisma } from "@/lib/db/prisma";
@@ -37,11 +40,15 @@ export async function GET(request: Request, context: { params: Promise<{ opportu
   const users = await wonPolicyUsers(tenant.id);
   const active = payload.notification.recipients.filter((r: Recipient) => users.some(u => u.user_id === r.user_id));
   const mailboxes = emailPreview(active, users);
-  const subject = `Oportunidad ganada · ${payload.opportunity.folio}`;
-  const text = `${payload.opportunity.title}\nCliente: ${payload.opportunity.customer.name}\nImporte neto: ${payload.opportunity.winning_proposal.amount} ${payload.opportunity.winning_proposal.currency}\nFecha comercial de cierre: ${payload.closed_on}\nRegistrado: ${payload.occurred_at}\nVer oportunidad: /oportunidades/${encodeURIComponent(payload.opportunity_id)}`;
-  return NextResponse.json({ event: payload, mode: "dry_run", subject, text,
-    emails: mailboxes.map(m => ({ ...m, reasons: m.reasons.map(r => reasonLabel[r]) })),
+  const parsed=wonEventSchema.safeParse(payload);
+  const base=getPublicAppUrl();
+  const sender=canSeeAll?await resolveResendConfig():null;
+  const template=parsed.success?renderWonMessage(parsed.data,[...new Set(active.flatMap((r:Recipient)=>r.reasons))] as Recipient["reasons"],base.ok?base.url:undefined):null;
+  const subject = template?.subject ?? `Oportunidad ganada · ${payload.opportunity.folio}`;
+  const text = template?.text ?? `${payload.opportunity.title}\nCliente: ${payload.opportunity.customer.name}\nImporte neto: ${payload.opportunity.winning_proposal.amount} ${payload.opportunity.winning_proposal.currency}\nFecha comercial de cierre: ${payload.closed_on}\nRegistrado: ${payload.occurred_at}\nVer oportunidad: /oportunidades/${encodeURIComponent(payload.opportunity_id)}`;
+  return NextResponse.json({ event: payload, mode: "dry_run", subject, text, from: sender?.from ?? null,
+    emails: mailboxes.map(m => ({ ...m, ...(parsed.success?renderWonMessage(parsed.data,m.reasons,base.ok?base.url:undefined):{subject,text}), reasons: m.reasons.map(r => reasonLabel[r]) })),
     inApp: active.map((r: Recipient) => ({ userId: r.user_id, reasons: r.reasons.map(reason => reasonLabel[reason]) })),
     missingEmailCount: active.filter((r: Recipient) => !mailboxes.some(m => m.userIds.includes(r.user_id))).length,
-    message: "Vista previa. No se ha enviado correo ni publicado una notificación interna." }, { headers });
+    message: "Esta consulta muestra una vista previa. Revisa Tus avisos comerciales para conocer los avisos publicados y el estado del correo." }, { headers });
 }

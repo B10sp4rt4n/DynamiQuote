@@ -1,82 +1,132 @@
-# Piloto de aviso de oportunidad ganada
+# Avisos de oportunidad ganada
 
-Implementación en modo dry run. No contiene transporte de correo ni publica
-avisos en una bandeja interna. La vista muestra lo que recibirían los usuarios.
-No se habilita automáticamente en SynAppsSys ni en otros tenants.
+La rama implementa captura JSON, bandeja interna y cola de correo con el Resend
+que ya usa Cotiza. Los canales nuevos están desactivados por defecto. Este cambio
+no activa SynAppsSys, no modifica su cuenta real y no envía correos por sí solo.
 
-## Recorrido
+## Publicación y configuración
 
-1. Aplicar `prisma/manual/20261107_won_notifications.sql` en el entorno aislado.
-2. Habilitar `COTIZA_WON_EVENT_PILOT=true` en ese entorno; por defecto está apagado.
-3. Abrir la ficha de una oportunidad como owner/admin del tenant o superadmin.
-4. En «Aviso de cierre ganado · Piloto», activar captura, mantener «Avisar al
-   responsable» y seleccionar al usuario de Salvador como designado administrativo
-   del tenant SynAppsSys, verificando su identidad y correo en el directorio.
-5. Guardar. Esta política afecta a los próximos cierres de esa empresa.
-6. Con una oportunidad de prueba completa, autorizar una propuesta y registrar
-   su resultado ganado. La política no autoriza propuestas ni altera permisos.
-7. Revisar el último cierre y descargar JSON. Si Salvador es también responsable,
-   aparecen ambas razones en un único destinatario por canal.
+Aplicar, en este orden, las migraciones revisadas antes de habilitar los flags:
 
-No cambiar resultados comerciales reales para probar. No reconstruir cierres
-anteriores al piloto: el sistema no inventa fechas, destinatarios ni eventos.
+1. `prisma/manual/20261107_won_notifications.sql`
+2. `prisma/manual/20261107_won_delivery.sql`
 
-## Identidad y duplicados
+Ambas son aditivas e idempotentes. No rellenan cierres, destinatarios ni envíos
+históricos. No usar `db push` contra producción para sustituir estas migraciones.
 
-- La selección comercial se deriva del resultado de la propuesta, no del envío.
-- El evento se guarda junto con la transición comercial dentro de la transacción
-  que ya utiliza los bloqueos de negocio/tenant y propuesta.
-- Solo dispara al entrar en `won`: reintentos y correcciones de fecha no crean
-  otro evento. Tras retirar el resultado y volver a ganar, existe un nuevo cierre.
-- Cada evento tiene UUID y clave de tenant/oportunidad/secuencia/tipo.
-- El responsable y los designados se consolidan por `user_id`, uniendo motivos.
-- La vista de correo además agrupa por dirección normalizada (trim + minúsculas).
-  Los avisos internos mantienen identidades por usuario, no por correo compartido.
-- Se conservan propuesta ganadora, revisión de cotización, importe decimal neto,
-  moneda, fecha comercial y fecha real de registro. La zona actual de Cotiza es CDMX.
-- Si falta información mínima, se registra `opportunity_won_incomplete` en la
-  auditoría. Se conserva el cierre, sin fabricar un evento exportable completo.
+Los tres flags requieren el valor exacto `true`:
 
-## Datos y acceso
+| Variable | Efecto |
+| --- | --- |
+| `COTIZA_WON_EVENT_PILOT` | Captura el evento al entrar en ganada; habilita la configuración y exportación. |
+| `COTIZA_WON_IN_APP_ENABLED` | Publica un aviso por evento/usuario y habilita `/notificaciones`. |
+| `COTIZA_WON_EMAIL_ENABLED` | Encola y procesa correo. Requiere remitente/credenciales existentes y URL pública válida. |
 
-La política vive en `opportunity_won_notification_policies`, aislada por tenant,
-con versión, fecha y último actor. Solo administración configura destinatarios;
-el servidor valida que sean usuarios activos de esa empresa.
+Los canales también requieren la captura activa y la política del tenant. Los
+flags de canal apagados no consultan las nuevas tablas. Los eventos creados con
+canales apagados no se convierten retroactivamente en envíos al encenderlos.
 
-El evento inmutable vive en `proposal_audit_events` y corresponde al identificador
-de oportunidad de la propuesta que ganó. La ficha canónica de un negocio con
-alternativas puede recuperar eventos de sus miembros autorizados. Su secuencia
-es por identificador de oportunidad, no por conjunto de alternativas.
+En la ficha del negocio, un owner/admin del tenant o superadmin configura al
+responsable y otros usuarios designados. La pantalla muestra qué canales están
+activos y permite revisar el mensaje por destinatario y descargar el JSON. Un
+designado debe seguir teniendo acceso al documento: la designación no le da permisos.
 
-`GET /api/opportunities/:id/won-event` devuelve un sobre de prueba con el evento,
-asunto, cuerpo y destinatarios actuales elegibles. `?download=1` descarga el
-snapshot y registra la exportación. La administración ve todos los destinatarios;
-un usuario ordinario solo ve su propia entrada. Esta proyección no añade campos
-al contrato. La descarga posterior no cambia el snapshot comercial.
+Para SynAppsSys se verificó en lectura la existencia de la cuenta activa correcta.
+La otra cuenta del mismo correo pertenece a un tenant diferente y no se incorpora.
+No incluir datos personales de esas cuentas en este repositorio público.
 
-Los usuarios desactivados se excluyen de la vista de entrega actual aunque
-permanezcan en el snapshot histórico. No se incluyen correos, márgenes, costos,
-credenciales ni documentos adjuntos en el JSON del evento. El asunto/cuerpo usa
-texto plano. El enlace al negocio sigue requiriendo autenticación y permisos.
+## Recorrido de aceptación
 
-El JSON Schema adjunto es el contrato propuesto de integración. La configuración
-por canal descrita en ese diseño es una ampliación futura: este primer piloto
-prepara ambos canales. Ningún consumidor debe tratar el evento como prueba de envío.
+1. Usar una base aislada, tenant e identidades sintéticos; no cerrar negocios
+   comerciales reales para probar. Aplicar las dos migraciones dos veces.
+2. Activar captura y aviso interno. Seleccionar al mismo usuario como responsable
+   y designado administrativo. Registrar una propuesta autorizada como ganada.
+3. Confirmar un aviso con ambos motivos; marcarlo leído y repetir esa operación.
+4. Para probar correo, usar un receptor local simulado (`RESEND_BASE_URL` del SDK),
+   una clave ficticia, remitente/destinatarios sintéticos y URL local. Nunca reutilizar
+   credenciales de producción en esa prueba.
+5. Simular fallo 503, reintentar y verificar el mismo sobre y clave, una sola
+   aceptación y dos intentos registrados. Repetir procesamiento después del éxito.
+6. Repetir cierre, corregir fecha, probar otro tenant, usuario desactivado,
+   designación sin permisos, workers simultáneos y recuperación de un trabajo interrumpido.
+7. Validar el JSON real contra `docs/cotiza-oportunidad-ganada.schema.json`.
 
-## Validación y límites para activación
+La prueba con el destinatario real requiere revisar remitente, destinatario,
+asunto y cuerpo completo antes de autorizar ese envío. No se hizo en esta ejecución.
 
-Se probaron consolidación de roles y buzones, exclusión de usuarios no elegibles,
-fechas históricas, importes decimales, captura de transición y no repetición,
-permisos de exportación y privacidad de destinatarios.
+## Estado y duplicados
 
-Pendiente antes de activar: aplicar y verificar la migración en PostgreSQL aislado,
-recorrer la interfaz completa con una sesión autenticada y comprobar la ficha de
-Salvador en SynAppsSys. Estas verificaciones no se sustituyen por pruebas con mocks.
+El evento se guarda dentro de la transacción comercial que ya bloquea el negocio
+por tenant y la propuesta. Captura, aviso y cola se materializan atómicamente.
+Los fallos del proveedor ocurren después del commit y no revierten el cierre.
 
-Para envío real faltan transporte asíncrono con reintentos e idempotencia por
-buzón/evento, registro de entrega por canal, bandeja interna con leído/no leído,
-y revalidación de permisos específicos del destinatario. La versión actual no
-habilita ninguno de esos envíos y no contiene una llamada a Resend/Gmail.
+Solo se captura al entrar en `won`. Guardar de nuevo o corregir su fecha no crea
+otro aviso. Retirar el resultado y volver a ganar representa un nuevo cierre.
+Los roles se unen por usuario para aviso interno y por dirección normalizada
+para correo, conservando ambos motivos. Las restricciones únicas impiden volver
+a crear filas para el mismo evento/destinatario.
 
-Reversión: apagar el flag y revertir código. Conservar los eventos históricos.
-La migración no modifica datos comerciales existentes ni activa ninguna política.
+El snapshot conserva propuesta y revisión ganadoras, importe neto decimal y
+moneda, fecha comercial e instante de registro. No se reemplaza por otra versión.
+Si faltan datos mínimos, queda `opportunity_won_incomplete` sin fabricar un evento
+exportable. Cambiar la fecha después conserva el evento original y registra la
+corrección en la auditoría.
+
+## Bandeja y acceso
+
+El encabezado enlaza a «Avisos comerciales» con contador de no leídos. Se listan
+los 50 avisos más recientes. El marcado de lectura conserva el primer timestamp.
+La consulta y el PATCH revalidan tenant, identidad, usuario activo, tenant activo
+y acceso actual a propuesta/oportunidad; ni un superadmin marca avisos de otro usuario.
+El enlace abre la propuesta ganadora exacta y sigue exigiendo sus permisos normales.
+
+`GET /api/notifications/won` devuelve únicamente el buzón del usuario actual.
+`PATCH` recibe solo `notificationId`; tenant y usuario provienen de la sesión.
+La descarga JSON conserva su auditoría y proyecta los destinatarios según el rol.
+No lleva costos, márgenes, credenciales ni correos de destinatarios.
+
+## Correo, recuperación y límites
+
+El primer procesamiento se registra con `after()` tras confirmar el resultado.
+La cabecera de un administrador procesa pendientes al abrir la app y cada minuto
+mientras la pestaña está visible. Un cierre posterior también puede drenar la cola.
+`POST /api/notifications/won-deliveries` permite procesar pendientes del tenant
+actual a administración; `GET` muestra su estado e intentos. Hay límites de frecuencia.
+No se añadió un cron, servicio ni suscripción. Si la aplicación queda inactiva,
+los reintentos esperan una nueva actividad administrativa o procesamiento explícito.
+
+La cola usa leases y `FOR UPDATE SKIP LOCKED`; el worker que perdió su lease no
+sobrescribe el resultado de otro. Revalida la política, usuario, dirección y
+permisos antes de transmitir. Desactivación, cambios de destinatario o pérdida
+de acceso suprimen el envío. El cuerpo y remitente quedan congelados antes del
+primer request; un cambio de remitente después exige revisión.
+
+Resend recibe una clave estable por evento/buzón. Su ventana documentada es de
+24 horas; el worker limita sus reintentos a 23 horas y cuatro intentos, con esperas
+de 1, 5 y 15 minutos. Después queda «Requiere revisión», sin nuevo envío automático.
+No cambiar la clave para resolver un resultado incierto sin conciliarlo antes.
+Fuente: https://resend.com/changelog/idempotency-keys
+
+`sent` significa «Aceptado por el proveedor», no entrega al buzón ni lectura.
+Estas dos últimas señales requieren integración adicional de webhooks y no se
+presentan como confirmadas. Se registran IDs de proveedor y códigos de error
+acotados; no se guardan mensajes crudos del proveedor que puedan filtrar datos.
+
+## Validación y reversión
+
+La integración reproducible se ejecuta con `COTIZA_WON_DELIVERY_TEST_URL` apuntando
+a una base vacía de localhost con el esquema Prisma, la migración de políticas y
+`proposal_approvals.executed_by_user_id` de la base operativa. Ejecutar
+`npx vitest run lib/db/won-delivery.integration.test.ts`. La suite rechaza hosts
+remotos y aplica la migración de entregas dos veces.
+
+Se ejecutaron pruebas DOM de la bandeja y límites de autenticación/aislamiento,
+además de integración con PostgreSQL desechable, Next.js y el SDK Resend contra
+un receptor local simulado. Se verificaron reintento 503, mismo sobre/clave,
+aceptación única, lectura idempotente y exportación válida. No hubo envíos externos.
+El recorrido visual completo con Clerk real sigue pendiente por el bloqueo de
+Chromium local y la autenticación independiente de la vista previa.
+
+Para revertir, apagar los dos flags de canal y el flag de captura antes de revertir
+el código. Conservar eventos, avisos y entregas históricos. No borrar registros
+para forzar reenvíos. Las tablas nuevas no alteran datos comerciales anteriores.

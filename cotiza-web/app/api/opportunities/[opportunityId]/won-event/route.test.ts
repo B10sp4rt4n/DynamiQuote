@@ -1,3 +1,5 @@
+vi.mock("server-only",()=>({}));
+vi.mock("@/lib/email/resend",()=>({resolveResendConfig:async()=>({from:"Cotiza <mail@example.invalid>",error:null})}));
 import { afterEach, beforeEach, expect, it, vi } from "vitest";
 const m = vi.hoisted(() => ({ tenant: vi.fn(), business: vi.fn(), proposals: vi.fn(), event: vi.fn(), audit: vi.fn(), users: vi.fn(), quotes: vi.fn() }));
 vi.mock("@/lib/auth/tenant-context", () => ({ getCurrentTenantContext: m.tenant }));

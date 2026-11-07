@@ -1,4 +1,5 @@
-import { NextResponse } from "next/server";
+import { after, NextResponse } from "next/server";
+import { deliveryFlags } from "@/lib/notifications/won-message";
 import { closeDateInstant } from "@/lib/domain/commercial-close-date";
 
 import { getCurrentTenantContext } from "@/lib/auth/tenant-context";
@@ -234,6 +235,12 @@ export async function PATCH(request: Request, context: RouteContext) {
     return NextResponse.json({ error: "La decisión cambió mientras editabas. Recarga la propuesta antes de guardar" }, { status: 409 });
   }
 
+  if (parsed.data.outcome === "won" && deliveryFlags().email) {
+    after(async () => {
+      try { const { processWonEmails } = await import("@/lib/db/won-email-dispatch"); await processWonEmails(tenant.id); }
+      catch { console.error("[won-delivery] Procesamiento pendiente; revisar cola del tenant"); }
+    });
+  }
   return NextResponse.json({ outcome: parsed.data.outcome,
     outcomeAt: parsed.data.closedOn ? closeDateInstant(parsed.data.closedOn).toISOString() : null,
   }, { status: 200 });

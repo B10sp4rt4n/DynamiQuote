@@ -1,0 +1,14 @@
+import {afterEach,beforeEach,expect,it,vi} from "vitest";
+const m=vi.hoisted(()=>({tenant:vi.fn(),query:vi.fn(),process:vi.fn()}));
+vi.mock("@/lib/auth/tenant-context",()=>({getCurrentTenantContext:m.tenant}));
+vi.mock("@/lib/db/prisma",()=>({prisma:{$queryRaw:m.query}}));
+vi.mock("@/lib/db/won-email-dispatch",()=>({processWonEmails:m.process}));
+vi.mock("@/lib/utils/rate-limit",()=>({enforceRateLimit:()=>({allowed:true})}));
+import {GET,POST} from "./route";
+beforeEach(()=>{vi.resetAllMocks();vi.stubEnv("COTIZA_WON_EVENT_PILOT","true");vi.stubEnv("COTIZA_WON_EMAIL_ENABLED","true");m.tenant.mockResolvedValue({id:"own-tenant",userId:"admin",userRole:"admin",isSuperAdmin:false});m.query.mockResolvedValue([]);m.process.mockResolvedValue({mode:"live",processed:1});});
+afterEach(()=>vi.unstubAllEnvs());
+it("does not process mail without an authenticated tenant",async()=>{m.tenant.mockResolvedValue(null);expect((await POST()).status).toBe(401);expect(m.process).not.toHaveBeenCalled();});
+it("does not grant processing or visibility to ordinary users",async()=>{m.tenant.mockResolvedValue({id:"own-tenant",userId:"seller",userRole:"user",isSuperAdmin:false});expect((await GET()).status).toBe(403);expect((await POST()).status).toBe(403);expect(m.process).not.toHaveBeenCalled();expect(m.query).not.toHaveBeenCalled();});
+it("does not process or inspect delivery storage when the global channel is paused",async()=>{vi.stubEnv("COTIZA_WON_EMAIL_ENABLED","false");expect((await (await POST()).json()).mode).toBe("paused");expect(m.process).not.toHaveBeenCalled();expect(m.query).not.toHaveBeenCalled();});
+it("processes only the administrator's current tenant",async()=>{expect((await POST()).status).toBe(200);expect(m.process).toHaveBeenCalledWith("own-tenant");});
+it("a status query never processes the queue",async()=>{expect((await GET()).status).toBe(200);expect(m.query).toHaveBeenCalled();expect(m.process).not.toHaveBeenCalled();});

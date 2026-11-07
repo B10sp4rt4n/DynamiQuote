@@ -1,0 +1,11 @@
+import { beforeEach,expect,it,vi } from "vitest";
+vi.mock("server-only",()=>({}));
+const m=vi.hoisted(()=>({config:vi.fn(),send:vi.fn()}));
+vi.mock("./resend",()=>({resolveResendConfig:m.config}));
+import { getWonMailTransport } from "./won-notification";
+const message={from:"Cotiza <mail@example.com>",to:"owner@example.com",subject:"Ganada",text:"Detalle"};
+beforeEach(()=>{vi.resetAllMocks();m.config.mockResolvedValue({from:message.from,error:null,client:{emails:{send:m.send}}});});
+it("uses the existing sender and a provider idempotency key",async()=>{m.send.mockResolvedValue({data:{id:"id"},error:null});const t=(await getWonMailTransport())!;expect(await t.send(message,"stable-key")).toEqual({kind:"sent",id:"id"});expect(m.send).toHaveBeenCalledWith(message,{idempotencyKey:"stable-key"});});
+it("retries transient and unknown outcomes without persisting provider text",async()=>{m.send.mockResolvedValue({data:null,error:{statusCode:429,name:"rate_limit_exceeded",message:"private@example.com"}});const t=(await getWonMailTransport())!;expect(await t.send(message,"k")).toEqual({kind:"retry",code:"provider_retryable"});m.send.mockRejectedValue(Error("secret request"));expect(await t.send(message,"k")).toEqual({kind:"retry",code:"provider_result_unknown"});});
+it("does not retry payload conflicts or invalid recipients",async()=>{m.send.mockResolvedValue({data:null,error:{statusCode:409,name:"invalid_idempotent_request"}});const t=(await getWonMailTransport())!;expect(await t.send(message,"k")).toEqual({kind:"failed",code:"idempotency_payload_conflict"});m.send.mockResolvedValue({data:null,error:{statusCode:422,name:"validation_error"}});expect(await t.send(message,"k")).toEqual({kind:"failed",code:"provider_rejected"});});
+it("does not construct a transport when sender configuration is missing",async()=>{m.config.mockResolvedValue({client:null,error:"missing",from:""});expect(await getWonMailTransport()).toBeNull();expect(m.send).not.toHaveBeenCalled();});
