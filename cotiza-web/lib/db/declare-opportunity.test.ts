@@ -11,3 +11,9 @@ it("validates client in the session tenant before allocating and keeps actor pro
 it("rejects unavailable and cross-tenant clients without creating a record",async()=>{m.client.mockResolvedValue(null);await expect(declareOpportunity("tenant-a","seller-a",input)).rejects.toMatchObject({status:404});expect(m.create).not.toHaveBeenCalled();});
 it("recovers a retry without creating another opportunity",async()=>{m.prior.mockResolvedValue({opportunity_id:"prior",opportunity_number:"OPP-0001",owner_user_id:"seller-a",client_id:input.clientId,title:input.title});expect((await declareOpportunity("tenant-a","seller-a",input)).opportunityId).toBe("prior");expect(m.create).not.toHaveBeenCalled();});
 it("rejects replay by a different actor or with changed content",async()=>{m.prior.mockResolvedValue({owner_user_id:"seller-b",client_id:input.clientId,title:input.title});await expect(declareOpportunity("tenant-a","seller-a",input)).rejects.toMatchObject({status:409});expect(m.create).not.toHaveBeenCalled();});
+
+it("accepts legacy catalog CUIDs and UUID clients, while retaining a UUID retry key",()=>{
+ for(const clientId of ["csyntheticclient00000000001", input.clientId]) expect(declarationSchema.safeParse({...input,clientId}).success).toBe(true);
+ for(const clientId of ["", " ", "../foreign", "x".repeat(129)]) expect(declarationSchema.safeParse({...input,clientId}).success).toBe(false);
+ expect(declarationSchema.safeParse({...input,creationId:"not-an-attempt-id"}).success).toBe(false);
+});
