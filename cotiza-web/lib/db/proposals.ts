@@ -14,6 +14,7 @@ import {
   type ProposalApproverRole,
 } from "@/lib/db/proposal-approvals";
 import { prisma } from "@/lib/db/prisma";
+import { hasAnotherBusinessWin } from "@/lib/db/commercial-win-guard";
 import { NOT_DISCARDED_WHERE } from "@/lib/db/proposal-filters";
 import { closeDateInstant, earliestCommercialStart, isValidCloseDate, mexicoCalendarDate } from "@/lib/domain/commercial-close-date";
 import {
@@ -1791,7 +1792,7 @@ export async function getProposalWorkflowByTenant(
   };
 }
 
-export type SetProposalOutcomeResult = "forbidden" | "invalid_status" | "invalid_date" | "conflict" | "not_found" | "updated";
+export type SetProposalOutcomeResult = "forbidden" | "invalid_status" | "invalid_date" | "conflict" | "business_already_won" | "not_found" | "updated";
 
 export type ProposalOutcomeDateInput = {
   closedOn?: string;
@@ -1813,6 +1814,9 @@ export async function setProposalOutcomeByTenant(
   dateInput: ProposalOutcomeDateInput = {},
 ): Promise<SetProposalOutcomeResult> {
   return prisma.$transaction(async (tx): Promise<SetProposalOutcomeResult> => {
+    // Two proposals (including alternatives on different opportunities) can
+    // otherwise both pass a sibling lookup before either commits its win.
+    if (outcome === "won") await tx.$executeRaw`SELECT pg_advisory_xact_lock(hashtextextended(${`business-win:${tenantId}`}, 0))`;
     // Serialize decisions on the same proposal; status and ownership are
     // checked after acquiring the lock, including after a concurrent reopen.
     await tx.$queryRaw(Prisma.sql`
@@ -1834,6 +1838,9 @@ export async function setProposalOutcomeByTenant(
     }
     if ((outcome === "won" || outcome === "lost") && row.status !== "approved") {
       return "invalid_status";
+    }
+    if (outcome === "won" && row.outcome !== "won" && await hasAnotherBusinessWin(tx, tenantId, row)) {
+      return "business_already_won";
     }
     const now = new Date();
     let outcomeAt = outcome ? now : null;
