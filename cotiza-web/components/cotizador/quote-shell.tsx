@@ -654,7 +654,7 @@ export function QuoteShell({
   }
 
   return (
-    <section className="rounded-xl border border-zinc-200 bg-white p-6 shadow-sm">
+    <section className="min-w-0 rounded-xl border border-zinc-200 bg-white p-4 shadow-sm sm:p-6">
       <div className="flex flex-col gap-2 border-b border-zinc-200 pb-4">
         <p className="text-sm uppercase tracking-[0.18em] text-zinc-500">Tenant activo</p>
         <h1 className="text-2xl font-semibold text-zinc-900">Cotizaciones de {tenantName}</h1>
@@ -664,7 +664,7 @@ export function QuoteShell({
               Asociar a empresa
             </label>
             <select
-              className="min-w-[260px] rounded-lg border border-zinc-300 bg-white px-3 py-2 text-sm text-zinc-900"
+              className="w-full min-w-0 max-w-full rounded-lg border border-zinc-300 bg-white px-3 py-2 text-sm text-zinc-900"
               disabled={switchingTenant}
               id="tenant-selector"
               onChange={(event) => {
@@ -770,14 +770,14 @@ export function QuoteShell({
             <span className="text-xs font-normal text-zinc-600">Etiqueta comercial; no modifica precios ni aprobaciones.</span>
           </label> : null}
         </div>
-        <fieldset className="mt-4 space-y-3 rounded-lg border border-zinc-300 bg-white p-4 text-zinc-900" disabled={createState === "saving"}>
+        <fieldset className="mt-4 min-w-0 space-y-3 rounded-lg border border-zinc-300 bg-white p-4 text-zinc-900" disabled={createState === "saving"}>
           <legend className="px-1 text-sm font-semibold">¿A qué oportunidad corresponde?</legend>
           <div className="flex flex-wrap gap-4">{([{ value: "new", label: "Nueva oportunidad" }, { value: "existing", label: "Oportunidad existente" }] as const).map(option =>
             <label key={option.value} className="flex items-center gap-2 text-sm"><input type="radio" name="opportunity-mode" value={option.value}
               checked={opportunityMode === option.value} onChange={() => { setOpportunityMode(option.value); setOpportunityId(""); setOpportunityOptions([]); setOpportunityError(null); setOpportunityLoading(option.value === "existing" && Boolean(selectedClientId)); }} />{option.label}</label>)}</div>
           {opportunityMode === "new" ? <p className="text-sm text-zinc-700">Se creará al guardar esta cotización. No necesitas llenar el alta ahora: quedará un aviso para completar nombre, necesidad y origen después.</p> :
             !selectedClientId ? <p className="text-sm text-zinc-700">Selecciona un cliente del catálogo para ver sus oportunidades abiertas.</p> :
-            <label className="grid gap-1 text-sm font-medium">Oportunidad abierta<select className="rounded-lg border border-zinc-400 bg-white px-3 py-2 text-zinc-900" value={opportunityId} disabled={opportunityLoading}
+            <label className="grid min-w-0 gap-1 text-sm font-medium">Oportunidad abierta<select className="w-full min-w-0 max-w-full rounded-lg border border-zinc-400 bg-white px-3 py-2 text-zinc-900" value={opportunityId} disabled={opportunityLoading}
               onChange={event => setOpportunityId(event.target.value)}><option value="">{opportunityLoading ? "Consultando…" : "Seleccionar oportunidad"}</option>
               {opportunityOptions.map(option => <option key={option.opportunityId} value={option.opportunityId}>{option.opportunityNumber} · {option.title}</option>)}</select>
               {!opportunityLoading && !opportunityError && opportunityOptions.length === 0 ? <span>No hay oportunidades abiertas disponibles. Puedes declarar una nueva.</span> : null}</label>}
@@ -844,7 +844,7 @@ export function QuoteShell({
             </div>
             <label className="flex items-center gap-2 px-4 py-2 text-sm text-zinc-900"><input type="checkbox" checked={showArchived} onChange={e => setShowArchived(e.target.checked)} />Mostrar archivadas</label>
             {deleteError ? <p className="mt-2 text-sm font-medium text-rose-700">{deleteError}</p> : null}
-            <div className="overflow-hidden">
+            <div className="overflow-x-auto">
               <table className="min-w-full divide-y divide-zinc-200 text-sm">
                 <thead className="bg-zinc-50 text-left text-zinc-600">
                   <tr>

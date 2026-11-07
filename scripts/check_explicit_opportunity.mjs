@@ -69,6 +69,10 @@ try {
     if(!kpiPage.ok || !kpiHtml.includes('Revenue ganado (histórico)') || !kpiHtml.includes('1,100.00'))throw Error('KPI page did not render accepted revenue');
     console.log('HTTP full journey: created proposal, revised quote, authorized both, closed accepted revision, rejected duplicate win, and rendered KPI revenue 1100.');
     console.log('HTTP: rendered declaration, created as session actor, recovered retry and prefilled existing opportunity successfully.');
+    if (process.env.COTIZA_BROWSER_CHECK === '1') {
+     console.log('Browser review ready: '+base+'/oportunidades/'+data.opportunity.opportunityId);
+     await new Promise(resolve=>{process.once('SIGINT',resolve);process.once('SIGTERM',resolve);app.once('exit',resolve);});
+    }
    } finally {app.kill('SIGTERM');}
   } else await new Promise(resolve=>{process.once('SIGINT',resolve);process.once('SIGTERM',resolve);app.once('exit',resolve);});app.kill('SIGTERM');
  }
