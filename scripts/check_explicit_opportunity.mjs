@@ -24,7 +24,7 @@ try {
  if ((process.env.COTIZA_BROWSER_CHECK === '1' || process.env.COTIZA_HTTP_CHECK === '1') && process.exitCode === 0) {
   const fixture=pg.getPgClient();await fixture.connect();
   await fixture.query("INSERT INTO tenants (tenant_id,name,slug,active,created_at) VALUES ('flow-demo','Empresa de prueba','flow-demo',true,now())");
-  await fixture.query("INSERT INTO clients (client_id,tenant_id,company,active,created_at) VALUES ('11a244aa-5d21-4133-a073-7bac9e62c552','flow-demo','Cliente de prueba',true,now())");await fixture.end();
+  await fixture.query("INSERT INTO clients (client_id,tenant_id,company,active,created_at) VALUES ('csyntheticclient00000000001','flow-demo','Cliente de prueba',true,now())");await fixture.end();
   const app=spawn(process.execPath,[createRequire(path.join(root,'cotiza-web/package.json')).resolve('next/dist/bin/next'),'dev','--hostname','127.0.0.1','--port','3008'],{cwd:path.join(root,'cotiza-web'),stdio:'inherit',env:{...process.env,DATABASE_URL:url,DEFAULT_TENANT_SLUG:'flow-demo',NEXT_PUBLIC_CLERK_PUBLISHABLE_KEY:'',CLERK_SECRET_KEY:'',NEXT_TELEMETRY_DISABLED:'1'}});
   if (process.env.COTIZA_HTTP_CHECK === '1') {
    try {
@@ -33,7 +33,7 @@ try {
     const base='http://127.0.0.1:3008';
     const page=await fetch(base+'/oportunidades/nueva');const html=await page.text();
     if(!page.ok || !html.includes('Nombre del negocio') || !html.includes('Define el negocio'))throw Error('Declaration page not rendered');
-    const input={creationId:crypto.randomUUID(),clientId:'11a244aa-5d21-4133-a073-7bac9e62c552',title:'HTTP synthetic renewal'};
+    const input={creationId:crypto.randomUUID(),clientId:'csyntheticclient00000000001',title:'HTTP synthetic renewal'};
     const post=()=>fetch(base+'/api/opportunities',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify(input)});
     const response=await post();const data=await response.json();if(response.status!==201)throw Error(JSON.stringify(data));
     const retry=await (await post()).json();if(retry.opportunity.opportunityId!==data.opportunity.opportunityId)throw Error('HTTP retry duplicated');
