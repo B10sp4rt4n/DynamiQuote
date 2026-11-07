@@ -97,7 +97,7 @@ export function QuoteShell({
   const searchParams = useSearchParams();
   const [quoteItems, setQuoteItems] = useState<QuoteGroupSummary[]>(() => sortQuotes(items));
   const [editorReload, setEditorReload] = useState(0);
-  const [activeQuoteId, setActiveQuoteId] = useState<string | null>(requestedQuote?.quoteId ?? items.find(item => item.status !== "archived")?.quoteId ?? null);
+  const [activeQuoteId, setActiveQuoteId] = useState<string | null>(initialOpportunity ? null : requestedQuote?.quoteId ?? items.find(item => item.status !== "archived")?.quoteId ?? null);
   const [selectedVersion, setSelectedVersion] = useState<QuoteGroupSummary | null>(null);
   // The list stays one row per group; the editor also accepts the exact version
   // selected in history or resolved by the server from the URL.
@@ -339,6 +339,7 @@ export function QuoteShell({
   }, [pathname, quoteSort, router, searchParams]);
 
   useEffect(() => {
+    if (initialOpportunity && !activeQuoteId) return;
     if (editorQuotes.length === 0) {
       if (activeQuoteId !== null) {
         // eslint-disable-next-line react-hooks/set-state-in-effect
@@ -354,7 +355,7 @@ export function QuoteShell({
       // No debe depender del filtro de búsqueda, para no "rebotar" la selección.
       setActiveQuoteId(editorQuotes[0].quoteId);
     }
-  }, [activeQuoteId, editorQuotes]);
+  }, [activeQuoteId, editorQuotes, initialOpportunity]);
 
   // Buscar clientes con debounce al escribir en el campo de cliente
   useEffect(() => {
@@ -686,7 +687,7 @@ export function QuoteShell({
       </p>
       <div className="mt-6 rounded-xl border border-zinc-200 bg-zinc-50 p-4">
         <div className="flex flex-col gap-2">
-          <CommercialFlow current={2} completed={activeQuoteId || (opportunityMode === "existing" && opportunityId) ? [1] : []} next={activeQuoteId ? "Completa las partidas y usa Generar propuesta en el editor." : "Prepara la cotización de la oportunidad seleccionada."} />
+          <CommercialFlow current={2} completed={activeQuoteId || (opportunityMode === "existing" && opportunityId) ? [1] : []} next={activeQuoteId ? "Completa las partidas y usa Crear propuesta en el editor." : "Prepara la cotización de la oportunidad seleccionada."} />
           <h2 className="text-lg font-semibold text-zinc-900">Nueva cotización</h2>
           <p className="text-sm text-zinc-600">
             Crea la cotizacion base y despues edita lineas o genera su propuesta formal.
@@ -913,7 +914,7 @@ export function QuoteShell({
           </div>
         ) : null}
       </div>
-      {editorQuotes.length > 0 ? (
+      {editorQuotes.length > 0 && (!initialOpportunity || activeQuoteId) ? (
         <QuoteLineEditor
         key={editorReload}
           threatDownImportEnabled={threatDownImportEnabled}
