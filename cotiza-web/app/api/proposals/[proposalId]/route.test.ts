@@ -72,7 +72,7 @@ describe("PATCH commercial close date", () => {
       { closedOn: "2026-09-01", expectedOutcome: "won", expectedOutcomeAt: null });
     expect(await result.json()).toMatchObject({ outcome: "won", outcomeAt: "2026-09-01T06:00:00.000Z" });
   });
-  it.each([["invalid_date", 422], ["conflict", 409], ["forbidden", 403], ["not_found", 404], ["invalid_status", 409]])("maps %s without reporting success", async (result, status) => {
+  it.each([["invalid_date", 422], ["conflict", 409], ["business_already_won", 409], ["forbidden", 403], ["not_found", 404], ["invalid_status", 409]])("maps %s without reporting success", async (result, status) => {
     setProposalOutcomeByTenantMock.mockResolvedValue(result);
     expect((await PATCH(request({ outcome: "won", closedOn: "2026-09-01" }), ctx("p1"))).status).toBe(status);
   });
