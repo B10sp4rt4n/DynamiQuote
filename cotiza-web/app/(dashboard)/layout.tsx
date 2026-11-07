@@ -10,6 +10,8 @@ import { getCurrentTenantContext } from "@/lib/auth/tenant-context";
 import { ExpiryAlertsBell } from "@/components/layout/expiry-alerts-bell";
 import { CotizaBrand } from "@/components/ui/cotiza-brand";
 import { DashboardNav } from "@/components/layout/dashboard-nav";
+import { TenantSwitcher } from "@/components/layout/tenant-switcher";
+import { getActiveTenants } from "@/lib/db/tenants";
 
 type DashboardLayoutProps = {
   children: React.ReactNode;
@@ -47,13 +49,17 @@ export default async function DashboardLayout({ children }: DashboardLayoutProps
     );
   }
 
-  const crmWorkspaceEnabled = tenant.isSuperAdmin && await isTenantCapabilityEnabled(tenant.id, "crm_workspace_pilot");
+  const [crmWorkspaceEnabled, tenantOptions] = await Promise.all([
+    tenant.isSuperAdmin && isTenantCapabilityEnabled(tenant.id, "crm_workspace_pilot"),
+    tenant.isSuperAdmin ? getActiveTenants() : [],
+  ]);
+  const showTenantSwitcher = tenant.isSuperAdmin && tenantOptions.length > 1;
 
   return (
     <div className="min-h-screen bg-zinc-100">
       <header className="border-b border-zinc-200 bg-white">
         <div className="mx-auto grid max-w-7xl grid-cols-[minmax(0,1fr)_auto] items-center gap-3 px-4 py-3 sm:px-6 sm:py-4">
-          <CotizaBrand href="/inicio" subtitle={`Tenant activo: ${tenant.name}`} />
+          <CotizaBrand href="/inicio" subtitle={showTenantSwitcher ? null : `Empresa activa: ${tenant.name}`} />
           <div className="flex shrink-0 items-center gap-2 text-sm text-zinc-600 sm:gap-4">
             <ExpiryAlertsBell />
             {clerkEnabled ? (
@@ -67,6 +73,9 @@ export default async function DashboardLayout({ children }: DashboardLayoutProps
               />
             ) : <Link href="/sign-in">Activar autenticacion</Link>}
           </div>
+          {showTenantSwitcher ? <div className="col-span-2 min-w-0">
+            <TenantSwitcher key={`${tenant.id}:${tenant.userId}`} currentSlug={tenant.slug} currentName={tenant.name} options={tenantOptions} />
+          </div> : null}
           <div className="col-span-2 min-w-0">
             <DashboardNav crmWorkspaceEnabled={crmWorkspaceEnabled} />
           </div>
