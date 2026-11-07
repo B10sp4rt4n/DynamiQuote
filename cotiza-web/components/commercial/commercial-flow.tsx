@@ -5,7 +5,7 @@ export function CommercialFlow({ current, completed = [], next, attention, conte
   if (context) {
     steps[0].href = `/oportunidades/${encodeURIComponent(context.opportunityId)}`;
     steps[1].href = context.quoteId ? `/cotizaciones?quoteId=${encodeURIComponent(context.quoteId)}` : `/cotizaciones?opportunityId=${encodeURIComponent(context.opportunityId)}`;
-    steps[2].href = context.proposalId ? `/propuestas?proposalId=${encodeURIComponent(context.proposalId)}` : `/oportunidades/${encodeURIComponent(context.opportunityId)}#propuestas`;
+    steps[2].href = context.proposalId ? `/propuestas/${encodeURIComponent(context.proposalId)}` : `/oportunidades/${encodeURIComponent(context.opportunityId)}#propuestas`;
   }
   return <section aria-label="Recorrido comercial" className="rounded-xl border border-zinc-200 bg-white p-4 text-zinc-900">
     {context ? <p className="mb-3 break-words text-sm font-semibold">Negocio: {context.opportunityNumber ?? ""} {context.title ?? ""}</p> : null}
