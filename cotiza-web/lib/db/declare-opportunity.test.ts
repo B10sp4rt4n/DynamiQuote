@@ -1,0 +1,13 @@
+import { beforeEach, expect, it, vi } from "vitest";
+const m = vi.hoisted(()=>({ client: vi.fn(), prior: vi.fn(), row: vi.fn(), lock: vi.fn(), create: vi.fn() }));
+vi.mock("server-only",()=>({}));
+vi.mock("./prisma",()=>({prisma:{$transaction:async(fn: (tx: unknown)=>unknown)=>fn({$executeRaw:m.lock, client:{findFirst:m.client}, opportunities:{findFirst:m.prior,findFirstOrThrow:m.row}})}}));
+vi.mock("./opportunities",()=>({createOpportunityForTenant:m.create}));
+import { declarationSchema, declareOpportunity } from "./declare-opportunity";
+const input={creationId:"7edf5943-15fb-40d7-b7b3-48dc5b875159",clientId:"6e2d4f0d-4db4-4b62-a13a-63cbab1916af",title:"Renovación"};
+beforeEach(()=>{vi.clearAllMocks();m.client.mockResolvedValue({client_id:input.clientId,company:"Synthetic"});m.prior.mockResolvedValue(null);m.create.mockResolvedValue("opp-a");m.row.mockResolvedValue({opportunity_number:"OPP-0001",title:input.title});});
+it("rejects injected tenant, actor and empty business names",()=>{expect(declarationSchema.safeParse({...input,tenantId:"other"}).success).toBe(false);expect(declarationSchema.safeParse({...input,title:" "}).success).toBe(false);});
+it("validates client in the session tenant before allocating and keeps actor provenance",async()=>{await declareOpportunity("tenant-a","seller-a",input);expect(m.client).toHaveBeenCalledWith({where:{tenant_id:"tenant-a",client_id:input.clientId,active:true}});expect(m.lock).toHaveBeenCalled();expect(m.create).toHaveBeenCalledWith("tenant-a",expect.objectContaining({createdByUserId:"seller-a",intakeMetadata:expect.objectContaining({createdBy:"seller-a",declarationId:input.creationId,kind:"opportunity-origin"})}),expect.anything());});
+it("rejects unavailable and cross-tenant clients without creating a record",async()=>{m.client.mockResolvedValue(null);await expect(declareOpportunity("tenant-a","seller-a",input)).rejects.toMatchObject({status:404});expect(m.create).not.toHaveBeenCalled();});
+it("recovers a retry without creating another opportunity",async()=>{m.prior.mockResolvedValue({opportunity_id:"prior",opportunity_number:"OPP-0001",owner_user_id:"seller-a",client_id:input.clientId,title:input.title});expect((await declareOpportunity("tenant-a","seller-a",input)).opportunityId).toBe("prior");expect(m.create).not.toHaveBeenCalled();});
+it("rejects replay by a different actor or with changed content",async()=>{m.prior.mockResolvedValue({owner_user_id:"seller-b",client_id:input.clientId,title:input.title});await expect(declareOpportunity("tenant-a","seller-a",input)).rejects.toMatchObject({status:409});expect(m.create).not.toHaveBeenCalled();});

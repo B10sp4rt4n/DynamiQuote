@@ -1,3 +1,5 @@
+import Link from "next/link";
+import { CommercialFlow } from "@/components/commercial/commercial-flow";
 import { PipelineDashboard } from "@/components/pipeline/pipeline-dashboard";
 import { getCurrentTenantContext } from "@/lib/auth/tenant-context";
 import { getOpportunityPipelineByTenant } from "@/lib/db/opportunities";
@@ -34,6 +36,8 @@ export default async function PipelinePage() {
 
   return (
     <div className="space-y-6">
+      <CommercialFlow current={1} next="Declara una nueva oportunidad o retoma un negocio existente." />
+      <Link className="inline-block rounded-lg bg-blue-700 px-5 py-3 font-semibold text-white" href="/oportunidades/nueva">+ Nueva oportunidad</Link>
       <div>
         <h1 className="text-2xl font-semibold tracking-tight text-slate-950">Oportunidades</h1>
         <p className="mt-1 text-sm text-zinc-500">

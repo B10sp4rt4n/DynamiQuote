@@ -1,3 +1,4 @@
+import { getOpportunityPipelineByTenant } from "@/lib/db/opportunities";
 import { QuoteShell } from "@/components/cotizador/quote-shell";
 import { isTenantCapabilityEnabled, THREATDOWN_PDF_IMPORT } from "@/lib/db/tenant-capabilities";
 import { getCurrentTenantContext } from "@/lib/auth/tenant-context";
@@ -7,7 +8,7 @@ import { getActiveTenants } from "@/lib/db/tenants";
 export const dynamic = "force-dynamic";
 
 export default async function QuotesPage({ searchParams }: {
-  searchParams: Promise<{ quoteId?: string | string[] }>;
+  searchParams: Promise<{ quoteId?: string | string[]; opportunityId?: string | string[] }>;
 }) {
   const tenant = await getCurrentTenantContext();
 
@@ -29,6 +30,11 @@ export default async function QuotesPage({ searchParams }: {
     isTenantCapabilityEnabled(tenant.id, "cpq_guided_preview"),
     isTenantCapabilityEnabled(tenant.id, "quote_playbook_field"),
   ]);
+  const requestedOpportunityId = typeof query.opportunityId === "string" ? query.opportunityId : null;
+  const available = requestedOpportunityId ? await getOpportunityPipelineByTenant(tenant.id, tenant.userId, canSeeAll) : [];
+  const selected = available.find(o=>o.opportunityId === requestedOpportunityId && o.stage === "open" && o.clientId && (canSeeAll || o.ownerUserId === tenant.userId));
+  if (requestedOpportunityId && !selected) return <section className="rounded-xl border border-amber-300 bg-amber-50 p-6 text-amber-950">Oportunidad no disponible para tu sesión. Regresa a Oportunidades y selecciona un negocio abierto.</section>;
+  const initialOpportunity = selected && selected.clientId ? { opportunityId: selected.opportunityId, title: selected.title, clientId: selected.clientId, company: selected.clientCompany ?? "" } : undefined;
   const canSwitchTenant = tenant.isSuperAdmin;
   const tenantOptions = canSwitchTenant
     ? await getActiveTenants()
@@ -36,6 +42,8 @@ export default async function QuotesPage({ searchParams }: {
 
   return (
     <QuoteShell
+      key={`${tenant.id}:${tenant.userId}:${initialOpportunity?.opportunityId ?? "default"}`}
+      initialOpportunity={initialOpportunity}
       playbookFieldEnabled={playbookFieldEnabled}
       guidedQuotingEnabled={guidedQuotingEnabled}
       threatDownImportEnabled={threatDownImportEnabled}

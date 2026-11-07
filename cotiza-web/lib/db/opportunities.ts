@@ -88,6 +88,7 @@ export async function createOpportunityForTenant(
 export type OpportunityStage = "open" | "won" | "lost" | "paused" | "no_decision";
 
 export type OpportunityWithStage = {
+  amountUnestimated?: boolean;
   disposition?: OpportunityDisposition;
   canChangeDisposition?: boolean;
   commercialOptions?: CommercialOptionsSummary;
@@ -261,6 +262,7 @@ async function attachDerivedStage(
       const startedAt = option ? opportunities.filter(member=>option.memberOpportunityIds.includes(member.opportunity_id)).reduce((earliest,member)=>member.created_at < earliest ? member.created_at : earliest,o.created_at) : o.created_at;
       return {
         amount,
+        amountUnestimated: !fin && (o.intake_metadata as Record<string, unknown> | null)?.kind === "opportunity-origin",
         ...(disposition ? { disposition } : {}),
         canChangeDisposition: derived === "open",
         ...intakeSummary(o.intake_metadata),
