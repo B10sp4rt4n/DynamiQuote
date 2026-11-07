@@ -23,4 +23,12 @@ El runner `scripts/check_explicit_opportunity.mjs` crea su propia base vacía y 
 
 Este control impide cierres duplicados nuevos. No deduplica ni modifica decisiones históricas ya registradas. No cambia el significado de los KPI de actividad (monto propuesto y autorizado): esas métricas siguen describiendo documentos, mientras el ingreso requiere una ganada.
 
-La validación visual en teléfono sigue pendiente: el navegador disponible en esta sesión no expone emulación ni cambio de viewport. Las pruebas HTTP y de base no sustituyen una revisión móvil ni una prueba completa con inicio de sesión Clerk real.
+La validación en un teléfono físico y en Safari sigue pendiente. Se pudo reducir el ancho CSS de Chrome mediante su zoom nativo, sin usar emulación de dispositivos. Esta prueba verifica adaptación de distribución, no gestos ni particularidades de iOS.
+
+## Revisión de ancho estrecho
+
+Se reprodujeron estos problemas en la versión publicada con sesión Clerk, a 340 píxeles CSS: la página de cotización medía 1,892 píxeles de ancho por el tamaño mínimo del fieldset de partidas; el selector de cotización también excedía el ancho disponible. El alta de oportunidad medía 393 píxeles por el ancho intrínseco del catálogo de clientes. La ficha y la propuesta individual ya cabían en el ancho de la página. El encabezado completo ocupaba 407 píxeles de altura.
+
+Los ajustes compactan el menú con un botón que indica la sección actual, conserva el orden comercial y cierra al elegir una sección. Se mantiene el aviso del cambio de orden. Los campos permiten contraerse y el fieldset de partidas establece su ancho mínimo en cero, con desplazamiento horizontal propio y una indicación para el usuario. El catálogo de cotizaciones guardadas también permite desplazarse para acceder a sus acciones.
+
+La comprobación visual de publicación debe cubrir alta, ficha, cotización y propuesta, con ancho CSS de 340 y 454 píxeles y una comprobación de escritorio a zoom normal. Se comprueba que el ancho del documento no exceda el viewport; las tablas anchas conservan su propio desplazamiento. No se guardan cambios en los negocios productivos durante esta revisión.
