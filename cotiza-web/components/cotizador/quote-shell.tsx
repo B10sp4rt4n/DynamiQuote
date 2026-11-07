@@ -1,5 +1,6 @@
 "use client";
 
+import { CommercialFlow } from "@/components/commercial/commercial-flow";
 import Link from "next/link";
 import { QuoteOpportunityPanel } from "./quote-opportunity-panel";
 import { useEffect, useMemo, useRef, useState } from "react";
@@ -24,6 +25,7 @@ type TenantOption = {
 };
 
 type QuoteShellProps = {
+  initialOpportunity?: { opportunityId: string; clientId: string; company: string; title: string };
   playbookFieldEnabled?: boolean;
   guidedQuotingEnabled?: boolean;
   threatDownImportEnabled?: boolean;
@@ -79,6 +81,7 @@ function sortQuotes(items: QuoteGroupSummary[]): QuoteGroupSummary[] {
 }
 
 export function QuoteShell({
+  initialOpportunity,
   playbookFieldEnabled = false,
   guidedQuotingEnabled = false,
   threatDownImportEnabled = false,
@@ -118,14 +121,14 @@ export function QuoteShell({
   const [quoteSort, setQuoteSort] = useState<QuoteSort>("date_desc");
   const [selectedTenantSlug, setSelectedTenantSlug] = useState(currentTenantSlug);
   const [switchingTenant, setSwitchingTenant] = useState(false);
-  const [clientName, setClientName] = useState("");
-  const [selectedClientId, setSelectedClientId] = useState<string | null>(null);
-  const [clientSearch, setClientSearch] = useState("");
+  const [clientName, setClientName] = useState(initialOpportunity?.company ?? "");
+  const [selectedClientId, setSelectedClientId] = useState<string | null>(initialOpportunity?.clientId ?? null);
+  const [clientSearch, setClientSearch] = useState(initialOpportunity?.company ?? "");
   const [clientOptions, setClientOptions] = useState<{ clientId: string; company: string; contactName: string | null }[]>([]);
   const [showClientDropdown, setShowClientDropdown] = useState(false);
-  const [proposalName, setProposalName] = useState("");
-  const [opportunityMode, setOpportunityMode] = useState<"new" | "existing">("new");
-  const [opportunityId, setOpportunityId] = useState("");
+  const [proposalName, setProposalName] = useState(initialOpportunity?.title ?? "");
+  const [opportunityMode, setOpportunityMode] = useState<"new" | "existing">(initialOpportunity ? "existing" : "new");
+  const [opportunityId, setOpportunityId] = useState(initialOpportunity?.opportunityId ?? "");
   const [opportunityOptions, setOpportunityOptions] = useState<{ opportunityId: string; opportunityNumber: string; title: string }[]>([]);
   const [opportunityLoading, setOpportunityLoading] = useState(false);
   const [opportunityError, setOpportunityError] = useState<string | null>(null);
@@ -683,7 +686,8 @@ export function QuoteShell({
       </p>
       <div className="mt-6 rounded-xl border border-zinc-200 bg-zinc-50 p-4">
         <div className="flex flex-col gap-2">
-          <h2 className="text-lg font-semibold text-zinc-900">Nueva cotizacion</h2>
+          <CommercialFlow current={2} completed={activeQuoteId || (opportunityMode === "existing" && opportunityId) ? [1] : []} next={activeQuoteId ? "Completa las partidas y usa Generar propuesta en el editor." : "Prepara la cotización de la oportunidad seleccionada."} />
+          <h2 className="text-lg font-semibold text-zinc-900">Nueva cotización</h2>
           <p className="text-sm text-zinc-600">
             Crea la cotizacion base y despues edita lineas o genera su propuesta formal.
           </p>

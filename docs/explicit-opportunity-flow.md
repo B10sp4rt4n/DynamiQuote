@@ -1,0 +1,11 @@
+# Declaración explícita y recorrido comercial
+
+Oportunidades muestra + Nueva oportunidad. El alta captura cliente activo del tenant y nombre; asigna responsable desde la sesión. No requiere cotización ni monto. Guarda actor, fecha y un identificador de intento en intake_metadata, sin migraciones. Un reintento con el mismo identificador recupera el resultado; otros datos/actor se rechazan. La asignación de folios usa el mismo advisory lock transaccional que el creador de cotizaciones.
+
+Tras guardar, Continuar: crear cotización abre el formulario con cliente, nombre y oportunidad existente preseleccionados. La selección se valida en servidor por tenant, vendedor, cliente y estado abierto; el escritor de cotizaciones vuelve a validarla. Un enlace indisponible no abre un alta nueva. La tabla de oportunidades ofrece Crear cotización y muestra Por estimar para altas explícitas sin importes de propuestas.
+
+La secuencia 1 Oportunidad → 2 Cotización → 3 Propuesta usa números, textos y color: azul actual, verde con check para pasos anteriores acreditados, gris pendiente/anterior, ámbar con explicación ante errores del alta. Se muestra en Oportunidades, alta, cotizador y detalle de propuesta. Los enlaces de pasos permiten navegación directa. El resultado comercial y las reglas de autorización/envío existentes conservan su autoridad.
+
+Validación: 526 pruebas aprobadas, 35 omitidas por condiciones; e2e legado con base externa excluido. TypeScript, ESLint dirigido y build Next.js con URL de base sintética aprobados durante preparación. Las pruebas nuevas cubren alcance del cliente, actor de sesión, rechazo de campos inyectados, reintento sin duplicación, conflictos de actor y preselección de oportunidades. Los adaptadores de base están simulados en las pruebas nuevas: no acreditan concurrencia nativa multiproceso ni recorrido autenticado de navegador. No se crearon negocios reales, emitieron documentos fiscales ni enviaron correos.
+
+Pendientes de aceptación: ensayo PostgreSQL de alta/reintento concurrente junto a creación de cotización; sesión real para verificar alta → cotización → propuesta, colores, foco y pantallas móviles. Cambio preparado en rama; sin liberación productiva en esta preparación.

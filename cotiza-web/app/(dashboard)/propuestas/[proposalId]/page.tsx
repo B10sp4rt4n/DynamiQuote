@@ -1,3 +1,4 @@
+import { CommercialFlow } from "@/components/commercial/commercial-flow";
 import Link from "next/link";
 
 import { ProposalAuditPanel } from "@/components/propuestas/proposal-audit-panel";
@@ -91,6 +92,7 @@ export default async function ProposalDetailPage({ params }: ProposalDetailPageP
 
   return (
     <div className="space-y-4">
+      <CommercialFlow current={3} completed={[1, 2]} next="Revisa la propuesta y utiliza la acción disponible según su autorización y resultado comercial." />
       <div className="flex items-center justify-between">
         <Link className="text-sm font-medium text-zinc-600 hover:text-zinc-900" href="/propuestas">
           ← Volver a Propuestas

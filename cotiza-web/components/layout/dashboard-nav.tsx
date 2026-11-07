@@ -23,7 +23,8 @@ export function DashboardNav({ crmWorkspaceEnabled = false }: { crmWorkspaceEnab
     ...(crmWorkspaceEnabled ? [{ href: "/crm", label: "CRM · Piloto" }] : []),
     ...supportingNavigation,
   ];
-  const pathname = usePathname();
+  const currentPath = usePathname();
+  const pathname = currentPath.startsWith("/oportunidades/") ? "/pipeline" : currentPath;
   const activeHref = links
     .filter(({ href }) => pathname === href || pathname.startsWith(`${href}/`))
     .reduce<string | undefined>(

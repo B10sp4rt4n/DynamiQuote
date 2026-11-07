@@ -155,6 +155,7 @@ export function PipelineTable({
               {filtered.map((opp) => (
                 <tr key={opp.opportunityId}>
                   <td className="max-w-[220px] px-4 py-2.5 font-medium text-zinc-900"><span className="block truncate">{opp.title}</span>
+                    {opp.stage === "open" && opp.clientId ? <Link className="mt-1 block text-sm font-semibold text-blue-800 underline" href={`/cotizaciones?opportunityId=${encodeURIComponent(opp.opportunityId)}`}>Crear cotización →</Link> : null}
                     {opp.intakePending && opp.intakeQuoteId ? <Link className="mt-1 inline-block rounded bg-amber-100 px-2 py-1 text-xs font-semibold text-amber-950 hover:underline"
                       href={`/cotizaciones?quoteId=${encodeURIComponent(opp.intakeQuoteId)}`}>Completar datos de oportunidad</Link> : null}</td>
                   <td className="px-4 py-2.5 text-zinc-500">{opp.opportunityNumber}</td>
@@ -167,7 +168,7 @@ export function PipelineTable({
                       <span className="text-zinc-400">Sin cliente</span>
                     )}
                   </td>
-                  <td className="px-4 py-2.5 text-zinc-700"><OpportunityAmount amount={opp.amount} options={opp.commercialOptions} opportunityId={opp.opportunityId} canChoose={canChooseOptions} stage={opp.stage} /></td>
+                  <td className="px-4 py-2.5 text-zinc-700">{opp.amountUnestimated ? <span>Por estimar</span> : <OpportunityAmount amount={opp.amount} options={opp.commercialOptions} opportunityId={opp.opportunityId} canChoose={canChooseOptions} stage={opp.stage} />}</td>
                   <td className="whitespace-nowrap px-4 py-2.5 text-zinc-500">{formatDate(opp.createdAt, "America/Mexico_City")}</td>
                   <td className="whitespace-nowrap px-4 py-2.5 text-zinc-500">
                     {opp.stage === "paused" ? "En pausa" : opp.stage === "open" ? "Pendiente" : opp.closedAt ? formatDate(opp.closedAt, "America/Mexico_City") : "Sin fecha registrada"}

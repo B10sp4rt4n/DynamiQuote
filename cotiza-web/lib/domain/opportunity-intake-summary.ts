@@ -2,7 +2,7 @@ import { intakeMissingFields } from "./opportunity-intake";
 export function readIntakeMetadata(value: unknown): Record<string, unknown> | null {
   if (!value || typeof value !== "object" || Array.isArray(value)) return null;
   const data = value as Record<string, unknown>;
-  return data.version === 1 && data.kind === "quote-origin" ? data : null;
+  return data.version === 1 && (data.kind === "quote-origin" || data.kind === "opportunity-origin") ? data : null;
 }
 export function intakeSummary(value: unknown): { intakePending?: boolean; intakeQuoteId?: string } {
   const data = readIntakeMetadata(value);
