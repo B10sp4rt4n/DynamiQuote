@@ -42,7 +42,7 @@ beforeEach(() => {
   container = document.createElement("div"); document.body.append(container); root = createRoot(container);
 });
 afterEach(async () => { await act(async () => root.unmount()); container.remove(); vi.unstubAllGlobals(); });
-async function renderShell(playbookFieldEnabled = false) { await act(async () => root.render(<QuoteShell playbookFieldEnabled={playbookFieldEnabled} currentTenantSlug="test" items={[]} tenantName="Test" tenantOptions={[]} />)); }
+async function renderShell(playbookFieldEnabled = false) { await act(async () => root.render(<QuoteShell playbookFieldEnabled={playbookFieldEnabled} items={[]} tenantName="Test" />)); }
 async function renderPanel() { await act(async () => root.render(<QuoteOpportunityPanel key="new-quote" quoteId="new-quote" />)); await settle(); }
 function field(label: string) { const element = [...container.querySelectorAll("label")].find(item => item.textContent?.startsWith(label))?.querySelector("input, textarea"); if (!element) throw Error(`No field ${label}`); return element as HTMLInputElement; }
 

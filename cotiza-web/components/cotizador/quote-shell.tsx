@@ -19,23 +19,14 @@ import {
   type QuoteSort,
 } from "@/lib/domain/quote-list-state";
 
-type TenantOption = {
-  id: string;
-  name: string;
-  slug: string;
-};
-
 type QuoteShellProps = {
   initialOpportunity?: { opportunityId: string; clientId: string; company: string; title: string };
   playbookFieldEnabled?: boolean;
   guidedQuotingEnabled?: boolean;
   threatDownImportEnabled?: boolean;
-  canSwitchTenant?: boolean;
-  currentTenantSlug: string;
   items: QuoteGroupSummary[];
   requestedQuote?: QuoteGroupSummary | null;
   tenantName: string;
-  tenantOptions: TenantOption[];
 };
 
 function formatCurrency(value: number | null): string {
@@ -86,12 +77,9 @@ export function QuoteShell({
   playbookFieldEnabled = false,
   guidedQuotingEnabled = false,
   threatDownImportEnabled = false,
-  canSwitchTenant = false,
-  currentTenantSlug,
   items,
   requestedQuote = null,
   tenantName,
-  tenantOptions,
 }: QuoteShellProps) {
   const router = useRouter();
   const pathname = usePathname();
@@ -120,8 +108,6 @@ export function QuoteShell({
   const [quoteSearch, setQuoteSearch] = useState("");
   const [showArchived, setShowArchived] = useState(false);
   const [quoteSort, setQuoteSort] = useState<QuoteSort>("date_desc");
-  const [selectedTenantSlug, setSelectedTenantSlug] = useState(currentTenantSlug);
-  const [switchingTenant, setSwitchingTenant] = useState(false);
   const [clientName, setClientName] = useState(initialOpportunity?.company ?? "");
   const [selectedClientId, setSelectedClientId] = useState<string | null>(initialOpportunity?.clientId ?? null);
   const [clientSearch, setClientSearch] = useState(initialOpportunity?.company ?? "");
@@ -620,72 +606,13 @@ export function QuoteShell({
     }
   }
 
-  async function handleTenantAssociation(slug: string) {
-    if (!slug || slug === selectedTenantSlug) {
-      return;
-    }
-
-    setSwitchingTenant(true);
-    setCreateMessage(null);
-
-    try {
-      const response = await fetch("/api/context/tenant", {
-        body: JSON.stringify({ slug }),
-        headers: {
-          "Content-Type": "application/json",
-        },
-        method: "POST",
-      });
-
-      const data = (await response.json()) as { error?: string; ok?: boolean };
-
-      if (!response.ok || !data.ok) {
-        throw new Error(data.error ?? "No fue posible asociar la empresa");
-      }
-
-      setSelectedTenantSlug(slug);
-      setCreateMessage("Empresa asociada correctamente. Recargando...");
-      window.location.reload();
-    } catch (error) {
-      setCreateState("error");
-      setCreateMessage(error instanceof Error ? error.message : "Error interno");
-      setSwitchingTenant(false);
-    }
-  }
 
   return (
     <section className="min-w-0 rounded-xl border border-zinc-200 bg-white p-4 shadow-sm sm:p-6">
       <div className="flex flex-col gap-2 border-b border-zinc-200 pb-4">
-        <p className="text-sm uppercase tracking-[0.18em] text-zinc-500">Tenant activo</p>
         <h1 className="text-2xl font-semibold text-zinc-900">Cotizaciones de {tenantName}</h1>
-        {canSwitchTenant && tenantOptions.length > 1 ? (
-          <div className="mt-2 flex flex-wrap items-center gap-2">
-            <label className="text-xs font-medium uppercase tracking-[0.12em] text-zinc-500" htmlFor="tenant-selector">
-              Asociar a empresa
-            </label>
-            <select
-              className="w-full min-w-0 max-w-full rounded-lg border border-zinc-300 bg-white px-3 py-2 text-sm text-zinc-900"
-              disabled={switchingTenant}
-              id="tenant-selector"
-              onChange={(event) => {
-                void handleTenantAssociation(event.target.value);
-              }}
-              value={selectedTenantSlug}
-            >
-              {tenantOptions.map((tenantOption) => (
-                <option key={tenantOption.id} value={tenantOption.slug}>
-                  {tenantOption.name} ({tenantOption.slug})
-                </option>
-              ))}
-            </select>
-            {switchingTenant ? <p className="text-xs text-zinc-500">Actualizando contexto...</p> : null}
-          </div>
-        ) : null}
+
       </div>
-      <p className="mt-2 text-zinc-600">
-        Esta vista ya consume Neon con aislamiento por tenant y muestra la ultima version de cada
-        grupo de cotizacion.
-      </p>
       <div className="mt-6 rounded-xl border border-zinc-200 bg-zinc-50 p-4">
         <div className="flex flex-col gap-2">
           {activeQuoteId ? <DocumentCommercialFlow key={activeQuoteId} kind="quote" id={activeQuoteId}/> : <CommercialFlow current={2} context={initialOpportunity ? {opportunityId:initialOpportunity.opportunityId,title:initialOpportunity.title} : undefined} completed={activeQuoteId || (opportunityMode === "existing" && opportunityId) ? [1] : []} next={activeQuoteId ? "Completa las partidas y usa Crear propuesta en el editor." : "Prepara la cotización de la oportunidad seleccionada."} />}

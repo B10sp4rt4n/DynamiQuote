@@ -3,7 +3,6 @@ import { QuoteShell } from "@/components/cotizador/quote-shell";
 import { isTenantCapabilityEnabled, THREATDOWN_PDF_IMPORT } from "@/lib/db/tenant-capabilities";
 import { getCurrentTenantContext } from "@/lib/auth/tenant-context";
 import { getQuoteGroupsSummaryByTenant, getQuoteVersionSummaryByTenant } from "@/lib/db/quotes";
-import { getActiveTenants } from "@/lib/db/tenants";
 
 export const dynamic = "force-dynamic";
 
@@ -35,10 +34,6 @@ export default async function QuotesPage({ searchParams }: {
   const selected = available.find(o=>o.opportunityId === requestedOpportunityId && o.stage === "open" && o.clientId && (canSeeAll || o.ownerUserId === tenant.userId));
   if (requestedOpportunityId && !selected) return <section className="rounded-xl border border-amber-300 bg-amber-50 p-6 text-amber-950">Oportunidad no disponible para tu sesión. Regresa a Oportunidades y selecciona un negocio abierto.</section>;
   const initialOpportunity = selected && selected.clientId ? { opportunityId: selected.opportunityId, title: selected.title, clientId: selected.clientId, company: selected.clientCompany ?? "" } : undefined;
-  const canSwitchTenant = tenant.isSuperAdmin;
-  const tenantOptions = canSwitchTenant
-    ? await getActiveTenants()
-    : [{ id: tenant.id, name: tenant.name, slug: tenant.slug }];
 
   return (
     <QuoteShell
@@ -47,12 +42,9 @@ export default async function QuotesPage({ searchParams }: {
       playbookFieldEnabled={playbookFieldEnabled}
       guidedQuotingEnabled={guidedQuotingEnabled}
       threatDownImportEnabled={threatDownImportEnabled}
-      canSwitchTenant={canSwitchTenant}
-      currentTenantSlug={tenant.slug}
       items={items}
       requestedQuote={requestedQuote}
       tenantName={tenant.name}
-      tenantOptions={tenantOptions}
     />
   );
 }

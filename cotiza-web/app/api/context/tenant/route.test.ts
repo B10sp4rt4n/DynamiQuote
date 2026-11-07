@@ -1,0 +1,12 @@
+import { beforeEach, expect, it, vi } from "vitest";
+const m=vi.hoisted(()=>({auth:vi.fn(),context:vi.fn(),tenant:vi.fn()}));
+vi.mock("@clerk/nextjs/server",()=>({auth:m.auth}));
+vi.mock("@/lib/auth/tenant-context",()=>({getCurrentTenantContext:m.context}));
+vi.mock("@/lib/db/prisma",()=>({prisma:{tenant:{findFirst:m.tenant}}}));
+import { POST } from "./route";
+const request=()=>new Request("http://localhost/api/context/tenant",{method:"POST",headers:{"Content-Type":"application/json"},body:JSON.stringify({slug:"b"})});
+beforeEach(()=>{vi.clearAllMocks();m.auth.mockResolvedValue({userId:"user"});m.context.mockResolvedValue({isSuperAdmin:true});m.tenant.mockResolvedValue({slug:"b"});});
+it("rejects an unsigned request",async()=>{m.auth.mockResolvedValue({userId:null});expect((await POST(request())).status).toBe(401);expect(m.tenant).not.toHaveBeenCalled();});
+it("does not grant owners or regular users global switching",async()=>{m.context.mockResolvedValue({isSuperAdmin:false,userRole:"owner"});expect((await POST(request())).status).toBe(403);expect(m.tenant).not.toHaveBeenCalled();});
+it("requires an active target company",async()=>{m.tenant.mockResolvedValue(null);expect((await POST(request())).status).toBe(404);expect(m.tenant).toHaveBeenCalledWith(expect.objectContaining({where:{active:true,slug:"b"}}));});
+it("switches superadmin context through an httpOnly cookie",async()=>{const response=await POST(request());expect(response.status).toBe(200);expect(await response.json()).toEqual({ok:true,slug:"b"});expect(response.headers.get("set-cookie")).toContain("tenant_override_slug=b");expect(response.headers.get("set-cookie")).toContain("HttpOnly");});

@@ -48,8 +48,8 @@ async function view(version: number) {
   await settle();
 }
 async function render(requestedQuote: QuoteGroupSummary | null = null) {
-  await act(async () => { root.render(<QuoteShell currentTenantSlug="test" items={[quote(4), quote(1, "COT-0065")]}
-    requestedQuote={requestedQuote} tenantName="Tenant de prueba" tenantOptions={[]} />); });
+  await act(async () => { root.render(<QuoteShell items={[quote(4), quote(1, "COT-0065")]}
+    requestedQuote={requestedQuote} tenantName="Tenant de prueba" />); });
   await settle();
 }
 
