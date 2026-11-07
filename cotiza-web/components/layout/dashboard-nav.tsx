@@ -2,6 +2,7 @@
 
 import Link from "next/link";
 import { usePathname } from "next/navigation";
+import { useState } from "react";
 
 const navigation = [
   { href: "/inicio", label: "Inicio" },
@@ -24,6 +25,7 @@ export function DashboardNav({ crmWorkspaceEnabled = false }: { crmWorkspaceEnab
     ...supportingNavigation,
   ];
   const currentPath = usePathname();
+  const [mobileOpen, setMobileOpen] = useState(false);
   const pathname = currentPath.startsWith("/oportunidades/") ? "/pipeline" : currentPath;
   const activeHref = links
     .filter(({ href }) => pathname === href || pathname.startsWith(`${href}/`))
@@ -34,7 +36,13 @@ export function DashboardNav({ crmWorkspaceEnabled = false }: { crmWorkspaceEnab
 
   return (
     <div className="space-y-3">
-      <nav aria-label="Menu principal" className="flex flex-wrap gap-2">
+      <button type="button" aria-expanded={mobileOpen} aria-controls="dashboard-primary-navigation"
+        onClick={() => setMobileOpen(open => !open)}
+        className="flex min-h-11 w-full items-center justify-between gap-3 rounded-lg border border-zinc-300 px-3 py-2 text-left text-sm font-semibold text-zinc-900 focus-visible:outline-2 focus-visible:outline-offset-2 md:hidden">
+        <span>Menú · {links.find(link => link.href === activeHref)?.label ?? "Cotiza"}</span>
+        <span aria-hidden="true">{mobileOpen ? "−" : "+"}</span>
+      </button>
+      <nav id="dashboard-primary-navigation" aria-label="Menu principal" className={`${mobileOpen ? "flex" : "hidden"} flex-wrap gap-2 md:flex`}>
         {links.map(({ href, label }) => (
           <Link
             aria-current={activeHref === href ? "page" : undefined}
@@ -44,6 +52,7 @@ export function DashboardNav({ crmWorkspaceEnabled = false }: { crmWorkspaceEnab
                 : "text-zinc-600 hover:bg-zinc-100 hover:text-zinc-900"
             }`}
             href={href}
+            onClick={() => setMobileOpen(false)}
             key={href}
           >
             {label}
