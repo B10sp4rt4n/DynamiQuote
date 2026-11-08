@@ -1,6 +1,7 @@
 "use client";
 
 import { useEffect, useState } from "react";
+import { ProposalLiveCancellation } from './proposal-live-cancellation';
 
 const PAYMENT_FORM_OPTIONS = [
   { label: "01 - Efectivo", value: "01" },
@@ -204,6 +205,7 @@ export function ProposalInvoicePanel({ proposalId, recipientCompany }: ProposalI
         >
           Descargar PDF
         </a>
+        {invoice.uuid ? <ProposalLiveCancellation proposalId={proposalId} uuid={invoice.uuid}/> : null}
       </div>
     );
   }
