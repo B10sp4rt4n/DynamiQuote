@@ -44,6 +44,11 @@ export function ProposalCorrectionPanel({ proposalId, paymentId }: { proposalId:
         body = JSON.stringify({ ...input, idempotency_key: attempt.current.key, ...(state?.environment === 'production' ? {confirm_real_operation:true} : {}) });
       } else if (action === 'reconcile') body = JSON.stringify({ receipt_uuid: uuid });
       else if (['stamp','cancel-original'].includes(action) && state?.environment === 'production') body = JSON.stringify({confirm_real_operation:true});
+      if (!['create','read'].includes(action) && state?.environment === 'production') {
+        const revisionId = state.history.at(-1)?.id;
+        if (!revisionId) throw new Error('Recarga la corrección antes de continuar');
+        body = JSON.stringify({...JSON.parse(body ?? '{}'),revision_id:revisionId});
+      }
       const response = await fetch(['create','read'].includes(action) ? path : `${path}/${action}`, {
         method: action === 'read' ? 'GET' : 'POST', headers: { 'Content-Type': 'application/json' }, body, cache: 'no-store',
       });

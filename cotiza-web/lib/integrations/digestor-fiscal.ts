@@ -622,7 +622,7 @@ export type BillingCancellation = {
   idempotency_key?: string;
   acknowledgement_xml: string | null; checked_at?: string | null;
 };
-export type CancelDocumentInput = { idempotency_key: string; reason: '01' | '02' | '03'; replacement_draft_id?: string };
+export type CancelDocumentInput = { idempotency_key: string; expected_uuid?: string; reason: '01' | '02' | '03'; replacement_draft_id?: string };
 const cancellationPath = (draftId: string, paymentId?: string) => paymentId
   ? `${paymentPath(draftId)}/${encodeURIComponent(paymentId)}/receipt/cancellation`
   : `/v1/billing/drafts/${encodeURIComponent(draftId)}/cancellation`;
@@ -657,6 +657,6 @@ export function createFiscalCorrection(draftId: string, input: CreateFiscalCorre
   return request(correctionPath(draftId, paymentId), { method: 'POST', body: JSON.stringify(input) });
 }
 export function fiscalCorrectionAction(draftId: string, action: 'stamp' | 'reconcile' | 'abandon' | 'cancel-original' | 'confirm-cancellation',
-  input: { receipt_uuid: string } | undefined, paymentId?: string): Promise<FiscalCorrection> {
+  input: { receipt_uuid?: string; revision_id?: string } | undefined, paymentId?: string): Promise<FiscalCorrection> {
   return request(`${correctionPath(draftId, paymentId)}/${action}`, { method: 'POST', body: input ? JSON.stringify(input) : undefined });
 }

@@ -31,7 +31,7 @@ describe('correction scope and explicit operations',() => {
   it.each(['stamp','cancel-original'])('requires production consent for %s',async operation=>{
     vi.stubEnv('DIGESTOR_FISCAL_OPERATIONS_PRODUCTION_ENABLED','true');
     expect((await runCorrectionAction(req({}),ctx(undefined,operation))).status).toBe(422);expect(m.action).not.toHaveBeenCalled();
-    expect((await runCorrectionAction(req({confirm_real_operation:true}),ctx(undefined,operation))).status).toBe(200);
+    expect((await runCorrectionAction(req({confirm_real_operation:true,revision_id:uuid}),ctx(undefined,operation))).status).toBe(200);
   });
   it('requires production confirmation to prepare and strips UI-only consent',async()=>{
     vi.stubEnv('DIGESTOR_FISCAL_OPERATIONS_PRODUCTION_ENABLED','true');

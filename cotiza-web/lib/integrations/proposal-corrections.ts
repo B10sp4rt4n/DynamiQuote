@@ -12,7 +12,8 @@ const changes = z.strictObject({
   operation_reference: z.string().trim().min(1).max(100).optional(),
 });
 const createInput = z.strictObject({ idempotency_key: z.uuid(), source_uuid: z.uuid(), reason: z.string().trim().min(5).max(500), changes, confirm_real_operation: z.literal(true).optional() });
-const recoveryInput = z.strictObject({ receipt_uuid: z.uuid() });
+const recoveryInput = z.strictObject({ receipt_uuid: z.uuid(), revision_id: z.uuid().optional() });
+const actionInput = z.strictObject({ revision_id:z.uuid(),confirm_real_operation:z.literal(true).optional() });
 const operations = z.enum(['stamp', 'reconcile', 'abandon', 'cancel-original', 'confirm-cancellation']);
 type Context = { params: Promise<{ proposalId: string; paymentId?: string; operation?: string }> };
 
@@ -72,15 +73,18 @@ export async function runCorrectionAction(request: Request, context: Context) {
   if (auth.error) return auth.error;
   const parsedAction = operations.safeParse(operation);
   if (!parsedAction.success) return NextResponse.json({ error: 'Acción no admitida' }, { status: 422 });
-  if (process.env['DIGESTOR_FISCAL_OPERATIONS_PRODUCTION_ENABLED'] === 'true' && ['stamp','cancel-original'].includes(parsedAction.data)) {
-    const consent = await request.json().catch(()=>null);
-    if (consent?.confirm_real_operation !== true) return NextResponse.json({error:'Confirma la operación fiscal real'},{status:422});
-  }
-  let input: { receipt_uuid: string } | undefined;
+  const production = process.env['DIGESTOR_FISCAL_OPERATIONS_PRODUCTION_ENABLED'] === 'true';
+  let input: {receipt_uuid?:string;revision_id?:string} | undefined;
   if (parsedAction.data === 'reconcile') {
     const parsed = recoveryInput.safeParse(await request.json().catch(() => null));
-    if (!parsed.success) return NextResponse.json({ error: 'Indica el UUID confirmado por el proveedor' }, { status: 422 });
+    if (!parsed.success || (production && !parsed.data.revision_id)) return NextResponse.json({ error: 'Indica el UUID confirmado y la corrección revisada' }, { status: 422 });
     input = parsed.data;
+  } else if (production) {
+    const parsed = actionInput.safeParse(await request.json().catch(()=>null));
+    if (!parsed.success || (['stamp','cancel-original'].includes(parsedAction.data) && parsed.data.confirm_real_operation !== true)) {
+      return NextResponse.json({error:'Confirma la operación y la versión exacta de la corrección'},{status:422});
+    }
+    input = {revision_id:parsed.data.revision_id};
   }
   try { return NextResponse.json(await fiscalCorrectionAction(auth.draftId, parsedAction.data, input, paymentId)); }
   catch (error) { return paymentFailure(error); }

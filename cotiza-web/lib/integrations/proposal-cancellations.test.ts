@@ -39,8 +39,8 @@ describe('cancellation proxy', () => {
   it('requires and strips production consent before forwarding',async()=>{
     vi.stubEnv('DIGESTOR_FISCAL_OPERATIONS_PRODUCTION_ENABLED','true');
     expect((await requestCancellation(req(),ctx)).status).toBe(422);expect(m.cancel).not.toHaveBeenCalled();
-    expect((await requestCancellation(req({confirm_real_operation:true}),ctx)).status).toBe(200);
-    expect(m.cancel).toHaveBeenCalledWith('server-resolved',input,'payment');
+    expect((await requestCancellation(req({confirm_real_operation:true,expected_uuid:input.idempotency_key}),ctx)).status).toBe(200);
+    expect(m.cancel).toHaveBeenCalledWith('server-resolved',{...input,expected_uuid:input.idempotency_key},'payment');
   });
   it('does not retry a failed cancellation request', async () => {
     m.cancel.mockRejectedValue(new Error('synthetic timeout'));

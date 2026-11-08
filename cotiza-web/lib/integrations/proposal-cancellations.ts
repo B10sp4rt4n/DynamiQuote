@@ -6,7 +6,7 @@ import { cancelBillingDocument, getBillingCancellation, reconcileBillingCancella
 
 // Motivo 01 is accepted only by Digestor with a verified same-tenant replacement.
 // Cotiza does not accept a raw Digestor ID or an arbitrary replacement UUID from its UI.
-const input = z.strictObject({ idempotency_key: z.uuid(), reason: z.enum(['02', '03']), confirm_real_operation: z.literal(true).optional() });
+const input = z.strictObject({ idempotency_key: z.uuid(), reason: z.enum(['02', '03']), expected_uuid: z.uuid().optional(), confirm_real_operation: z.literal(true).optional() });
 type Context = { params: Promise<{ proposalId: string; paymentId?: string }> };
 
 export async function readCancellation(request: Request, context: Context) {
@@ -32,7 +32,7 @@ export async function requestCancellation(request: Request, context: Context) {
   if (auth.error) return auth.error;
   const parsed = input.safeParse(await request.json().catch(() => null));
   if (!parsed.success) return NextResponse.json({ error: 'Selecciona motivo 02 o 03 y una clave de operación válida' }, { status: 422 });
-  if (process.env['DIGESTOR_FISCAL_OPERATIONS_PRODUCTION_ENABLED'] === 'true' && parsed.data.confirm_real_operation !== true) {
+  if (process.env['DIGESTOR_FISCAL_OPERATIONS_PRODUCTION_ENABLED'] === 'true' && (parsed.data.confirm_real_operation !== true || !parsed.data.expected_uuid)) {
     return NextResponse.json({error:'Confirma la solicitud de cancelación real'},{status:422});
   }
   const {confirm_real_operation: _consent, ...payload} = parsed.data;
