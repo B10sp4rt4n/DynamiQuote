@@ -1,4 +1,4 @@
-import { beforeEach, describe, expect, it, vi } from 'vitest';
+import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 import { NextResponse } from 'next/server';
 vi.mock('server-only', () => ({}));
 const m=vi.hoisted(() => ({ auth:vi.fn(), read:vi.fn(), create:vi.fn(), action:vi.fn() }));
@@ -11,6 +11,7 @@ const input={idempotency_key:uuid,source_uuid:uuid,reason:'Corrección revisada'
 const ctx=(paymentId?:string,operation='stamp') => ({params:Promise.resolve({proposalId:'p',paymentId,operation})});
 const req=(data:unknown=input,url='https://cotiza.test/correction') => new Request(url,{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify(data)});
 describe('correction scope and explicit operations',() => {
+  afterEach(()=>vi.unstubAllEnvs());
   beforeEach(() => {vi.resetAllMocks();m.auth.mockResolvedValue({draftId:'server-draft'});m.create.mockResolvedValue({pending:true});m.action.mockResolvedValue({pending:true});});
   it('uses the server draft with an exact source UUID and operation key',async () => {
     expect((await createCorrection(req(),ctx())).status).toBe(201);
@@ -26,6 +27,17 @@ describe('correction scope and explicit operations',() => {
     m.auth.mockResolvedValue({error:NextResponse.json({error:'Forbidden'},{status:403})});
     expect((await handler(req(),ctx())).status).toBe(403);
     for(const fn of [m.read,m.create,m.action])expect(fn).not.toHaveBeenCalled();
+  });
+  it.each(['stamp','cancel-original'])('requires production consent for %s',async operation=>{
+    vi.stubEnv('DIGESTOR_FISCAL_OPERATIONS_PRODUCTION_ENABLED','true');
+    expect((await runCorrectionAction(req({}),ctx(undefined,operation))).status).toBe(422);expect(m.action).not.toHaveBeenCalled();
+    expect((await runCorrectionAction(req({confirm_real_operation:true}),ctx(undefined,operation))).status).toBe(200);
+  });
+  it('requires production confirmation to prepare and strips UI-only consent',async()=>{
+    vi.stubEnv('DIGESTOR_FISCAL_OPERATIONS_PRODUCTION_ENABLED','true');
+    expect((await createCorrection(req(),ctx())).status).toBe(422);expect(m.create).not.toHaveBeenCalled();
+    expect((await createCorrection(req({...input,confirm_real_operation:true}),ctx())).status).toBe(201);
+    expect(m.create).toHaveBeenCalledWith('server-draft',input,undefined);
   });
   it('recovers by UUID through the distinct operation without stamping',async () => {
     expect((await runCorrectionAction(req({receipt_uuid:uuid}),ctx('payment','reconcile'))).status).toBe(200);

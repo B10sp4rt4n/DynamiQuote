@@ -28,7 +28,7 @@ vi.mock("@/lib/db/clients", () => ({ updateClientForTenant: mocks.updateClient }
 vi.mock("@/lib/db/proposals", () => ({ getProposalWorkflowByTenant: mocks.getProposal, isProposalVisibleToViewer: mocks.visible }));
 vi.mock("@/lib/db/tenants", () => ({ getTenantProfileByTenant: mocks.getTenantProfile }));
 
-import { POST } from "./route";
+import { GET, POST } from "./route";
 import { invoiceBasisFingerprint } from "@/lib/domain/invoice-profile";
 
 const proposalFixture = { outcome: "won", items: [{ itemNumber: 1, description: "Servicio", quantity: 1, priceUnit: 100 }],
@@ -75,7 +75,18 @@ describe("no regenerar prefacturas timbradas", () => {
     expect(mocks.createDraft).not.toHaveBeenCalled();
   });
 
-  afterEach(() => { delete process.env["DIGESTOR_FISCAL_PPD_ENABLED"]; });
+  afterEach(() => { vi.unstubAllEnvs(); delete process.env["DIGESTOR_FISCAL_PPD_ENABLED"]; });
+  it.each([['user',false],['owner',true],['admin',true]])('shows production fiscal actions only for administrative %s scope',async(role,expected)=>{
+    vi.stubEnv('DIGESTOR_FISCAL_OPERATIONS_PRODUCTION_ENABLED','true');vi.stubEnv('DIGESTOR_FISCAL_CANCELLATION_ENABLED','true');vi.stubEnv('DIGESTOR_FISCAL_CORRECTIONS_ENABLED','true');
+    mocks.tenant.mockResolvedValue({id:'t1',userId:'actor',userRole:role,authMode:'clerk'});
+    const result=await (await GET(new Request('https://cotiza.test/invoice'),ctx)).json();
+    expect(result.cancellationEnabled).toBe(expected);expect(result.correctionsEnabled).toBe(expected);
+  });
+  it('hides production fiscal controls from bootstrap identity',async()=>{
+    vi.stubEnv('DIGESTOR_FISCAL_OPERATIONS_PRODUCTION_ENABLED','true');vi.stubEnv('DIGESTOR_FISCAL_CANCELLATION_ENABLED','true');
+    mocks.tenant.mockResolvedValue({id:'t1',userId:'bootstrap',userRole:'owner',authMode:'bootstrap'});
+    expect((await (await GET(new Request('https://cotiza.test/invoice'),ctx)).json()).cancellationEnabled).toBe(false);
+  });
   it("rejects PPD by default and accepts the explicit feature gate", async () => {
     expect((await POST(request({ paymentMethod: "PPD", paymentForm: "99" }), ctx)).status).toBe(403);
     mocks.createDraft.mockClear();

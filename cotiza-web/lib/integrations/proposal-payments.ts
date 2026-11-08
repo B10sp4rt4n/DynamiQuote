@@ -18,9 +18,14 @@ export async function authorizeProposalFiscalDocument(proposalId: string, featur
   if (!enabled || !isDigestorFiscalEnabledForTenant(tenant.id)) {
     return { error: NextResponse.json({ error: "La operación fiscal aún no está habilitada" }, { status: 403 }) };
   }
-  if (feature === 'payments' && process.env['DIGESTOR_FISCAL_PPD_PRODUCTION_ENABLED'] === 'true') {
+  const production = feature === 'payments' ? process.env['DIGESTOR_FISCAL_PPD_PRODUCTION_ENABLED'] === 'true'
+    : process.env['DIGESTOR_FISCAL_OPERATIONS_PRODUCTION_ENABLED'] === 'true';
+  if (production) {
     if (tenant.authMode !== 'clerk') return { error: NextResponse.json({ error: "Inicia sesión para operar facturas reales" }, { status: 401 }) };
-    if (request && request.headers.get('origin') !== new URL(request.url).origin) {
+    if (feature !== 'payments' && !(tenant.isSuperAdmin || tenant.userRole === 'owner' || tenant.userRole === 'admin')) {
+      return { error: NextResponse.json({ error: 'Acceso fiscal administrativo requerido' }, { status: 403 }) };
+    }
+    if (request && !['GET','HEAD'].includes(request.method) && request.headers.get('origin') !== new URL(request.url).origin) {
       return { error: NextResponse.json({ error: "Origen no autorizado" }, { status: 403 }) };
     }
   }

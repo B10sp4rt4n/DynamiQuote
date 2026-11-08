@@ -3,7 +3,7 @@ import { renderToBuffer } from "@react-pdf/renderer";
 import { NextResponse } from "next/server";
 
 import { getCurrentTenantContext } from "@/lib/auth/tenant-context";
-import { fetchBillingDraftPdf, isDigestorFiscalEnabledForTenant, getFiscalCorrection, liveCancellation } from "@/lib/integrations/digestor-fiscal";
+import { fetchBillingDraftPdf, isDigestorFiscalEnabledForTenant, getFiscalCorrection, liveCancellation, getBillingCancellation } from "@/lib/integrations/digestor-fiscal";
 import { getProposalInvoiceStatusByTenant } from "@/lib/db/proposal-invoices";
 import { CfdiDocument } from "@/lib/pdf/cfdi-document";
 import { buildCfdiQrDataUrl } from "@/lib/pdf/cfdi-qr";
@@ -47,9 +47,11 @@ export async function GET(_: Request, context: RouteContext) {
       const sourceRevision = correction?.history.find(row => row.source_uuid.toLowerCase() === cfdi.timbre.uuid.toLowerCase());
       const pilot = process.env['DIGESTOR_FISCAL_LIVE_CANCEL_UUID']?.toLowerCase() === invoice.uuid?.toLowerCase()
         ? await liveCancellation(invoice.draftId,'read',invoice.uuid!) : null;
+      const cancellation = process.env['DIGESTOR_FISCAL_CANCELLATION_ENABLED'] === 'true'
+        ? await getBillingCancellation(invoice.draftId) : null;
       const qrDataUrl = await buildCfdiQrDataUrl(cfdi);
       const pdfBuffer = await renderToBuffer(CfdiDocument({ cfdi, proposalNumber: proposalId, qrDataUrl,
-        fiscalStatus: pilot?.status ?? sourceRevision?.source_cancellation_status }));
+        fiscalStatus: sourceRevision?.source_cancellation_status ?? cancellation?.status ?? pilot?.status }));
 
       return new NextResponse(new Uint8Array(pdfBuffer), {
         headers: {

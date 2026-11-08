@@ -42,7 +42,7 @@ export function ProposalCancellationPanel({ proposalId, paymentId, onStatusChang
     try {
       const response = await fetch(action === 'request' ? path : `${path}/reconcile`, {
         method: 'POST', headers: { 'Content-Type': 'application/json' },
-        body: action === 'request' ? JSON.stringify({ reason, idempotency_key: attempt.current.key }) : undefined,
+        body: action === 'request' ? JSON.stringify({ reason, idempotency_key: attempt.current.key, ...(state?.environment === 'production' ? {confirm_real_operation:true} : {}) }) : undefined,
       });
       const value = await response.json();
       if (!response.ok) throw new Error(value.error ?? 'Operación sin confirmar; consulta el estado antes de reintentar');
@@ -58,7 +58,7 @@ export function ProposalCancellationPanel({ proposalId, paymentId, onStatusChang
     finally { operation.current = false; setBusy(false); }
   }
   return <section className="mt-3 rounded border border-zinc-300 bg-white p-3 text-zinc-900">
-    <h4 className="font-medium">Cancelación de {paymentId ? 'complemento' : 'factura'} · pruebas</h4>
+    <h4 className="font-medium">Cancelación de {paymentId ? 'complemento' : 'factura'}{state?.environment === 'production' ? ' · comprobante real' : ' · pruebas'}</h4>
     <p className="mt-1 text-sm" role="status">{state ? LABEL[state.status] : 'Consultando estado…'}</p>
     {error ? <p role="alert" className="mt-2 text-sm text-rose-800">{error}</p> : null}
     {state?.status === 'not_requested' || state?.status === 'not_sent' ? <fieldset disabled={busy} className="mt-3 space-y-2">
@@ -66,8 +66,8 @@ export function ProposalCancellationPanel({ proposalId, paymentId, onStatusChang
         <option value="02">02 · Comprobante con errores sin relación</option><option value="03">03 · No se llevó a cabo la operación</option>
       </select></label>
       <p className="text-xs text-zinc-600">Para sustituir este comprobante utiliza «Corregir y sustituir» y confirma primero la nueva emisión.</p>
-      <label className="flex items-start gap-2 text-sm"><input type="checkbox" checked={confirmed} onChange={event => setConfirmed(event.target.checked)} />Confirmo que revisé el comprobante y el motivo para solicitar su cancelación en pruebas.</label>
-      <button type="button" disabled={!confirmed || busy} onClick={() => void execute('request')} className="rounded border border-rose-500 px-3 py-2 text-sm text-rose-900 disabled:opacity-50">Solicitar cancelación en pruebas</button>
+      <label className="flex items-start gap-2 text-sm"><input type="checkbox" checked={confirmed} onChange={event => setConfirmed(event.target.checked)} />Confirmo que revisé el comprobante y el motivo para solicitar su cancelación{state?.environment === 'production' ? ' real' : ' en pruebas'}.</label>
+      <button type="button" disabled={!confirmed || busy} onClick={() => void execute('request')} className="rounded border border-rose-500 px-3 py-2 text-sm text-rose-900 disabled:opacity-50">{state?.environment === 'production' ? 'Solicitar cancelación real' : 'Solicitar cancelación en pruebas'}</button>
     </fieldset> : null}
     {state && !['not_requested', 'cancelled', 'not_sent'].includes(state.status) ? <button type="button" disabled={busy} onClick={() => void execute('reconcile')} className="mt-2 rounded border px-3 py-2 text-sm disabled:opacity-50">Consultar estado fiscal sin repetir solicitud</button> : null}
     {state?.acknowledgement_xml ? <a className="mt-2 inline-block rounded border px-3 py-2 text-sm" href={`${path}?download=1`}>Descargar acuse de solicitud</a> : null}

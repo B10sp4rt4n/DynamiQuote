@@ -41,8 +41,9 @@ export function ProposalCorrectionPanel({ proposalId, paymentId }: { proposalId:
         const input = { source_uuid: state?.active_uuid, reason, changes };
         const fingerprint = JSON.stringify(input);
         if (attempt.current?.fingerprint !== fingerprint) attempt.current = { fingerprint, key: crypto.randomUUID() };
-        body = JSON.stringify({ ...input, idempotency_key: attempt.current.key });
+        body = JSON.stringify({ ...input, idempotency_key: attempt.current.key, ...(state?.environment === 'production' ? {confirm_real_operation:true} : {}) });
       } else if (action === 'reconcile') body = JSON.stringify({ receipt_uuid: uuid });
+      else if (['stamp','cancel-original'].includes(action) && state?.environment === 'production') body = JSON.stringify({confirm_real_operation:true});
       const response = await fetch(['create','read'].includes(action) ? path : `${path}/${action}`, {
         method: action === 'read' ? 'GET' : 'POST', headers: { 'Content-Type': 'application/json' }, body, cache: 'no-store',
       });
@@ -59,7 +60,7 @@ export function ProposalCorrectionPanel({ proposalId, paymentId }: { proposalId:
   const step = !current ? (state?.history.length ? 4 : 1) : current.status !== 'stamped' ? 2
     : current.source_cancellation_status === 'not_requested' ? 3 : 4;
   return <section className="mt-4 rounded-lg border border-blue-300 bg-white p-4 text-zinc-900">
-    <h4 className="font-semibold">Corregir y sustituir {paymentId ? 'complemento' : 'factura'} · pruebas</h4>
+    <h4 className="font-semibold">Corregir y sustituir {paymentId ? 'complemento' : 'factura'}{state?.environment === 'production' ? ' · comprobante real' : ' · pruebas'}</h4>
     <ol aria-label="Flujo de sustitución" className="mt-3 grid grid-cols-2 gap-2 text-xs sm:grid-cols-4">
       {['Revisar corrección','Emitir sustituta','Solicitar cancelación anterior','Confirmar estado'].map((label,index) => <li key={label}
         className={`rounded border p-2 ${index+1 === step ? 'border-blue-600 bg-blue-50 font-semibold' : 'border-zinc-200'}`}>{index+1}. {label}</li>)}
@@ -70,7 +71,8 @@ export function ProposalCorrectionPanel({ proposalId, paymentId }: { proposalId:
     {state ? <>
       <p className="mt-2 break-all text-xs">Comprobante activo en Cotiza: {state.active_uuid}</p>
       <div className="mt-2 flex flex-wrap gap-2 text-sm"><a className="rounded border px-3 py-2" href={`${path}?format=xml`}>XML activo</a><a className="rounded border px-3 py-2" target="_blank" rel="noreferrer" href={`${path}?format=pdf`}>PDF activo</a></div>
-      {!current ? <fieldset disabled={busy} className="mt-4 grid gap-3 sm:grid-cols-2">
+      {state.can_correct === false ? <p className="mt-3 text-sm text-amber-900">El comprobante tiene una cancelación registrada. Conserva su expediente y revisa el estado fiscal antes de corregir.</p> : null}
+      {!current && state.can_correct !== false ? <fieldset disabled={busy} className="mt-4 grid gap-3 sm:grid-cols-2">
         <legend className="mb-2 font-medium">Datos para la sustituta</legend>
         {(paymentId ? ['operation_reference'] : ['customer_name','customer_zip','customer_regimen','customer_use_cfdi']).map(key => <label key={key} className="text-sm">{FIELD_LABELS[key]}
           <input className="mt-1 w-full rounded border p-2" value={fields[key] ?? ''} onChange={event => { setConfirmed(false); setFields(previous => ({ ...previous,[key]:event.target.value })); }} />
@@ -82,14 +84,14 @@ export function ProposalCorrectionPanel({ proposalId, paymentId }: { proposalId:
         <label className="text-sm sm:col-span-2">Motivo de la corrección<textarea className="mt-1 w-full rounded border p-2" value={reason} maxLength={500} onChange={event => { setConfirmed(false); setReason(event.target.value); }} /></label>
         <label className="flex items-start gap-2 text-sm sm:col-span-2"><input type="checkbox" checked={confirmed} onChange={event => setConfirmed(event.target.checked)} />Revisé los datos que se corregirán y el motivo.</label>
         <button type="button" disabled={busy || !confirmed || reason.trim().length < 5} className="rounded bg-blue-800 px-3 py-2 text-sm text-white disabled:opacity-50" onClick={() => void run('create')}>Preparar sustitución para revisión</button>
-      </fieldset> : <div className="mt-4 space-y-2 text-sm">
+      </fieldset> : current ? <div className="mt-4 space-y-2 text-sm">
         <p role="status" className="font-medium">{STATUS[current.status]}</p><p className="break-all text-xs">UUID anterior: {current.source_uuid}</p>
         <p>Motivo: {current.reason}</p>
         <dl className="rounded border border-blue-200 bg-blue-50 p-3">{Object.entries(current.changes ?? {}).map(([key,value]) => <div key={key} className="mt-1"><dt className="font-medium">{FIELD_LABELS[key] ?? key}</dt><dd className="break-words">{value}</dd></div>)}</dl>
         {current.result_uuid ? <><p className="break-all text-xs">UUID sustituto: {current.result_uuid}</p><a className="inline-block rounded border px-3 py-2" href={`${path}?format=xml&revision=${encodeURIComponent(current.id)}`}>XML de la sustituta emitida</a></> : null}
         {['prepared','rejected'].includes(current.status) ? <>
-          <label className="flex items-start gap-2"><input type="checkbox" checked={confirmed} onChange={event => setConfirmed(event.target.checked)} />Confirmo los datos preparados para emitir la sustituta en pruebas.</label>
-          <button type="button" disabled={busy || !confirmed} className="rounded border border-amber-500 px-3 py-2 disabled:opacity-50" onClick={() => void run('stamp')}>Timbrar sustituta en pruebas</button>
+          <label className="flex items-start gap-2"><input type="checkbox" checked={confirmed} onChange={event => setConfirmed(event.target.checked)} />Confirmo los datos preparados para emitir la sustituta{state?.environment === 'production' ? ' real' : ' en pruebas'}.</label>
+          <button type="button" disabled={busy || !confirmed} className="rounded border border-amber-500 px-3 py-2 disabled:opacity-50" onClick={() => void run('stamp')}>{state?.environment === 'production' ? 'Emitir sustituta real' : 'Timbrar sustituta en pruebas'}</button>
           <button type="button" disabled={busy} className="ml-2 rounded border px-3 py-2 disabled:opacity-50" onClick={() => void run('abandon')}>Descartar corrección sin emitir</button>
         </> : null}
         {['processing','unknown'].includes(current.status) ? <>
@@ -98,10 +100,10 @@ export function ProposalCorrectionPanel({ proposalId, paymentId }: { proposalId:
         </> : null}
         {current.status === 'stamped' && ['not_requested','not_sent'].includes(current.source_cancellation_status) ? <>
           <label className="flex items-start gap-2"><input type="checkbox" checked={confirmed} onChange={event => setConfirmed(event.target.checked)} />Confirmo solicitar la cancelación del comprobante anterior con motivo01 y esta sustituta.</label>
-          <button type="button" disabled={busy || !confirmed} className="rounded border border-rose-500 px-3 py-2 disabled:opacity-50" onClick={() => void run('cancel-original')}>Solicitar cancelación del anterior en pruebas</button>
+          <button type="button" disabled={busy || !confirmed} className="rounded border border-rose-500 px-3 py-2 disabled:opacity-50" onClick={() => void run('cancel-original')}>{state?.environment === 'production' ? 'Solicitar cancelación real del anterior' : 'Solicitar cancelación del anterior en pruebas'}</button>
         </> : null}
         {current.status === 'stamped' && !['not_requested','not_sent'].includes(current.source_cancellation_status) ? <button type="button" disabled={busy} className="rounded border px-3 py-2 disabled:opacity-50" onClick={() => void run('confirm-cancellation')}>Consultar confirmación de cancelación</button> : null}
-      </div>}
+      </div> : null}
       {state.history.length ? <details className="mt-3 text-sm"><summary>Historial de sustituciones ({state.history.length})</summary><ol className="mt-2 space-y-2">{state.history.map(row => <li key={row.id} className="break-all rounded border p-2 text-xs">{row.source_uuid} → {row.result_uuid ?? 'pendiente'} · Cancelación anterior: {row.source_cancellation_status}</li>)}</ol></details> : null}
       {state.archived_history?.length ? <details className="mt-3 text-sm"><summary>Correcciones descartadas sin emitir ({state.archived_history.length})</summary><ol className="mt-2 space-y-2">{state.archived_history.map(row => <li key={row.id} className="break-all rounded border p-2 text-xs">{row.source_uuid} · {row.reason}</li>)}</ol></details> : null}
     </> : !error ? <p className="mt-2 text-sm">Consultando datos fiscales…</p> : null}

@@ -616,6 +616,7 @@ export function recoverPaymentReceipt(draftId: string, paymentId: string, receip
 }
 
 export type BillingCancellation = {
+  environment?: 'sandbox' | 'production';
   status: 'not_requested' | 'not_sent' | 'processing' | 'requested' | 'unknown' | 'rejected' | 'cancelled';
   document_uuid?: string; reason?: string; replacement_uuid?: string | null;
   idempotency_key?: string;
@@ -636,6 +637,8 @@ export function reconcileBillingCancellation(draftId: string, paymentId?: string
 }
 
 export type FiscalCorrection = {
+  can_correct?: boolean;
+  environment?: 'sandbox' | 'production';
   active_uuid: string; active_xml_base64: string; pending: boolean; kind: 'invoice' | 'receipt';
   defaults: Record<string, string | null>;
   archived_history?: Array<{ id: string; source_uuid: string; reason: string }>;
