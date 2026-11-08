@@ -564,10 +564,12 @@ export type BillingPayment = {
   balance_before: string; balance_after: string;
   receipt_status: "not_sent" | "processing" | "unknown" | "rejected" | "stamped";
   receipt_uuid: string | null; xml_base64: string | null; bank_verification: "not_performed";
+  cancellation_status?: BillingCancellation['status'];
 };
 export type BillingPayments = {
   supported: boolean; reason?: string; currency?: string; invoice_uuid?: string; total?: string;
   paid?: string; balance?: string; receipt_stamp_enabled?: boolean; payments: BillingPayment[];
+  invoice_cancellation_status?: BillingCancellation['status'];
 };
 const paymentPath = (draftId: string) => `/v1/billing/drafts/${encodeURIComponent(draftId)}/payments`;
 export function getBillingPayments(draftId: string): Promise<BillingPayments> {
@@ -586,4 +588,30 @@ export function preparePaymentReceipt(draftId: string, paymentId: string): Promi
 }
 export function stampPaymentReceipt(draftId: string, paymentId: string): Promise<BillingPayment & { ok: boolean }> {
   return request(`${paymentPath(draftId)}/${encodeURIComponent(paymentId)}/receipt/stamp`, { method: "POST" });
+}
+
+export function recoverPaymentReceipt(draftId: string, paymentId: string, receiptUuid: string): Promise<BillingPayment> {
+  return request(`${paymentPath(draftId)}/${encodeURIComponent(paymentId)}/receipt/reconcile`, {
+    method: 'POST', body: JSON.stringify({ receipt_uuid: receiptUuid }),
+  });
+}
+
+export type BillingCancellation = {
+  status: 'not_requested' | 'not_sent' | 'processing' | 'requested' | 'unknown' | 'rejected' | 'cancelled';
+  document_uuid?: string; reason?: string; replacement_uuid?: string | null;
+  idempotency_key?: string;
+  acknowledgement_xml: string | null; checked_at?: string | null;
+};
+export type CancelDocumentInput = { idempotency_key: string; reason: '01' | '02' | '03'; replacement_draft_id?: string };
+const cancellationPath = (draftId: string, paymentId?: string) => paymentId
+  ? `${paymentPath(draftId)}/${encodeURIComponent(paymentId)}/receipt/cancellation`
+  : `/v1/billing/drafts/${encodeURIComponent(draftId)}/cancellation`;
+export function getBillingCancellation(draftId: string, paymentId?: string): Promise<BillingCancellation> {
+  return request(cancellationPath(draftId, paymentId), { method: 'GET', cache: 'no-store' });
+}
+export function cancelBillingDocument(draftId: string, input: CancelDocumentInput, paymentId?: string): Promise<BillingCancellation> {
+  return request(cancellationPath(draftId, paymentId), { method: 'POST', body: JSON.stringify(input) });
+}
+export function reconcileBillingCancellation(draftId: string, paymentId?: string): Promise<BillingCancellation> {
+  return request(`${cancellationPath(draftId, paymentId)}/reconcile`, { method: 'POST' });
 }

@@ -2,6 +2,7 @@
 
 import { useEffect, useState } from "react";
 import { ProposalPaymentPanel } from "./proposal-payment-panel";
+import { ProposalCancellationPanel } from './proposal-cancellation-panel';
 
 const PAYMENT_FORM_OPTIONS = [
   { label: "01 - Efectivo", value: "01" },
@@ -56,6 +57,8 @@ type ProposalInvoicePanelProps = {
 
 export function ProposalInvoicePanel({ proposalId, recipientCompany }: ProposalInvoicePanelProps) {
   const [ppdEnabled, setPpdEnabled] = useState(false);
+  const [cancellationEnabled, setCancellationEnabled] = useState(false);
+  const [invoiceCancellationStatus, setInvoiceCancellationStatus] = useState('not_requested');
   const [loading, setLoading] = useState(true);
   const [invoice, setInvoice] = useState<InvoiceStatus | null>(null);
   const [form, setForm] = useState<FormState>(EMPTY_FORM);
@@ -78,6 +81,7 @@ export function ProposalInvoicePanel({ proposalId, recipientCompany }: ProposalI
         const res = await fetch(`/api/proposals/${proposalId}/invoice`);
         const data = (await res.json()) as {
           ppdEnabled?: boolean;
+          cancellationEnabled?: boolean;
           clientFiscalData?: ClientFiscalData | null;
           error?: string;
           invoice?: InvoiceStatus;
@@ -92,6 +96,7 @@ export function ProposalInvoicePanel({ proposalId, recipientCompany }: ProposalI
         }
 
         setPpdEnabled(data.ppdEnabled === true);
+        setCancellationEnabled(data.cancellationEnabled === true);
         if (data.invoice) {
           setInvoice(data.invoice);
         }
@@ -276,7 +281,9 @@ export function ProposalInvoicePanel({ proposalId, recipientCompany }: ProposalI
         >
           Descargar PDF
         </a>
-        {ppdEnabled ? <ProposalPaymentPanel proposalId={proposalId} /> : null}
+        {ppdEnabled ? <ProposalPaymentPanel proposalId={proposalId} cancellationEnabled={cancellationEnabled}
+          invoiceBlocked={['processing', 'requested', 'unknown', 'cancelled'].includes(invoiceCancellationStatus)} /> : null}
+        {cancellationEnabled ? <ProposalCancellationPanel proposalId={proposalId} onStatusChange={setInvoiceCancellationStatus} /> : null}
       </div>
     );
   }

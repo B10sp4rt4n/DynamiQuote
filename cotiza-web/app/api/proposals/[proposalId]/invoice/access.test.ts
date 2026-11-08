@@ -6,11 +6,11 @@ vi.mock("@/lib/db/proposals", () => ({ isProposalVisibleToViewer: m.visible, get
 vi.mock("@/lib/db/proposal-invoices", () => ({ getProposalInvoiceStatusByTenant: m.invoice, getClientFiscalDataForProposalByTenant: m.fiscal, saveProposalInvoiceDraftByTenant: vi.fn(), markProposalInvoiceStampedByTenant: vi.fn(), claimProposalInvoiceStampByTenant: m.claim, markProposalInvoiceRejectedByTenant: m.reject }));
 vi.mock("@/lib/db/clients", () => ({ updateClientForTenant: vi.fn() }));
 vi.mock("@/lib/db/tenants", () => ({ getTenantProfileByTenant: vi.fn() }));
-vi.mock("@/lib/integrations/digestor-fiscal", () => ({ isDigestorFiscalEnabledForTenant: m.enabled, createBillingDraft: m.create, stampBillingDraft: m.stamp, fetchBillingDraftPreviewHtml: m.preview, fetchBillingDraftPdf: m.pdf, getBillingPayments: m.payment, registerBillingPayment: m.payment, getPaymentReceipt: m.payment, preparePaymentReceipt: m.payment, stampPaymentReceipt: m.payment, getBillingDraftStampResult: m.remoteState }));
+vi.mock("@/lib/integrations/digestor-fiscal", () => ({ isDigestorFiscalEnabledForTenant: m.enabled, createBillingDraft: m.create, stampBillingDraft: m.stamp, fetchBillingDraftPreviewHtml: m.preview, fetchBillingDraftPdf: m.pdf, getBillingPayments: m.payment, registerBillingPayment: m.payment, getPaymentReceipt: m.payment, preparePaymentReceipt: m.payment, stampPaymentReceipt: m.payment, recoverPaymentReceipt: m.payment, getBillingCancellation: m.payment, cancelBillingDocument: m.payment, reconcileBillingCancellation: m.payment, getBillingDraftStampResult: m.remoteState }));
 vi.mock("@react-pdf/renderer", () => ({ renderToBuffer: vi.fn() }));
 vi.mock("@/lib/pdf/cfdi-document", () => ({ CfdiDocument: vi.fn() }));
 vi.mock("@/lib/pdf/cfdi-qr", () => ({ buildCfdiQrDataUrl: vi.fn() }));
-vi.mock("@/lib/pdf/cfdi-xml", () => ({ parseCfdiXml: vi.fn() }));
+vi.mock("@/lib/pdf/cfdi-xml", () => ({ parseCfdiXml: vi.fn(), parsePaymentReceiptXml: vi.fn() }));
 import { GET as status, POST as create } from "./route";
 import { POST as stamp } from "./stamp/route";
 import { GET as preview } from "./preview/route";
@@ -20,12 +20,18 @@ import { GET as payments, POST as register } from "./payments/route";
 import { GET as receipt } from "./payments/[paymentId]/receipt/route";
 import { POST as prepare } from "./payments/[paymentId]/receipt/prepare/route";
 import { POST as receiptStamp } from "./payments/[paymentId]/receipt/stamp/route";
-const handlers = [["status", status], ["create", create], ["stamp", stamp], ["preview", preview], ["pdf", pdf], ["reconcile", reconcile], ["payments", payments], ["register", register], ["receipt", receipt], ["prepare", prepare], ["receiptStamp", receiptStamp]] as const;
+import { POST as recoverReceipt } from "./payments/[paymentId]/receipt/reconcile/route";
+import { GET as receiptPdf } from "./payments/[paymentId]/receipt/pdf/route";
+import { GET as cancellation, POST as cancel } from "./cancellation/route";
+import { POST as cancellationStatus } from "./cancellation/reconcile/route";
+import { GET as receiptCancellation, POST as cancelReceipt } from "./payments/[paymentId]/receipt/cancellation/route";
+import { POST as receiptCancellationStatus } from "./payments/[paymentId]/receipt/cancellation/reconcile/route";
+const handlers = [["status", status], ["create", create], ["stamp", stamp], ["preview", preview], ["pdf", pdf], ["reconcile", reconcile], ["payments", payments], ["register", register], ["receipt", receipt], ["prepare", prepare], ["receiptStamp", receiptStamp], ["recoverReceipt", recoverReceipt], ["receiptPdf", receiptPdf], ["cancellation", cancellation], ["cancel", cancel], ["cancellationStatus", cancellationStatus], ["receiptCancellation", receiptCancellation], ["cancelReceipt", cancelReceipt], ["receiptCancellationStatus", receiptCancellationStatus]] as const;
 const context = () => ({ params: Promise.resolve({ proposalId: "proposal-b", paymentId: "payment-b" }) });
 const request = () => new Request("https://cotiza.test/api/proposals/proposal-b/invoice", { method: "POST", body: "{}", headers: { "Content-Type": "application/json" } });
 describe.each(handlers)("invoice %s access", (_name, handler) => {
   afterEach(() => { vi.unstubAllEnvs(); });
-  beforeEach(() => { vi.stubEnv("DIGESTOR_FISCAL_PPD_ENABLED", "true"); vi.resetAllMocks(); m.enabled.mockReturnValue(true); m.tenant.mockResolvedValue({ id: "tenant-a", userId: "seller-a", userRole: "user", isSuperAdmin: false }); m.visible.mockResolvedValue(true); m.invoice.mockResolvedValue(null); m.fiscal.mockResolvedValue(null); });
+  beforeEach(() => { vi.stubEnv("DIGESTOR_FISCAL_PPD_ENABLED", "true"); vi.stubEnv("DIGESTOR_FISCAL_CANCELLATION_ENABLED", "true"); vi.resetAllMocks(); m.enabled.mockReturnValue(true); m.tenant.mockResolvedValue({ id: "tenant-a", userId: "seller-a", userRole: "user", isSuperAdmin: false }); m.visible.mockResolvedValue(true); m.invoice.mockResolvedValue(null); m.fiscal.mockResolvedValue(null); });
   it("requires authentication before resolving invoice or calling fiscal service", async () => {
     m.tenant.mockResolvedValue(null); expect((await handler(request(), context())).status).toBe(401);
     expect(m.visible).not.toHaveBeenCalled(); expect(m.invoice).not.toHaveBeenCalled(); expect(m.create).not.toHaveBeenCalled(); expect(m.stamp).not.toHaveBeenCalled(); expect(m.remoteState).not.toHaveBeenCalled(); expect(m.payment).not.toHaveBeenCalled(); expect(m.claim).not.toHaveBeenCalled(); expect(m.reject).not.toHaveBeenCalled();
