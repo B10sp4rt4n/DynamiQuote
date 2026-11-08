@@ -216,18 +216,20 @@ function formatDate(iso: string): string {
 }
 
 type CfdiDocumentProps = {
+  cancellationStatus?: string;
   cfdi: ParsedCfdi;
   proposalNumber: string;
   qrDataUrl: string;
 };
 
-export function CfdiDocument({ cfdi, proposalNumber, qrDataUrl }: CfdiDocumentProps) {
+export function CfdiDocument({ cfdi, proposalNumber, qrDataUrl, cancellationStatus }: CfdiDocumentProps) {
   return (
     <Document>
       <Page size="A4" style={styles.page}>
         <View style={styles.headerRow}>
           <View>
             <Text style={styles.title}>{cfdi.emisor.nombre}</Text>
+            {cancellationStatus ? <Text style={{color:'#b91c1c',fontSize:12,marginTop:5}}>{cancellationStatus}</Text> : null}
             <Text style={styles.partyLine}>RFC: {cfdi.emisor.rfc}</Text>
             <Text style={styles.partyLine}>Régimen fiscal: {cfdi.emisor.regimenFiscal}</Text>
           </View>

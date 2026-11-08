@@ -27,6 +27,21 @@ export function isDigestorFiscalConfigured(): boolean {
   return getConfig() !== null;
 }
 
+export type LiveCancellation = {
+  status: 'not_requested' | 'processing' | 'unknown' | 'requested' | 'cancelled';
+  document_uuid?: string;
+  reason: '03';
+  acknowledgement_xml: string | null;
+  sat_response?: { Estado?: string; EsCancelable?: string; EstatusCancelacion?: string | null } | null;
+};
+
+export function liveCancellation(draftId: string, operation: 'read' | 'submit' | 'reconcile', uuid: string): Promise<LiveCancellation> {
+  const path = `/v1/billing/drafts/${encodeURIComponent(draftId)}/production-cancellation`;
+  if (operation === 'read') return request(path, {method:'GET',cache:'no-store'});
+  return request(path+(operation === 'reconcile' ? '/reconcile' : ''), {method:'POST',
+    body:operation === 'submit' ? JSON.stringify({confirm:true,expected_uuid:uuid}) : undefined});
+}
+
 // Tenant de Cotiza habilitado para facturar -- hoy solo SynAppsSys.
 export function isDigestorFiscalEnabledForTenant(tenantId: string): boolean {
   const enabledTenantId = process.env["DIGESTOR_FISCAL_TENANT_ID"];
