@@ -2,6 +2,8 @@
 
 import { useEffect, useState } from "react";
 import { ProposalPaymentPanel } from "./proposal-payment-panel";
+import { ProposalCancellationPanel } from './proposal-cancellation-panel';
+import { ProposalCorrectionPanel } from './proposal-correction-panel';
 
 const PAYMENT_FORM_OPTIONS = [
   { label: "01 - Efectivo", value: "01" },
@@ -56,6 +58,9 @@ type ProposalInvoicePanelProps = {
 
 export function ProposalInvoicePanel({ proposalId, recipientCompany }: ProposalInvoicePanelProps) {
   const [ppdEnabled, setPpdEnabled] = useState(false);
+  const [cancellationEnabled, setCancellationEnabled] = useState(false);
+  const [correctionsEnabled, setCorrectionsEnabled] = useState(false);
+  const [invoiceCancellationStatus, setInvoiceCancellationStatus] = useState('not_requested');
   const [loading, setLoading] = useState(true);
   const [invoice, setInvoice] = useState<InvoiceStatus | null>(null);
   const [form, setForm] = useState<FormState>(EMPTY_FORM);
@@ -78,6 +83,8 @@ export function ProposalInvoicePanel({ proposalId, recipientCompany }: ProposalI
         const res = await fetch(`/api/proposals/${proposalId}/invoice`);
         const data = (await res.json()) as {
           ppdEnabled?: boolean;
+          cancellationEnabled?: boolean;
+          correctionsEnabled?: boolean;
           clientFiscalData?: ClientFiscalData | null;
           error?: string;
           invoice?: InvoiceStatus;
@@ -92,6 +99,8 @@ export function ProposalInvoicePanel({ proposalId, recipientCompany }: ProposalI
         }
 
         setPpdEnabled(data.ppdEnabled === true);
+        setCancellationEnabled(data.cancellationEnabled === true);
+        setCorrectionsEnabled(data.correctionsEnabled === true);
         if (data.invoice) {
           setInvoice(data.invoice);
         }
@@ -266,7 +275,7 @@ export function ProposalInvoicePanel({ proposalId, recipientCompany }: ProposalI
   if (invoice?.status === "stamped") {
     return (
       <div className="rounded-lg border border-emerald-300 bg-emerald-50 p-4">
-        <p className="text-sm font-semibold text-emerald-900">Factura timbrada</p>
+        <p className="text-sm font-semibold text-emerald-900">{correctionsEnabled ? 'Factura de origen timbrada' : 'Factura timbrada'}</p>
         <p className="mt-1 text-sm text-emerald-800">UUID: {invoice.uuid ?? "N/D"}</p>
         <a
           className="mt-2 inline-block rounded-lg border border-emerald-400 bg-white px-3 py-1.5 text-xs font-medium text-emerald-800 transition hover:bg-emerald-100"
@@ -274,9 +283,13 @@ export function ProposalInvoicePanel({ proposalId, recipientCompany }: ProposalI
           rel="noreferrer"
           target="_blank"
         >
-          Descargar PDF
+          {correctionsEnabled ? 'PDF de origen' : 'Descargar PDF'}
         </a>
-        {ppdEnabled ? <ProposalPaymentPanel proposalId={proposalId} /> : null}
+        {ppdEnabled ? <ProposalPaymentPanel proposalId={proposalId} cancellationEnabled={cancellationEnabled}
+          correctionsEnabled={correctionsEnabled}
+          invoiceBlocked={['processing', 'requested', 'unknown', 'cancelled'].includes(invoiceCancellationStatus)} /> : null}
+        {cancellationEnabled ? <ProposalCancellationPanel proposalId={proposalId} onStatusChange={setInvoiceCancellationStatus} /> : null}
+        {correctionsEnabled ? <ProposalCorrectionPanel proposalId={proposalId} /> : null}
       </div>
     );
   }

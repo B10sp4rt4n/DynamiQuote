@@ -9,11 +9,14 @@ export function isPpdCaptureEnabled(): boolean {
   return process.env["DIGESTOR_FISCAL_PPD_ENABLED"] === "true";
 }
 
-export async function authorizeProposalPayments(proposalId: string) {
+export async function authorizeProposalFiscalDocument(proposalId: string, feature: 'payments' | 'cancellation' | 'correction' | 'correction_read') {
   const tenant = await getCurrentTenantContext();
   if (!tenant) return { error: NextResponse.json({ error: "No autorizado" }, { status: 401 }) };
-  if (!isPpdCaptureEnabled() || !isDigestorFiscalEnabledForTenant(tenant.id)) {
-    return { error: NextResponse.json({ error: "PPD y pagos aún no están habilitados" }, { status: 403 }) };
+  const enabled = feature === 'payments' ? isPpdCaptureEnabled() : feature === 'correction_read' ? true
+    : feature === 'correction' ? process.env['DIGESTOR_FISCAL_CORRECTIONS_ENABLED'] === 'true'
+    : process.env['DIGESTOR_FISCAL_CANCELLATION_ENABLED'] === 'true';
+  if (!enabled || !isDigestorFiscalEnabledForTenant(tenant.id)) {
+    return { error: NextResponse.json({ error: "La operación fiscal aún no está habilitada" }, { status: 403 }) };
   }
   const canSeeAll = tenant.isSuperAdmin || tenant.userRole === "owner" || tenant.userRole === "admin";
   if (!await isProposalVisibleToViewer(tenant.id, proposalId, tenant.userId, canSeeAll)) {
@@ -24,6 +27,10 @@ export async function authorizeProposalPayments(proposalId: string) {
     return { error: NextResponse.json({ error: "Se requiere una factura timbrada" }, { status: 409 }) };
   }
   return { draftId: invoice.draftId };
+}
+
+export function authorizeProposalPayments(proposalId: string) {
+  return authorizeProposalFiscalDocument(proposalId, 'payments');
 }
 
 export function paymentFailure(error: unknown): NextResponse {

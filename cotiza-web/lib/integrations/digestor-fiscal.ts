@@ -564,10 +564,15 @@ export type BillingPayment = {
   balance_before: string; balance_after: string;
   receipt_status: "not_sent" | "processing" | "unknown" | "rejected" | "stamped";
   receipt_uuid: string | null; xml_base64: string | null; bank_verification: "not_performed";
+  cancellation_status?: BillingCancellation['status'];
+  fiscal_ready?: boolean;
+  has_active_revision?: boolean;
 };
 export type BillingPayments = {
   supported: boolean; reason?: string; currency?: string; invoice_uuid?: string; total?: string;
   paid?: string; balance?: string; receipt_stamp_enabled?: boolean; payments: BillingPayment[];
+  invoice_cancellation_status?: BillingCancellation['status'];
+  invoice_fiscal_ready?: boolean;
 };
 const paymentPath = (draftId: string) => `/v1/billing/drafts/${encodeURIComponent(draftId)}/payments`;
 export function getBillingPayments(draftId: string): Promise<BillingPayments> {
@@ -586,4 +591,53 @@ export function preparePaymentReceipt(draftId: string, paymentId: string): Promi
 }
 export function stampPaymentReceipt(draftId: string, paymentId: string): Promise<BillingPayment & { ok: boolean }> {
   return request(`${paymentPath(draftId)}/${encodeURIComponent(paymentId)}/receipt/stamp`, { method: "POST" });
+}
+
+export function recoverPaymentReceipt(draftId: string, paymentId: string, receiptUuid: string): Promise<BillingPayment> {
+  return request(`${paymentPath(draftId)}/${encodeURIComponent(paymentId)}/receipt/reconcile`, {
+    method: 'POST', body: JSON.stringify({ receipt_uuid: receiptUuid }),
+  });
+}
+
+export type BillingCancellation = {
+  status: 'not_requested' | 'not_sent' | 'processing' | 'requested' | 'unknown' | 'rejected' | 'cancelled';
+  document_uuid?: string; reason?: string; replacement_uuid?: string | null;
+  idempotency_key?: string;
+  acknowledgement_xml: string | null; checked_at?: string | null;
+};
+export type CancelDocumentInput = { idempotency_key: string; reason: '01' | '02' | '03'; replacement_draft_id?: string };
+const cancellationPath = (draftId: string, paymentId?: string) => paymentId
+  ? `${paymentPath(draftId)}/${encodeURIComponent(paymentId)}/receipt/cancellation`
+  : `/v1/billing/drafts/${encodeURIComponent(draftId)}/cancellation`;
+export function getBillingCancellation(draftId: string, paymentId?: string): Promise<BillingCancellation> {
+  return request(cancellationPath(draftId, paymentId), { method: 'GET', cache: 'no-store' });
+}
+export function cancelBillingDocument(draftId: string, input: CancelDocumentInput, paymentId?: string): Promise<BillingCancellation> {
+  return request(cancellationPath(draftId, paymentId), { method: 'POST', body: JSON.stringify(input) });
+}
+export function reconcileBillingCancellation(draftId: string, paymentId?: string): Promise<BillingCancellation> {
+  return request(`${cancellationPath(draftId, paymentId)}/reconcile`, { method: 'POST' });
+}
+
+export type FiscalCorrection = {
+  active_uuid: string; active_xml_base64: string; pending: boolean; kind: 'invoice' | 'receipt';
+  defaults: Record<string, string | null>;
+  archived_history?: Array<{ id: string; source_uuid: string; reason: string }>;
+  history: Array<{ id: string; source_uuid: string; result_uuid: string | null;
+    status: 'prepared' | 'processing' | 'unknown' | 'rejected' | 'stamped'; reason: string; changes?: Record<string,string>;
+    source_cancellation_status: BillingCancellation['status']; request_xml_base64: string; result_xml_base64: string | null }>;
+};
+export type CreateFiscalCorrection = { idempotency_key: string; source_uuid: string; reason: string; changes: Record<string, string> };
+const correctionPath = (draftId: string, paymentId?: string) => paymentId
+  ? `${paymentPath(draftId)}/${encodeURIComponent(paymentId)}/receipt/correction`
+  : `/v1/billing/drafts/${encodeURIComponent(draftId)}/correction`;
+export function getFiscalCorrection(draftId: string, paymentId?: string): Promise<FiscalCorrection> {
+  return request(correctionPath(draftId, paymentId), { method: 'GET', cache: 'no-store' });
+}
+export function createFiscalCorrection(draftId: string, input: CreateFiscalCorrection, paymentId?: string): Promise<FiscalCorrection> {
+  return request(correctionPath(draftId, paymentId), { method: 'POST', body: JSON.stringify(input) });
+}
+export function fiscalCorrectionAction(draftId: string, action: 'stamp' | 'reconcile' | 'abandon' | 'cancel-original' | 'confirm-cancellation',
+  input: { receipt_uuid: string } | undefined, paymentId?: string): Promise<FiscalCorrection> {
+  return request(`${correctionPath(draftId, paymentId)}/${action}`, { method: 'POST', body: input ? JSON.stringify(input) : undefined });
 }
