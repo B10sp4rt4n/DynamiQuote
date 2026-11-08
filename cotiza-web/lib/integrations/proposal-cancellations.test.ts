@@ -1,4 +1,4 @@
-import { beforeEach, describe, expect, it, vi } from 'vitest';
+import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 import { NextResponse } from 'next/server';
 vi.mock('server-only', () => ({}));
 const m = vi.hoisted(() => ({ auth: vi.fn(), read: vi.fn(), cancel: vi.fn(), reconcile: vi.fn() }));
@@ -12,6 +12,7 @@ const req = (extra = {}) => new Request('https://cotiza.test/cancellation', {
   method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ ...input, ...extra }),
 });
 describe('cancellation proxy', () => {
+  afterEach(()=>vi.unstubAllEnvs());
   beforeEach(() => { vi.resetAllMocks(); m.auth.mockResolvedValue({ draftId: 'server-resolved' }); m.cancel.mockResolvedValue({ status: 'requested' }); });
   it('uses the server-resolved draft, receipt scope and stable key', async () => {
     expect((await requestCancellation(req(), ctx)).status).toBe(200);
@@ -34,6 +35,12 @@ describe('cancellation proxy', () => {
     m.read.mockResolvedValue({ status: 'requested', acknowledgement_xml: '<synthetic-ack/>' });
     const response = await readCancellation(new Request('https://cotiza.test/cancellation?download=1'), ctx);
     expect(await response.text()).toBe('<synthetic-ack/>'); expect(response.headers.get('cache-control')).toBe('no-store');
+  });
+  it('requires and strips production consent before forwarding',async()=>{
+    vi.stubEnv('DIGESTOR_FISCAL_OPERATIONS_PRODUCTION_ENABLED','true');
+    expect((await requestCancellation(req(),ctx)).status).toBe(422);expect(m.cancel).not.toHaveBeenCalled();
+    expect((await requestCancellation(req({confirm_real_operation:true,expected_uuid:input.idempotency_key}),ctx)).status).toBe(200);
+    expect(m.cancel).toHaveBeenCalledWith('server-resolved',{...input,expected_uuid:input.idempotency_key},'payment');
   });
   it('does not retry a failed cancellation request', async () => {
     m.cancel.mockRejectedValue(new Error('synthetic timeout'));

@@ -291,7 +291,7 @@ export function ProposalInvoicePanel({ proposalId, recipientCompany }: ProposalI
           invoiceBlocked={['processing', 'requested', 'unknown', 'cancelled'].includes(invoiceCancellationStatus)} /> : null}
         {cancellationEnabled ? <ProposalCancellationPanel proposalId={proposalId} onStatusChange={setInvoiceCancellationStatus} /> : null}
         {correctionsEnabled ? <ProposalCorrectionPanel proposalId={proposalId} /> : null}
-        {invoice.uuid ? <ProposalLiveCancellation proposalId={proposalId} uuid={invoice.uuid}/> : null}
+        {invoice.uuid && !cancellationEnabled ? <ProposalLiveCancellation proposalId={proposalId} uuid={invoice.uuid}/> : null}
       </div>
     );
   }

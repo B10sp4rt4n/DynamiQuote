@@ -11,8 +11,9 @@ const changes = z.strictObject({
   payment_method: z.enum(['PUE', 'PPD']).optional(), payment_form: z.enum(['01','02','03','04','28','99']).optional(),
   operation_reference: z.string().trim().min(1).max(100).optional(),
 });
-const createInput = z.strictObject({ idempotency_key: z.uuid(), source_uuid: z.uuid(), reason: z.string().trim().min(5).max(500), changes });
-const recoveryInput = z.strictObject({ receipt_uuid: z.uuid() });
+const createInput = z.strictObject({ idempotency_key: z.uuid(), source_uuid: z.uuid(), reason: z.string().trim().min(5).max(500), changes, confirm_real_operation: z.literal(true).optional() });
+const recoveryInput = z.strictObject({ receipt_uuid: z.uuid(), revision_id: z.uuid().optional() });
+const actionInput = z.strictObject({ revision_id:z.uuid(),confirm_real_operation:z.literal(true).optional() });
 const operations = z.enum(['stamp', 'reconcile', 'abandon', 'cancel-original', 'confirm-cancellation']);
 type Context = { params: Promise<{ proposalId: string; paymentId?: string; operation?: string }> };
 
@@ -51,11 +52,14 @@ export async function readCorrection(request: Request, context: Context) {
 
 export async function createCorrection(request: Request, context: Context) {
   const { proposalId, paymentId } = await context.params;
-  const auth = await authorizeProposalFiscalDocument(proposalId, 'correction');
+  const auth = await authorizeProposalFiscalDocument(proposalId, 'correction', request);
   if (auth.error) return auth.error;
   const parsed = createInput.safeParse(await request.json().catch(() => null));
   if (!parsed.success) return NextResponse.json({ error: 'Revisa los datos de corrección; los importes y el RFC se conservan' }, { status: 422 });
-  const input = parsed.data;
+  if (process.env['DIGESTOR_FISCAL_OPERATIONS_PRODUCTION_ENABLED'] === 'true' && parsed.data.confirm_real_operation !== true) {
+    return NextResponse.json({error:'Confirma la preparación de la sustitución real'},{status:422});
+  }
+  const {confirm_real_operation: _consent, ...input} = parsed.data;
   if (paymentId && Object.keys(input.changes).some(key => !['payment_form','operation_reference'].includes(key))) {
     return NextResponse.json({ error: 'El complemento permite corregir forma y referencia, conservando sus importes y fecha' }, { status: 422 });
   }
@@ -65,15 +69,22 @@ export async function createCorrection(request: Request, context: Context) {
 
 export async function runCorrectionAction(request: Request, context: Context) {
   const { proposalId, paymentId, operation } = await context.params;
-  const auth = await authorizeProposalFiscalDocument(proposalId, 'correction');
+  const auth = await authorizeProposalFiscalDocument(proposalId, 'correction', request);
   if (auth.error) return auth.error;
   const parsedAction = operations.safeParse(operation);
   if (!parsedAction.success) return NextResponse.json({ error: 'Acción no admitida' }, { status: 422 });
-  let input: { receipt_uuid: string } | undefined;
+  const production = process.env['DIGESTOR_FISCAL_OPERATIONS_PRODUCTION_ENABLED'] === 'true';
+  let input: {receipt_uuid?:string;revision_id?:string} | undefined;
   if (parsedAction.data === 'reconcile') {
     const parsed = recoveryInput.safeParse(await request.json().catch(() => null));
-    if (!parsed.success) return NextResponse.json({ error: 'Indica el UUID confirmado por el proveedor' }, { status: 422 });
+    if (!parsed.success || (production && !parsed.data.revision_id)) return NextResponse.json({ error: 'Indica el UUID confirmado y la corrección revisada' }, { status: 422 });
     input = parsed.data;
+  } else if (production) {
+    const parsed = actionInput.safeParse(await request.json().catch(()=>null));
+    if (!parsed.success || (['stamp','cancel-original'].includes(parsedAction.data) && parsed.data.confirm_real_operation !== true)) {
+      return NextResponse.json({error:'Confirma la operación y la versión exacta de la corrección'},{status:422});
+    }
+    input = {revision_id:parsed.data.revision_id};
   }
   try { return NextResponse.json(await fiscalCorrectionAction(auth.draftId, parsedAction.data, input, paymentId)); }
   catch (error) { return paymentFailure(error); }

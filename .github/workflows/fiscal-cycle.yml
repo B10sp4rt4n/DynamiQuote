@@ -1,7 +1,7 @@
 name: Fiscal cycle (synthetic)
 on:
   push:
-    branches: [feat/fiscal-payment-cancellation, feat/ppd-production-release]
+    branches: [feat/fiscal-payment-cancellation, feat/ppd-production-release, feat/fiscal-general-production]
   workflow_dispatch:
 permissions:
   contents: read
