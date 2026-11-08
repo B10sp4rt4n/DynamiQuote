@@ -205,8 +205,8 @@ const styles = StyleSheet.create({
   },
 });
 
-function formatCurrency(value: number, currency: string): string {
-  return new Intl.NumberFormat("es-MX", { currency, style: "currency" }).format(value);
+function formatCurrency(value: number, currency: string, unit = false): string {
+  return new Intl.NumberFormat("es-MX", { currency, style: "currency", maximumFractionDigits: unit ? 6 : 2 }).format(value);
 }
 
 function formatDate(iso: string): string {
@@ -216,25 +216,27 @@ function formatDate(iso: string): string {
 }
 
 type CfdiDocumentProps = {
-  cancellationStatus?: string;
   cfdi: ParsedCfdi;
   proposalNumber: string;
   qrDataUrl: string;
+  fiscalStatus?: string;
 };
 
-export function CfdiDocument({ cfdi, proposalNumber, qrDataUrl, cancellationStatus }: CfdiDocumentProps) {
+export function CfdiDocument({ cfdi, proposalNumber, qrDataUrl, fiscalStatus }: CfdiDocumentProps) {
   return (
     <Document>
       <Page size="A4" style={styles.page}>
+        {fiscalStatus && !['not_requested', 'not_sent'].includes(fiscalStatus) ? <Text style={{ color: '#9f1239', marginBottom: 8, fontSize: 10 }}>
+          {fiscalStatus === 'cancelled' ? 'COMPROBANTE CANCELADO' : fiscalStatus === 'rejected' ? 'Solicitud de cancelación rechazada' : 'Cancelación con seguimiento pendiente'}
+        </Text> : null}
         <View style={styles.headerRow}>
           <View>
             <Text style={styles.title}>{cfdi.emisor.nombre}</Text>
-            {cancellationStatus ? <Text style={{color:'#b91c1c',fontSize:12,marginTop:5}}>{cancellationStatus}</Text> : null}
             <Text style={styles.partyLine}>RFC: {cfdi.emisor.rfc}</Text>
             <Text style={styles.partyLine}>Régimen fiscal: {cfdi.emisor.regimenFiscal}</Text>
           </View>
           <View>
-            <Text style={styles.metaLabel}>Factura (Ingreso)</Text>
+            <Text style={styles.metaLabel}>{cfdi.tipoDeComprobante === 'P' ? 'Complemento de pago · REP 2.0' : 'Factura (Ingreso)'}</Text>
             <Text style={styles.metaValue}>
               {cfdi.serie ?? ""}
               {cfdi.folio ?? proposalNumber}
@@ -266,6 +268,21 @@ export function CfdiDocument({ cfdi, proposalNumber, qrDataUrl, cancellationStat
           </View>
         </View>
 
+        {cfdi.relations?.map((relation, index) => <View key={index} style={{ marginTop: 8, padding: 8, borderWidth: 1, borderColor: '#cbd5e1' }} wrap={false}>
+          <Text style={styles.partyTitle}>Relación fiscal {relation.type}{relation.type === '04' ? ' · Sustitución de CFDI previos' : ''}</Text>
+          {relation.uuids.map(uuid => <Text key={uuid} style={styles.partyLine}>Comprobante relacionado: {uuid}</Text>)}
+        </View>)}
+        {cfdi.payments?.map((payment, index) => <View key={index} style={{ marginTop: 10 }} wrap={false}>
+          <Text style={styles.partyTitle}>Pago recibido: {payment.amount} {payment.currency}</Text>
+          <Text style={styles.partyLine}>Fecha: {payment.date} · Forma de pago: {payment.form}</Text>
+          {payment.documents.map(document => <View key={document.uuid} style={{ marginTop: 6, padding: 8, borderWidth: 1, borderColor: '#cbd5e1' }}>
+            <Text style={styles.partyLine}>Factura relacionada: {document.uuid}</Text>
+            <Text style={styles.partyLine}>Parcialidad: {document.partiality} · Moneda: {document.currency}</Text>
+            <Text style={styles.partyLine}>Saldo anterior: {document.before} · Importe pagado: {document.paid} · Saldo insoluto: {document.after}</Text>
+          </View>)}
+        </View>)}
+
+        {cfdi.tipoDeComprobante !== 'P' ? <>
         <View style={styles.tableHead}>
           <Text style={styles.tableHeadClave}>Clave</Text>
           <Text style={styles.tableHeadDescripcion}>Concepto</Text>
@@ -277,8 +294,8 @@ export function CfdiDocument({ cfdi, proposalNumber, qrDataUrl, cancellationStat
           <View key={`${concepto.claveProdServ}-${index}`} style={styles.tableBody}>
             <Text style={styles.cellClave}>{concepto.claveProdServ}</Text>
             <Text style={styles.cellDescripcion}>{concepto.descripcion}</Text>
-            <Text style={styles.cellCant}>{concepto.cantidad.toFixed(2)}</Text>
-            <Text style={styles.cellPUnit}>{formatCurrency(concepto.valorUnitario, cfdi.moneda)}</Text>
+            <Text style={styles.cellCant}>{new Intl.NumberFormat("es-MX", { maximumFractionDigits: 6 }).format(concepto.cantidad)}</Text>
+            <Text style={styles.cellPUnit}>{formatCurrency(concepto.valorUnitario, cfdi.moneda, true)}</Text>
             <Text style={styles.cellImporte}>{formatCurrency(concepto.importe, cfdi.moneda)}</Text>
           </View>
         ))}
@@ -299,6 +316,8 @@ export function CfdiDocument({ cfdi, proposalNumber, qrDataUrl, cancellationStat
             <Text style={styles.cell}>{formatCurrency(cfdi.total, cfdi.moneda)}</Text>
           </View>
         </View>
+
+        </> : <Text style={{ marginTop: 8, fontSize: 8 }}>Total del CFDI de pago: 0. El importe recibido se detalla en el complemento.</Text>}
 
         <View style={styles.fiscalBox}>
           <View style={styles.footer}>
