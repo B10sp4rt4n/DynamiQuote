@@ -1,8 +1,9 @@
+import { isProposalVisibleToViewer } from "@/lib/db/proposals";
 import { renderToBuffer } from "@react-pdf/renderer";
 import { NextResponse } from "next/server";
 
 import { getCurrentTenantContext } from "@/lib/auth/tenant-context";
-import { fetchBillingDraftPdf, isDigestorFiscalEnabledForTenant, liveCancellation } from "@/lib/integrations/digestor-fiscal";
+import { fetchBillingDraftPdf, isDigestorFiscalEnabledForTenant, getFiscalCorrection, liveCancellation } from "@/lib/integrations/digestor-fiscal";
 import { getProposalInvoiceStatusByTenant } from "@/lib/db/proposal-invoices";
 import { CfdiDocument } from "@/lib/pdf/cfdi-document";
 import { buildCfdiQrDataUrl } from "@/lib/pdf/cfdi-qr";
@@ -25,6 +26,10 @@ export async function GET(_: Request, context: RouteContext) {
   }
 
   const { proposalId } = await context.params;
+  const canSeeAll = tenant.isSuperAdmin || tenant.userRole === "owner" || tenant.userRole === "admin";
+  if (!await isProposalVisibleToViewer(tenant.id, proposalId, tenant.userId, canSeeAll)) {
+    return NextResponse.json({ error: "Propuesta no encontrada" }, { status: 404 });
+  }
   const invoice = await getProposalInvoiceStatusByTenant(tenant.id, proposalId);
 
   if (!invoice?.draftId) {
@@ -37,14 +42,14 @@ export async function GET(_: Request, context: RouteContext) {
   if (invoice.status === "stamped" && invoice.xmlBase64) {
     try {
       const cfdi = parseCfdiXml(invoice.xmlBase64);
-      let cancellationStatus: string | undefined;
-      if (process.env['DIGESTOR_FISCAL_LIVE_CANCEL_UUID']?.toLowerCase() === invoice.uuid?.toLowerCase()) {
-        const fiscal = await liveCancellation(invoice.draftId,'read',invoice.uuid!);
-        cancellationStatus = fiscal.status === 'cancelled' ? 'COMPROBANTE CANCELADO — CONFIRMADO POR EL SAT'
-          : fiscal.status === 'not_requested' ? undefined : 'CANCELACIÓN PENDIENTE DE CONFIRMACIÓN';
-      }
+      const correction = process.env['DIGESTOR_FISCAL_CORRECTIONS_ENABLED'] === 'true'
+        ? await getFiscalCorrection(invoice.draftId) : null;
+      const sourceRevision = correction?.history.find(row => row.source_uuid.toLowerCase() === cfdi.timbre.uuid.toLowerCase());
+      const pilot = process.env['DIGESTOR_FISCAL_LIVE_CANCEL_UUID']?.toLowerCase() === invoice.uuid?.toLowerCase()
+        ? await liveCancellation(invoice.draftId,'read',invoice.uuid!) : null;
       const qrDataUrl = await buildCfdiQrDataUrl(cfdi);
-      const pdfBuffer = await renderToBuffer(CfdiDocument({ cfdi, proposalNumber: proposalId, qrDataUrl, cancellationStatus }));
+      const pdfBuffer = await renderToBuffer(CfdiDocument({ cfdi, proposalNumber: proposalId, qrDataUrl,
+        fiscalStatus: pilot?.status ?? sourceRevision?.source_cancellation_status }));
 
       return new NextResponse(new Uint8Array(pdfBuffer), {
         headers: {

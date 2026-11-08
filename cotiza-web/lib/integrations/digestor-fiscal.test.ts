@@ -3,6 +3,28 @@ import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 // digestor-fiscal.ts usa "server-only" -- mock para tests sin runtime de Next.js.
 vi.mock("server-only", () => ({}));
 
+describe("consulta de timbrado persistido", () => {
+  const originalFetch = global.fetch;
+  afterEach(() => {
+    clearConfigEnv();
+    global.fetch = originalFetch;
+    vi.restoreAllMocks();
+  });
+  it("consulta el draft exacto por GET sin solicitar otro timbre", async () => {
+    vi.resetModules();
+    setConfigEnv();
+    const fetchMock = vi.fn()
+      .mockResolvedValueOnce(jsonResponse({ access_token: "fixture-token", expires_in: 3600 }))
+      .mockResolvedValueOnce(jsonResponse({ stamp_status: "stamped", uuid: "fixture-uuid", xml_base64: "fixture-xml" }));
+    global.fetch = fetchMock as unknown as typeof fetch;
+    const { getBillingDraftStampResult } = await import("./digestor-fiscal");
+    expect(await getBillingDraftStampResult("draft/one")).toEqual({ stampStatus: "stamped", uuid: "fixture-uuid", xmlBase64: "fixture-xml" });
+    expect(fetchMock.mock.calls[1][0]).toBe("https://digestor.test/v1/billing/drafts/draft%2Fone/stamp-result");
+    expect(fetchMock.mock.calls[1][1].method).toBe("GET");
+    expect(fetchMock.mock.calls.some(([url]) => String(url).endsWith("/stamp"))).toBe(false);
+  });
+});
+
 const ENV_KEYS = ["DIGESTOR_FISCAL_BASE_URL", "DIGESTOR_FISCAL_USERNAME", "DIGESTOR_FISCAL_PASSWORD"] as const;
 
 function setConfigEnv(): void {
@@ -237,5 +259,46 @@ describe("digestor-fiscal: CSF + validacion de receptor", () => {
     await expect(validateReceptorFiscalData({ cp: "06100", regimen: "601", rfc: "AAA010101AAA" })).rejects.toThrow(
       "Digestor Fiscal no esta configurado.",
     );
+  });
+});
+
+
+describe("explicit fiscal classification transport", () => {
+  const originalFetch = global.fetch;
+  afterEach(() => { clearConfigEnv(); global.fetch = originalFetch; vi.restoreAllMocks(); });
+  it("transmits each reviewed SAT code, unit and full unit precision", async () => {
+    vi.resetModules(); setConfigEnv();
+    const fetchMock = vi.fn()
+      .mockResolvedValueOnce(jsonResponse({ access_token: "synthetic-token", expires_in: 3600 }))
+      .mockResolvedValueOnce(jsonResponse({ id: "d1", missing_fields: [], ready_to_stamp: true }));
+    global.fetch = fetchMock as unknown as typeof fetch;
+    const { createBillingDraft } = await import("./digestor-fiscal");
+    await createBillingDraft({ currency: "MXN", customerName: "Synthetic", customerRfc: "AAA010101AAA",
+      customerRegimen: "601", customerUseCfdi: "G03", customerZip: "01000", emitterName: "Synthetic",
+      emitterRfc: "EKU9003173C9", emitterRegimen: "601", placeOfIssue: "01000", paymentMethod: "PUE", paymentForm: "03",
+      items: [{ description: "Synthetic service", quantity: 1.234567, unitPrice: 12.345678, satProductCode: "80101500", unitCode: "E48" }] });
+    expect(JSON.parse(fetchMock.mock.calls[1][1].body).items).toEqual([
+      { description: "Synthetic service", quantity: 1.234567, unit_price: 12.345678, sat_product_code: "80101500", unit_code: "E48", tax_object: "02", tax_rate: 0.16 }
+    ]);
+  });
+});
+
+describe("PPD payment transport", () => {
+  const originalFetch = global.fetch;
+  afterEach(() => { clearConfigEnv(); global.fetch = originalFetch; vi.restoreAllMocks(); });
+  it("keeps payment decimal strings and encodes exact draft/payment identifiers", async () => {
+    vi.resetModules(); setConfigEnv();
+    const fetchMock = vi.fn()
+      .mockResolvedValueOnce(jsonResponse({ access_token: "synthetic", expires_in: 3600 }))
+      .mockResolvedValueOnce(jsonResponse({ id: "payment" }))
+      .mockResolvedValueOnce(jsonResponse({ receipt_status: "unknown" }));
+    global.fetch = fetchMock as unknown as typeof fetch;
+    const { registerBillingPayment, getPaymentReceipt } = await import("./digestor-fiscal");
+    const payload = { idempotency_key: "fixture", reference: "BANK", amount: "999999999999.99", paid_at: "2026-10-20T12:00:00Z", payment_form: "03" };
+    await registerBillingPayment("draft/one", payload); await getPaymentReceipt("draft/one", "payment/one");
+    expect(fetchMock.mock.calls[1][0]).toBe("https://digestor.test/v1/billing/drafts/draft%2Fone/payments");
+    expect(JSON.parse(fetchMock.mock.calls[1][1].body)).toEqual(payload);
+    expect(fetchMock.mock.calls[2][0]).toBe("https://digestor.test/v1/billing/drafts/draft%2Fone/payments/payment%2Fone/receipt");
+    expect(fetchMock.mock.calls[2][1].method).toBe("GET");
   });
 });

@@ -1,6 +1,6 @@
 import "server-only";
 
-import { XMLParser } from "fast-xml-parser";
+import { XMLParser, XMLValidator } from "fast-xml-parser";
 
 // Parsea el XML CFDI 4.0 timbrado (con complemento TimbreFiscalDigital) que
 // regresa TimbraCFDI via Digestor Fiscal. Solo se usa para armar la
@@ -19,6 +19,11 @@ export type ParsedCfdiConcepto = {
 };
 
 export type ParsedCfdi = {
+  relations?: Array<{ type: string; uuids: string[] }>;
+  payments?: Array<{
+    date: string; form: string; currency: string; amount: string;
+    documents: Array<{ uuid: string; currency: string; partiality: string; before: string; paid: string; after: string }>;
+  }>;
   emisor: {
     nombre: string;
     regimenFiscal: string;
@@ -59,7 +64,7 @@ export type ParsedCfdi = {
 const parser = new XMLParser({
   attributeNamePrefix: "",
   ignoreAttributes: false,
-  isArray: (name) => name === "Concepto" || name === "Traslado",
+  isArray: (name) => ['Concepto', 'Traslado', 'Pago', 'DoctoRelacionado', 'CfdiRelacionados', 'CfdiRelacionado'].includes(name),
   removeNSPrefix: true,
 });
 
@@ -70,10 +75,14 @@ function toNumber(value: unknown): number {
 
 export function parseCfdiXml(xmlBase64: string): ParsedCfdi {
   const xml = Buffer.from(xmlBase64, "base64").toString("utf-8");
+  if (xml.length > 5_000_000 || /<!DOCTYPE|<!ENTITY/i.test(xml) || XMLValidator.validate(xml) !== true) {
+    throw new Error('XML fiscal inválido');
+  }
   const parsed = parser.parse(xml) as {
     Comprobante: Record<string, unknown> & {
-      Complemento?: { TimbreFiscalDigital?: Record<string, unknown> };
+      Complemento?: { TimbreFiscalDigital?: Record<string, unknown>; Pagos?: { Version?: string; Pago?: Array<Record<string, unknown> & { DoctoRelacionado?: Array<Record<string, unknown>> }> } };
       Conceptos?: { Concepto?: Array<Record<string, unknown>> };
+      CfdiRelacionados?: Array<{ TipoRelacion?: string; CfdiRelacionado?: Array<{ UUID?: string }> }>;
       Emisor: Record<string, unknown>;
       Impuestos?: { TotalImpuestosTrasladados?: string };
       Receptor: Record<string, unknown>;
@@ -85,6 +94,7 @@ export function parseCfdiXml(xmlBase64: string): ParsedCfdi {
   const receptor = comprobante.Receptor;
   const timbre = comprobante.Complemento?.TimbreFiscalDigital;
   const conceptosRaw = comprobante.Conceptos?.Concepto ?? [];
+  const pagos = comprobante.Complemento?.Pagos;
 
   if (!timbre) {
     throw new Error("El XML no trae el complemento TimbreFiscalDigital -- no se puede armar la representacion impresa.");
@@ -95,6 +105,17 @@ export function parseCfdiXml(xmlBase64: string): ParsedCfdi {
   const cadenaOriginal = `||1.1|${timbre.UUID}|${timbre.FechaTimbrado}|${timbre.RfcProvCertif}|${timbre.SelloCFD}|${timbre.NoCertificadoSAT}||`;
 
   return {
+    relations: (comprobante.CfdiRelacionados ?? []).map(relation => ({ type: String(relation.TipoRelacion ?? ''),
+      uuids: (relation.CfdiRelacionado ?? []).map(document => String(document.UUID ?? '')) })),
+    payments: pagos?.Version === '2.0' ? (pagos.Pago ?? []).map(payment => ({
+      date: String(payment.FechaPago ?? ''), form: String(payment.FormaDePagoP ?? ''),
+      currency: String(payment.MonedaP ?? ''), amount: String(payment.Monto ?? ''),
+      documents: (payment.DoctoRelacionado ?? []).map(document => ({
+        uuid: String(document.IdDocumento ?? ''), currency: String(document.MonedaDR ?? ''),
+        partiality: String(document.NumParcialidad ?? ''), before: String(document.ImpSaldoAnt ?? ''),
+        paid: String(document.ImpPagado ?? ''), after: String(document.ImpSaldoInsoluto ?? ''),
+      })),
+    })) : undefined,
     cadenaOriginal,
     conceptos: conceptosRaw.map((c) => ({
       cantidad: toNumber(c.Cantidad),
@@ -142,4 +163,17 @@ export function parseCfdiXml(xmlBase64: string): ParsedCfdi {
       ? toNumber(comprobante.Impuestos.TotalImpuestosTrasladados)
       : null,
   };
+}
+
+export function parsePaymentReceiptXml(xmlBase64: string, receiptUuid: string): ParsedCfdi {
+  const cfdi = parseCfdiXml(xmlBase64);
+  if (cfdi.tipoDeComprobante !== 'P' || cfdi.moneda !== 'XXX' || cfdi.total !== 0
+      || cfdi.timbre.uuid.toLowerCase() !== receiptUuid.toLowerCase() || !cfdi.payments?.length
+      || cfdi.payments.some(payment => !payment.documents.length || !payment.date || !payment.form
+        || !/^\d+(\.\d+)?$/.test(payment.amount)
+        || payment.documents.some(document => !document.uuid || !document.partiality
+          || [document.before, document.paid, document.after].some(value => !/^\d+(\.\d+)?$/.test(value))))) {
+    throw new Error('El XML no corresponde al complemento timbrado esperado');
+  }
+  return cfdi;
 }
