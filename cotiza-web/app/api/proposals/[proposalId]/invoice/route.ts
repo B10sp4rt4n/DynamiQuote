@@ -49,6 +49,7 @@ export async function GET(_: Request, context: RouteContext) {
   if (!proposal) return NextResponse.json({ error: "Propuesta no encontrada" }, { status: 404 });
   return NextResponse.json({ clientFiscalData, invoice, ppdEnabled: isPpdCaptureEnabled(),
     cancellationEnabled: process.env['DIGESTOR_FISCAL_CANCELLATION_ENABLED'] === 'true',
+    correctionsEnabled: process.env['DIGESTOR_FISCAL_CORRECTIONS_ENABLED'] === 'true',
     fiscalBasis: { fingerprint: invoiceBasisFingerprint(proposal), currency: proposal.formal?.currency,
       items: proposal.items.map(item => ({ itemNumber: item.itemNumber, description: item.description })) },
   }, { status: 200 });

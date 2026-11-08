@@ -19,6 +19,7 @@ export type ParsedCfdiConcepto = {
 };
 
 export type ParsedCfdi = {
+  relations?: Array<{ type: string; uuids: string[] }>;
   payments?: Array<{
     date: string; form: string; currency: string; amount: string;
     documents: Array<{ uuid: string; currency: string; partiality: string; before: string; paid: string; after: string }>;
@@ -63,7 +64,7 @@ export type ParsedCfdi = {
 const parser = new XMLParser({
   attributeNamePrefix: "",
   ignoreAttributes: false,
-  isArray: (name) => ['Concepto', 'Traslado', 'Pago', 'DoctoRelacionado'].includes(name),
+  isArray: (name) => ['Concepto', 'Traslado', 'Pago', 'DoctoRelacionado', 'CfdiRelacionados', 'CfdiRelacionado'].includes(name),
   removeNSPrefix: true,
 });
 
@@ -81,6 +82,7 @@ export function parseCfdiXml(xmlBase64: string): ParsedCfdi {
     Comprobante: Record<string, unknown> & {
       Complemento?: { TimbreFiscalDigital?: Record<string, unknown>; Pagos?: { Version?: string; Pago?: Array<Record<string, unknown> & { DoctoRelacionado?: Array<Record<string, unknown>> }> } };
       Conceptos?: { Concepto?: Array<Record<string, unknown>> };
+      CfdiRelacionados?: Array<{ TipoRelacion?: string; CfdiRelacionado?: Array<{ UUID?: string }> }>;
       Emisor: Record<string, unknown>;
       Impuestos?: { TotalImpuestosTrasladados?: string };
       Receptor: Record<string, unknown>;
@@ -103,6 +105,8 @@ export function parseCfdiXml(xmlBase64: string): ParsedCfdi {
   const cadenaOriginal = `||1.1|${timbre.UUID}|${timbre.FechaTimbrado}|${timbre.RfcProvCertif}|${timbre.SelloCFD}|${timbre.NoCertificadoSAT}||`;
 
   return {
+    relations: (comprobante.CfdiRelacionados ?? []).map(relation => ({ type: String(relation.TipoRelacion ?? ''),
+      uuids: (relation.CfdiRelacionado ?? []).map(document => String(document.UUID ?? '')) })),
     payments: pagos?.Version === '2.0' ? (pagos.Pago ?? []).map(payment => ({
       date: String(payment.FechaPago ?? ''), form: String(payment.FormaDePagoP ?? ''),
       currency: String(payment.MonedaP ?? ''), amount: String(payment.Monto ?? ''),

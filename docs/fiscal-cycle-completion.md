@@ -38,9 +38,28 @@ Usar instalaciones temporales de esbuild y Playwright; no son dependencias produ
 ## Pendientes que impiden declarar completo el MVP fiscal
 
 - Firma/CSD, identidad y aceptación efectiva del PAC sandbox; matriz fiscal y vigencia aplicable. Las pruebas con proveedor simulado no certifican aceptación fiscal.
-- Sustitución desde Cotiza: generar/vincular comprobante sustituto y relación04, seleccionar su propuesta en el mismo tenant y cancelar con motivo01. El motor valida una sustituta ya timbrada y relacionada; el frontend bloquea IDs/UUID arbitrarios y no ofrece este recorrido incompleto.
-- Corrección/sustitución de REP y reversión/reasignación de aplicaciones. No se borra un pago para hacer coincidir un saldo fiscal.
+- Ampliar la sustitución a cambios económicos o de RFC y a facturas con pagos. El primer perfil de metadatos y forma/método ya tiene recorrido guiado, conserva economía y bloquea IDs ajenos.
+- Ampliar la corrección de REP a importes o parcialidades anteriores y resolver reversión/reasignación de aplicaciones. El primer perfil ya corrige forma/referencia del último REP sin borrar el pago.
 - Factura con pagos: se bloquea su cancelación hasta resolver los documentos y aplicaciones. No existe todavía el asistente completo de resolución.
 - Revisión de interfaz con sesión real y versión desplegada, mantenimiento/migraciones/respaldo y autorización de liberación.
 
 Los perfiles de otras monedas, anticipos, retenciones, pagos agrupados y factura global permanecen fuera del primer perfil y se rechazan explícitamente.
+
+## Ampliación: sustituciones y correcciones conservando importes
+
+Se agrega el recorrido guiado de cuatro pasos: revisar corrección → emitir sustituta → solicitar cancelación del anterior con motivo01 → consultar confirmación. La sustituta lleva relación04 al comprobante anterior. El original y sus XML siguen disponibles; el comprobante nuevo sólo se adopta como activo cuando la cancelación anterior está confirmada. El PDF de sustitución muestra la relación fiscal y UUID de origen.
+
+Alcance funcional del primer perfil:
+
+- Factura sin pagos registrados: corregir nombre, código postal, régimen/uso fiscal del receptor y método/forma de pago, conservando RFC, partidas, impuestos y total. El motor conserva una cadena para sustituciones sucesivas; los pagos posteriores se vinculan al UUID activo.
+- Último REP: corregir forma de pago y referencia fiscal, conservando fecha, importes, saldos, factura relacionada y el pago económico original. Una corrección pendiente bloquea la emisión fiscal posterior. Al confirmarse la cancelación anterior puede continuar la siguiente parcialidad.
+- Resultado incierto: recuperar el XML por UUID confirmado en el proveedor, sin reemisión. Una corrección preparada o rechazada puede descartarse antes de emitir; su evidencia queda conservada y visible.
+- Nueva guarda `DIGESTOR_FISCAL_CORRECTIONS_ENABLED=false`. Las consultas de evidencia autorizadas permanecen separadas de las mutaciones. Coordinar con Digestor, `FISCAL_CORRECTIONS_ENABLED`, flags PPD/REP/cancelación y migración20261107_02 antes de cualquier piloto.
+
+Se probaron interacciones reales del componente React en JSDOM: edición, confirmaciones por paso y deduplicación de doble clic. No equivale a revisión visual de navegador ni a una sesión Clerk real. Script: `scripts/check_fiscal_correction_dom.mjs`, con esbuild/jsdom instalados sólo como herramientas temporales de desarrollo.
+
+La integración adicional `fiscal-correction.integration.test.ts`, con `FISCAL_CORRECTION_FIXTURE_URL` de loopback y un fixture recién iniciado, recorre sustitución de factura y REP, adopción del UUID nuevo, conservación del XML anterior y del cobro, PDF y liquidación posterior. El proveedor permanece simulado.
+
+La revisión actual de Railway mostró únicamente el entorno production del servicio Digestor. La conexión OAuth sólo expone nombres de variables y no permitió verificar/usar una credencial o CSD de pruebas; no se trató el token genérico como sandbox ni se modificó producción. Sigue pendiente el ensayo de firmado/aceptación real del PAC con configuración segura verificada.
+
+Cambios de RFC, cantidades, precios, tasas, importes de cobros, reasignación/reversión de pagos y corrección de parcialidades anteriores requieren su propio flujo y permanecen bloqueados. No se declara completo todo el sistema de facturación por este primer perfil.

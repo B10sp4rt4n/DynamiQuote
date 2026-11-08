@@ -227,7 +227,7 @@ export function CfdiDocument({ cfdi, proposalNumber, qrDataUrl, fiscalStatus }: 
     <Document>
       <Page size="A4" style={styles.page}>
         {fiscalStatus && !['not_requested', 'not_sent'].includes(fiscalStatus) ? <Text style={{ color: '#9f1239', marginBottom: 8, fontSize: 10 }}>
-          {fiscalStatus === 'cancelled' ? 'COMPLEMENTO CANCELADO' : fiscalStatus === 'rejected' ? 'Solicitud de cancelación rechazada' : 'Cancelación con seguimiento pendiente'}
+          {fiscalStatus === 'cancelled' ? 'COMPROBANTE CANCELADO' : fiscalStatus === 'rejected' ? 'Solicitud de cancelación rechazada' : 'Cancelación con seguimiento pendiente'}
         </Text> : null}
         <View style={styles.headerRow}>
           <View>
@@ -268,6 +268,10 @@ export function CfdiDocument({ cfdi, proposalNumber, qrDataUrl, fiscalStatus }: 
           </View>
         </View>
 
+        {cfdi.relations?.map((relation, index) => <View key={index} style={{ marginTop: 8, padding: 8, borderWidth: 1, borderColor: '#cbd5e1' }} wrap={false}>
+          <Text style={styles.partyTitle}>Relación fiscal {relation.type}{relation.type === '04' ? ' · Sustitución de CFDI previos' : ''}</Text>
+          {relation.uuids.map(uuid => <Text key={uuid} style={styles.partyLine}>Comprobante relacionado: {uuid}</Text>)}
+        </View>)}
         {cfdi.payments?.map((payment, index) => <View key={index} style={{ marginTop: 10 }} wrap={false}>
           <Text style={styles.partyTitle}>Pago recibido: {payment.amount} {payment.currency}</Text>
           <Text style={styles.partyLine}>Fecha: {payment.date} · Forma de pago: {payment.form}</Text>

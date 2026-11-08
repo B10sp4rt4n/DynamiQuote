@@ -21,7 +21,7 @@ export function ProposalCancellationPanel({ proposalId, paymentId, onStatusChang
   const attempt = useRef<{ reason: string; key: string } | null>(null);
   useEffect(() => {
     const controller = new AbortController();
-    fetch(path, { signal: controller.signal, cache: 'no-store' }).then(async response => {
+    function load() { return fetch(path, { signal: controller.signal, cache: 'no-store' }).then(async response => {
       const value = await response.json();
       if (!response.ok) throw new Error(value.error ?? 'No se pudo consultar la cancelación');
       if (!controller.signal.aborted) {
@@ -30,8 +30,10 @@ export function ProposalCancellationPanel({ proposalId, paymentId, onStatusChang
           setReason(value.reason); attempt.current = { reason: value.reason, key: value.idempotency_key };
         }
       }
-    }).catch(error => { if (!controller.signal.aborted) setError(error instanceof Error ? error.message : 'Error de consulta'); });
-    return () => controller.abort();
+    }).catch(error => { if (!controller.signal.aborted) setError(error instanceof Error ? error.message : 'Error de consulta'); }); }
+    void load(); const updated = () => { void load(); };
+    window.addEventListener('cotiza:fiscal-updated', updated);
+    return () => { controller.abort(); window.removeEventListener('cotiza:fiscal-updated', updated); };
   }, [path, paymentId, onStatusChange]);
   async function execute(action: 'request' | 'reconcile') {
     if (operation.current || (action === 'request' && !confirmed)) return;
@@ -60,10 +62,10 @@ export function ProposalCancellationPanel({ proposalId, paymentId, onStatusChang
     <p className="mt-1 text-sm" role="status">{state ? LABEL[state.status] : 'Consultando estado…'}</p>
     {error ? <p role="alert" className="mt-2 text-sm text-rose-800">{error}</p> : null}
     {state?.status === 'not_requested' || state?.status === 'not_sent' ? <fieldset disabled={busy} className="mt-3 space-y-2">
-      <label className="block text-sm">Motivo<select className="mt-1 block w-full rounded border p-2" value={reason} onChange={event => setReason(event.target.value as '02' | '03')}>
+      <label className="block text-sm">Motivo<select className="mt-1 block w-full rounded border p-2" value={reason} onChange={event => { setConfirmed(false); setReason(event.target.value as '02' | '03'); }}>
         <option value="02">02 · Comprobante con errores sin relación</option><option value="03">03 · No se llevó a cabo la operación</option>
       </select></label>
-      <p className="text-xs text-zinc-600">Si requiere sustitución, primero debe existir el comprobante sustituto y su relación fiscal. Ese recorrido sigue pendiente en Cotiza.</p>
+      <p className="text-xs text-zinc-600">Para sustituir este comprobante utiliza «Corregir y sustituir» y confirma primero la nueva emisión.</p>
       <label className="flex items-start gap-2 text-sm"><input type="checkbox" checked={confirmed} onChange={event => setConfirmed(event.target.checked)} />Confirmo que revisé el comprobante y el motivo para solicitar su cancelación en pruebas.</label>
       <button type="button" disabled={!confirmed || busy} onClick={() => void execute('request')} className="rounded border border-rose-500 px-3 py-2 text-sm text-rose-900 disabled:opacity-50">Solicitar cancelación en pruebas</button>
     </fieldset> : null}

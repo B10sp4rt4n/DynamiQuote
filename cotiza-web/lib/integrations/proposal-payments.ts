@@ -9,10 +9,12 @@ export function isPpdCaptureEnabled(): boolean {
   return process.env["DIGESTOR_FISCAL_PPD_ENABLED"] === "true";
 }
 
-export async function authorizeProposalFiscalDocument(proposalId: string, feature: 'payments' | 'cancellation') {
+export async function authorizeProposalFiscalDocument(proposalId: string, feature: 'payments' | 'cancellation' | 'correction' | 'correction_read') {
   const tenant = await getCurrentTenantContext();
   if (!tenant) return { error: NextResponse.json({ error: "No autorizado" }, { status: 401 }) };
-  const enabled = feature === 'payments' ? isPpdCaptureEnabled() : process.env['DIGESTOR_FISCAL_CANCELLATION_ENABLED'] === 'true';
+  const enabled = feature === 'payments' ? isPpdCaptureEnabled() : feature === 'correction_read' ? true
+    : feature === 'correction' ? process.env['DIGESTOR_FISCAL_CORRECTIONS_ENABLED'] === 'true'
+    : process.env['DIGESTOR_FISCAL_CANCELLATION_ENABLED'] === 'true';
   if (!enabled || !isDigestorFiscalEnabledForTenant(tenant.id)) {
     return { error: NextResponse.json({ error: "La operación fiscal aún no está habilitada" }, { status: 403 }) };
   }

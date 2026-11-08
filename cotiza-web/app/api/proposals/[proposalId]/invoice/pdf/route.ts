@@ -3,7 +3,7 @@ import { renderToBuffer } from "@react-pdf/renderer";
 import { NextResponse } from "next/server";
 
 import { getCurrentTenantContext } from "@/lib/auth/tenant-context";
-import { fetchBillingDraftPdf, isDigestorFiscalEnabledForTenant } from "@/lib/integrations/digestor-fiscal";
+import { fetchBillingDraftPdf, isDigestorFiscalEnabledForTenant, getFiscalCorrection } from "@/lib/integrations/digestor-fiscal";
 import { getProposalInvoiceStatusByTenant } from "@/lib/db/proposal-invoices";
 import { CfdiDocument } from "@/lib/pdf/cfdi-document";
 import { buildCfdiQrDataUrl } from "@/lib/pdf/cfdi-qr";
@@ -42,8 +42,12 @@ export async function GET(_: Request, context: RouteContext) {
   if (invoice.status === "stamped" && invoice.xmlBase64) {
     try {
       const cfdi = parseCfdiXml(invoice.xmlBase64);
+      const correction = process.env['DIGESTOR_FISCAL_CORRECTIONS_ENABLED'] === 'true'
+        ? await getFiscalCorrection(invoice.draftId) : null;
+      const sourceRevision = correction?.history.find(row => row.source_uuid.toLowerCase() === cfdi.timbre.uuid.toLowerCase());
       const qrDataUrl = await buildCfdiQrDataUrl(cfdi);
-      const pdfBuffer = await renderToBuffer(CfdiDocument({ cfdi, proposalNumber: proposalId, qrDataUrl }));
+      const pdfBuffer = await renderToBuffer(CfdiDocument({ cfdi, proposalNumber: proposalId, qrDataUrl,
+        fiscalStatus: sourceRevision?.source_cancellation_status }));
 
       return new NextResponse(new Uint8Array(pdfBuffer), {
         headers: {
