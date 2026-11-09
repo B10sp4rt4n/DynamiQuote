@@ -40,6 +40,8 @@ function describe(item: ProposalAuditTimelineItem): { detail: string | null; tit
   const d = item.details;
 
   switch (item.type) {
+    case "invoice_preparation_saved":
+      return { title: "Prefactura preparada", detail: "Datos y clasificación guardados para recuperar esta revisión.", tone: "ok" };
     case "fiscal_classification_confirmed":
       return { title: "Clasificación fiscal confirmada", detail: `Partida ${String(d["itemNumber"])} · producto ${String(d["satProductCode"])} · unidad ${String(d["unitCode"])}`, tone: "ok" };
     case "outcome_date_changed":

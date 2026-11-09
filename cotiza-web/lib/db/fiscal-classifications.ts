@@ -1,7 +1,7 @@
 import "server-only";
 import { createHash } from "node:crypto";
 import { prisma } from "./prisma";
-import { normalizeConcept, type ClassificationMemory, type SaleNature } from "@/lib/domain/fiscal-classification";
+import { confirmClassificationSchema, normalizeConcept, type ClassificationMemory, type SaleNature } from "@/lib/domain/fiscal-classification";
 
 const TYPE = "fiscal_classification_confirmed";
 const hash = (value: string) => createHash("sha256").update(value).digest("hex");
@@ -17,6 +17,34 @@ export function classificationKey(item: Concept, nature: SaleNature): string {
 function parse(payload: string | null, eventHash: string) {
   if (!payload || hash(payload) !== eventHash) return null;
   try { const data = JSON.parse(payload); return data.version === 1 && data.type === TYPE ? data : null; } catch { return null; }
+}
+
+// A saved decision for this exact document/actor/revision is distinct from
+// reusable commercial memory. It can be recovered even when remember=false.
+export async function savedClassification(input: { tenantId: string; actorUserId: string;
+  proposalId: string; itemNumber: number; fingerprint: string; eventId?: string }) {
+  const rows = await prisma.proposal_audit_events.findMany({
+    where: { tenant_id: input.tenantId, proposal_id: input.proposalId, event_type: TYPE,
+      ...(input.eventId ? { event_id: input.eventId } : {}),
+      AND: [
+        { payload: { contains: `"itemNumber":${input.itemNumber},` } },
+        { payload: { contains: JSON.stringify({ fingerprint: input.fingerprint }).slice(1, -1) } },
+        { payload: { contains: JSON.stringify({ actorUserId: input.actorUserId }).slice(1, -1) } },
+      ] },
+    orderBy: [{ created_at: "desc" }, { event_id: "desc" }], take: 1,
+    select: { event_id: true, payload: true, event_hash: true, created_at: true },
+  });
+  const row = rows[0], data = row && parse(row.payload, row.event_hash);
+  if (!data || row.event_id !== `fcl_${row.event_hash}` || data.tenantId !== input.tenantId
+    || data.actorUserId !== input.actorUserId || data.proposalId !== input.proposalId
+    || data.itemNumber !== input.itemNumber || data.fingerprint !== input.fingerprint) return null;
+  const checked = confirmClassificationSchema.safeParse({ itemNumber: data.itemNumber,
+    expectedFingerprint: data.fingerprint, nature: data.nature, satProductCode: data.satProductCode,
+    unitCode: data.unitCode, catalogVersion: data.catalogVersion, confirm: true, remember: data.remember });
+  if (!checked.success) return null;
+  return { classification: { itemNumber: checked.data.itemNumber, satProductCode: checked.data.satProductCode,
+    unitCode: checked.data.unitCode, catalogVersion: checked.data.catalogVersion, classificationEventId: row.event_id },
+    nature: checked.data.nature, remember: checked.data.remember, confirmedAt: row.created_at.toISOString() };
 }
 export async function classificationMemory(tenantId: string, item: Concept, nature: SaleNature): Promise<ClassificationMemory | null> {
   const memoryKey = classificationKey(item, nature);

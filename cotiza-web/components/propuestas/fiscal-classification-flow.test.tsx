@@ -23,6 +23,7 @@ vi.mock("@/lib/integrations/digestor-fiscal", () => ({ isDigestorFiscalEnabledFo
 vi.mock("@/lib/integrations/proposal-payments", () => ({ isPpdCaptureEnabled: () => false }));
 import { GET as classificationsGet, POST as classificationsPost } from "@/app/api/proposals/[proposalId]/fiscal-classifications/route";
 import { GET as invoiceGet, POST as invoicePost } from "@/app/api/proposals/[proposalId]/invoice/route";
+import { preparationEvent } from "@/lib/db/invoice-preparations";
 import { ProposalInvoicePanel } from "./proposal-invoice-panel";
 
 const catalog = { cfdiVersion: "4.0", source: "SAT", sourceUrl: "https://sat.gob.mx/catalogo.xls", sourceFile: "synthetic-test.xls",
@@ -32,7 +33,7 @@ const unit = { code: "E48", description: "Unidad de servicio", valid: true };
 const proposal = { proposalId: "p1", outcome: "won", formal: { currency: "MXN" },
   items: [{ itemNumber: 1, sku: "SYNTHETIC-EDR", description: "ThreatDown EDR 12 meses", quantity: 2, priceUnit: 100 }] };
 const context = { params: Promise.resolve({ proposalId: "p1" }) };
-type StoredEvent = { event_id: string; tenant_id: string; payload: string; event_hash: string; created_at: Date };
+type StoredEvent = { event_id: string; tenant_id: string; proposal_id: string; event_type: string; payload: string; event_hash: string; created_at: Date };
 let root: Root, host: HTMLDivElement, events: StoredEvent[], version: string;
 let fetcher: ReturnType<typeof vi.fn>;
 const buttons = () => [...host.querySelectorAll("button")];
@@ -76,7 +77,11 @@ beforeEach(() => {
   m.invoice.mockResolvedValue({ status: null, draftId: null, stampedAt: null, uuid: null });
   m.fiscalData.mockResolvedValue({ company: "EMPRESA SINTÉTICA", rfc: "AAA010101AAA", fiscalRegime: "601", zipCode: "01000", cfdiUse: "G03" });
   m.profile.mockResolvedValue({ rfc: "AAA010101AAA", fiscalRegime: "601", fiscalZipCode: "01000" });
-  m.createDraft.mockResolvedValue({ id: "synthetic-draft", missingFields: [] }); m.saveDraft.mockResolvedValue(true);
+  m.createDraft.mockResolvedValue({ id: "synthetic-draft", missingFields: [] });
+  m.saveDraft.mockImplementation(async (tenantId, proposalId, draftId, _previous, preparation) => {
+    events.push(preparationEvent(tenantId, proposalId, draftId, preparation));
+    m.invoice.mockResolvedValue({ status: "draft", draftId, stampedAt: null, uuid: null }); return true;
+  });
   m.updateClient.mockResolvedValue(null);
   m.search.mockImplementation(async (kind: string) => ({ catalog: { ...catalog, sourceSha256: version }, results: [kind === "product" ? product : unit] }));
   m.validate.mockImplementation(async (_items, expected?: string) => expected && expected !== version
@@ -84,7 +89,12 @@ beforeEach(() => {
     : { valid: true, catalog: { ...catalog, sourceSha256: version }, items: [{ itemNumber: 1, valid: true, product, unit }] });
   m.upsert.mockImplementation(async ({ create }) => { const found = events.find(row => row.event_id === create.event_id); if (found) return found; events.push(create); return create; });
   m.findFirst.mockImplementation(async ({ where }) => events.find(row => row.event_id === where.event_id && row.tenant_id === where.tenant_id) ?? null);
-  m.findMany.mockImplementation(async ({ where }) => events.filter(row => row.tenant_id === where.tenant_id && row.payload.includes(where.payload.contains)).reverse());
+  m.findMany.mockImplementation(async ({ where, take }) => events.filter(row => row.tenant_id === where.tenant_id
+    && (!where.event_id || row.event_id === where.event_id)
+    && row.event_type === where.event_type && (!where.proposal_id || row.proposal_id === where.proposal_id)
+    && (!where.payload || row.payload.includes(where.payload.contains))
+    && (!where.AND || where.AND.every((part: { payload: { contains: string } }) => row.payload.includes(part.payload.contains))))
+    .reverse().slice(0, take));
   fetcher = vi.fn(async (url: string, init?: RequestInit) => {
     const request = new Request(new URL(url, "https://cotiza.test"), init);
     if (new URL(request.url).pathname.endsWith("/fiscal-classifications"))
@@ -118,9 +128,11 @@ it("requires review, makes one confirmation/draft on double click, and blocks st
   expect(button("Timbrar (irreversible)").disabled).toBe(true);
 });
 
-it("retrieves tenant memory as a candidate and requires a new confirmation before draft generation", async () => {
+it("uses commercial memory only as a candidate after the document revision changes", async () => {
   await mount(); await chooseKeys(); await review(); await click("Confirmar clasificación");
-  await act(async () => root.unmount()); root = createRoot(host); await mount(); await nature();
+  await act(async () => root.unmount());
+  m.proposal.mockResolvedValue({ ...proposal, items: [{ ...proposal.items[0], quantity: 3 }] });
+  root = createRoot(host); await mount(); await nature();
   expect(host.textContent).toContain("Selección anterior de tu empresa");
   expect(button("Generar prefactura").disabled).toBe(true);
   await click("Revisar selección anterior");
@@ -186,4 +198,42 @@ it("keeps unsupported currency blocked even when the classification is confirmed
   expect(button("Generar prefactura").disabled).toBe(true);
   expect(host.textContent).toContain("La moneda de esta propuesta aún no está habilitada");
   expect(postCount("/invoice")).toBe(0);
+});
+
+it("recovers confirmed selections and the exact prepared form after a full unmount without another confirmation or draft", async () => {
+  await mount(); await chooseKeys(); await review(); await click("Confirmar clasificación");
+  await act(async () => {
+    const select = host.querySelectorAll<HTMLSelectElement>("select")[1];
+    select.value = "28"; select.dispatchEvent(new Event("change", { bubbles: true }));
+    setValue(host.querySelector<HTMLInputElement>('[data-invoice-field="customerZip"]')!, "02000");
+  });
+  await click("Generar prefactura");
+  expect(events).toHaveLength(2);
+  await act(async () => root.unmount()); root = createRoot(host);
+  m.fiscalData.mockResolvedValue({ company: "CATÁLOGO MODIFICADO", rfc: "BBB010101BBB", fiscalRegime: "601", zipCode: "03000", cfdiUse: "G01" });
+  await mount();
+  expect(host.querySelector<HTMLInputElement>('[data-invoice-field="customerName"]')!.value).toBe("EMPRESA SINTÉTICA");
+  expect(host.querySelector<HTMLInputElement>('[data-invoice-field="customerZip"]')!.value).toBe("02000");
+  expect(host.querySelectorAll<HTMLSelectElement>("select")[1].value).toBe("28");
+  expect(host.textContent).toContain("Prefactura preparada. Puedes revisar su vista previa.");
+  expect(host.textContent).toContain("Claves vigentes y confirmadas para esta revisión.");
+  expect(button("Timbrar (irreversible)").disabled).toBe(false);
+  await click("Ver vista previa");
+  expect(host.querySelector("iframe")!.getAttribute("src")).toBe("/api/proposals/p1/invoice/preview");
+  expect(postCount("/fiscal-classifications")).toBe(1); expect(postCount("/invoice")).toBe(1);
+  expect(fetcher.mock.calls.some(([url]) => String(url).endsWith("/stamp"))).toBe(false);
+});
+
+it.each(["actor", "catalog", "proposal", "emitter", "receipt"])("keeps stamping blocked on reopen when %s changed", async changed => {
+  await mount(); await chooseKeys(); await review(); await click("Confirmar clasificación"); await click("Generar prefactura");
+  await act(async () => root.unmount()); root = createRoot(host);
+  if (changed === "actor") m.tenant.mockResolvedValue({ id: "tenant-a", name: "EMISOR SINTÉTICO", userId: "actor-b", userRole: "owner", authMode: "clerk" });
+  if (changed === "catalog") version = "d".repeat(64);
+  if (changed === "proposal") m.proposal.mockResolvedValue({ ...proposal, items: [{ ...proposal.items[0], quantity: 3 }] });
+  if (changed === "emitter") m.profile.mockResolvedValue({ rfc: "BBB010101BBB", fiscalRegime: "601", fiscalZipCode: "01000" });
+  if (changed === "receipt") events[0].payload += " ";
+  await mount();
+  expect(button("Timbrar (irreversible)").disabled).toBe(true);
+  expect(postCount("/invoice")).toBe(1);
+  expect(fetcher.mock.calls.some(([url]) => String(url).endsWith("/stamp"))).toBe(false);
 });

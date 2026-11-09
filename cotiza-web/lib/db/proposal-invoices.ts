@@ -1,6 +1,7 @@
 import "server-only";
 
 import { prisma } from "@/lib/db/prisma";
+import { preparationEvent, type InvoicePreparation } from "./invoice-preparations";
 
 export type ProposalInvoiceStatus = "draft" | "stamping" | "stamped" | "rejected" | null;
 
@@ -51,8 +52,9 @@ export async function saveProposalInvoiceDraftByTenant(
   proposalId: string,
   draftId: string,
   expectedDraftId: string | null,
+  preparation?: InvoicePreparation,
 ): Promise<boolean> {
-  const result = await prisma.proposals.updateMany({
+  const update = {
     data: {
       invoice_draft_id: draftId,
       invoice_status: "draft",
@@ -71,7 +73,14 @@ export async function saveProposalInvoiceDraftByTenant(
       invoice_stamped_at: null,
       OR: [{ invoice_status: null }, { invoice_status: { in: ["draft", "rejected"] } }],
     },
+  };
+  if (preparation) return prisma.$transaction(async tx => {
+    const result = await tx.proposals.updateMany(update);
+    if (result.count !== 1) return false;
+    await tx.proposal_audit_events.create({ data: preparationEvent(tenantId, proposalId, draftId, preparation) });
+    return true;
   });
+  const result = await prisma.proposals.updateMany(update);
   return result.count === 1;
 }
 

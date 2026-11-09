@@ -99,3 +99,26 @@ el bloqueo USD y la conservación de receptor, moneda, descripción, cantidad, p
 IVA y método/forma de pago al preparar el borrador. La comprobación de navegador
 incluye el estado de unidad pendiente y el borrador preparado en ambos tamaños.
 No equivale a una prueba productiva ni a aceptación fiscal de una operación real.
+
+## Recuperación de la misma revisión
+
+La memoria comercial sigue siendo candidata para otras revisiones o propuestas.
+La lectura `mode=resume` recupera un recibo ya confirmado sólo para el mismo
+actor, tenant, propuesta, partida y fingerprint. Revalida claves y versión en
+Digestor; un catálogo cambiado o no disponible mantiene el bloqueo. La UI descarta
+respuestas tardías cuando el usuario ya editó la partida.
+
+Al generar una prefactura se conserva un snapshot `invoice_preparation_saved`
+en la misma transacción que vincula su draftId local. Incluye receptor, método y
+forma de pago, recibos de clasificación y perfil del emisor. Su recuperación
+exige correspondencia de draftId, actor, empresa, partidas, revisión, emisor,
+integridad y catálogo vigente. Usa los recibos exactos del borrador, incluso si
+hay otra confirmación posterior. No reemplaza los datos del documento por los
+valores actuales del catálogo de clientes, ni vuelve a guardar datos en el cliente.
+
+Los borradores anteriores sin snapshot conservan vista previa y necesitan
+regenerarse una vez para disponer de esta recuperación. No se infiere su contenido
+ni se reconstruye su preparación a partir de una memoria comercial.
+
+La evidencia sintética de reapertura y persistencia se registra en
+`docs/fiscal-mvp-closure-plan.md`. No requiere migración ni cambia Digestor.

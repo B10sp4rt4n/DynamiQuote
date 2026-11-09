@@ -1,6 +1,7 @@
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 
 vi.mock("server-only", () => ({}));
+vi.mock("@/lib/db/invoice-preparations", () => ({ recoverInvoicePreparation: async () => null }));
 vi.mock("@/lib/db/fiscal-classifications", () => ({ verifyClassification: mocks.verify }));
 
 const mocks = vi.hoisted(() => ({
@@ -117,18 +118,18 @@ describe("no regenerar prefacturas timbradas", () => {
   it("si otra solicitud cambia el estado, no pisa el draftId local", async () => {
     mocks.saveDraft.mockResolvedValue(false);
     expect((await POST(request(), ctx)).status).toBe(409);
-    expect(mocks.saveDraft).toHaveBeenCalledWith("t1", "p1", "d2", "d1");
+    expect(mocks.saveDraft).toHaveBeenCalledWith("t1", "p1", "d2", "d1", expect.objectContaining({ actorUserId: "seller-1" }));
   });
 
   it("preserves null as the expected draft on initial creation", async () => {
     mocks.getInvoice.mockResolvedValue({ status: null, draftId: null });
     expect((await POST(request(), ctx)).status).toBe(201);
-    expect(mocks.saveDraft).toHaveBeenCalledWith("t1", "p1", "d2", null);
+    expect(mocks.saveDraft).toHaveBeenCalledWith("t1", "p1", "d2", null, expect.objectContaining({ actorUserId: "seller-1" }));
   });
 
   it("para nuevas prefacturas, conserva el flujo existente", async () => {
     expect((await POST(request(), ctx)).status).toBe(201);
-    expect(mocks.saveDraft).toHaveBeenCalledWith("t1", "p1", "d2", "d1");
+    expect(mocks.saveDraft).toHaveBeenCalledWith("t1", "p1", "d2", "d1", expect.objectContaining({ actorUserId: "seller-1" }));
     expect(mocks.createDraft.mock.calls[0][0].items[0]).toMatchObject({ satProductCode: "80101500", unitCode: "E48", taxRate: 0.16 });
   });
   it("rejects a changed proposal before creating a remote draft", async () => {

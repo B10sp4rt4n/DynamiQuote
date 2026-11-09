@@ -19,6 +19,7 @@ import { createProposalInvoiceSchema } from "@/lib/validations/proposal-invoice"
 import { invoiceBasisFingerprint } from "@/lib/domain/invoice-profile";
 
 import { verifyClassification } from "@/lib/db/fiscal-classifications";
+import { recoverInvoicePreparation } from "@/lib/db/invoice-preparations";
 
 type RouteContext = {
   params: Promise<{ proposalId: string }>;
@@ -50,14 +51,26 @@ export async function GET(_: Request, context: RouteContext) {
   }
 
   if (!proposal) return NextResponse.json({ error: "Propuesta no encontrada" }, { status: 404 });
+  let preparation = null;
+  if (invoice.draftId && invoice.status === "draft" && !invoice.uuid && !invoice.stampedAt && tenant.userId) {
+    try {
+      const profile = await getTenantProfileByTenant(tenant.id);
+      preparation = await recoverInvoicePreparation({ tenantId: tenant.id, proposalId, draftId: invoice.draftId,
+        actorUserId: tenant.userId, fingerprint: invoiceBasisFingerprint(proposal),
+        itemNumbers: proposal.items.map(item => item.itemNumber), emitter: {
+          rfc: profile?.rfc?.trim() ?? "", name: profile?.razonSocial?.trim() || tenant.name,
+          regimen: profile?.fiscalRegime?.trim() ?? "", zip: profile?.fiscalZipCode?.trim() ?? "" } });
+      if (preparation?.input.paymentMethod === "PPD" && !isPpdCaptureEnabled()) preparation = null;
+    } catch { /* Keep historical preview available; unavailable validation never unlocks stamping. */ }
+  }
   const canOperateFiscal = process.env['DIGESTOR_FISCAL_OPERATIONS_PRODUCTION_ENABLED'] !== 'true'
     || (tenant.authMode === 'clerk' && canSeeAll);
-  return NextResponse.json({ clientFiscalData, invoice, ppdEnabled: isPpdCaptureEnabled(),
+  return NextResponse.json({ clientFiscalData, invoice, preparation, ppdEnabled: isPpdCaptureEnabled(),
     cancellationEnabled: canOperateFiscal && process.env['DIGESTOR_FISCAL_CANCELLATION_ENABLED'] === 'true',
     correctionsEnabled: canOperateFiscal && process.env['DIGESTOR_FISCAL_CORRECTIONS_ENABLED'] === 'true',
     fiscalBasis: { fingerprint: invoiceBasisFingerprint(proposal), currency: proposal.formal?.currency,
       items: proposal.items.map(item => ({ itemNumber: item.itemNumber, description: item.description, sku: item.sku })) },
-  }, { status: 200 });
+  }, { status: 200, headers: { "Cache-Control": "no-store" } });
 }
 
 export async function POST(request: Request, context: RouteContext) {
@@ -184,7 +197,10 @@ export async function POST(request: Request, context: RouteContext) {
       placeOfIssue,
     });
 
-    const saved = await saveProposalInvoiceDraftByTenant(tenant.id, proposalId, draft.id, invoice.draftId);
+    const saved = await saveProposalInvoiceDraftByTenant(tenant.id, proposalId, draft.id, invoice.draftId, {
+      actorUserId: tenant.userId!, input, emitter: { rfc: emitterRfc, name: emitterName, regimen: emitterRegimen, zip: placeOfIssue },
+      missingFields: draft.missingFields ?? [],
+    });
     if (!saved) {
       // El timbrado pudo iniciar mientras se creaba el borrador remoto.
       // Dejar el borrador remoto sin vincular, nunca sobrescribir el CFDI.

@@ -1,10 +1,10 @@
 import { beforeEach, expect, it, vi } from "vitest";
 vi.mock("server-only", () => ({}));
-const m = vi.hoisted(() => ({ tenant: vi.fn(), visible: vi.fn(), proposal: vi.fn(), invoice: vi.fn(), memory: vi.fn(), record: vi.fn(), enabled: vi.fn(), search: vi.fn(), validate: vi.fn() }));
+const m = vi.hoisted(() => ({ tenant: vi.fn(), visible: vi.fn(), proposal: vi.fn(), invoice: vi.fn(), memory: vi.fn(), saved: vi.fn(), record: vi.fn(), enabled: vi.fn(), search: vi.fn(), validate: vi.fn() }));
 vi.mock("@/lib/auth/tenant-context", () => ({ getCurrentTenantContext: m.tenant }));
 vi.mock("@/lib/db/proposals", () => ({ getProposalWorkflowByTenant: m.proposal, isProposalVisibleToViewer: m.visible }));
 vi.mock("@/lib/db/proposal-invoices", () => ({ getProposalInvoiceStatusByTenant: m.invoice }));
-vi.mock("@/lib/db/fiscal-classifications", () => ({ classificationMemory: m.memory, recordClassification: m.record }));
+vi.mock("@/lib/db/fiscal-classifications", () => ({ classificationMemory: m.memory, savedClassification: m.saved, recordClassification: m.record }));
 vi.mock("@/lib/integrations/digestor-fiscal", () => ({ isDigestorFiscalEnabledForTenant: m.enabled, searchSatCatalog: m.search, validateSatClassifications: m.validate }));
 import { GET, POST } from "./route";
 import { invoiceBasisFingerprint } from "@/lib/domain/invoice-profile";
@@ -49,4 +49,30 @@ it("never records a decision on search or memory read", async () => {
   m.memory.mockResolvedValue(null);
   await GET(new Request("https://cotiza.test/api?itemNumber=1&mode=memory&nature=license"), ctx);
   expect(m.memory).toHaveBeenCalledWith("t1", proposal.items[0], "license"); expect(m.record).not.toHaveBeenCalled();
+});
+
+it("recovers only the exact reviewed receipt and revalidates its catalog without caching", async () => {
+  const classification = { itemNumber: 1, satProductCode: body.satProductCode, unitCode: body.unitCode,
+    catalogVersion: body.catalogVersion, classificationEventId: "fcl_" + "c".repeat(64) };
+  m.saved.mockResolvedValue({ classification, nature: "license", remember: false });
+  m.validate.mockResolvedValue({ valid: true, catalog: { sourceSha256: body.catalogVersion },
+    items: [{ itemNumber: 1, valid: true, product: { code: body.satProductCode, valid: true }, unit: { code: "E48", valid: true } }] });
+  const url = `https://cotiza.test/api?itemNumber=1&mode=resume&expectedFingerprint=${body.expectedFingerprint}&eventId=${classification.classificationEventId}`;
+  const result = await GET(new Request(url), ctx);
+  expect(result.headers.get("Cache-Control")).toBe("no-store");
+  expect((await result.json()).saved.classification).toEqual(classification);
+  expect(m.saved).toHaveBeenCalledWith({ tenantId: "t1", actorUserId: "u1", proposalId: "p1", itemNumber: 1,
+    fingerprint: body.expectedFingerprint, eventId: classification.classificationEventId });
+  expect(m.record).not.toHaveBeenCalled();
+  m.validate.mockResolvedValue({ valid: false, error: "Catalog changed" });
+  expect(await (await GET(new Request(url), ctx)).json()).toMatchObject({ saved: null, reviewRequired: true });
+  m.validate.mockRejectedValue(new Error("Unavailable"));
+  expect((await GET(new Request(url), ctx)).status).toBe(503);
+});
+
+it("rejects a stale resume fingerprint or an invalid receipt before reading persisted decisions", async () => {
+  const base = "https://cotiza.test/api?itemNumber=1&mode=resume&expectedFingerprint=";
+  expect((await GET(new Request(base + "0".repeat(64)), ctx)).status).toBe(409);
+  expect((await GET(new Request(base + body.expectedFingerprint + "&eventId=invalid"), ctx)).status).toBe(422);
+  expect(m.saved).not.toHaveBeenCalled();
 });
