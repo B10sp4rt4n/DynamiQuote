@@ -17,7 +17,9 @@ export function ProposalCorrectionPanel({ proposalId, paymentId }: { proposalId:
   const [confirmed, setConfirmed] = useState(false);
   const [busy, setBusy] = useState(false);
   const [error, setError] = useState<string | null>(null);
+  const [needsRefresh, setNeedsRefresh] = useState(false);
   const operation = useRef(false);
+  const uncertain = useRef(false);
   const attempt = useRef<{ fingerprint: string; key: string } | null>(null);
 
   useEffect(() => {
@@ -31,8 +33,9 @@ export function ProposalCorrectionPanel({ proposalId, paymentId }: { proposalId:
   }, [path]);
 
   async function run(action: 'create' | 'stamp' | 'reconcile' | 'abandon' | 'cancel-original' | 'confirm-cancellation' | 'read') {
-    if (operation.current || (['create','stamp','cancel-original'].includes(action) && !confirmed)) return;
+    if (operation.current || (uncertain.current && action !== 'read') || (['create','stamp','cancel-original'].includes(action) && !confirmed)) return;
     operation.current = true; setBusy(true); setError(null);
+    let submitted = false;
     try {
       let body: string | undefined;
       if (action === 'create') {
@@ -49,16 +52,20 @@ export function ProposalCorrectionPanel({ proposalId, paymentId }: { proposalId:
         if (!revisionId) throw new Error('Recarga la corrección antes de continuar');
         body = JSON.stringify({...JSON.parse(body ?? '{}'),revision_id:revisionId});
       }
+      submitted = action !== 'read';
       const response = await fetch(['create','read'].includes(action) ? path : `${path}/${action}`, {
         method: action === 'read' ? 'GET' : 'POST', headers: { 'Content-Type': 'application/json' }, body, cache: 'no-store',
       });
       const data = await response.json();
       if (!response.ok) throw new Error(data.error ?? 'Operación sin confirmar; consulta el estado antes de reintentar');
-      setState(data); setConfirmed(false);
+      setState(data); setConfirmed(false); uncertain.current = false; setNeedsRefresh(false);
       setFields(Object.fromEntries(Object.entries(data.defaults).map(([key,value]) => [key,String(value ?? '')])));
       if (!data.pending) { attempt.current = null; setReason(''); }
       window.dispatchEvent(new Event('cotiza:fiscal-updated'));
-    } catch (error) { setError(error instanceof Error ? error.message : 'Error de conexión'); }
+    } catch (error) {
+      if (submitted) { uncertain.current = true; setNeedsRefresh(true); setConfirmed(false); }
+      setError(error instanceof Error ? error.message : 'Error de conexión');
+    }
     finally { operation.current = false; setBusy(false); }
   }
   const current = state?.pending ? state.history.at(-1) : undefined;
@@ -72,12 +79,13 @@ export function ProposalCorrectionPanel({ proposalId, paymentId }: { proposalId:
     </ol>
     <p className="mt-2 text-xs text-zinc-600">El RFC, los importes y los pagos recibidos se conservan. {paymentId ? 'Puedes corregir forma y referencia del último complemento.' : 'Puedes corregir datos del receptor y método o forma de pago si la factura aún no tiene pagos registrados.'}</p>
     {error ? <p role="alert" className="mt-2 text-sm text-rose-800">{error}</p> : null}
+    {needsRefresh ? <p role="status" className="mt-2 text-sm text-amber-900">La operación no quedó confirmada en esta pantalla. Consulta el historial y estado antes de continuar.</p> : null}
     <button type="button" disabled={busy} className="mt-2 rounded border px-3 py-2 text-sm disabled:opacity-50" onClick={() => void run('read')}>Consultar historial y estado</button>
     {state ? <>
       <p className="mt-2 break-all text-xs">Comprobante activo en Cotiza: {state.active_uuid}</p>
       <div className="mt-2 flex flex-wrap gap-2 text-sm"><a className="rounded border px-3 py-2" href={`${path}?format=xml`}>XML activo</a><a className="rounded border px-3 py-2" target="_blank" rel="noreferrer" href={`${path}?format=pdf`}>PDF activo</a></div>
       {state.can_correct === false ? <p className="mt-3 text-sm text-amber-900">El comprobante tiene una cancelación registrada. Conserva su expediente y revisa el estado fiscal antes de corregir.</p> : null}
-      {!current && state.can_correct !== false ? <fieldset disabled={busy} className="mt-4 grid gap-3 sm:grid-cols-2">
+      {!current && state.can_correct !== false ? <fieldset disabled={busy || needsRefresh} className="mt-4 grid gap-3 sm:grid-cols-2">
         <legend className="mb-2 font-medium">Datos para la sustituta</legend>
         {(paymentId ? ['operation_reference'] : ['customer_name','customer_zip','customer_regimen','customer_use_cfdi']).map(key => <label key={key} className="text-sm">{FIELD_LABELS[key]}
           <input className="mt-1 w-full rounded border p-2" value={fields[key] ?? ''} onChange={event => { setConfirmed(false); setFields(previous => ({ ...previous,[key]:event.target.value })); }} />
@@ -96,18 +104,19 @@ export function ProposalCorrectionPanel({ proposalId, paymentId }: { proposalId:
         {current.result_uuid ? <><p className="break-all text-xs">UUID sustituto: {current.result_uuid}</p><a className="inline-block rounded border px-3 py-2" href={`${path}?format=xml&revision=${encodeURIComponent(current.id)}`}>XML de la sustituta emitida</a></> : null}
         {['prepared','rejected'].includes(current.status) ? <>
           <label className="flex items-start gap-2"><input type="checkbox" checked={confirmed} onChange={event => setConfirmed(event.target.checked)} />Confirmo los datos preparados para emitir la sustituta{state?.environment === 'production' ? ' real' : ' en pruebas'}.</label>
-          <button type="button" disabled={busy || !confirmed} className="rounded border border-amber-500 px-3 py-2 disabled:opacity-50" onClick={() => void run('stamp')}>{state?.environment === 'production' ? 'Emitir sustituta real' : 'Timbrar sustituta en pruebas'}</button>
-          <button type="button" disabled={busy} className="ml-2 rounded border px-3 py-2 disabled:opacity-50" onClick={() => void run('abandon')}>Descartar corrección sin emitir</button>
+          <button type="button" disabled={busy || needsRefresh || !confirmed} className="rounded border border-amber-500 px-3 py-2 disabled:opacity-50" onClick={() => void run('stamp')}>{state?.environment === 'production' ? 'Emitir sustituta real' : 'Timbrar sustituta en pruebas'}</button>
+          <button type="button" disabled={busy || needsRefresh} className="ml-2 rounded border px-3 py-2 disabled:opacity-50" onClick={() => void run('abandon')}>Descartar corrección sin emitir</button>
         </> : null}
-        {['processing','unknown'].includes(current.status) ? <>
+        {current.status === 'processing' ? <p>La emisión sigue pendiente de confirmación. Consulta el historial y estado; no vuelvas a timbrar.</p> : null}
+        {current.status === 'unknown' ? <>
           <label className="block">UUID confirmado por el proveedor<input className="mt-1 w-full rounded border p-2" value={uuid} onChange={event => setUuid(event.target.value)} /></label>
-          <button type="button" disabled={busy || !uuid} className="rounded border px-3 py-2 disabled:opacity-50" onClick={() => void run('reconcile')}>Recuperar sustituta sin volver a timbrar</button>
+          <button type="button" disabled={busy || needsRefresh || !uuid} className="rounded border px-3 py-2 disabled:opacity-50" onClick={() => void run('reconcile')}>Recuperar sustituta sin volver a timbrar</button>
         </> : null}
         {current.status === 'stamped' && ['not_requested','not_sent'].includes(current.source_cancellation_status) ? <>
           <label className="flex items-start gap-2"><input type="checkbox" checked={confirmed} onChange={event => setConfirmed(event.target.checked)} />Confirmo solicitar la cancelación del comprobante anterior con motivo01 y esta sustituta.</label>
-          <button type="button" disabled={busy || !confirmed} className="rounded border border-rose-500 px-3 py-2 disabled:opacity-50" onClick={() => void run('cancel-original')}>{state?.environment === 'production' ? 'Solicitar cancelación real del anterior' : 'Solicitar cancelación del anterior en pruebas'}</button>
+          <button type="button" disabled={busy || needsRefresh || !confirmed} className="rounded border border-rose-500 px-3 py-2 disabled:opacity-50" onClick={() => void run('cancel-original')}>{state?.environment === 'production' ? 'Solicitar cancelación real del anterior' : 'Solicitar cancelación del anterior en pruebas'}</button>
         </> : null}
-        {current.status === 'stamped' && !['not_requested','not_sent'].includes(current.source_cancellation_status) ? <button type="button" disabled={busy} className="rounded border px-3 py-2 disabled:opacity-50" onClick={() => void run('confirm-cancellation')}>Consultar confirmación de cancelación</button> : null}
+        {current.status === 'stamped' && !['not_requested','not_sent'].includes(current.source_cancellation_status) ? <button type="button" disabled={busy || needsRefresh} className="rounded border px-3 py-2 disabled:opacity-50" onClick={() => void run('confirm-cancellation')}>Consultar confirmación de cancelación</button> : null}
       </div> : null}
       {state.history.length ? <details className="mt-3 text-sm"><summary>Historial de sustituciones ({state.history.length})</summary><ol className="mt-2 space-y-2">{state.history.map(row => <li key={row.id} className="break-all rounded border p-2 text-xs">{row.source_uuid} → {row.result_uuid ?? 'pendiente'} · Cancelación anterior: {row.source_cancellation_status}</li>)}</ol></details> : null}
       {state.archived_history?.length ? <details className="mt-3 text-sm"><summary>Correcciones descartadas sin emitir ({state.archived_history.length})</summary><ol className="mt-2 space-y-2">{state.archived_history.map(row => <li key={row.id} className="break-all rounded border p-2 text-xs">{row.source_uuid} · {row.reason}</li>)}</ol></details> : null}

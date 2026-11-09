@@ -35,3 +35,45 @@ it('hides preparation when cancellation has already been recorded',async()=>{
  await act(async()=>root.render(<ProposalCorrectionPanel proposalId="synthetic"/>));
  expect(container.textContent).toContain('cancelación registrada');expect(click('Preparar sustitución para revisión')).toBeUndefined();
 });
+it('blocks repeating issuance after a lost response until a successful state read',async()=>{
+ const data={environment:'production',active_uuid:'synthetic-original',pending:true,kind:'invoice',defaults:{},history:[{id:'11111111-2222-4333-8444-555555555555',source_uuid:'synthetic-original',status:'prepared',reason:'Synthetic correction',changes:{},source_cancellation_status:'not_requested'}]};
+ let reads=0;
+ fetchMock.mockImplementation(async(_url:string,init?:RequestInit)=>{
+  if(init?.method==='POST')throw new TypeError('Respuesta perdida');
+  reads++;if(reads===2)throw new TypeError('Consulta sin respuesta');
+  return {ok:true,json:async()=>reads===1?data:{...data,history:[{...data.history[0],status:'unknown'}]}};
+ });
+ await act(async()=>root.render(<ProposalCorrectionPanel proposalId="synthetic"/>));
+ await act(async()=>container.querySelector<HTMLInputElement>('input[type=checkbox]')!.click());
+ await act(async()=>click('Emitir sustituta real').click());
+ expect(click('Emitir sustituta real').disabled).toBe(true);
+ expect(click('Descartar corrección sin emitir').disabled).toBe(true);
+ await act(async()=>click('Consultar historial y estado').click());
+ expect(click('Emitir sustituta real').disabled).toBe(true);
+ await act(async()=>click('Consultar historial y estado').click());
+ expect(click('Emitir sustituta real')).toBeUndefined();
+ expect(click('Recuperar sustituta sin volver a timbrar')).toBeDefined();
+ expect(fetchMock.mock.calls.filter(([,init])=>init?.method==='POST')).toHaveLength(1);
+});
+it('does not offer recovery while the original issuance is processing',async()=>{
+ fetchMock.mockResolvedValue({ok:true,json:async()=>({environment:'sandbox',active_uuid:'original',pending:true,kind:'invoice',defaults:{},history:[{id:'revision',source_uuid:'original',status:'processing',reason:'Synthetic',changes:{},source_cancellation_status:'not_requested'}]})});
+ await act(async()=>root.render(<ProposalCorrectionPanel proposalId="synthetic"/>));
+ expect(click('Recuperar sustituta sin volver a timbrar')).toBeUndefined();
+ expect(click('Consultar historial y estado')).toBeDefined();
+});
+it('keeps cancellation blocked if both the response and automatic state read are lost',async()=>{
+ let reads=0;
+ fetchMock.mockImplementation(async(_url:string,init?:RequestInit)=>{
+  if(init?.method==='POST')throw new TypeError('Respuesta perdida');
+  reads++;if(reads===2)throw new TypeError('Consulta sin respuesta');
+  return {ok:true,json:async()=>({environment:'production',status:reads===1?'not_requested':'requested',document_uuid:'11111111-2222-4333-8444-555555555555'})};
+ });
+ await act(async()=>root.render(<ProposalCancellationPanel proposalId="synthetic"/>));
+ await act(async()=>container.querySelector<HTMLInputElement>('input[type=checkbox]')!.click());
+ await act(async()=>click('Solicitar cancelación real').click());
+ expect(click('Solicitar cancelación real').disabled).toBe(true);
+ await act(async()=>click('Consultar solicitud guardada').click());
+ expect(container.textContent).toContain('pendiente de confirmación');
+ expect(click('Solicitar cancelación real')).toBeUndefined();
+ expect(fetchMock.mock.calls.filter(([,init])=>init?.method==='POST')).toHaveLength(1);
+});
