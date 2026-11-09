@@ -147,10 +147,10 @@ export function ProposalDetailView({
       <ProposalOutcomeActions key={`${proposal.proposalId}:${proposal.outcome}:${proposal.outcomeAt}`} createdAt={proposal.createdAt} closeDateMinimum={proposal.closeDateMinimum} opportunityCreatedAt={proposal.opportunityCreatedAt} initialOutcome={proposal.outcome} initialOutcomeAt={proposal.outcomeAt} proposalId={proposal.proposalId} status={status} />
 
       {digestorFiscalEnabled && proposal.outcome === "won" ? (
-        <ProposalInvoicePanel
+        <div id="facturacion" className="scroll-mt-24"><ProposalInvoicePanel
           proposalId={proposal.proposalId}
           recipientCompany={formal?.recipientCompany ?? null}
-        />
+        /></div>
       ) : null}
 
       <div className="grid gap-4 md:grid-cols-2">

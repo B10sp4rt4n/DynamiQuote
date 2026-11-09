@@ -3,14 +3,17 @@ import Link from "next/link";
 import { useState } from "react";
 import { useRouter } from "next/navigation";
 import type { CommercialOptionsSummary } from "@/lib/domain/commercial-options";
-const money=(n:number)=>new Intl.NumberFormat("es-MX",{style:"currency",currency:"MXN"}).format(n);
-export function OpportunityAmount({amount,options,opportunityId,canChoose=false,stage}:{amount:number;options?:CommercialOptionsSummary;opportunityId:string;canChoose?:boolean;stage?:string}) {
+export function OpportunityAmount({amount,options,opportunityId,canChoose=false,stage,currency="MXN",showCurrency=false,unknownCurrencyLabel="Moneda por confirmar",multipleCurrencies=false}:{amount:number;options?:CommercialOptionsSummary;opportunityId:string;canChoose?:boolean;stage?:string;currency?:string|null;showCurrency?:boolean;unknownCurrencyLabel?:string;multipleCurrencies?:boolean}) {
+  const money = (value: number) => currency
+    ? new Intl.NumberFormat("es-MX", { style: "currency", currency, currencyDisplay: showCurrency ? "code" : "symbol" }).format(value)
+    : `${new Intl.NumberFormat("es-MX", { minimumFractionDigits: 2, maximumFractionDigits: 2 }).format(value)} · ${unknownCurrencyLabel}`;
   const router=useRouter();const [saving,setSaving]=useState(false);const [error,setError]=useState<string|null>(null);
   async function choose(value:string) {
     setSaving(true);setError(null);
     try {const response=await fetch(`/api/opportunities/${encodeURIComponent(opportunityId)}/commercial-option`,{method:"PATCH",headers:{"Content-Type":"application/json"},body:JSON.stringify({optionId:value||null})});const result=await response.json();if(!response.ok)throw Error(result.error??"No se pudo seleccionar");router.refresh();}
     catch(e){setError(e instanceof Error?e.message:"No se pudo seleccionar");}finally{setSaving(false);}
   }
+  if(multipleCurrencies)return <span>Importes en varias monedas · revisa cada propuesta</span>;
   if(!options)return <>{money(amount)}</>;
   const pending=stage!=="won"&&!options.selectedOptionId;
   return <div className="space-y-2 text-zinc-900"><span className="block font-semibold">{options.reviewRequired ? "Revisar decisiones de alternativas" : pending?`${money(options.minimum)} a ${money(options.maximum)}`:money(amount)}</span><span className="block text-xs text-zinc-600">{options.optionCount} opciones alternativas{pending?" · por elegir · no se suman":" · se cuenta una sola opción"}</span>
