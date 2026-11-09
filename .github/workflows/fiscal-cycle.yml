@@ -113,7 +113,7 @@ jobs:
         uses: actions/checkout@11bd71901bbe5b1630ceea73d27597364c9af683
         with:
           repository: B10sp4rt4n/digestor__fiscal
-          ref: 48540af084950910ed4c0f3dc370629bd34a20e2
+          ref: 3cd099862fa23d62258318b965d5ed2a35f83758
           path: digestor-fixture
           persist-credentials: false
       - name: Install isolated Digestor HTTP fixture dependencies

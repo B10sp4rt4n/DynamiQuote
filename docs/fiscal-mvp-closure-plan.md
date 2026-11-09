@@ -8,7 +8,7 @@ Salvador. Base revisada: Cotiza `ddda1a5` y Digestor `e3aede1`.
 | Orden | Pendiente | Criterio verificable | Estado |
 | --- | --- | --- | --- |
 | 1 | Preparar, guardar y reabrir prefactura | Recuperar datos y claves exactamente revisados; validar identidad, empresa, revisión y catálogo; conservar vista previa y bloquear información obsoleta. Probar persistencia y reapertura. | Publicado y verificado en producción |
-| 2 | Prefactura → CFDI y recuperación | Un solo timbrado ante doble clic, concurrencia o respuesta perdida; recuperación de UUID/XML/PDF sin volver a emitir. | Implementado en revisión; recorrido HTTP/SQL sintético aprobado; falta PAC sandbox y publicación |
+| 2 | Prefactura → CFDI y recuperación | Un solo timbrado ante doble clic, concurrencia o respuesta perdida; recuperación de UUID/XML/PDF sin volver a emitir. | Implementado y probado con HTTP/SQL, PostgreSQL real, navegador y PAC público sandbox; publicación pendiente |
 | 3 | Pagos PPD → REP → saldo | Varias parcialidades, recuperación y saldo comprobables; cobros económicos separados del estado fiscal. | Publicado; falta acreditar recorrido completo conectado |
 | 4 | Cancelación, sustitución y corrección | Acuse separado de confirmación SAT; UUID/revisión exactos; motivo 01 y corrección REP conservando documentos y pagos. | Una cancelación real acreditada; otros perfiles pendientes |
 | 5 | Alcance fiscal restante | Matriz de USD/tipo de cambio, notas de crédito y facturas con pagos: soporte demostrado o bloqueo explícito; evidencia y siguiente acción. | Pendiente de consolidación |
@@ -117,7 +117,7 @@ posterior cierra el pendiente productivo anotado arriba.
 ## Pendiente 2: timbrado y recuperación
 
 Implementado para revisión en `fix/fiscal-stamp-recovery`, con dependencia de
-Digestor PR #15 (`48540af084950910ed4c0f3dc370629bd34a20e2`).
+Digestor PR #15 (`3cd099862fa23d62258318b965d5ed2a35f83758`).
 
 - Confirmación explícita ligada al borrador revisado, reserva atómica y defensa
   de doble clic en el panel. Una pestaña con otro draftId no puede emitir.
@@ -140,9 +140,41 @@ XML exacto, PDF, rechazo y carrera de consulta anterior al envío. La CI añade
 PostgreSQL 18 real para Cotiza y PostgreSQL 17 para concurrencia en Digestor.
 
 Las pruebas sintéticas no acreditan PAC sandbox ni operación fiscal real.
-Antes de publicar el recorrido, falta comprobar el formato/normalizaciones
-reales de `ObtieneCFDI` en sandbox; publicar Digestor antes de Cotiza. Un estado
+La comprobación pública sandbox posterior se documenta abajo. Para publicar,
+revisar el transporte activo y desplegar Digestor antes de Cotiza. Un estado
 `processing` que sobreviva a la caída de un worker requiere revisión manual;
 no se libera automáticamente por tiempo. Históricos sin huella tampoco se
 recuperan por este mecanismo. La consulta estructural no verifica sellos ni
 custodia externa. El siguiente pendiente funcional sigue siendo PPD/REP/saldo.
+
+
+### Verificación conectada del pendiente 2
+
+- Cotiza PR #74: https://github.com/B10sp4rt4n/DynamiQuote/pull/74.
+- Fuente funcional verificada: `53caee57a2d7b50dcac17ee5d8081ba02d492d2c`.
+- CI: https://github.com/B10sp4rt4n/DynamiQuote/actions/runs/42607390272:
+  TypeScript y 958 pruebas aprobadas/67 omitidas; 17 pruebas de persistencia/
+  concurrencia aprobadas en PostgreSQL 18.6 real y un recorrido conectado
+  HTTP/SQL adicional aprobado (18 en total). Las omisiones de la suite corriente
+  incluyen los casos que se ejecutan por separado y otros escenarios opcionales.
+- Visual: escritorio 1360 px y móvil 390 px; respuesta desconocida, error de
+  consulta, recuperación y recarga conservando estado. Cero emisiones, errores
+  de consola, peticiones externas o desbordamiento en este ensayo visual.
+  Capturas inspeccionadas. Artefacto `fiscal-classification-visual`, ID13669255552,
+  sha256 `aa1e13ff5ac39c3fd3039e1a789e7c4833732e86197016ae76ddca85e7595779`,
+  vence 12-nov-2026 11:15 UTC.
+- Digestor PR #15: https://github.com/B10sp4rt4n/digestor__fiscal/pull/15.
+  CI https://github.com/B10sp4rt4n/digestor__fiscal/actions/runs/42606653428:
+  308 pruebas y 54 subpruebas aprobadas, con concurrencia PostgreSQL 17.
+- PAC real de pruebas: una emisión de demostración HTTP200, pérdida local
+  deliberada de respuesta que persistió `unknown`, una consulta `ObtieneCFDI`
+  HTTP200 y recuperación idempotente, con coincidencia de la estructura original
+  y una sola métrica fiscal. No hubo emisión, cobro ni cancelación productivos.
+  Evidencia y script reproducible en el PR #15, carpeta
+  `docs/evidence/invoice-recovery-20261109/`.
+
+Estado: pendiente 2 preparado y verificado para revisión/publicación, con el
+límite explícito de que la aceptación sandbox corresponde al transporte REST
+público; no se ejercitó el transporte SOAP de la instalación productiva ni se
+certificaron sellos. No declarar desplegado este cambio. Después de publicarlo,
+el siguiente pendiente es el recorrido PPD → REP → saldo.
