@@ -35,7 +35,7 @@ beforeAll(async () => {
   ({POST:stamp}=await import('@/app/api/proposals/[proposalId]/invoice/payments/[paymentId]/receipt/stamp/route'));
   ({POST:recover}=await import('@/app/api/proposals/[proposalId]/invoice/payments/[paymentId]/receipt/reconcile/route'));
   ({GET:pdf}=await import('@/app/api/proposals/[proposalId]/invoice/payments/[paymentId]/receipt/pdf/route'));
-  await db.tenant.create({data:{tenant_id:'synthetic-a',slug:'synthetic-a',name:'SYNTHETIC',created_at:new Date()}});
+  await db.tenant.upsert({where:{tenant_id:'synthetic-a'},update:{},create:{tenant_id:'synthetic-a',slug:'synthetic-a',name:'SYNTHETIC',created_at:new Date()}});
   await db.proposals.create({data:{proposal_id:'ppd-connected-proposal',tenant_id:'synthetic-a',created_by:'synthetic-seller',created_by_user_id:'synthetic-seller',
     status:'draft',created_at:new Date(),invoice_draft_id:data.invoice.draftId,invoice_uuid:data.invoice.uuid,invoice_xml_base64:data.invoice.xmlBase64,invoice_status:'stamped'}});
 },30_000);
