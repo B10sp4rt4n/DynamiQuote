@@ -1,7 +1,7 @@
 name: Fiscal cycle (synthetic)
 on:
   push:
-    branches: [fix/ppd-connected-cycle, fix/fiscal-stamp-recovery, feat/fiscal-payment-cancellation, feat/ppd-production-release, feat/fiscal-general-production, feat/fiscal-classification-aup, fix/prefactura-guided-readiness, fix/fiscal-classification-resume, fix/sat-validation-contract]
+    branches: [fix/fiscal-correction-integrity, fix/ppd-connected-cycle, fix/fiscal-stamp-recovery, feat/fiscal-payment-cancellation, feat/ppd-production-release, feat/fiscal-general-production, feat/fiscal-classification-aup, fix/prefactura-guided-readiness, fix/fiscal-classification-resume, fix/sat-validation-contract]
   workflow_dispatch:
 permissions:
   contents: read
@@ -24,7 +24,7 @@ jobs:
       - run: ./cotiza-web/node_modules/.bin/tsc --noEmit --project cotiza-web/tsconfig.json
       - run: npm --prefix cotiza-web test -- --maxWorkers=2 --exclude validate-quote-lifecycle.e2e.test.ts --reporter=dot
   classification-visual:
-    if: github.ref == 'refs/heads/fix/ppd-connected-cycle' || github.ref == 'refs/heads/fix/fiscal-stamp-recovery' || github.ref == 'refs/heads/feat/fiscal-classification-aup' || github.ref == 'refs/heads/fix/prefactura-guided-readiness' || github.ref == 'refs/heads/fix/fiscal-classification-resume'
+    if: github.ref == 'refs/heads/fix/fiscal-correction-integrity' || github.ref == 'refs/heads/fix/ppd-connected-cycle' || github.ref == 'refs/heads/fix/fiscal-stamp-recovery' || github.ref == 'refs/heads/feat/fiscal-classification-aup' || github.ref == 'refs/heads/fix/prefactura-guided-readiness' || github.ref == 'refs/heads/fix/fiscal-classification-resume'
     runs-on: ubuntu-24.04
     timeout-minutes: 15
     env:
@@ -48,17 +48,23 @@ jobs:
           PLAYWRIGHT_MODULE="$RUNNER_TEMP/fiscal-ui-tools/node_modules/playwright/index.mjs" \
           node scripts/check_fiscal_classification_ui.mjs
       - name: Check unknown result and UUID recovery in desktop/mobile
-        if: github.ref == 'refs/heads/fix/ppd-connected-cycle' || github.ref == 'refs/heads/fix/fiscal-stamp-recovery'
+        if: github.ref == 'refs/heads/fix/fiscal-correction-integrity' || github.ref == 'refs/heads/fix/ppd-connected-cycle' || github.ref == 'refs/heads/fix/fiscal-stamp-recovery'
         run: |
           ESBUILD_MODULE="$RUNNER_TEMP/fiscal-ui-tools/node_modules/esbuild" \
           PLAYWRIGHT_MODULE="$RUNNER_TEMP/fiscal-ui-tools/node_modules/playwright/index.mjs" \
           node scripts/check_invoice_recovery_ui.mjs
       - name: Connected PPD panel in desktop and mobile
-        if: github.ref == 'refs/heads/fix/ppd-connected-cycle'
+        if: github.ref == 'refs/heads/fix/fiscal-correction-integrity' || github.ref == 'refs/heads/fix/ppd-connected-cycle'
         run: |
           ESBUILD_MODULE="$RUNNER_TEMP/fiscal-ui-tools/node_modules/esbuild" \
           PLAYWRIGHT_MODULE="$RUNNER_TEMP/fiscal-ui-tools/node_modules/playwright/index.mjs" \
           node scripts/check_ppd_cycle_ui.mjs
+      - name: Correction and cancellation with lost responses in desktop and mobile
+        if: github.ref == 'refs/heads/fix/fiscal-correction-integrity'
+        run: |
+          ESBUILD_MODULE="$RUNNER_TEMP/fiscal-ui-tools/node_modules/esbuild" \
+          PLAYWRIGHT_MODULE="$RUNNER_TEMP/fiscal-ui-tools/node_modules/playwright/index.mjs" \
+          node scripts/check_fiscal_correction_ui.mjs
       - name: Upload synthetic evidence
         if: always()
         uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02
@@ -68,11 +74,12 @@ jobs:
             artifacts/fiscal-classification
             artifacts/invoice-recovery
             artifacts/ppd-cycle
+            artifacts/fiscal-correction
           retention-days: 3
           if-no-files-found: warn
 
   preparation-persistence:
-    if: github.ref == 'refs/heads/fix/ppd-connected-cycle' || github.ref == 'refs/heads/fix/fiscal-stamp-recovery' || github.ref == 'refs/heads/fix/fiscal-classification-resume'
+    if: github.ref == 'refs/heads/fix/fiscal-correction-integrity' || github.ref == 'refs/heads/fix/ppd-connected-cycle' || github.ref == 'refs/heads/fix/fiscal-stamp-recovery' || github.ref == 'refs/heads/fix/fiscal-classification-resume'
     runs-on: ubuntu-24.04
     timeout-minutes: 15
     services:
@@ -116,27 +123,33 @@ jobs:
       - name: Confirm preparation persists, isolates identities, and rolls back on failure
         run: npm --prefix cotiza-web test -- lib/db/invoice-preparations.integration.test.ts lib/db/proposal-invoices.integration.test.ts --maxWorkers=1 --no-file-parallelism
       - name: Checkout exact synthetic Digestor implementation
-        if: github.ref == 'refs/heads/fix/ppd-connected-cycle' || github.ref == 'refs/heads/fix/fiscal-stamp-recovery'
+        if: github.ref == 'refs/heads/fix/fiscal-correction-integrity' || github.ref == 'refs/heads/fix/ppd-connected-cycle' || github.ref == 'refs/heads/fix/fiscal-stamp-recovery'
         uses: actions/checkout@11bd71901bbe5b1630ceea73d27597364c9af683
         with:
           repository: B10sp4rt4n/digestor__fiscal
-          ref: d4223e744d03b3a7ed6345ad28129074cff4d3fa
+          ref: 20849f8173be0fbccd8a4a48260d0e91f8642d11
           path: digestor-fixture
           persist-credentials: false
       - name: Install isolated Digestor HTTP fixture dependencies
-        if: github.ref == 'refs/heads/fix/ppd-connected-cycle' || github.ref == 'refs/heads/fix/fiscal-stamp-recovery'
+        if: github.ref == 'refs/heads/fix/fiscal-correction-integrity' || github.ref == 'refs/heads/fix/ppd-connected-cycle' || github.ref == 'refs/heads/fix/fiscal-stamp-recovery'
         run: |
           python3 -m venv "$RUNNER_TEMP/digestor-fixture-venv"
           "$RUNNER_TEMP/digestor-fixture-venv/bin/pip" install --index-url https://pypi.org/simple --only-binary=:all: -r digestor-fixture/requirements.txt -r digestor-fixture/requirements.fiscal-test.txt
       - name: Real HTTP and SQL recovery with synthetic provider
-        if: github.ref == 'refs/heads/fix/ppd-connected-cycle' || github.ref == 'refs/heads/fix/fiscal-stamp-recovery'
+        if: github.ref == 'refs/heads/fix/fiscal-correction-integrity' || github.ref == 'refs/heads/fix/ppd-connected-cycle' || github.ref == 'refs/heads/fix/fiscal-stamp-recovery'
         run: |
           DIGESTOR_FIXTURE_ROOT="$GITHUB_WORKSPACE/digestor-fixture" \
           DIGESTOR_FIXTURE_PYTHON="$RUNNER_TEMP/digestor-fixture-venv/bin/python" \
           node scripts/check_invoice_recovery.mjs
       - name: Real HTTP and SQL PPD cycle with synthetic provider
-        if: github.ref == 'refs/heads/fix/ppd-connected-cycle'
+        if: github.ref == 'refs/heads/fix/fiscal-correction-integrity' || github.ref == 'refs/heads/fix/ppd-connected-cycle'
         run: |
           DIGESTOR_FIXTURE_ROOT="$GITHUB_WORKSPACE/digestor-fixture" \
           DIGESTOR_FIXTURE_PYTHON="$RUNNER_TEMP/digestor-fixture-venv/bin/python" \
           node scripts/check_ppd_cycle.mjs
+      - name: Real HTTP correction and cancellation with synthetic provider
+        if: github.ref == 'refs/heads/fix/fiscal-correction-integrity'
+        run: |
+          DIGESTOR_FIXTURE_ROOT="$GITHUB_WORKSPACE/digestor-fixture" \
+          DIGESTOR_FIXTURE_PYTHON="$RUNNER_TEMP/digestor-fixture-venv/bin/python" \
+          node scripts/check_fiscal_correction.mjs

@@ -6,6 +6,7 @@ vi.mock('./proposal-payments',() => ({ authorizeProposalFiscalDocument:m.auth,
   paymentFailure:() => NextResponse.json({error:'Uncertain'}, {status:502}) }));
 vi.mock('./digestor-fiscal',() => ({ getFiscalCorrection:m.read, createFiscalCorrection:m.create, fiscalCorrectionAction:m.action }));
 import { readCorrection, createCorrection, runCorrectionAction } from './proposal-corrections';
+import { REP_BASE64, RECEIPT_UUID, INVOICE_UUID } from '@/tests/fixtures/synthetic-rep';
 const uuid='11111111-2222-4333-8444-555555555555';
 const input={idempotency_key:uuid,source_uuid:uuid,reason:'Corrección revisada',changes:{customer_name:'CORREGIDO'}};
 const ctx=(paymentId?:string,operation='stamp') => ({params:Promise.resolve({proposalId:'p',paymentId,operation})});
@@ -50,5 +51,16 @@ describe('correction scope and explicit operations',() => {
     m.read.mockResolvedValue({history:[{id:'own',status:'prepared',result_xml_base64:null,result_uuid:null}]});
     expect((await readCorrection(req({},'https://cotiza.test/correction?format=xml&revision=foreign'),ctx())).status).toBe(404);
     expect((await readCorrection(req({},'https://cotiza.test/correction?format=xml&revision=own'),ctx())).status).toBe(409);
+  });
+  it.each([undefined,'own'])('rejects XML whose UUID differs from the selected active or historical revision (%s)',async revision => {
+    m.read.mockResolvedValue({kind:'receipt',active_uuid:INVOICE_UUID,active_xml_base64:REP_BASE64,
+      history:[{id:'own',status:'stamped',result_uuid:INVOICE_UUID,result_xml_base64:REP_BASE64}]});
+    const response=await readCorrection(req({},`https://cotiza.test/correction?format=xml${revision?'&revision='+revision:''}`),ctx('payment'));
+    expect(response.status).toBe(502);expect(response.headers.get('Content-Type')).not.toContain('application/xml');
+  });
+  it('preserves the exact original XML bytes for a matching corrected REP',async()=>{
+    m.read.mockResolvedValue({kind:'receipt',active_uuid:RECEIPT_UUID,active_xml_base64:REP_BASE64,history:[]});
+    const response=await readCorrection(req({},'https://cotiza.test/correction?format=xml'),ctx('payment'));
+    expect(response.status).toBe(200);expect(Buffer.from(await response.arrayBuffer()).equals(Buffer.from(REP_BASE64,'base64'))).toBe(true);
   });
 });

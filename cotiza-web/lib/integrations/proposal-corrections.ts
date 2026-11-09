@@ -32,15 +32,16 @@ export async function readCorrection(request: Request, context: Context) {
       const xml = row ? row.result_xml_base64 : result.active_xml_base64;
       const uuid = row ? row.result_uuid : result.active_uuid;
       if (!xml || !uuid || (row && row.status !== 'stamped')) return NextResponse.json({ error: 'Primero confirma el timbrado de la sustituta' }, { status: 409 });
+      const { parseCfdiXml, parsePaymentReceiptXml } = await import('@/lib/pdf/cfdi-xml');
+      const cfdi = result.kind === 'receipt' ? parsePaymentReceiptXml(xml, uuid) : parseCfdiXml(xml);
+      if (cfdi.timbre.uuid.toLowerCase() !== uuid.toLowerCase()) throw new Error('El XML no corresponde al UUID de la sustitución');
       if (format === 'xml') return new Response(Buffer.from(xml, 'base64'), { headers: {
         'Content-Type': 'application/xml', 'Content-Disposition': 'attachment; filename="comprobante-sustituto.xml"',
         'Cache-Control': 'no-store', 'X-Content-Type-Options': 'nosniff',
       } });
-      const [{ renderToBuffer }, { CfdiDocument }, { parseCfdiXml, parsePaymentReceiptXml }, { buildCfdiQrDataUrl }] = await Promise.all([
-        import('@react-pdf/renderer'), import('@/lib/pdf/cfdi-document'), import('@/lib/pdf/cfdi-xml'), import('@/lib/pdf/cfdi-qr'),
+      const [{ renderToBuffer }, { CfdiDocument }, { buildCfdiQrDataUrl }] = await Promise.all([
+        import('@react-pdf/renderer'), import('@/lib/pdf/cfdi-document'), import('@/lib/pdf/cfdi-qr'),
       ]);
-      const cfdi = result.kind === 'receipt' ? parsePaymentReceiptXml(xml, uuid) : parseCfdiXml(xml);
-      if (cfdi.timbre.uuid.toLowerCase() !== uuid.toLowerCase()) throw new Error('El XML no corresponde al UUID de la sustitución');
       const next = result.history.find(item => item.source_uuid === uuid);
       const pdf = await renderToBuffer(CfdiDocument({ cfdi, proposalNumber: proposalId, qrDataUrl: await buildCfdiQrDataUrl(cfdi),
         fiscalStatus: next?.source_cancellation_status }));

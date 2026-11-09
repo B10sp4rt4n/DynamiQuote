@@ -10,7 +10,7 @@ Salvador. Base revisada: Cotiza `ddda1a5` y Digestor `e3aede1`.
 | 1 | Preparar, guardar y reabrir prefactura | Recuperar datos y claves exactamente revisados; validar identidad, empresa, revisión y catálogo; conservar vista previa y bloquear información obsoleta. Probar persistencia y reapertura. | Publicado y verificado en producción |
 | 2 | Prefactura → CFDI y recuperación | Un solo timbrado ante doble clic, concurrencia o respuesta perdida; recuperación de UUID/XML/PDF sin volver a emitir. | Publicado y comprobado en producción: Digestor #15 y Cotiza #74 |
 | 3 | Pagos PPD → REP → saldo | Varias parcialidades, recuperación y saldo comprobables; cobros económicos separados del estado fiscal. | Recorrido HTTP/SQL y PAC sandbox acreditados; mejoras de recuperación/completitud en revisión |
-| 4 | Cancelación, sustitución y corrección | Acuse separado de confirmación SAT; UUID/revisión exactos; motivo 01 y corrección REP conservando documentos y pagos. | Una cancelación real acreditada; otros perfiles pendientes |
+| 4 | Cancelación, sustitución y corrección | Acuse separado de confirmación SAT; UUID/revisión exactos; motivo 01 y corrección REP conservando documentos y pagos. | Una cancelación real previa; sustitución/corrección conectadas con proveedor sintético y guardas ante incertidumbre; PAC sandbox y publicación de esta entrega pendientes |
 | 5 | Alcance fiscal restante | Matriz de USD/tipo de cambio, notas de crédito y facturas con pagos: soporte demostrado o bloqueo explícito; evidencia y siguiente acción. | Pendiente de consolidación |
 
 69-B y nuevas capacidades se incorporan después de consolidar este recorrido.
@@ -215,3 +215,26 @@ pagos ficticios en producción. Los casos reales autorizados permanecen separado
 de la evidencia sandbox; no se acreditan bancos, sellos criptográficos ni todos
 los perfiles del SAT. Publicar backend antes del consumidor. El siguiente
 pendiente funcional sigue siendo cancelación, sustitución y corrección.
+
+## Pendiente 4: integridad de cancelación, sustitución y corrección
+
+Preparado sobre Cotiza #75 y Digestor #16; dependencia adicional Digestor #17.
+La pantalla exige consultar estado después de perder una respuesta de emisión,
+cancelación o corrección. Una consulta fallida no vuelve a habilitar operaciones.
+La recuperación de sustituta sólo admite unknown: processing conserva reserva.
+Las descargas de XML activo/histórico validan el UUID igual que el PDF.
+
+Recorrido conectado reproducible con HTTP real, FastAPI/SQLAlchemy/SQLite y
+proveedor sintético: sustituta con relación04, motivo01, acuse separado de
+confirmación, activación posterior y corrección REP conservando pagos e XML
+originales. No acredita aceptación PAC sandbox ni confirmación SAT real de
+estos nuevos escenarios. La cancelación real previa permanece evidencia separada.
+
+Regresión local combinada: Cotiza969 aprobadas/68 omitidas; Digestor298 aprobadas,
+54 subpruebas y17 omitidas. TypeScript y ESLint dirigido aprobados (un aviso
+preexistente por _consent). Navegador local no arrancó por socket Operation not
+permitted; CI ejecuta escritorio/móvil y PostgreSQL desechable. Evidencia final
+se registra en el PR; detalles en docs/fiscal-correction-integrity.md.
+
+Publicación pendiente y separada de esta preparación: Digestor #16 → #17 antes
+del consumidor Cotiza #75 y su continuación. Sin operaciones fiscales reales.
