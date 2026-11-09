@@ -2,8 +2,9 @@
 
 ## Resultado y alcance
 
-Un administrador de una empresa habilitada conecta su cuenta mediante OAuth con
-PKCE y consulta/importa sus ventas desde Configuración → Mercado Libre. Cada
+Superadmin habilita el canal opcional para una empresa desde Configuración →
+Operación y canales. Un owner o administrador de esa empresa conecta su cuenta
+mediante OAuth con PKCE y consulta/importa sus ventas desde esa pestaña. Cada
 consulta lee hasta 50 órdenes; puede continuar la paginación y volver a consultar
 las recientes. La interfaz diferencia órdenes pagadas, pendientes y canceladas,
 muestra productos/importes y conserva la última consulta. Es consulta manual;
@@ -20,7 +21,10 @@ como origen fiscal sin inventar una propuesta comercial previa.
    OAuth, PKCE S256, renovación de tokens y permisos de lectura necesarios para
    `/users/me` y `/orders/search` según los permisos actuales de Mercado Libre.
 2. Revisar y aplicar explícitamente
-   `cotiza-web/prisma/manual/20261109_mercadolibre.sql` antes de habilitar el piloto.
+   `cotiza-web/prisma/manual/20261109_mercadolibre.sql` y
+   `cotiza-web/prisma/manual/20261109_tenant_operation.sql` antes de publicar.
+   Las capacidades requieren la tabla de `20261022_tenant_capabilities.sql`, ya
+   usada por Cotiza. La nueva migración no habilita canales para ninguna empresa.
    El cambio es aditivo e idempotente; no se aplica en el build ni desde el Site.
    Esta extensión se consume mediante SQL parametrizado; sus tablas se administran
    con el archivo manual, sin regenerar el cliente Prisma. No usar `db push` para
@@ -29,8 +33,7 @@ como origen fiscal sin inventar una propuesta comercial previa.
 
    | Variable | Contenido |
    | --- | --- |
-   | `MERCADOLIBRE_ENABLED` | `true` para habilitar el conector; ausente/apagado por defecto |
-   | `MERCADOLIBRE_TENANT_IDS` | IDs exactos de empresas autorizadas, separados por comas |
+   | `MERCADOLIBRE_ENABLED` | `true` para poner en servicio el conector; ausente/apagado por defecto. No concede acceso a ninguna empresa |
    | `MERCADOLIBRE_CLIENT_ID` | ID de la aplicación |
    | `MERCADOLIBRE_CLIENT_SECRET` | Secreto de la aplicación, sólo servidor |
    | `MERCADOLIBRE_REDIRECT_URI` | URL HTTPS exacta de `/api/integrations/mercadolibre/callback` en Cotiza |
@@ -40,7 +43,11 @@ como origen fiscal sin inventar una propuesta comercial previa.
    La clave debe conservarse en el gestor de secretos. Cambiarla sin una migración
    de cifrado obliga a reconectar las cuentas existentes.
 4. Publicar el código, verificar acceso sin habilitación y después habilitar sólo
-   la empresa piloto. Un usuario Clerk activo con rol owner/admin de esa empresa,
+   la empresa piloto desde Configuración → Operación y canales (superadmin).
+   La capacidad `mercadolibre_channel` ausente o apagada bloquea página/API incluso
+   para superadmin. La variable anterior `MERCADOLIBRE_TENANT_IDS` deja de conceder
+   acceso: no hay habilitación automática ni migración de su lista.
+   Un usuario Clerk activo con rol owner/admin de esa empresa,
    o superadmin confirmado en `app_users`, autoriza la cuenta. Bootstrap no opera.
 5. La conexión comprueba `site_id=MLM`, identidad del vendedor y cuenta ya vinculada.
    Una cuenta pertenece a una empresa; una empresa conserva una cuenta. El cambio
@@ -129,7 +136,8 @@ conteos con la cuenta y probar desconectar/reconectar con su propietario.
 
 ## Reversión
 
-Apagar `MERCADOLIBRE_ENABLED` o retirar la empresa del allowlist. Conservar tablas,
+Apagar `MERCADOLIBRE_ENABLED` o deshabilitar el canal de la empresa en Configuración.
+Cambiar de modalidad no habilita ni revoca un canal. Conservar tablas,
 cifrado y evidencias; el código anterior no depende de estas tablas. No borrar
 ventas ni recrear vínculos para revertir software. Rotar/revocar credenciales
 sólo con la coordinación del propietario cuando corresponda.

@@ -1,12 +1,13 @@
 import { afterEach, beforeEach, expect, it, vi } from "vitest";
 vi.mock("server-only", () => ({}));
-const m = vi.hoisted(() => ({ tenant: vi.fn(), member: vi.fn() }));
+const m = vi.hoisted(() => ({ tenant: vi.fn(), member: vi.fn(), capability: vi.fn() }));
+vi.mock("@/lib/db/tenant-capabilities", () => ({ isTenantCapabilityEnabled: m.capability }));
 vi.mock("@/lib/auth/tenant-context", () => ({ getCurrentTenantContext: m.tenant }));
 vi.mock("@/lib/db/prisma", () => ({ prisma: { app_users: { findFirst: m.member } } }));
 import { authorizeMercadoLibre } from "./access";
 beforeEach(() => {
   vi.resetAllMocks();
-  vi.stubEnv("MERCADOLIBRE_ENABLED", "true"); vi.stubEnv("MERCADOLIBRE_TENANT_IDS", "t1,t2");
+  vi.stubEnv("MERCADOLIBRE_ENABLED", "true"); m.capability.mockResolvedValue(true);
   vi.stubEnv("MERCADOLIBRE_CLIENT_ID", "123"); vi.stubEnv("MERCADOLIBRE_CLIENT_SECRET", "synthetic");
   vi.stubEnv("MERCADOLIBRE_TOKEN_KEY", "ab".repeat(32)); vi.stubEnv("MERCADOLIBRE_REDIRECT_URI", "https://cotiza.test/api/integrations/mercadolibre/callback");
   m.tenant.mockResolvedValue({ id: "t1", userId: "u1", authMode: "clerk", name: "Company", isSuperAdmin: true });
@@ -20,7 +21,8 @@ it("rejects unauthenticated and bootstrap access before reading a membership", a
   expect(m.member).not.toHaveBeenCalled();
 });
 it("rejects a disabled company even for superadmins", async () => {
-  vi.stubEnv("MERCADOLIBRE_TENANT_IDS", "t2"); await expect(authorizeMercadoLibre()).rejects.toMatchObject({ status: 404 });
+  m.capability.mockResolvedValue(false); await expect(authorizeMercadoLibre()).rejects.toMatchObject({ status: 404 });
+  expect(m.capability).toHaveBeenCalledWith("t1", "mercadolibre_channel");
 });
 it("requires an authoritative administrative role and tenant membership despite claims", async () => {
   for (const member of [null, { role: "user", tenant_id: "t1" }, { role: "owner", tenant_id: "t2" }]) {

@@ -4,7 +4,7 @@ on:
     branches: [feat/mercadolibre-sales-inbox]
   pull_request:
     branches: [main]
-    paths: ['cotiza-web/lib/integrations/mercadolibre/**', 'cotiza-web/app/api/integrations/mercadolibre/**', 'cotiza-web/components/integraciones/**', 'cotiza-web/app/(dashboard)/configuracion/**', 'cotiza-web/prisma/manual/20261109_mercadolibre.sql', 'scripts/check_mercadolibre_ui.mjs', '.github/workflows/mercadolibre-pilot.yml']
+    paths: ['cotiza-web/lib/integrations/mercadolibre/**', 'cotiza-web/app/api/integrations/mercadolibre/**', 'cotiza-web/components/integraciones/**', 'cotiza-web/components/configuracion/**', 'cotiza-web/app/(dashboard)/configuracion/**', 'cotiza-web/app/api/settings/tenant-*/**', 'cotiza-web/lib/db/tenant-*.ts', 'cotiza-web/lib/auth/tenant-configuration.ts', 'cotiza-web/lib/tenant-*.ts', 'cotiza-web/prisma/manual/20261109_*.sql', 'scripts/check_*_ui.mjs', '.github/workflows/mercadolibre-pilot.yml']
   workflow_dispatch:
 permissions:
   contents: read
@@ -35,7 +35,7 @@ jobs:
       - run: ./cotiza-web/node_modules/.bin/tsc --noEmit --project cotiza-web/tsconfig.json
       - run: npm --prefix cotiza-web test -- --maxWorkers=2 --exclude validate-quote-lifecycle.e2e.test.ts --reporter=dot
       - name: PostgreSQL isolation, idempotency, OAuth replay and refresh concurrency
-        run: npm --prefix cotiza-web test -- lib/integrations/mercadolibre/store.integration.test.ts --maxWorkers=1
+        run: npm --prefix cotiza-web test -- lib/integrations/mercadolibre/store.integration.test.ts lib/db/tenant-operation.integration.test.ts --maxWorkers=1
         env:
           COTIZA_ML_TEST_DATABASE_URL: postgresql://postgres:synthetic-local-only@127.0.0.1:5432/cotiza_ml_synthetic
       - run: npm --prefix cotiza-web run build
@@ -62,11 +62,18 @@ jobs:
           ESBUILD_MODULE="$RUNNER_TEMP/ml-ui-tools/node_modules/esbuild" \
           PLAYWRIGHT_MODULE="$RUNNER_TEMP/ml-ui-tools/node_modules/playwright/index.mjs" \
           node scripts/check_mercadolibre_ui.mjs
+      - name: Tenant operation and optional channel in desktop and mobile
+        run: |
+          ESBUILD_MODULE="$RUNNER_TEMP/ml-ui-tools/node_modules/esbuild" \
+          PLAYWRIGHT_MODULE="$RUNNER_TEMP/ml-ui-tools/node_modules/playwright/index.mjs" \
+          node scripts/check_tenant_operation_ui.mjs
       - name: Upload synthetic visual evidence
         if: always()
         uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02
         with:
           name: mercadolibre-visual-synthetic
-          path: artifacts/mercadolibre
+          path: |
+            artifacts/mercadolibre
+            artifacts/tenant-operation
           retention-days: 3
           if-no-files-found: warn

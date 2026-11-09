@@ -1,6 +1,6 @@
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 vi.mock("server-only", () => ({}));
-import { mercadoLibreConfig, mercadoLibreEnabled } from "./config";
+import { mercadoLibreConfig } from "./config";
 import { challenge, nonce, seal, unseal } from "./crypto";
 import { exchangeToken, normalizeOrder, searchSales } from "./client";
 
@@ -14,11 +14,6 @@ beforeEach(() => {
 });
 afterEach(() => { vi.unstubAllEnvs(); vi.unstubAllGlobals(); });
 describe("Mercado Libre boundaries", () => {
-  it("requires both the global gate and an exact tenant allowlist", () => {
-    expect(mercadoLibreEnabled("t1")).toBe(false);
-    vi.stubEnv("MERCADOLIBRE_ENABLED", "true"); vi.stubEnv("MERCADOLIBRE_TENANT_IDS", "t10, t2");
-    expect(mercadoLibreEnabled("t1")).toBe(false); expect(mercadoLibreEnabled("t2")).toBe(true);
-  });
   it("rejects an incomplete, insecure or ambiguous callback configuration", () => {
     for (const url of ["http://cotiza.test/api/integrations/mercadolibre/callback", "https://cotiza.test/other", "https://cotiza.test/api/integrations/mercadolibre/callback?x=1"]) {
       vi.stubEnv("MERCADOLIBRE_REDIRECT_URI", url); expect(() => mercadoLibreConfig()).toThrow();

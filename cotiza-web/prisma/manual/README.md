@@ -112,6 +112,12 @@ del código que la consume. No hay DDL ni dependencias nuevas.
 no modificar estas tablas mediante `db push`. Aplicar antes de habilitar el piloto.
 Ver `docs/mercadolibre-pilot.md` para configuración, pruebas y reversión.
 
+`20261109_tenant_operation.sql` agrega el perfil operativo y su historial. Aplicar
+antes de publicar Configuración → Operación y canales; no habilita canales ni
+modifica tenants existentes. Sin fila, la modalidad es Venta consultiva. La
+habilitación opcional de Mercado Libre usa las tablas de capacidades existentes.
+Ver `docs/tenant-capabilities.md` para permisos, alcance y validación.
+
 ## Alta comercial diferida (27 de octubre de 2026)
 
 `20261027_opportunity_intake.sql` agrega `opportunities.intake_metadata` nullable,

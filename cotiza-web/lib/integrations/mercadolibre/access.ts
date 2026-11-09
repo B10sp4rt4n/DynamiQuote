@@ -2,12 +2,13 @@ import "server-only";
 import { NextResponse } from "next/server";
 import { getCurrentTenantContext } from "@/lib/auth/tenant-context";
 import { prisma } from "@/lib/db/prisma";
-import { mercadoLibreEnabled, mercadoLibreConfig, MercadoLibreError } from "./config";
+import { mercadoLibreConfig, MercadoLibreError } from "./config";
+import { mercadoLibreEnabled } from "./availability";
 
 export async function authorizeMercadoLibre(request?: Request) {
   const tenant = await getCurrentTenantContext();
   if (!tenant || tenant.authMode !== "clerk" || !tenant.userId) throw new MercadoLibreError("Inicia sesión para administrar la integración", 401);
-  if (!mercadoLibreEnabled(tenant.id)) throw new MercadoLibreError("Integración no habilitada para esta empresa", 404);
+  if (!await mercadoLibreEnabled(tenant.id)) throw new MercadoLibreError("Integración no habilitada para esta empresa", 404);
   // Verify authoritative membership/role; never elevate a claim or bootstrap identity.
   const member = await prisma.app_users.findFirst({ where: { user_id: tenant.userId, active: true },
     select: { tenant_id: true, role: true } });

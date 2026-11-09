@@ -4,11 +4,6 @@ export class MercadoLibreError extends Error {
   constructor(message: string, public status = 409) { super(message); }
 }
 
-export function mercadoLibreEnabled(tenantId: string) {
-  return process.env.MERCADOLIBRE_ENABLED === "true"
-    && (process.env.MERCADOLIBRE_TENANT_IDS ?? "").split(",").map(s => s.trim()).includes(tenantId);
-}
-
 export function mercadoLibreConfig() {
   const clientId = process.env.MERCADOLIBRE_CLIENT_ID ?? "";
   const clientSecret = process.env.MERCADOLIBRE_CLIENT_SECRET ?? "";

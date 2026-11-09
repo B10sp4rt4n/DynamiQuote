@@ -10,13 +10,13 @@ export default async function MercadoLibrePage({ searchParams }: { searchParams:
   try { actor = await authorizeMercadoLibre(); } catch {
     return <section className="rounded-xl border bg-white p-6"><h1 className="text-xl font-semibold">Mercado Libre</h1>
       <p className="mt-2">La integración requiere acceso administrativo y habilitación para esta empresa.</p>
-      <Link href="/configuracion" className="mt-4 inline-block underline">Volver a Configuración</Link></section>;
+      <Link href="/configuracion?tab=operation" className="mt-4 inline-block underline">Volver a Operación y canales</Link></section>;
   }
   let data;
   try { data = await readInbox(actor.tenantId); } catch {
     return <section className="rounded-xl border bg-white p-6"><h1 className="text-xl font-semibold">Mercado Libre · {actor.tenantName}</h1>
       <p className="mt-2">La bandeja todavía no está disponible. Falta completar la preparación de la integración.</p>
-      <Link href="/configuracion" className="mt-4 inline-block underline">Volver a Configuración</Link></section>;
+      <Link href="/configuracion?tab=operation" className="mt-4 inline-block underline">Volver a Operación y canales</Link></section>;
   }
   const params = await searchParams;
   return <MercadoLibreInbox key={actor.tenantId} initial={data} ready={mercadoLibreReady()} tenantName={actor.tenantName}

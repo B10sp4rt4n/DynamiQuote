@@ -52,7 +52,7 @@ export function MercadoLibreInbox({ initial, ready, tenantName, callback }: {
   }
   const connected = inbox.connection?.status === "connected";
   return <section className="space-y-5 text-zinc-900" aria-busy={busy}>
-    <div><Link href="/configuracion" className="text-sm underline">Volver a Configuración</Link>
+    <div><Link href="/configuracion?tab=operation" className="text-sm underline">Volver a Operación y canales</Link>
       <h1 className="mt-3 text-2xl font-semibold">Ventas de Mercado Libre</h1>
       <p className="mt-1 text-zinc-600">Empresa: {tenantName}</p></div>
     <div className="rounded-xl border border-zinc-200 bg-white p-5">
