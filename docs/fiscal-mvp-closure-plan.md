@@ -45,7 +45,7 @@ Acciones:
 - [x] Recuperar preparación del documento, diferenciada de memoria comercial.
 - [x] Verificar actor/tenant/propuesta/revisión y catálogo antes de reutilizarla.
 - [x] Probar reapertura, edición, catálogo cambiado, errores e identidades ajenas.
-- [ ] Registrar evidencia de pruebas y estado real del recorrido conectado.
+- [x] Registrar evidencia de pruebas y estado real del recorrido conectado.
 
 Evidencia de partida: PR Cotiza #69/#71 y Digestor #14. La inspección realizada
 en esta entrega fue de lectura; no se confirmó clasificación ni se regeneró el
@@ -80,3 +80,24 @@ Pendiente para cerrar el punto 1 en producción: publicar la entrega revisada y
 verificar la preparación/reapertura conectada con una operación apropiada, sin
 emitir CFDI. No se declara esta operación productiva realizada ni se cambia la
 clasificación fiscal de una propuesta comercial durante estas pruebas.
+
+### Verificación final de esta entrega
+
+- PR de implementación y plan: https://github.com/B10sp4rt4n/DynamiQuote/pull/72.
+- Código verificado: `25d11bdfc098966b6e4b8f1704a9f8d4cff46a77`.
+- GitHub Actions: https://github.com/B10sp4rt4n/DynamiQuote/actions/runs/42595063627.
+- Regresión: 919 aprobadas, 65 omitidas; TypeScript aprobado.
+- Persistencia: cinco pruebas aprobadas con PostgreSQL 18.6 real desechable.
+- Navegador sintético: escritorio 1360 px y móvil 390 px aprobados, con recarga
+  completa, una creación de borrador y cero llamadas de timbrado. Sin peticiones
+  externas, errores de consola ni desbordamiento. Las capturas de reapertura de
+  ambos tamaños fueron inspeccionadas.
+- Artefacto GitHub `fiscal-classification-visual`, ID 13663416031: 14 capturas y
+  result.json; retención hasta 12-nov-2026 09:40 UTC.
+- Compilación Next.js local con webpack aprobada. El intento Turbopack se detuvo
+  por el enlace de dependencias fuera del directorio del worktree; no se declara
+  aprobado ese intento.
+
+Estado: corrección preparada y comprobada en entornos sintéticos/aislados. El
+punto 1 permanece abierto únicamente para su publicación y comprobación conectada
+en producción. No se ha emitido ningún CFDI durante esta entrega.
