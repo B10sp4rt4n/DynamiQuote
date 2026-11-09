@@ -1,4 +1,6 @@
 import { SettingsShell } from "@/components/configuracion/settings-shell";
+import Link from "next/link";
+import { mercadoLibreEnabled } from "@/lib/integrations/mercadolibre/config";
 import { isTenantCapabilityEnabled, THREATDOWN_PDF_IMPORT } from "@/lib/db/tenant-capabilities";
 import { getCurrentTenantContext } from "@/lib/auth/tenant-context";
 import { getMarginPolicyByTenant } from "@/lib/db/margin-policies";
@@ -38,6 +40,12 @@ export default async function SettingsPage() {
   ]);
 
   return (
+    <>
+    {canManageUsers && tenant.authMode === "clerk" && mercadoLibreEnabled(tenant.id) ?
+      <Link href="/configuracion/integraciones/mercadolibre" className="mb-5 block rounded-xl border border-zinc-300 bg-white p-5">
+        <span className="font-semibold">Mercado Libre</span>
+        <span className="mt-1 block text-sm text-zinc-600">Conectar cuenta y consultar ventas de {tenant.name}</span>
+      </Link> : null}
     <SettingsShell
       threatDownImportEnabled={threatDownImportEnabled}
       playbookFieldEnabled={playbookFieldEnabled}
@@ -57,5 +65,6 @@ export default async function SettingsPage() {
       tenantProfile={tenantProfile}
       users={users}
     />
+    </>
   );
 }

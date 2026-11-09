@@ -105,6 +105,13 @@ de los campos originales; ejecutar dos veces para comprobar idempotencia. La
 etiqueta es compatible con el código anterior; aplicar antes del despliegue
 del código que la consume. No hay DDL ni dependencias nuevas.
 
+## Bandeja Mercado Libre (9 de noviembre de 2026)
+
+`20261109_mercadolibre.sql` agrega conexión cifrada por empresa, intentos OAuth,
+órdenes y revisiones. Es una extensión con SQL parametrizado y migración manual;
+no modificar estas tablas mediante `db push`. Aplicar antes de habilitar el piloto.
+Ver `docs/mercadolibre-pilot.md` para configuración, pruebas y reversión.
+
 ## Alta comercial diferida (27 de octubre de 2026)
 
 `20261027_opportunity_intake.sql` agrega `opportunities.intake_metadata` nullable,
