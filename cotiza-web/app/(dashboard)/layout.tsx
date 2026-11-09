@@ -12,6 +12,7 @@ import { CotizaBrand } from "@/components/ui/cotiza-brand";
 import { DashboardNav } from "@/components/layout/dashboard-nav";
 import { TenantSwitcher } from "@/components/layout/tenant-switcher";
 import { getActiveTenants } from "@/lib/db/tenants";
+import { isDigestorFiscalSandboxTenant } from "@/lib/integrations/digestor-routing";
 
 type DashboardLayoutProps = {
   children: React.ReactNode;
@@ -81,7 +82,14 @@ export default async function DashboardLayout({ children }: DashboardLayoutProps
           </div>
         </div>
       </header>
-      <main className="mx-auto min-w-0 max-w-7xl px-4 py-5 sm:px-6 sm:py-8">{children}</main>
+      <main className="mx-auto min-w-0 max-w-7xl px-4 py-5 sm:px-6 sm:py-8">
+        {isDigestorFiscalSandboxTenant(tenant.id) ? <aside aria-label="Entorno de pruebas"
+          className="mb-5 rounded-xl border border-amber-300 bg-amber-50 p-4 text-sm text-amber-950">
+          <p className="font-semibold">Laboratorio fiscal · PAC de pruebas · Sin validez fiscal</p>
+          <p className="mt-1">Esta empresa utiliza datos de ensayo y una conexión fiscal independiente.</p>
+        </aside> : null}
+        {children}
+      </main>
     </div>
   );
 }

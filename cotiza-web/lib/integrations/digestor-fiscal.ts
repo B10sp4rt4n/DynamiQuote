@@ -1,32 +1,16 @@
 import "server-only";
 import type { CsfReview } from "@/lib/domain/csf-review";
 import { readInvoiceStamp } from "@/lib/domain/invoice-stamp";
+import { getPrimaryDigestorConfig, getRequestDigestorConfig, getSandboxDigestorConfig,
+  isDigestorFiscalSandboxTenant, type DigestorFiscalConfig } from "./digestor-routing";
 
 // Cliente HTTP hacia Digestor Fiscal (repo aparte, B10sp4rt4n/digestor__fiscal).
-// Motor de un solo emisor por ahora (solo SynAppsSys tiene CSD real cargado
-// ahi) -- no hay mapeo multi-tenant, se gatea con DIGESTOR_FISCAL_TENANT_ID.
+// Emisor principal y laboratorio opcional tienen destinos, cuentas y tokens
+// separados. El tenant de sesión elige el destino; nunca el payload del navegador.
 // Nunca se llama desde el cliente: solo desde rutas API server-side.
 
-type DigestorFiscalConfig = {
-  baseUrl: string;
-  username: string;
-  password: string;
-};
-
-function getConfig(): DigestorFiscalConfig | null {
-  const baseUrl = process.env["DIGESTOR_FISCAL_BASE_URL"];
-  const username = process.env["DIGESTOR_FISCAL_USERNAME"];
-  const password = process.env["DIGESTOR_FISCAL_PASSWORD"];
-
-  if (!baseUrl || !username || !password) {
-    return null;
-  }
-
-  return { baseUrl: baseUrl.replace(/\/+$/, ""), password, username };
-}
-
 export function isDigestorFiscalConfigured(): boolean {
-  return getConfig() !== null;
+  return getPrimaryDigestorConfig() !== null;
 }
 
 export type LiveCancellation = {
@@ -46,6 +30,7 @@ export function liveCancellation(draftId: string, operation: 'read' | 'submit' |
 
 // Tenant de Cotiza habilitado para facturar -- hoy solo SynAppsSys.
 export function isDigestorFiscalEnabledForTenant(tenantId: string): boolean {
+  if (isDigestorFiscalSandboxTenant(tenantId)) return getSandboxDigestorConfig() !== null;
   const enabledTenantId = process.env["DIGESTOR_FISCAL_TENANT_ID"];
   return Boolean(enabledTenantId) && enabledTenantId === tenantId && isDigestorFiscalConfigured();
 }
@@ -55,10 +40,28 @@ type CachedToken = {
   token: string;
 };
 
-let cachedToken: CachedToken | null = null;
+const cachedTokens = new Map<string, CachedToken>();
+
+async function verifySandboxProvider(config: DigestorFiscalConfig, token: string): Promise<void> {
+  if (config.environment !== "sandbox") return;
+  const response = await fetch(`${config.baseUrl}/v1/billing/provider/status?probe=false`, {
+    headers: { Authorization: `Bearer ${token}` }, cache: "no-store", redirect: "error", signal: AbortSignal.timeout(10_000),
+  });
+  const status = await response.json().catch(() => null);
+  let url: URL;
+  try { url = new URL(status?.base_url); } catch { throw new Error("No se pudo confirmar el PAC de pruebas"); }
+  if (!response.ok || status?.environment !== "sandbox" || status?.configured !== true || status?.production_configured !== false
+      || url.protocol !== "https:" || url.hostname !== "pruebas.timbracfdi33.mx" || !["", "443", "1444"].includes(url.port)
+      || url.username || url.password || url.search || url.hash || url.pathname.replace(/\/$/, "") !== "/api/v2") {
+    throw new Error("El laboratorio sólo puede utilizar el PAC de pruebas");
+  }
+}
 
 async function login(config: DigestorFiscalConfig): Promise<string> {
+  const key = JSON.stringify([config.environment, config.baseUrl, config.username, config.expectedTenantId]);
+  const cachedToken = cachedTokens.get(key);
   if (cachedToken && cachedToken.expiresAt > Date.now() + 30_000) {
+    await verifySandboxProvider(config, cachedToken.token);
     return cachedToken.token;
   }
 
@@ -66,15 +69,20 @@ async function login(config: DigestorFiscalConfig): Promise<string> {
     body: JSON.stringify({ password: config.password, username: config.username }),
     headers: { "Content-Type": "application/json" },
     method: "POST",
+    cache: "no-store", redirect: "error", signal: AbortSignal.timeout(15_000),
   });
 
   if (!response.ok) {
     throw new Error(`No fue posible autenticar con Digestor Fiscal (HTTP ${response.status}).`);
   }
 
-  const data = (await response.json()) as { access_token: string; expires_in: number };
-  cachedToken = { expiresAt: Date.now() + data.expires_in * 1000, token: data.access_token };
-  return cachedToken.token;
+  const data = (await response.json()) as { access_token: string; expires_in: number; tenant_id?: string };
+  if (!data.access_token || !Number.isFinite(data.expires_in) || (config.expectedTenantId && data.tenant_id !== config.expectedTenantId)) {
+    throw new Error("La cuenta fiscal no corresponde a la empresa de pruebas");
+  }
+  await verifySandboxProvider(config, data.access_token);
+  cachedTokens.set(key, { expiresAt: Date.now() + data.expires_in * 1000, token: data.access_token });
+  return data.access_token;
 }
 
 function extractErrorMessage(body: unknown, status: number): string {
@@ -92,7 +100,7 @@ function extractErrorMessage(body: unknown, status: number): string {
 }
 
 async function request<T>(path: string, init: RequestInit = {}): Promise<T> {
-  const config = getConfig();
+  const config = await getRequestDigestorConfig();
   if (!config) {
     throw new Error("Digestor Fiscal no esta configurado (faltan variables de entorno).");
   }
@@ -100,6 +108,7 @@ async function request<T>(path: string, init: RequestInit = {}): Promise<T> {
   const token = await login(config);
   const response = await fetch(`${config.baseUrl}${path}`, {
     ...init,
+    redirect: "error",
     headers: {
       ...init.headers,
       Authorization: `Bearer ${token}`,
@@ -299,13 +308,14 @@ export function recoverBillingDraftStampResult(draftId: string, invoiceUuid: str
 // Los endpoints de preview/pdf de Digestor Fiscal tambien exigen Bearer --
 // Cotiza los proxea (nunca expone el token al navegador).
 export async function fetchBillingDraftPreviewHtml(draftId: string): Promise<string> {
-  const config = getConfig();
+  const config = await getRequestDigestorConfig();
   if (!config) {
     throw new Error("Digestor Fiscal no esta configurado.");
   }
   const token = await login(config);
   const response = await fetch(`${config.baseUrl}/v1/billing/drafts/${draftId}/preview`, {
     headers: { Authorization: `Bearer ${token}` },
+    redirect: "error", cache: "no-store",
   });
   if (!response.ok) {
     throw new Error(`No fue posible obtener la vista previa (HTTP ${response.status}).`);
@@ -314,13 +324,14 @@ export async function fetchBillingDraftPreviewHtml(draftId: string): Promise<str
 }
 
 export async function fetchBillingDraftPdf(draftId: string): Promise<Buffer> {
-  const config = getConfig();
+  const config = await getRequestDigestorConfig();
   if (!config) {
     throw new Error("Digestor Fiscal no esta configurado.");
   }
   const token = await login(config);
   const response = await fetch(`${config.baseUrl}/v1/billing/drafts/${draftId}/pdf`, {
     headers: { Authorization: `Bearer ${token}` },
+    redirect: "error", cache: "no-store",
   });
   if (!response.ok) {
     throw new Error(`No fue posible descargar el PDF (HTTP ${response.status}).`);
@@ -394,7 +405,7 @@ function mapDocumentJob(raw: RawDocumentJob): DigestorFiscalDocumentJob {
 // guarda nada en el cliente de Cotiza hasta que el usuario confirme los
 // datos extraidos (ver plan: no se auto-llena sin revision humana).
 export async function uploadCsfDocument(file: Buffer, filename: string): Promise<DigestorFiscalDocumentJob> {
-  const config = getConfig();
+  const config = await getRequestDigestorConfig();
   if (!config) {
     throw new Error("Digestor Fiscal no esta configurado.");
   }
@@ -407,6 +418,7 @@ export async function uploadCsfDocument(file: Buffer, filename: string): Promise
 
   const response = await fetch(`${config.baseUrl}/v1/documents`, {
     signal: AbortSignal.timeout(25_000),
+    redirect: "error", cache: "no-store",
     body: form,
     headers: { Authorization: `Bearer ${token}` },
     method: "POST",
@@ -538,13 +550,15 @@ export async function validateReceptorFiscalData(
   input: ReceptorValidationInput,
   options?: { pacCheck?: boolean },
 ): Promise<ReceptorValidationResult> {
-  const config = getConfig();
+  const config = await getRequestDigestorConfig();
   if (!config) {
     throw new Error("Digestor Fiscal no esta configurado.");
   }
 
+  if (config.environment === "sandbox") await login(config);
   const suffix = options?.pacCheck ? "?pac_check=true" : "";
   const response = await fetch(`${config.baseUrl}/v1/receptor/validate${suffix}`, {
+    redirect: "error", cache: "no-store",
     body: JSON.stringify({
       cp: input.cp,
       nombre: input.nombre ?? undefined,
