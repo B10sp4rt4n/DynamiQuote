@@ -1,7 +1,7 @@
 name: Fiscal cycle (synthetic)
 on:
   push:
-    branches: [feat/fiscal-payment-cancellation, feat/ppd-production-release, feat/fiscal-general-production, feat/fiscal-classification-aup, fix/prefactura-guided-readiness, fix/fiscal-classification-resume]
+    branches: [feat/fiscal-payment-cancellation, feat/ppd-production-release, feat/fiscal-general-production, feat/fiscal-classification-aup, fix/prefactura-guided-readiness, fix/fiscal-classification-resume, fix/sat-validation-contract]
   workflow_dispatch:
 permissions:
   contents: read

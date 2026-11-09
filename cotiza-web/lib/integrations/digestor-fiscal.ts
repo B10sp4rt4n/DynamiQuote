@@ -671,6 +671,9 @@ export function searchSatCatalog(kind: import("@/lib/domain/fiscal-classificatio
     { method: "GET", cache: "no-store", signal: AbortSignal.timeout(15_000) });
 }
 export function validateSatClassifications(items: Array<{ itemNumber: number; satProductCode: string; unitCode: string }>, catalogVersion?: string) {
+  // Persisted receipts also contain audit metadata. Digestor's Item contract
+  // forbids extra fields: TypeScript's structural type does not strip them.
+  const pairs = items.map(({ itemNumber, satProductCode, unitCode }) => ({ itemNumber, satProductCode, unitCode }));
   return request<import("@/lib/domain/fiscal-classification").SatValidation>("/v1/sat-catalogs/validate",
-    { method: "POST", cache: "no-store", signal: AbortSignal.timeout(15_000), body: JSON.stringify({ items, catalogVersion }) });
+    { method: "POST", cache: "no-store", signal: AbortSignal.timeout(15_000), body: JSON.stringify({ items: pairs, catalogVersion }) });
 }
