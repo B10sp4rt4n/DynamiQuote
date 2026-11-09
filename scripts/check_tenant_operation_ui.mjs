@@ -67,7 +67,7 @@ try {
       assert.equal(await page.evaluate(() => document.documentElement.scrollWidth > innerWidth), false, `Overflow ${width} ${name}`);
       await page.screenshot({ path: path.join(artifacts, `operation-${width}-${name}.png`), fullPage: true });
     };
-    await page.goto(origin); await page.getByRole('radio', { name: /Venta consultiva/ }).waitFor(); await capture('default');
+    await page.goto(origin); await page.getByRole('radio', { name: /^Venta consultiva/ }).waitFor(); await capture('default');
     await page.getByRole('radio', { name: /Mixta/ }).check();
     assert.equal(await page.getByRole('checkbox', { name: 'Canal Mercado Libre' }).isChecked(), false);
     await page.getByRole('button', { name: 'Guardar modalidad' }).click(); await page.getByRole('alert').waitFor();
@@ -79,7 +79,7 @@ try {
     assert.equal(await page.getByRole('radio', { name: /Mixta/ }).isChecked(), true);
     await page.evaluate(() => window.renderSynthetic({ tenantId: 'synthetic-b', tenantName: 'OTRA EMPRESA', canConfigure: false, mercadoLibreEntitled: false, mercadoLibreAvailable: false }));
     await page.getByRole('heading', { name: 'Modalidad de operación de OTRA EMPRESA' }).waitFor();
-    assert.equal(await page.getByRole('radio', { name: /Venta consultiva/ }).isChecked(), true);
+    assert.equal(await page.getByRole('radio', { name: /^Venta consultiva/ }).isChecked(), true);
     assert.equal(await page.getByRole('radio', { name: /Mixta/ }).isDisabled(), true);
     assert.equal(await page.getByText('Canal Mercado Libre', { exact: true }).count(), 0); await capture('unentitled');
     await page.evaluate(() => window.renderSynthetic({ tenantId: 'synthetic-c', mercadoLibreEntitled: true, mercadoLibreAvailable: true }));
