@@ -21,7 +21,7 @@ export async function getBusinessWorkspace(tenantId: string, id: string, viewer:
   const business=await resolveBusiness(tenantId,id,viewer);if(!business)return null;
   const {opportunity,ids}=business;
   const quotes=await prisma.quote.findMany({where:{tenantId,opportunity_id:{in:ids},...(viewer.canSeeAll?{}:{created_by_user_id:viewer.userId})},orderBy:[{createdAt:"desc"},{quote_id:"asc"}],select:{quote_id:true,quote_group_id:true,version:true,proposal_name:true,status:true,createdAt:true}});
-  const proposals=await prisma.proposals.findMany({where:{tenant_id:tenantId,OR:[{opportunity_id:{in:ids}},{origin:{in:quotes.map(q=>q.quote_id)},opportunity_id:null}],...(viewer.canSeeAll?{}:{AND:[{OR:[{created_by_user_id:viewer.userId},{created_by_user_id:null}]}]})},orderBy:{created_at:"desc"},select:{proposal_id:true,status:true,outcome:true,formal_proposals:{where:{tenant_id:tenantId},orderBy:{created_at:"desc"},take:1,select:{proposal_number:true,quote_id:true,status:true,sent_at:true}}}});
+  const proposals=await prisma.proposals.findMany({where:{tenant_id:tenantId,OR:[{opportunity_id:{in:ids}},{origin:{in:quotes.map(q=>q.quote_id)},opportunity_id:null}],...(viewer.canSeeAll?{}:{AND:[{OR:[{created_by_user_id:viewer.userId},{created_by_user_id:null}]}]})},orderBy:{created_at:"desc"},select:{proposal_id:true,status:true,outcome:true,invoice_status:true,invoice_draft_id:true,invoice_uuid:true,invoice_stamped_at:true,formal_proposals:{where:{tenant_id:tenantId},orderBy:[{created_at:"desc"},{proposal_doc_id:"desc"}],take:1,select:{proposal_number:true,quote_id:true,status:true,sent_at:true,currency:true}}}});
   const tasks=await prisma.tasks.findMany({where:{tenant_id:tenantId,opportunity_id:{in:ids},completed_at:null,...(viewer.canSeeAll?{}:{created_by_user_id:viewer.userId})},orderBy:{due_date:"asc"},select:{task_id:true,description:true,due_date:true}});
   const owner=opportunity.ownerUserId ? await prisma.app_users.findFirst({where:{user_id:opportunity.ownerUserId,tenant_id:tenantId},select:{first_name:true,last_name:true}}):null;
   return {opportunity,quotes,proposals,tasks,optionLabels:business.optionLabels,ownerName:owner?`${owner.first_name} ${owner.last_name}`.trim():null};
@@ -37,5 +37,5 @@ export async function getDocumentBusinessContext(tenantId:string,kind:"quote"|"p
   }
   if(!opportunityId)return null;
   const business=await resolveBusiness(tenantId,opportunityId,viewer);if(!business)return null;
-  return {opportunityId:business.opportunity.opportunityId,opportunityNumber:business.opportunity.opportunityNumber,title:business.opportunity.title,quoteId,proposalId};
+  return {opportunityId:business.opportunity.opportunityId,opportunityNumber:business.opportunity.opportunityNumber,title:business.opportunity.title,stage:business.opportunity.stage,quoteId,proposalId};
 }
