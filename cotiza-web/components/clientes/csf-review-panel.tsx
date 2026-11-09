@@ -69,7 +69,7 @@ export function CsfReviewPanel({ current, onApply, onPendingChange }: Props) {
     if (!file || busy.current) return;
     discard();
     if (!/\.pdf$/i.test(file.name) || !file.size || file.size > CSF_MAX_BYTES) {
-      setError("Selecciona el PDF original de la CSF, de hasta 4 MB."); setPhase("error"); return;
+      setError("Selecciona el PDF de la CSF, de hasta 4 MB."); setPhase("error"); return;
     }
     busy.current = true;
     const abort = new AbortController(); controller.current = abort;
@@ -116,7 +116,7 @@ export function CsfReviewPanel({ current, onApply, onPendingChange }: Props) {
         <input ref={input} aria-label="Cargar CSF en PDF" className="mt-1 block w-full text-sm" type="file" accept=".pdf,application/pdf"
           disabled={working} onChange={(e) => { void upload(e.target.files?.[0]); }} />
       </label>
-      <p className="mt-1 text-xs text-zinc-500">PDF original con texto, hasta 4 MB. El archivo se almacena para su revisión. El cliente se modifica al pulsar Guardar.</p>
+      <p className="mt-1 text-xs text-zinc-500">PDF con texto o escaneado, hasta 4 MB. El archivo se almacena para su revisión. El cliente se modifica al pulsar Guardar.</p>
       {working ? <p role="status" className="mt-3 text-sm text-teal-800">{phase === "uploading" ? "Cargando constancia…" : phase === "confirming" ? "Comprobando los datos revisados…" : "Leyendo datos fiscales…"}</p> : null}
       {error ? <p role="alert" className="mt-3 text-sm text-rose-700">{error}</p> : null}
       {phase === "error" && token ? <button type="button" className="mt-2 text-sm font-semibold text-teal-800 underline" onClick={() => { setError(""); setPollCount(0); setPhase("processing"); }}>Consultar de nuevo</button> : null}
@@ -130,6 +130,9 @@ export function CsfReviewPanel({ current, onApply, onPendingChange }: Props) {
           </div>
           <div className="min-w-0 space-y-3">
             <p className="text-xs text-zinc-600">Compara la extracción con los datos actuales. Puedes corregir cada campo antes de confirmarlo.</p>
+            {review.extraction?.reviewRequired ? <p role="note" className="rounded-lg border border-amber-200 bg-amber-50 p-3 text-xs text-amber-900">
+              Se leyó un escaneo. Comprueba sus datos contra el PDF; los avisos señalan campos cuya lectura requiere más atención.
+            </p> : null}
             {CSF_FIELDS.map(({ key, label }) => (
               <label key={key} className="block text-xs font-medium text-zinc-700">
                 {label}
@@ -142,6 +145,7 @@ export function CsfReviewPanel({ current, onApply, onPendingChange }: Props) {
                 </select> : <input aria-label={`CSF: ${label}`} className="mt-1 w-full rounded-lg border border-zinc-300 bg-white px-3 py-2 text-sm text-zinc-900"
                   disabled={working || phase === "applied"} value={values[key]} maxLength={key === "address" ? 300 : key === "company" ? 200 : key === "zipCode" ? 5 : 13}
                   onChange={(e) => change(key, e.target.value)} />}
+                {review.fieldWarnings?.[key] ? <span className="mt-1 block rounded bg-amber-100 px-2 py-1 font-normal text-amber-900">{review.fieldWarnings[key]}</span> : null}
                 {review.issues[key] ? <span className="mt-1 block font-normal text-amber-800">Lectura: {review.issues[key]}</span> : null}
               </label>
             ))}
