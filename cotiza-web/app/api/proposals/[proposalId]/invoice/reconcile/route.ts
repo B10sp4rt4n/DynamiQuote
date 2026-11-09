@@ -1,4 +1,6 @@
 import { NextResponse } from "next/server";
+import { z } from "zod";
+import { INVOICE_UUID_PATTERN, readInvoiceStamp } from "@/lib/domain/invoice-stamp";
 
 import { getCurrentTenantContext } from "@/lib/auth/tenant-context";
 import { isProposalVisibleToViewer } from "@/lib/db/proposals";
@@ -10,6 +12,7 @@ import {
 import {
   getBillingDraftStampResult,
   isDigestorFiscalEnabledForTenant,
+  recoverBillingDraftStampResult,
 } from "@/lib/integrations/digestor-fiscal";
 
 type RouteContext = {
@@ -17,7 +20,7 @@ type RouteContext = {
 };
 
 // Consulta Digestor sin solicitar otro timbre y concilia el estado local.
-export async function POST(_: Request, context: RouteContext) {
+export async function POST(request: Request, context: RouteContext) {
   const tenant = await getCurrentTenantContext();
   if (!tenant) {
     return NextResponse.json({ error: "No autorizado" }, { status: 401 });
@@ -35,7 +38,14 @@ export async function POST(_: Request, context: RouteContext) {
   if (!invoice) {
     return NextResponse.json({ error: "Propuesta no encontrada" }, { status: 404 });
   }
+  const raw = await request.text();
+  const input = z.object({ expectedDraftId: z.string().min(1).max(128), invoiceUuid: z.string().regex(INVOICE_UUID_PATTERN), confirm: z.literal(true) }).strict()
+    .safeParse(raw ? (() => { try { return JSON.parse(raw); } catch { return null; } })() : null);
+  if (raw && !input.success) return NextResponse.json({ error: "Revisa el UUID y confirma la recuperación" }, { status: 422 });
+  if (input.success && input.data.expectedDraftId !== invoice.draftId) return NextResponse.json({ error: "La prefactura cambió. Recarga antes de recuperar" }, { status: 409 });
   if (invoice.status === "stamped") {
+    if (input.success && invoice.uuid?.toLowerCase() !== input.data.invoiceUuid.toLowerCase())
+      return NextResponse.json({ error: "Esta factura ya tiene otro UUID" }, { status: 409 });
     return NextResponse.json({ status: "stamped", uuid: invoice.uuid }, { status: 200 });
   }
   if (!invoice.draftId || invoice.status !== "stamping") {
@@ -43,7 +53,9 @@ export async function POST(_: Request, context: RouteContext) {
   }
 
   try {
-    const result = await getBillingDraftStampResult(invoice.draftId);
+    const recovered = input.success ? await recoverBillingDraftStampResult(invoice.draftId, input.data.invoiceUuid) : null;
+    const result = recovered ? { stampStatus: recovered.stamp_status, uuid: recovered.uuid, xmlBase64: recovered.xml_base64 }
+      : await getBillingDraftStampResult(invoice.draftId);
     if (result.stampStatus === "stamped") {
       if (!result.uuid || !result.xmlBase64) {
         return NextResponse.json(
@@ -51,6 +63,10 @@ export async function POST(_: Request, context: RouteContext) {
           { status: 409 },
         );
       }
+      if (input.success && result.uuid.toLowerCase() !== input.data.invoiceUuid.toLowerCase()) {
+        return NextResponse.json({ error: "El proveedor devolvió un UUID diferente al confirmado. La factura permanece protegida." }, { status: 502 });
+      }
+      readInvoiceStamp(result.xmlBase64, result.uuid);
       const saved = await markProposalInvoiceStampedByTenant(
         tenant.id, proposalId, invoice.draftId, result.uuid, result.xmlBase64,
       );
@@ -60,7 +76,7 @@ export async function POST(_: Request, context: RouteContext) {
       return NextResponse.json({ status: "stamped", uuid: result.uuid }, { status: 200 });
     }
 
-    if (result.stampStatus === "rejected" || result.stampStatus === "not_sent") {
+    if (result.stampStatus === "rejected" && !result.uuid && !result.xmlBase64) {
       const saved = await markProposalInvoiceRejectedByTenant(tenant.id, proposalId, invoice.draftId);
       if (!saved) {
         return NextResponse.json({ error: "El estado cambio mientras se conciliaba. Actualiza la pagina." }, { status: 409 });

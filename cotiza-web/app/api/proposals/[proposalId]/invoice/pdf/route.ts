@@ -8,6 +8,7 @@ import { getProposalInvoiceStatusByTenant } from "@/lib/db/proposal-invoices";
 import { CfdiDocument } from "@/lib/pdf/cfdi-document";
 import { buildCfdiQrDataUrl } from "@/lib/pdf/cfdi-qr";
 import { parseCfdiXml } from "@/lib/pdf/cfdi-xml";
+import { readInvoiceStamp } from "@/lib/domain/invoice-stamp";
 
 export const runtime = "nodejs";
 
@@ -41,6 +42,8 @@ export async function GET(_: Request, context: RouteContext) {
   // PDF simplificado de Digestor Fiscal, que no trae esos elementos.
   if (invoice.status === "stamped" && invoice.xmlBase64) {
     try {
+      if (!invoice.uuid) throw new Error("Falta el UUID de la factura");
+      readInvoiceStamp(invoice.xmlBase64, invoice.uuid);
       const cfdi = parseCfdiXml(invoice.xmlBase64);
       const correction = process.env['DIGESTOR_FISCAL_CORRECTIONS_ENABLED'] === 'true'
         ? await getFiscalCorrection(invoice.draftId) : null;

@@ -1,5 +1,7 @@
 import { isProposalVisibleToViewer } from "@/lib/db/proposals";
 import { NextResponse } from "next/server";
+import { z } from "zod";
+import { readInvoiceStamp } from "@/lib/domain/invoice-stamp";
 
 import { getCurrentTenantContext } from "@/lib/auth/tenant-context";
 import { isDigestorFiscalEnabledForTenant, stampBillingDraft } from "@/lib/integrations/digestor-fiscal";
@@ -56,6 +58,11 @@ export async function POST(request: Request, context: RouteContext) {
     );
   }
 
+  const input = z.object({ expectedDraftId: z.string().min(1).max(128), confirm: z.literal(true) }).strict()
+    .safeParse(await request.json().catch(() => null));
+  if (!input.success) return NextResponse.json({ error: "Confirma el timbrado de la prefactura revisada" }, { status: 422 });
+  if (input.data.expectedDraftId !== invoice.draftId) return NextResponse.json({ error: "La prefactura cambió. Recarga y revisa antes de timbrar" }, { status: 409 });
+
   // El compare-and-set en BD evita que dos solicitudes concurrentes lancen
   // al PAC el mismo borrador. Ante timeout el estado queda en 'stamping'.
   const claimed = await claimProposalInvoiceStampByTenant(tenant.id, proposalId, invoice.draftId);
@@ -67,6 +74,9 @@ export async function POST(request: Request, context: RouteContext) {
     const result = await stampBillingDraft(invoice.draftId);
 
     if (!result.ok) {
+      if (result.draft?.stampStatus !== "rejected" || result.uuid || result.xmlBase64) {
+        return NextResponse.json({ error: "El resultado no confirma un rechazo. Consulta el estado; no repitas el timbrado" }, { status: 502 });
+      }
       const recorded = await markProposalInvoiceRejectedByTenant(tenant.id, proposalId, invoice.draftId);
       if (!recorded) {
         return NextResponse.json(
@@ -88,6 +98,8 @@ export async function POST(request: Request, context: RouteContext) {
         { status: 502 },
       );
     }
+
+    readInvoiceStamp(result.xmlBase64, result.uuid);
 
     const recorded = await markProposalInvoiceStampedByTenant(
       tenant.id, proposalId, invoice.draftId, result.uuid, result.xmlBase64,

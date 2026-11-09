@@ -7,7 +7,7 @@ vi.mock("@/lib/db/proposals", () => ({ isProposalVisibleToViewer: m.visible, get
 vi.mock("@/lib/db/proposal-invoices", () => ({ getProposalInvoiceStatusByTenant: m.invoice, getClientFiscalDataForProposalByTenant: m.fiscal, saveProposalInvoiceDraftByTenant: vi.fn(), markProposalInvoiceStampedByTenant: vi.fn(), claimProposalInvoiceStampByTenant: m.claim, markProposalInvoiceRejectedByTenant: m.reject }));
 vi.mock("@/lib/db/clients", () => ({ updateClientForTenant: vi.fn() }));
 vi.mock("@/lib/db/tenants", () => ({ getTenantProfileByTenant: vi.fn() }));
-vi.mock("@/lib/integrations/digestor-fiscal", () => ({ isDigestorFiscalEnabledForTenant: m.enabled, createBillingDraft: m.create, stampBillingDraft: m.stamp, fetchBillingDraftPreviewHtml: m.preview, fetchBillingDraftPdf: m.pdf, getBillingPayments: m.payment, registerBillingPayment: m.payment, getPaymentReceipt: m.payment, preparePaymentReceipt: m.payment, stampPaymentReceipt: m.payment, recoverPaymentReceipt: m.payment, getFiscalCorrection: m.payment, createFiscalCorrection: m.payment, fiscalCorrectionAction: m.payment, getBillingCancellation: m.payment, cancelBillingDocument: m.payment, reconcileBillingCancellation: m.payment, getBillingDraftStampResult: m.remoteState }));
+vi.mock("@/lib/integrations/digestor-fiscal", () => ({ isDigestorFiscalEnabledForTenant: m.enabled, createBillingDraft: m.create, stampBillingDraft: m.stamp, fetchBillingDraftPreviewHtml: m.preview, fetchBillingDraftPdf: m.pdf, getBillingPayments: m.payment, registerBillingPayment: m.payment, getPaymentReceipt: m.payment, preparePaymentReceipt: m.payment, stampPaymentReceipt: m.payment, recoverPaymentReceipt: m.payment, getFiscalCorrection: m.payment, createFiscalCorrection: m.payment, fiscalCorrectionAction: m.payment, getBillingCancellation: m.payment, cancelBillingDocument: m.payment, reconcileBillingCancellation: m.payment, recoverBillingDraftStampResult: m.remoteState, getBillingDraftStampResult: m.remoteState }));
 vi.mock("@react-pdf/renderer", () => ({ renderToBuffer: vi.fn() }));
 vi.mock("@/lib/pdf/cfdi-document", () => ({ CfdiDocument: vi.fn() }));
 vi.mock("@/lib/pdf/cfdi-qr", () => ({ buildCfdiQrDataUrl: vi.fn() }));
@@ -16,6 +16,7 @@ import { GET as status, POST as create } from "./route";
 import { POST as stamp } from "./stamp/route";
 import { GET as preview } from "./preview/route";
 import { GET as pdf } from "./pdf/route";
+import { GET as xml } from "./xml/route";
 import { POST as reconcile } from "./reconcile/route";
 import { GET as payments, POST as register } from "./payments/route";
 import { GET as receipt } from "./payments/[paymentId]/receipt/route";
@@ -31,7 +32,7 @@ import { GET as correction, POST as createCorrection } from "./correction/route"
 import { POST as correctionAction } from "./correction/[operation]/route";
 import { GET as receiptCorrection, POST as createReceiptCorrection } from "./payments/[paymentId]/receipt/correction/route";
 import { POST as receiptCorrectionAction } from "./payments/[paymentId]/receipt/correction/[operation]/route";
-const handlers = [["status", status], ["create", create], ["stamp", stamp], ["preview", preview], ["pdf", pdf], ["reconcile", reconcile], ["payments", payments], ["register", register], ["receipt", receipt], ["prepare", prepare], ["receiptStamp", receiptStamp], ["recoverReceipt", recoverReceipt], ["receiptPdf", receiptPdf], ["cancellation", cancellation], ["cancel", cancel], ["cancellationStatus", cancellationStatus], ["receiptCancellation", receiptCancellation], ["cancelReceipt", cancelReceipt], ["receiptCancellationStatus", receiptCancellationStatus], ["correction", correction], ["createCorrection", createCorrection], ["correctionAction", correctionAction], ["receiptCorrection", receiptCorrection], ["createReceiptCorrection", createReceiptCorrection], ["receiptCorrectionAction", receiptCorrectionAction]] as const;
+const handlers = [["xml", xml], ["status", status], ["create", create], ["stamp", stamp], ["preview", preview], ["pdf", pdf], ["reconcile", reconcile], ["payments", payments], ["register", register], ["receipt", receipt], ["prepare", prepare], ["receiptStamp", receiptStamp], ["recoverReceipt", recoverReceipt], ["receiptPdf", receiptPdf], ["cancellation", cancellation], ["cancel", cancel], ["cancellationStatus", cancellationStatus], ["receiptCancellation", receiptCancellation], ["cancelReceipt", cancelReceipt], ["receiptCancellationStatus", receiptCancellationStatus], ["correction", correction], ["createCorrection", createCorrection], ["correctionAction", correctionAction], ["receiptCorrection", receiptCorrection], ["createReceiptCorrection", createReceiptCorrection], ["receiptCorrectionAction", receiptCorrectionAction]] as const;
 const context = () => ({ params: Promise.resolve({ proposalId: "proposal-b", paymentId: "payment-b", operation: "stamp" }) });
 const request = () => new Request("https://cotiza.test/api/proposals/proposal-b/invoice", { method: "POST", body: "{}", headers: { "Content-Type": "application/json" } });
 describe.each(handlers)("invoice %s access", (_name, handler) => {
