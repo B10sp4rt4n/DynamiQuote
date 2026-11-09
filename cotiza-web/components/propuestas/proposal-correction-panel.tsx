@@ -33,6 +33,7 @@ export function ProposalCorrectionPanel({ proposalId, paymentId }: { proposalId:
   async function run(action: 'create' | 'stamp' | 'reconcile' | 'abandon' | 'cancel-original' | 'confirm-cancellation' | 'read') {
     if (operation.current || (['create','stamp','cancel-original'].includes(action) && !confirmed)) return;
     operation.current = true; setBusy(true); setError(null);
+    let responseReceived = false;
     try {
       let body: string | undefined;
       if (action === 'create') {
@@ -49,16 +50,25 @@ export function ProposalCorrectionPanel({ proposalId, paymentId }: { proposalId:
         if (!revisionId) throw new Error('Recarga la corrección antes de continuar');
         body = JSON.stringify({...JSON.parse(body ?? '{}'),revision_id:revisionId});
       }
+      if (action === 'stamp' || action === 'cancel-original') {
+        setConfirmed(false);
+        setState(previous => previous ? { ...previous, history: previous.history.map((row,index) =>
+          index === previous.history.length-1 ? action === 'stamp' ? { ...row, status: 'unknown' }
+            : { ...row, source_cancellation_status: 'unknown' } : row) } : previous);
+      }
       const response = await fetch(['create','read'].includes(action) ? path : `${path}/${action}`, {
         method: action === 'read' ? 'GET' : 'POST', headers: { 'Content-Type': 'application/json' }, body, cache: 'no-store',
       });
       const data = await response.json();
+      responseReceived = true;
       if (!response.ok) throw new Error(data.error ?? 'Operación sin confirmar; consulta el estado antes de reintentar');
       setState(data); setConfirmed(false);
       setFields(Object.fromEntries(Object.entries(data.defaults).map(([key,value]) => [key,String(value ?? '')])));
       if (!data.pending) { attempt.current = null; setReason(''); }
       window.dispatchEvent(new Event('cotiza:fiscal-updated'));
-    } catch (error) { setError(error instanceof Error ? error.message : 'Error de conexión'); }
+    } catch (error) { setError(!responseReceived && ['stamp','cancel-original'].includes(action)
+      ? 'No se confirmó la operación. No repitas la emisión ni la cancelación; consulta el historial y estado.'
+      : error instanceof Error ? error.message : 'Error de conexión'); }
     finally { operation.current = false; setBusy(false); }
   }
   const current = state?.pending ? state.history.at(-1) : undefined;

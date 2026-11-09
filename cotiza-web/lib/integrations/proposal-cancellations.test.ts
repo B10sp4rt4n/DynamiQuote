@@ -42,6 +42,12 @@ describe('cancellation proxy', () => {
     expect((await requestCancellation(req({confirm_real_operation:true,expected_uuid:input.idempotency_key}),ctx)).status).toBe(200);
     expect(m.cancel).toHaveBeenCalledWith('server-resolved',{...input,expected_uuid:input.idempotency_key},'payment');
   });
+  it('uses the authenticated sandbox scope while production operations are enabled',async()=>{
+    vi.stubEnv('DIGESTOR_FISCAL_OPERATIONS_PRODUCTION_ENABLED','true');
+    m.auth.mockResolvedValue({draftId:'server-resolved',environment:'sandbox'});
+    expect((await requestCancellation(req(),ctx)).status).toBe(200);
+    expect(m.cancel).toHaveBeenCalledWith('server-resolved',input,'payment');
+  });
   it('does not retry a failed cancellation request', async () => {
     m.cancel.mockRejectedValue(new Error('synthetic timeout'));
     expect((await requestCancellation(req(), ctx)).status).toBe(502); expect(m.cancel).toHaveBeenCalledTimes(1);
