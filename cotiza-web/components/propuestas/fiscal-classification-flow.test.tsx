@@ -237,3 +237,45 @@ it.each(["actor", "catalog", "proposal", "emitter", "receipt"])("keeps stamping 
   expect(postCount("/invoice")).toBe(1);
   expect(fetcher.mock.calls.some(([url]) => String(url).endsWith("/stamp"))).toBe(false);
 });
+
+it("sends one confirmed stamp for the exact prepared draft on a double click", async () => {
+  await mount(); await chooseKeys(); await review(); await click("Confirmar clasificación"); await click("Generar prefactura");
+  const confirm = vi.spyOn(window, "confirm").mockReturnValue(true);
+  let finish!: (value: Response) => void;
+  const pending = new Promise<Response>(resolve => { finish = resolve; });
+  const boundary = fetcher.getMockImplementation() as (url: string, init?: RequestInit) => Promise<Response>;
+  fetcher.mockImplementation((url: string, init?: RequestInit) => String(url).endsWith("/stamp") ? pending : boundary(url, init));
+  await act(async () => { button("Timbrar (irreversible)").click(); button("Timbrar (irreversible)").click(); });
+  expect(confirm).toHaveBeenCalledTimes(1); expect(postCount("/stamp")).toBe(1);
+  const [, payload] = fetcher.mock.calls.find(([url]) => String(url).endsWith("/stamp"))!;
+  expect(JSON.parse(payload!.body as string)).toEqual({ expectedDraftId: "synthetic-draft", confirm: true });
+  await act(async () => finish(Response.json({ ok: true, uuid: "11111111-2222-4333-8444-555555555555" })));
+  expect(host.textContent).toContain("Factura timbrada");
+  expect(host.querySelector('a[href$="/xml"]')).not.toBeNull();
+  expect(host.querySelector('a[href$="/pdf"]')).not.toBeNull();
+  confirm.mockRestore();
+});
+
+it("keeps uncertainty blocked, confirms recovery, and sends one read-only UUID request", async () => {
+  m.invoice.mockResolvedValue({ status: "stamping", draftId: "synthetic-draft", uuid: null, stampedAt: null });
+  await mount(); expect(host.textContent).toContain("Timbrado pendiente de confirmación");
+  expect(buttons().some(row => row.textContent === "Timbrar (irreversible)")).toBe(false);
+  expect(button("Recuperar XML por UUID (sin timbrar)").disabled).toBe(true);
+  const uuid = "11111111-2222-4333-8444-555555555555";
+  await act(async () => setValue(host.querySelector<HTMLInputElement>('input[id$="recovery-uuid"]')!, uuid));
+  const confirm = vi.spyOn(window, "confirm").mockReturnValue(false);
+  await click("Recuperar XML por UUID (sin timbrar)"); expect(postCount("/invoice/reconcile")).toBe(0);
+  confirm.mockReturnValue(true);
+  let finish!: (value: Response) => void;
+  const pending = new Promise<Response>(resolve => { finish = resolve; });
+  const boundary = fetcher.getMockImplementation() as (url: string, init?: RequestInit) => Promise<Response>;
+  fetcher.mockImplementation((url: string, init?: RequestInit) => String(url).endsWith("/reconcile") ? pending : boundary(url, init));
+  await act(async () => { button("Recuperar XML por UUID (sin timbrar)").click(); button("Recuperar XML por UUID (sin timbrar)").click(); });
+  expect(postCount("/invoice/reconcile")).toBe(1);
+  const [, payload] = fetcher.mock.calls.find(([url]) => String(url).endsWith("/reconcile"))!;
+  expect(JSON.parse(payload!.body as string)).toEqual({ expectedDraftId: "synthetic-draft", invoiceUuid: uuid, confirm: true });
+  m.invoice.mockResolvedValue({ status: "stamped", draftId: "synthetic-draft", uuid, stampedAt: new Date().toISOString() });
+  await act(async () => finish(Response.json({ status: "stamped", uuid })));
+  expect(host.textContent).toContain("Factura timbrada"); expect(postCount("/stamp")).toBe(0);
+  confirm.mockRestore();
+});

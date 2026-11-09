@@ -1,5 +1,6 @@
 import "server-only";
 import type { CsfReview } from "@/lib/domain/csf-review";
+import { readInvoiceStamp } from "@/lib/domain/invoice-stamp";
 
 // Cliente HTTP hacia Digestor Fiscal (repo aparte, B10sp4rt4n/digestor__fiscal).
 // Motor de un solo emisor por ahora (solo SynAppsSys tiene CSD real cargado
@@ -241,9 +242,7 @@ export async function stampBillingDraft(draftId: string): Promise<StampBillingDr
 
   let uuid: string | null = null;
   if (raw.xml_base64) {
-    const xml = Buffer.from(raw.xml_base64, "base64").toString("utf-8");
-    const match = xml.match(/UUID="([^"]+)"/);
-    uuid = match ? match[1] : null;
+    uuid = readInvoiceStamp(raw.xml_base64).uuid;
   }
 
   let rejectionMessage: string | null = null;
@@ -264,7 +263,7 @@ export async function stampBillingDraft(draftId: string): Promise<StampBillingDr
     ok: raw.ok,
     rejectionMessage,
     uuid,
-    xmlBase64: raw.ok ? raw.xml_base64 ?? null : null,
+    xmlBase64: raw.xml_base64 || null,
   };
 }
 
@@ -287,6 +286,14 @@ export async function getBillingDraftStampResult(draftId: string): Promise<Billi
     uuid: raw.uuid,
     xmlBase64: raw.xml_base64,
   };
+}
+
+export function recoverBillingDraftStampResult(draftId: string, invoiceUuid: string): Promise<{
+  stamp_status: string; uuid: string | null; xml_base64: string | null;
+}> {
+  return request(`/v1/billing/drafts/${encodeURIComponent(draftId)}/stamp-result/recover`, {
+    method: "POST", body: JSON.stringify({ invoice_uuid: invoiceUuid, confirm: true }), cache: "no-store",
+  });
 }
 
 // Los endpoints de preview/pdf de Digestor Fiscal tambien exigen Bearer --

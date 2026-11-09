@@ -1,3 +1,4 @@
+import { INVOICE_UUID, INVOICE_BASE64 } from "@/tests/fixtures/synthetic-invoice";
 import { afterAll, beforeAll, beforeEach, describe, expect, it, vi } from "vitest";
 
 vi.mock("server-only", () => ({}));
@@ -6,7 +7,7 @@ vi.mock("@/lib/auth/tenant-context", () => ({ getCurrentTenantContext: remote.se
 vi.mock("@/lib/integrations/digestor-fiscal", () => ({
   isDigestorFiscalEnabledForTenant: () => true,
   stampBillingDraft: remote.stamp,
-  getBillingDraftStampResult: remote.state,
+  getBillingDraftStampResult: remote.state, recoverBillingDraftStampResult: vi.fn(),
   createBillingDraft: remote.create,
 }));
 
@@ -21,8 +22,9 @@ let reconcile: typeof import("@/app/api/proposals/[proposalId]/invoice/reconcile
 let create: typeof import("@/app/api/proposals/[proposalId]/invoice/route").POST;
 let proposalId: string;
 let sequence = 0;
-const signed = { ok: true, uuid: "fictional-uuid", xmlBase64: "ZmljdGlvbmFsLXhtbA==" };
-const req = () => new Request("http://localhost/api/test", { method: "POST" });
+const signed = { ok: true, uuid: INVOICE_UUID, xmlBase64: INVOICE_BASE64 };
+const req = () => new Request("http://localhost/api/test", { method: "POST", body: JSON.stringify({ expectedDraftId: "draft-original", confirm: true }) });
+const query = () => new Request("http://localhost/api/test", { method: "POST" });
 const ctx = () => ({ params: Promise.resolve({ proposalId }) });
 const read = () => db.proposals.findUniqueOrThrow({ where: { proposal_id: proposalId } });
 function asUser(tenantId = tenant, userId = seller, role = "user") {
@@ -88,23 +90,23 @@ suite("Invoice safety against disposable PostgreSQL; fiscal provider simulated",
     expect((await stamp(req(), ctx())).status).toBe(502);
     expect((await stamp(req(), ctx())).status).toBe(409);
     remote.state.mockResolvedValue({ stampStatus: "stamped", uuid: signed.uuid, xmlBase64: signed.xmlBase64 });
-    expect((await reconcile(req(), ctx())).status).toBe(200);
+    expect((await reconcile(query(), ctx())).status).toBe(200);
     expect(remote.stamp).toHaveBeenCalledTimes(1);
     expect(remote.state).toHaveBeenCalledWith("draft-original");
     expect(await read()).toMatchObject({ invoice_status: "stamped", invoice_uuid: signed.uuid, invoice_xml_base64: signed.xmlBase64 });
   });
 
-  it.each(["unknown", "processing"])("does not reopen an unresolved %s result", async stampStatus => {
+  it.each(["unknown", "processing", "not_sent"])("does not reopen an unresolved %s result", async stampStatus => {
     await service.claimProposalInvoiceStampByTenant(tenant, proposalId, "draft-original");
     remote.state.mockResolvedValue({ stampStatus, uuid: null, xmlBase64: null });
-    expect((await reconcile(req(), ctx())).status).toBe(409);
+    expect((await reconcile(query(), ctx())).status).toBe(409);
     expect(await service.saveProposalInvoiceDraftByTenant(tenant, proposalId, "new-draft", "draft-original")).toBe(false);
     expect((await read()).invoice_status).toBe("stamping");
     expect(remote.stamp).not.toHaveBeenCalled();
   });
 
   it("allows correction only after a confirmed rejection, preserving the original claim until then", async () => {
-    remote.stamp.mockResolvedValue({ ok: false, rejectionMessage: "simulated rejection" });
+    remote.stamp.mockResolvedValue({ ok: false, draft: { stampStatus: "rejected" }, rejectionMessage: "simulated rejection" });
     expect((await stamp(req(), ctx())).status).toBe(422);
     expect((await read()).invoice_status).toBe("rejected");
     expect(await service.saveProposalInvoiceDraftByTenant(tenant, proposalId, "corrected-draft", "draft-original")).toBe(true);
@@ -115,13 +117,13 @@ suite("Invoice safety against disposable PostgreSQL; fiscal provider simulated",
     await service.claimProposalInvoiceStampByTenant(tenant, proposalId, "draft-original");
     for (const [tenantId, userId, role] of [[tenant, peer, "user"], [otherTenant, "foreign-owner", "owner"]]) {
       asUser(tenantId, userId, role);
-      expect((await reconcile(req(), ctx())).status).toBe(404);
+      expect((await reconcile(query(), ctx())).status).toBe(404);
     }
     expect(remote.state).not.toHaveBeenCalled();
     expect((await read()).invoice_status).toBe("stamping");
     asUser(tenant, "manager", "owner");
     remote.state.mockResolvedValue({ stampStatus: "unknown", uuid: null, xmlBase64: null });
-    expect((await reconcile(req(), ctx())).status).toBe(409);
+    expect((await reconcile(query(), ctx())).status).toBe(409);
     expect(remote.state).toHaveBeenCalledTimes(1);
   });
 

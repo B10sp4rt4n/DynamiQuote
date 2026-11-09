@@ -1,3 +1,4 @@
+import { INVOICE_UUID, INVOICE_BASE64 } from "@/tests/fixtures/synthetic-invoice";
 import { beforeEach, describe, expect, it, vi } from "vitest";
 
 const mocks = vi.hoisted(() => ({
@@ -30,7 +31,7 @@ vi.mock("@/lib/db/proposals", () => ({ isProposalVisibleToViewer: mocks.visible 
 import { POST } from "./route";
 
 const ctx = { params: Promise.resolve({ proposalId: "p1" }) };
-const req = () => new Request("http://localhost/api/proposals/p1/invoice/stamp", { method: "POST" });
+const req = () => new Request("http://localhost/api/proposals/p1/invoice/stamp", { method: "POST", headers: { "Content-Type": "application/json" }, body: JSON.stringify({ expectedDraftId: "d1", confirm: true }) });
 
 describe("timbrado: nunca emitir dos veces", () => {
   beforeEach(() => {
@@ -63,9 +64,9 @@ describe("timbrado: nunca emitir dos veces", () => {
   });
 
   it("persiste UUID/XML cuando PAC confirma éxito", async () => {
-    mocks.stamp.mockResolvedValue({ ok: true, uuid: "u1", xmlBase64: "c2lnbmVk" });
+    mocks.stamp.mockResolvedValue({ ok: true, uuid: INVOICE_UUID, xmlBase64: INVOICE_BASE64 });
     expect((await POST(req(), ctx)).status).toBe(200);
-    expect(mocks.markStamped).toHaveBeenCalledWith("t1", "p1", "d1", "u1", "c2lnbmVk");
+    expect(mocks.markStamped).toHaveBeenCalledWith("t1", "p1", "d1", INVOICE_UUID, INVOICE_BASE64);
     expect(mocks.markRejected).not.toHaveBeenCalled();
   });
 
@@ -77,7 +78,7 @@ describe("timbrado: nunca emitir dos veces", () => {
   });
 
   it("permite corregir solo ante rechazo explícito del PAC", async () => {
-    mocks.stamp.mockResolvedValue({ ok: false, rejectionMessage: "RFC invalido" });
+    mocks.stamp.mockResolvedValue({ ok: false, draft: { stampStatus: "rejected" }, rejectionMessage: "RFC invalido" });
     expect((await POST(req(), ctx)).status).toBe(422);
     expect(mocks.markRejected).toHaveBeenCalledWith("t1", "p1", "d1");
   });
@@ -90,7 +91,7 @@ describe("timbrado: nunca emitir dos veces", () => {
   });
 
   it("no declara liberada una reserva si el rechazo pierde la comparación de estado", async () => {
-    mocks.stamp.mockResolvedValue({ ok: false, rejectionMessage: "simulated rejection" });
+    mocks.stamp.mockResolvedValue({ ok: false, draft: { stampStatus: "rejected" }, rejectionMessage: "simulated rejection" });
     mocks.markRejected.mockResolvedValue(false);
     expect((await POST(req(), ctx)).status).toBe(409);
     expect(mocks.markStamped).not.toHaveBeenCalled();
@@ -100,5 +101,27 @@ describe("timbrado: nunca emitir dos veces", () => {
     mocks.getCurrentTenantContext.mockResolvedValue(null);
     expect((await POST(req(), ctx)).status).toBe(401);
     expect(mocks.stamp).not.toHaveBeenCalled();
+  });
+
+  it.each([{}, { expectedDraftId: "d1", confirm: false }, { expectedDraftId: "d1", confirm: true, extra: true }])("requiere confirmación exacta: %j", async body => {
+    const request = new Request("http://localhost/test", { method: "POST", body: JSON.stringify(body) });
+    expect((await POST(request, ctx)).status).toBe(422);
+    expect(mocks.claim).not.toHaveBeenCalled();
+  });
+  it("una pestaña obsoleta no reserva el borrador nuevo", async () => {
+    mocks.getInvoice.mockResolvedValue({ draftId: "d2", status: "draft" });
+    expect((await POST(req(), ctx)).status).toBe(409);
+    expect(mocks.claim).not.toHaveBeenCalled();
+  });
+  it.each([
+    { ok: false, draft: { stampStatus: "unknown" } },
+    { ok: false, draft: { stampStatus: "rejected" }, xmlBase64: INVOICE_BASE64 },
+    { ok: true, uuid: "22222222-2222-4333-8444-555555555555", xmlBase64: INVOICE_BASE64 },
+    { ok: true, uuid: INVOICE_UUID, xmlBase64: "eG1s" },
+  ])("mantiene la reserva ante evidencia contradictoria: %j", async result => {
+    mocks.stamp.mockResolvedValue(result);
+    expect((await POST(req(), ctx)).status).toBe(502);
+    expect(mocks.markStamped).not.toHaveBeenCalled();
+    expect(mocks.markRejected).not.toHaveBeenCalled();
   });
 });

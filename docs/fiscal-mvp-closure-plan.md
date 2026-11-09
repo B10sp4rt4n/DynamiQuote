@@ -7,8 +7,8 @@ Salvador. Base revisada: Cotiza `ddda1a5` y Digestor `e3aede1`.
 
 | Orden | Pendiente | Criterio verificable | Estado |
 | --- | --- | --- | --- |
-| 1 | Preparar, guardar y reabrir prefactura | Recuperar datos y claves exactamente revisados; validar identidad, empresa, revisión y catálogo; conservar vista previa y bloquear información obsoleta. Probar persistencia y reapertura. | En curso |
-| 2 | Prefactura → CFDI y recuperación | Un solo timbrado ante doble clic, concurrencia o respuesta perdida; recuperación de UUID/XML/PDF sin volver a emitir. | Pendiente de recorrido conectado actualizado |
+| 1 | Preparar, guardar y reabrir prefactura | Recuperar datos y claves exactamente revisados; validar identidad, empresa, revisión y catálogo; conservar vista previa y bloquear información obsoleta. Probar persistencia y reapertura. | Publicado y verificado en producción |
+| 2 | Prefactura → CFDI y recuperación | Un solo timbrado ante doble clic, concurrencia o respuesta perdida; recuperación de UUID/XML/PDF sin volver a emitir. | Implementado en revisión; recorrido HTTP/SQL sintético aprobado; falta PAC sandbox y publicación |
 | 3 | Pagos PPD → REP → saldo | Varias parcialidades, recuperación y saldo comprobables; cobros económicos separados del estado fiscal. | Publicado; falta acreditar recorrido completo conectado |
 | 4 | Cancelación, sustitución y corrección | Acuse separado de confirmación SAT; UUID/revisión exactos; motivo 01 y corrección REP conservando documentos y pagos. | Una cancelación real acreditada; otros perfiles pendientes |
 | 5 | Alcance fiscal restante | Matriz de USD/tipo de cambio, notas de crédito y facturas con pagos: soporte demostrado o bloqueo explícito; evidencia y siguiente acción. | Pendiente de consolidación |
@@ -76,7 +76,7 @@ GitHub Actions para escritorio/móvil; las pruebas React/JSDOM sí se ejecutaron
 El workflow añade una base PostgreSQL 18 desechable para verificar persistencia
 sin credenciales ni conexiones productivas.
 
-Pendiente para cerrar el punto 1 en producción: publicar la entrega revisada y
+Estado histórico al preparar el PR #72 — pendiente para cerrar el punto 1 en producción: publicar la entrega revisada y
 verificar la preparación/reapertura conectada con una operación apropiada, sin
 emitir CFDI. No se declara esta operación productiva realizada ni se cambia la
 clasificación fiscal de una propuesta comercial durante estas pruebas.
@@ -98,6 +98,51 @@ clasificación fiscal de una propuesta comercial durante estas pruebas.
   por el enlace de dependencias fuera del directorio del worktree; no se declara
   aprobado ese intento.
 
-Estado: corrección preparada y comprobada en entornos sintéticos/aislados. El
+Estado histórico del PR #72: corrección preparada y comprobada en entornos sintéticos/aislados. El
 punto 1 permanece abierto únicamente para su publicación y comprobación conectada
 en producción. No se ha emitido ningún CFDI durante esta entrega.
+
+
+### Cierre conectado del pendiente 1
+
+Publicados los PR #72 y #73. El segundo corrige el contrato HTTP estricto del
+validador SAT: sólo transmite los tres campos fiscales, separando metadatos de
+confirmación. Producción verificada en commit
+`8882ca1dee1a2505f3b006f9ce5cf5fe7c915e0f`, deployment Vercel
+`dpl_3JN4Xht3mxNRS63aRw3kwLTgZmtb` READY. La preparación guardada fue regenerada
+y reabierta en el mismo documento: receptor, PUE/03 y dos clasificaciones
+confirmadas recuperadas, con vista previa. No se timbró. Esta verificación
+posterior cierra el pendiente productivo anotado arriba.
+
+## Pendiente 2: timbrado y recuperación
+
+Implementado para revisión en `fix/fiscal-stamp-recovery`, con dependencia de
+Digestor PR #15 (`48540af084950910ed4c0f3dc370629bd34a20e2`).
+
+- Confirmación explícita ligada al borrador revisado, reserva atómica y defensa
+  de doble clic en el panel. Una pestaña con otro draftId no puede emitir.
+- Consulta persistida sin emisión; `not_sent` no libera una reserva local porque
+  la consulta puede adelantarse al envío original. Sólo rechazo explícito sin
+  evidencia contradictoria permite corregir.
+- Recuperación por UUID confirmado con `ObtieneCFDI`. Exige solicitud original
+  verificable y estructura comercial idéntica; conserva bloqueo en caso de
+  diferencias, indisponibilidad o evidencia histórica insuficiente.
+- XML descargable original, bajo aislamiento/visibilidad de propuesta. XML y
+  PDF requieren coincidencia del timbre/UUID; no se certifican sellos ni estado SAT.
+- UUID ya asociado a otro borrador rechazado y recuperación serializada en
+  PostgreSQL. Folio automático estable por borrador si no se aporta uno.
+
+Recorrido local conectado aprobado con rutas reales de Cotiza, Prisma sobre
+PostgreSQL/PGlite desechable, adaptador HTTP real y FastAPI/SQLAlchemy/SQLite en
+Digestor; únicamente identidad y PAC son sintéticos. Comprueba concurrencia,
+respuesta perdida después de aceptación, UUID ajeno, recuperación idempotente,
+XML exacto, PDF, rechazo y carrera de consulta anterior al envío. La CI añade
+PostgreSQL 18 real para Cotiza y PostgreSQL 17 para concurrencia en Digestor.
+
+Las pruebas sintéticas no acreditan PAC sandbox ni operación fiscal real.
+Antes de publicar el recorrido, falta comprobar el formato/normalizaciones
+reales de `ObtieneCFDI` en sandbox; publicar Digestor antes de Cotiza. Un estado
+`processing` que sobreviva a la caída de un worker requiere revisión manual;
+no se libera automáticamente por tiempo. Históricos sin huella tampoco se
+recuperan por este mecanismo. La consulta estructural no verifica sellos ni
+custodia externa. El siguiente pendiente funcional sigue siendo PPD/REP/saldo.

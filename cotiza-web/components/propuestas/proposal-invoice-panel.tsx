@@ -75,7 +75,10 @@ export function ProposalInvoicePanel({ proposalId, recipientCompany }: ProposalI
   const [generating, setGenerating] = useState(false);
   const generatingDraft = useRef(false);
   const [stamping, setStamping] = useState(false);
+  const stampingRequest = useRef(false);
   const [reconciling, setReconciling] = useState(false);
+  const reconcilingRequest = useRef(false);
+  const [recoveryUuid, setRecoveryUuid] = useState("");
   const [error, setError] = useState<string | null>(null);
   const [missingFields, setMissingFields] = useState<string[]>([]);
   const [showPreview, setShowPreview] = useState(false);
@@ -220,26 +223,31 @@ export function ProposalInvoicePanel({ proposalId, recipientCompany }: ProposalI
   }
 
   async function handleStamp() {
+    if (stampingRequest.current || !invoice?.draftId || draftDirty) return;
+    stampingRequest.current = true;
     const confirmed = window.confirm(
       "Esto genera un CFDI real ante el SAT y NO se puede deshacer. ¿Confirmas que quieres timbrar esta factura?",
     );
-    if (!confirmed) return;
+    if (!confirmed) { stampingRequest.current = false; return; }
 
     setStamping(true);
     setError(null);
 
     try {
-      const res = await fetch(`/api/proposals/${proposalId}/invoice/stamp`, { method: "POST" });
+      const res = await fetch(`/api/proposals/${proposalId}/invoice/stamp`, {
+        method: "POST", headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ expectedDraftId: invoice.draftId, confirm: true }),
+      });
       const data = (await res.json()) as { error?: string; ok?: boolean; uuid?: string | null };
 
-      if (!res.ok) {
+      if (!res.ok || !data.ok || !data.uuid) {
         throw new Error(data.error ?? "No se pudo timbrar la factura");
       }
 
       setInvoice((prev) => ({
         draftId: prev?.draftId ?? null,
         stampedAt: new Date().toISOString(),
-        status: data.ok ? "stamped" : "rejected",
+        status: "stamped",
         uuid: data.uuid ?? null,
       }));
     } catch (err) {
@@ -258,15 +266,23 @@ export function ProposalInvoicePanel({ proposalId, recipientCompany }: ProposalI
         setInvoice((prev) => prev ? { ...prev, status: "stamping" } : prev);
       }
     } finally {
+      stampingRequest.current = false;
       setStamping(false);
     }
   }
 
-  async function handleReconcile() {
+  async function handleReconcile(recover = false) {
+    if (reconcilingRequest.current || !invoice?.draftId) return;
+    if (recover && !window.confirm("Se consultará al proveedor para recuperar el XML de este UUID. Esta acción no solicita otro timbre. ¿Confirmas el UUID?")) return;
+    reconcilingRequest.current = true;
     setReconciling(true);
     setError(null);
     try {
-      const response = await fetch(`/api/proposals/${proposalId}/invoice/reconcile`, { method: "POST" });
+      const response = await fetch(`/api/proposals/${proposalId}/invoice/reconcile`, {
+        method: "POST",
+        ...(recover ? { headers: { "Content-Type": "application/json" },
+          body: JSON.stringify({ expectedDraftId: invoice.draftId, invoiceUuid: recoveryUuid.trim(), confirm: true }) } : {}),
+      });
       const data = (await response.json()) as { error?: string };
       if (!response.ok) {
         throw new Error(data.error ?? "No se pudo confirmar el estado del CFDI");
@@ -279,6 +295,7 @@ export function ProposalInvoicePanel({ proposalId, recipientCompany }: ProposalI
     } catch (err) {
       setError(err instanceof Error ? err.message : "Resultado aún no confirmado");
     } finally {
+      reconcilingRequest.current = false;
       setReconciling(false);
     }
   }
@@ -308,6 +325,16 @@ export function ProposalInvoicePanel({ proposalId, recipientCompany }: ProposalI
         >
           {reconciling ? "Consultando..." : "Consultar estado (sin timbrar)"}
         </button>
+        <div className="mt-4 min-w-0 border-t border-amber-200 pt-3">
+          <label className="block text-sm font-medium text-amber-900" htmlFor={`${id}-recovery-uuid`}>UUID confirmado por el proveedor</label>
+          <p className="mt-1 text-xs text-amber-800">Si el proveedor confirmó la emisión, copia aquí su UUID. Se verificará que el XML corresponda a esta prefactura.</p>
+          <input id={`${id}-recovery-uuid`} className="mt-2 min-h-11 w-full min-w-0 rounded-lg border border-amber-400 bg-white px-3 text-sm"
+            value={recoveryUuid} onChange={event => setRecoveryUuid(event.target.value)} disabled={reconciling}
+            autoComplete="off" spellCheck={false} placeholder="xxxxxxxx-xxxx-xxxx-xxxx-xxxxxxxxxxxx" />
+          <button type="button" className="mt-2 min-h-11 rounded-lg border border-amber-400 bg-white px-3 py-2 text-sm font-medium text-amber-900 disabled:opacity-60"
+            disabled={reconciling || !/^[a-f0-9]{8}(?:-[a-f0-9]{4}){3}-[a-f0-9]{12}$/i.test(recoveryUuid.trim())}
+            onClick={() => void handleReconcile(true)}>Recuperar XML por UUID (sin timbrar)</button>
+        </div>
       </div>
     );
   }
@@ -316,7 +343,9 @@ export function ProposalInvoicePanel({ proposalId, recipientCompany }: ProposalI
     return (
       <div className="rounded-lg border border-emerald-300 bg-emerald-50 p-4">
         <p className="text-sm font-semibold text-emerald-900">{correctionsEnabled ? 'Factura de origen timbrada' : 'Factura timbrada'}</p>
-        <p className="mt-1 text-sm text-emerald-800">UUID: {invoice.uuid ?? "N/D"}</p>
+        <p className="mt-1 break-all text-sm text-emerald-800">UUID: {invoice.uuid ?? "N/D"}</p>
+        <a className="mr-2 mt-2 inline-block rounded-lg border border-emerald-400 bg-white px-3 py-1.5 text-xs font-medium text-emerald-800 transition hover:bg-emerald-100"
+          href={`/api/proposals/${proposalId}/invoice/xml`}>Descargar XML</a>
         <a
           className="mt-2 inline-block rounded-lg border border-emerald-400 bg-white px-3 py-1.5 text-xs font-medium text-emerald-800 transition hover:bg-emerald-100"
           href={`/api/proposals/${proposalId}/invoice/pdf`}
