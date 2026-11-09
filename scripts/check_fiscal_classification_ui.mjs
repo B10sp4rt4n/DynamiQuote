@@ -81,6 +81,9 @@ try {
     };
     await page.goto(origin);
     await page.getByRole('button', { name: 'Generar prefactura', exact: true }).waitFor();
+    await page.getByText('Siguiente paso: Selecciona qué estás facturando.', { exact: true }).waitFor();
+    await page.getByRole('button', { name: 'Ir al siguiente paso', exact: true }).click();
+    assert.equal(await page.getByLabel('¿Qué estás facturando?').evaluate(element => element === document.activeElement), true);
     await page.getByLabel('¿Qué estás facturando?').selectOption('license');
     assert.equal(await page.getByRole('button', { name: 'Generar prefactura', exact: true }).isEnabled(), false);
     await page.getByLabel('Producto o servicio SAT', { exact: true }).fill('ThreatDown EDR');
@@ -88,11 +91,19 @@ try {
     await page.getByRole('button').filter({ hasText: product.code }).waitFor();
     await capture('candidates');
     await page.getByRole('button').filter({ hasText: product.code }).click();
+    await page.getByText('Siguiente paso: Busca y selecciona la Unidad SAT.', { exact: true }).waitFor();
+    assert.equal(await page.getByRole('button', { name: 'Confirmar clasificación', exact: true }).isEnabled(), false);
+    await page.getByRole('button', { name: 'Ir al siguiente paso', exact: true }).click();
+    assert.equal(await page.getByLabel('Unidad SAT', { exact: true }).evaluate(element => element === document.activeElement), true);
+    await capture('unit-pending');
     await page.getByLabel('Unidad SAT', { exact: true }).fill('E48');
     await page.getByRole('button', { name: 'Buscar', exact: true }).nth(1).click();
     await page.getByRole('button').filter({ hasText: 'E48' }).click();
     assert.deepEqual(counts, { confirm: 0, draft: 0, stamp: 0 });
     assert.equal(await page.getByRole('button', { name: 'Confirmar clasificación', exact: true }).isEnabled(), false);
+    await page.getByText('Siguiente paso: Marca la casilla de revisión de las dos claves.', { exact: true }).waitFor();
+    await page.getByRole('button', { name: 'Ir al siguiente paso', exact: true }).click();
+    assert.equal(await page.getByLabel('Revisé la descripción y las dos claves de esta partida.').evaluate(element => element === document.activeElement), true);
     await page.getByLabel('Revisé la descripción y las dos claves de esta partida.').check();
     await page.getByRole('button', { name: 'Confirmar clasificación', exact: true }).dblclick();
     await page.getByText('Claves vigentes y confirmadas para esta revisión.', { exact: true }).waitFor();
@@ -101,6 +112,8 @@ try {
     await page.getByRole('button', { name: 'Generar prefactura', exact: true }).dblclick();
     await page.getByRole('button', { name: 'Regenerar prefactura', exact: true }).waitFor();
     assert.equal(counts.draft, 1);
+    await page.getByText('Prefactura preparada. Puedes revisar su vista previa.', { exact: true }).waitFor();
+    await capture('draft');
     assert.equal(await page.getByRole('button', { name: 'Timbrar (irreversible)', exact: true }).isEnabled(), true);
     await page.getByLabel('Producto o servicio SAT', { exact: true }).fill('Otra operación');
     assert.equal(await page.getByRole('button', { name: 'Regenerar prefactura', exact: true }).isEnabled(), false);

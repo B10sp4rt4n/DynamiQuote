@@ -107,7 +107,11 @@ it("requires review, makes one confirmation/draft on double click, and blocks st
   expect(button("Generar prefactura").disabled).toBe(false);
   await act(async () => { button("Generar prefactura").click(); button("Generar prefactura").click(); });
   expect(postCount("/invoice")).toBe(1); expect(m.createDraft).toHaveBeenCalledTimes(1);
-  expect(m.createDraft.mock.calls[0][0]).toMatchObject({ currency: "MXN", items: [{ quantity: 2, unitPrice: 100, satProductCode: product.code, unitCode: "E48" }] });
+  expect(m.createDraft.mock.calls[0][0]).toMatchObject({ currency: "MXN", customerName: "EMPRESA SINTÉTICA",
+    customerRfc: "AAA010101AAA", customerRegimen: "601", customerZip: "01000", customerUseCfdi: "G03",
+    paymentMethod: "PUE", paymentForm: "03", items: [{ description: proposal.items[0].description,
+      quantity: 2, unitPrice: 100, taxRate: 0.16, satProductCode: product.code, unitCode: "E48" }] });
+  expect(host.textContent).toContain("Prefactura preparada. Puedes revisar su vista previa.");
   expect(button("Timbrar (irreversible)").disabled).toBe(false);
   await act(async () => setValue(host.querySelector<HTMLInputElement>('input[id]')!, "Otra operación"));
   expect(button("Regenerar prefactura").disabled).toBe(true);
@@ -154,4 +158,32 @@ it("allows a reviewed retry after confirmation or draft creation fails without u
   expect(m.createDraft).toHaveBeenCalledTimes(2);
   expect(m.saveDraft).toHaveBeenCalledTimes(1);
   expect(button("Timbrar (irreversible)").disabled).toBe(false);
+});
+
+it("links pending entries to the actual controls and explains recipient validation before any draft request", async () => {
+  await mount();
+  expect(host.textContent).toContain("0 de 1 partidas confirmadas");
+  await act(async () => buttons().find(row => row.textContent?.startsWith("Revisar partida 1:"))!.click());
+  expect(document.activeElement?.tagName).toBe("FIELDSET");
+  await chooseKeys(); await review(); await click("Confirmar clasificación");
+  expect(host.textContent).toContain("Todo listo para generar la prefactura.");
+  await act(async () => setValue(host.querySelector<HTMLInputElement>('[data-invoice-field="customerZip"]')!, "01"));
+  expect(button("Generar prefactura").disabled).toBe(true);
+  await click("El código postal debe tener cinco dígitos");
+  expect(document.activeElement).toBe(host.querySelector('[data-invoice-field="customerZip"]'));
+  expect(postCount("/invoice")).toBe(0);
+  await act(async () => setValue(document.activeElement as HTMLInputElement, "01000"));
+  await click("Generar prefactura");
+  expect(m.createDraft).toHaveBeenCalledTimes(1);
+  await click("Ver vista previa");
+  expect(host.querySelector('iframe')?.getAttribute("src")).toBe("/api/proposals/p1/invoice/preview");
+  expect(fetcher.mock.calls.some(([url]) => String(url).endsWith("/stamp"))).toBe(false);
+});
+
+it("keeps unsupported currency blocked even when the classification is confirmed", async () => {
+  m.proposal.mockResolvedValue({ ...proposal, formal: { currency: "USD" } });
+  await mount(); await chooseKeys(); await review(); await click("Confirmar clasificación");
+  expect(button("Generar prefactura").disabled).toBe(true);
+  expect(host.textContent).toContain("La moneda de esta propuesta aún no está habilitada");
+  expect(postCount("/invoice")).toBe(0);
 });

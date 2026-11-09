@@ -1,7 +1,8 @@
 "use client";
 
-import { useEffect, useRef, useState } from "react";
+import { useEffect, useId, useRef, useState } from "react";
 import { FiscalClassificationPicker } from "./fiscal-classification-picker";
+import { createProposalInvoiceSchema } from "@/lib/validations/proposal-invoice";
 import type { FiscalClassification } from "@/lib/domain/fiscal-classification";
 import { ProposalPaymentPanel } from "./proposal-payment-panel";
 import { ProposalCancellationPanel } from './proposal-cancellation-panel';
@@ -43,6 +44,8 @@ type FormState = {
   saveToClient: boolean;
 };
 
+const RECIPIENT_FIELDS = ["customerName", "customerRfc", "customerRegimen", "customerZip", "customerUseCfdi"] as const;
+
 const EMPTY_FORM: FormState = {
   customerName: "",
   customerRegimen: "",
@@ -60,6 +63,8 @@ type ProposalInvoicePanelProps = {
 };
 
 export function ProposalInvoicePanel({ proposalId, recipientCompany }: ProposalInvoicePanelProps) {
+  const panel = useRef<HTMLDivElement>(null);
+  const id = useId();
   const [ppdEnabled, setPpdEnabled] = useState(false);
   const [cancellationEnabled, setCancellationEnabled] = useState(false);
   const [correctionsEnabled, setCorrectionsEnabled] = useState(false);
@@ -139,13 +144,31 @@ export function ProposalInvoicePanel({ proposalId, recipientCompany }: ProposalI
     };
   }, [proposalId, recipientCompany]);
 
+  const recipientIssues = RECIPIENT_FIELDS.flatMap(field => {
+    const result = createProposalInvoiceSchema.shape[field].safeParse(form[field]);
+    return result.success ? [] : [{ field, message: result.error.issues[0].message }];
+  });
+  const unconfirmedItems = fiscalItems.filter(item => !item.classificationEventId);
+  const canGenerate = invoiceCurrency === "MXN" && !!itemsFingerprint && fiscalItems.length > 0
+    && unconfirmedItems.length === 0 && recipientIssues.length === 0;
+  function focusTarget(targetId: string) {
+    const target = document.getElementById(targetId);
+    target?.focus();
+    target?.scrollIntoView?.({ block: "center", behavior: "smooth" });
+  }
+  function focusRecipient(field: typeof RECIPIENT_FIELDS[number]) {
+    const target = panel.current?.querySelector<HTMLInputElement>(`[data-invoice-field="${field}"]`);
+    target?.focus();
+    target?.scrollIntoView?.({ block: "center", behavior: "smooth" });
+  }
+
   function setField<K extends keyof FormState>(field: K, value: FormState[K]) {
     setDraftDirty(true);
     setForm((prev) => ({ ...prev, [field]: value }));
   }
 
   async function handleGenerateDraft() {
-    if (generatingDraft.current) return;
+    if (generatingDraft.current || !canGenerate) return;
     generatingDraft.current = true;
     setGenerating(true);
     setError(null);
@@ -303,7 +326,7 @@ export function ProposalInvoicePanel({ proposalId, recipientCompany }: ProposalI
   }
 
   return (
-    <div className="rounded-lg border border-zinc-200 p-4">
+    <div ref={panel} className="min-w-0 rounded-lg border border-zinc-200 p-4">
       <p className="text-sm font-semibold text-zinc-900">Facturación (CFDI)</p>
       <p className="mt-1 text-xs text-zinc-500">
         Datos del receptor para timbrar. Se prellenan si ya están capturados en el cliente.
@@ -311,6 +334,17 @@ export function ProposalInvoicePanel({ proposalId, recipientCompany }: ProposalI
       <p className="mt-2 text-xs text-zinc-600">Factura nacional en MXN e IVA 16%. Revisa la clasificación fiscal de cada partida. En PPD registra los pagos recibidos y emite su complemento.</p>
       {invoiceCurrency !== "MXN" ? <p className="mt-2 text-xs text-amber-800">La moneda de esta propuesta aún no está habilitada para facturación. No se convertirá automáticamente.</p> : null}
 
+      <div id={`${id}-readiness`} className="mt-3 rounded-lg border border-zinc-200 bg-zinc-50 p-3 text-xs text-zinc-800">
+        <p role="status" className="font-semibold">{canGenerate ? invoice?.draftId && !draftDirty ? "Prefactura preparada. Puedes revisar su vista previa." : "Todo listo para generar la prefactura."
+          : `Para generar la prefactura: ${fiscalItems.length - unconfirmedItems.length} de ${fiscalItems.length} partidas confirmadas.`}</p>
+        {recipientIssues.length || unconfirmedItems.length ? <ul className="mt-2 space-y-2">
+          {recipientIssues.map(issue => <li key={issue.field}><button type="button" disabled={generating || stamping} className="min-h-9 text-left font-medium text-blue-800 underline" onClick={() => focusRecipient(issue.field)}>{issue.message}</button></li>)}
+          {unconfirmedItems.slice(0, 3).map(item => <li key={item.itemNumber}><button type="button" disabled={generating || stamping} className="min-h-9 text-left font-medium text-blue-800 underline" onClick={() => focusTarget(`${id}-item-${item.itemNumber}`)}>Revisar partida {item.itemNumber}: {item.description}</button></li>)}
+          {unconfirmedItems.length > 3 ? <li>Y {unconfirmedItems.length - 3} partidas más por confirmar.</li> : null}
+        </ul> : null}
+        {!itemsFingerprint || !fiscalItems.length ? <p className="mt-2">No hay partidas disponibles para preparar la prefactura. Revisa la propuesta o vuelve a cargar la página.</p> : null}
+        <p className="mt-2 text-zinc-600">Generar la prefactura permite revisarla antes de emitir un CFDI. El timbrado requiere una acción y confirmación separadas.</p>
+      </div>
       <fieldset disabled={generating || stamping}>
       <legend className="sr-only">Datos fiscales y clasificación de partidas</legend>
       <div className="mt-3 grid gap-3 sm:grid-cols-2">
@@ -318,6 +352,8 @@ export function ProposalInvoicePanel({ proposalId, recipientCompany }: ProposalI
           Razón social del receptor
           <input
             className="mt-1 w-full rounded-lg border border-zinc-300 bg-white px-3 py-2 text-sm text-zinc-900"
+            data-invoice-field="customerName"
+            aria-invalid={recipientIssues.some(issue => issue.field === "customerName")}
             onChange={(e) => setField("customerName", e.target.value)}
             value={form.customerName}
           />
@@ -326,6 +362,8 @@ export function ProposalInvoicePanel({ proposalId, recipientCompany }: ProposalI
           RFC del receptor
           <input
             className="mt-1 w-full rounded-lg border border-zinc-300 bg-white px-3 py-2 text-sm text-zinc-900"
+            data-invoice-field="customerRfc"
+            aria-invalid={recipientIssues.some(issue => issue.field === "customerRfc")}
             onChange={(e) => setField("customerRfc", e.target.value.toUpperCase())}
             value={form.customerRfc}
           />
@@ -334,6 +372,8 @@ export function ProposalInvoicePanel({ proposalId, recipientCompany }: ProposalI
           Régimen fiscal
           <input
             className="mt-1 w-full rounded-lg border border-zinc-300 bg-white px-3 py-2 text-sm text-zinc-900"
+            data-invoice-field="customerRegimen"
+            aria-invalid={recipientIssues.some(issue => issue.field === "customerRegimen")}
             onChange={(e) => setField("customerRegimen", e.target.value)}
             placeholder="Ej. 601"
             value={form.customerRegimen}
@@ -343,6 +383,8 @@ export function ProposalInvoicePanel({ proposalId, recipientCompany }: ProposalI
           Código postal
           <input
             className="mt-1 w-full rounded-lg border border-zinc-300 bg-white px-3 py-2 text-sm text-zinc-900"
+            data-invoice-field="customerZip"
+            aria-invalid={recipientIssues.some(issue => issue.field === "customerZip")}
             onChange={(e) => setField("customerZip", e.target.value)}
             value={form.customerZip}
           />
@@ -351,6 +393,8 @@ export function ProposalInvoicePanel({ proposalId, recipientCompany }: ProposalI
           Uso CFDI
           <input
             className="mt-1 w-full rounded-lg border border-zinc-300 bg-white px-3 py-2 text-sm text-zinc-900"
+            data-invoice-field="customerUseCfdi"
+            aria-invalid={recipientIssues.some(issue => issue.field === "customerUseCfdi")}
             onChange={(e) => setField("customerUseCfdi", e.target.value)}
             placeholder="Ej. G03"
             value={form.customerUseCfdi}
@@ -400,7 +444,7 @@ export function ProposalInvoicePanel({ proposalId, recipientCompany }: ProposalI
         <p className="text-xs text-zinc-600">Busca y confirma producto y unidad SAT en cada partida para generar la prefactura.</p>
         {fiscalItems.map((item, index) => (
           <FiscalClassificationPicker key={`${itemsFingerprint}:${item.itemNumber}`} proposalId={proposalId} itemNumber={item.itemNumber}
-            description={item.description} sku={item.sku} fingerprint={itemsFingerprint}
+            description={item.description} sku={item.sku} fingerprint={itemsFingerprint} anchorId={`${id}-item-${item.itemNumber}`}
             onChange={classification => { setDraftDirty(true); setFiscalItems(previous => previous.map((row, i) => i === index
               ? { itemNumber: row.itemNumber, description: row.description, sku: row.sku, ...(classification ?? {}) } : row)); }} />
         ))}
@@ -419,7 +463,8 @@ export function ProposalInvoicePanel({ proposalId, recipientCompany }: ProposalI
       <div className="mt-4 flex flex-wrap items-center gap-2">
         <button
           className="rounded-lg bg-zinc-900 px-3 py-1.5 text-xs font-medium text-white transition hover:bg-zinc-700 disabled:opacity-60"
-          disabled={generating || stamping || invoiceCurrency !== "MXN" || !itemsFingerprint || !fiscalItems.length || fiscalItems.some(item => !item.classificationEventId)}
+          aria-describedby={`${id}-readiness`}
+          disabled={generating || stamping || !canGenerate}
           onClick={() => void handleGenerateDraft()}
           type="button"
         >
