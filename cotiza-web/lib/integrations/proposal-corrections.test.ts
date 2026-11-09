@@ -63,4 +63,41 @@ describe('correction scope and explicit operations',() => {
     expect((await readCorrection(req({},'https://cotiza.test/correction?format=xml&revision=foreign'),ctx())).status).toBe(404);
     expect((await readCorrection(req({},'https://cotiza.test/correction?format=xml&revision=own'),ctx())).status).toBe(409);
   });
+  it('downloads a read-only diagnostic scoped to the authorized draft without XML or free text',async()=>{
+    m.auth.mockResolvedValue({draftId:'server-draft',environment:'sandbox'});
+    m.read.mockResolvedValue({environment:'production',kind:'receipt',active_uuid:uuid,pending:true,
+      active_xml_base64:'DO-NOT-EXPORT',defaults:{customer_name:'PRIVATE NAME'},token:'PRIVATE TOKEN',
+      history:[{id:uuid,source_uuid:uuid,result_uuid:null,status:'unknown',source_cancellation_status:'not_requested',
+        request_xml_base64:Buffer.from('abc').toString('base64'),result_xml_base64:'DO-NOT-EXPORT',
+        reason:'PRIVATE REASON',changes:{operation_reference:'PRIVATE REFERENCE'}}]});
+    const response=await readCorrection(new Request('https://cotiza.test/correction?format=diagnostic&environment=production&draft_id=foreign'),ctx('payment'));
+    expect(response.status).toBe(200);
+    expect(response.headers.get('Content-Disposition')).toContain('attachment;');
+    expect(response.headers.get('Cache-Control')).toBe('no-store');
+    expect(response.headers.get('X-Content-Type-Options')).toBe('nosniff');
+    const data=await response.json();
+    expect(data).toMatchObject({schema:'cotiza.fiscal-correction-diagnostic',version:1,environment:'sandbox',
+      proposal_id:'p',draft_id:'server-draft',payment_id:'payment',pending:true,
+      revisions:[{revision_id:uuid,pac_reference:{field:'IdComprobante',value:`revision-${uuid}`},status:'unknown',result_uuid:null,
+        request_xml_sha256:'ba7816bf8f01cfea414140de5dae2223b00361a396177a9cb410ff61f20015ad'}]});
+    expect(Number.isNaN(Date.parse(data.generated_at))).toBe(false);
+    expect(JSON.stringify(data)).not.toMatch(/PRIVATE|DO-NOT-EXPORT|xml_base64|foreign/);
+    expect(m.auth).toHaveBeenCalledWith('p','correction_read');
+    expect(m.read).toHaveBeenCalledExactlyOnceWith('server-draft','payment');
+    expect(m.create).not.toHaveBeenCalled();expect(m.action).not.toHaveBeenCalled();
+  });
+  it('keeps diagnostic revision selection within the authorized history',async()=>{
+    m.read.mockResolvedValue({history:[{id:'own',status:'prepared',request_xml_base64:null}]});
+    const response=await readCorrection(new Request('https://cotiza.test/correction?format=diagnostic&revision=foreign'),ctx());
+    expect(response.status).toBe(404);
+    const own=await readCorrection(new Request('https://cotiza.test/correction?format=diagnostic&revision=own'),ctx());
+    const data=await own.json();
+    expect(data.revisions).toHaveLength(1);expect(data.revisions[0].request_xml_sha256).toBeNull();
+    expect(data.payment_id).toBeNull();expect(m.action).not.toHaveBeenCalled();
+  });
+  it('rejects a diagnostic download before reading another tenant draft',async()=>{
+    m.auth.mockResolvedValue({error:NextResponse.json({error:'Forbidden'},{status:403})});
+    expect((await readCorrection(new Request('https://cotiza.test/correction?format=diagnostic'),ctx('foreign-payment'))).status).toBe(403);
+    expect(m.read).not.toHaveBeenCalled();
+  });
 });

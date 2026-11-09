@@ -28,6 +28,8 @@ it('protects a lost replacement response until a server read confirms the same r
  expect(button('Timbrar sustituta en pruebas')).toBeUndefined();
  expect(button('Descartar corrección sin emitir')).toBeUndefined();
  expect(container.textContent).toContain('No repitas');expect(container.textContent).toContain('Comprobante activo en Cotiza: '+original);
+ const diagnostic=[...container.querySelectorAll('a')].find(el=>el.textContent==='Descargar diagnóstico de conciliación');
+ expect(diagnostic?.getAttribute('href')).toBe('/api/proposals/synthetic/invoice/payments/payment/receipt/correction?format=diagnostic');
  fetchMock.mockResolvedValueOnce(reply(state('stamped')));await click('Consultar historial y estado');
  expect(button('Solicitar cancelación del anterior en pruebas')).toBeDefined();
  expect(container.textContent).toContain('UUID sustituto: '+replacement);
