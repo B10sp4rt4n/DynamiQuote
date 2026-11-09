@@ -75,10 +75,14 @@ export function ProposalPaymentPanel({ proposalId, cancellationEnabled = false, 
     const payment = summary?.payments.find(item => item.id === paymentId);
     if (action === 'stamp' && real && !window.confirm(`Emitir complemento fiscal real por ${money(payment?.amount)} para la factura ${summary?.invoice_uuid}. ¿Confirmas que recibiste este pago?`)) return;
     await run(async () => {
+      // Keep an unconfirmed browser request protected until a server read resolves it.
+      if (action === 'stamp') setSummary(previous => previous ? { ...previous,
+        payments: previous.payments.map(item => item.id === paymentId ? { ...item, receipt_status: 'unknown', fiscal_ready: false } : item),
+      } : previous);
       const response = await fetch(`${path}/${encodeURIComponent(paymentId)}/receipt/${action}`, {
         method: "POST", headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({ confirm_real_receipt: action === 'stamp' && real }),
-      });
+      }).catch(() => { throw new Error('No se confirmó la respuesta del complemento. No repitas el timbrado; consulta el saldo y estado.'); });
       const data = await response.json();
       if (!response.ok) { await refresh(); throw new Error(data.error ?? "No se confirmó el complemento"); }
       if (action === "prepare") {
