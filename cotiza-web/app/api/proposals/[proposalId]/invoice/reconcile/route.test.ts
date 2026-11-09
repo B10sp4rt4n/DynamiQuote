@@ -102,4 +102,15 @@ describe("conciliar factura sin volver a emitir", () => {
     expect(mocks.markStamped).not.toHaveBeenCalled();
     expect(mocks.markRejected).not.toHaveBeenCalled();
   });
+  it("un rechazo con XML contradictorio no libera la reserva", async () => {
+    mocks.readRemote.mockResolvedValue({ stampStatus: "rejected", uuid: INVOICE_UUID, xmlBase64: INVOICE_BASE64 });
+    expect((await POST(req(), ctx)).status).toBe(409);
+    expect(mocks.markRejected).not.toHaveBeenCalled();
+  });
+  it("la recuperación tampoco acepta un UUID diferente al confirmado", async () => {
+    mocks.recover.mockResolvedValue({ stamp_status: "stamped", uuid: INVOICE_UUID, xml_base64: INVOICE_BASE64 });
+    const request = new Request("http://localhost/test", { method: "POST", body: JSON.stringify({ expectedDraftId: "d1", invoiceUuid: "22222222-2222-4333-8444-555555555555", confirm: true }) });
+    expect((await POST(request, ctx)).status).toBe(502);
+    expect(mocks.markStamped).not.toHaveBeenCalled();
+  });
 });

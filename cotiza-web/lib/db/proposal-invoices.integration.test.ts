@@ -148,6 +148,8 @@ suite("Invoice safety against disposable PostgreSQL; fiscal provider simulated",
     const payload = new Request("http://localhost/api/test", { method: "POST", headers: { "Content-Type": "application/json" }, body: JSON.stringify({
       customerName: "Fictional", customerRegimen: "601", customerRfc: "AAA010101AAA", customerUseCfdi: "G03",
       customerZip: "06100", paymentForm: "03", paymentMethod: "PUE",
+      itemsFingerprint: "a".repeat(64), fiscalItems: [{ itemNumber: 1, satProductCode: "80101500", unitCode: "E48",
+        catalogVersion: "b".repeat(64), classificationEventId: "fcl_"+"c".repeat(64) }],
     }) });
     expect((await create(payload, ctx())).status).toBe(409);
     expect(remote.create).not.toHaveBeenCalled();

@@ -63,6 +63,9 @@ export async function POST(request: Request, context: RouteContext) {
           { status: 409 },
         );
       }
+      if (input.success && result.uuid.toLowerCase() !== input.data.invoiceUuid.toLowerCase()) {
+        return NextResponse.json({ error: "El proveedor devolvió un UUID diferente al confirmado. La factura permanece protegida." }, { status: 502 });
+      }
       readInvoiceStamp(result.xmlBase64, result.uuid);
       const saved = await markProposalInvoiceStampedByTenant(
         tenant.id, proposalId, invoice.draftId, result.uuid, result.xmlBase64,
