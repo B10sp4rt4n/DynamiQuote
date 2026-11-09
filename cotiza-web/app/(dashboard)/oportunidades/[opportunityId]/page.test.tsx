@@ -31,7 +31,8 @@ it("replaces the contradictory won/pending wizard with real documents, date, cur
   expect(html).toContain("1 cotización · 2 revisiones"); expect(html).toContain("1 propuesta · 1 autorizada");
   expect(html).toContain("20 oct 2026"); expect(html).toContain("USD");
   expect(html).toContain('href="/propuestas/proposal-a#facturacion"'); expect(html).toContain("Preparar prefactura");
-  expect(html).not.toMatch(/Pendiente|Estás aquí|Retoma una cotización|Crea la primera|El avance de estos pasos/);
+  expect(html).not.toMatch(/Estás aquí|Retoma una cotización|Crea la primera|El avance de estos pasos/);
+  expect(html).toContain("4. Facturación"); expect(html).toContain("Pendiente de preparar");
   expect(html.match(/<h1/g)).toHaveLength(1);
   expect(m.workspace).toHaveBeenCalledWith("tenant-a", "opp-a", { userId: "seller-a", canSeeAll: false });
 });
