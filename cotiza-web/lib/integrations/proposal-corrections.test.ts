@@ -23,6 +23,18 @@ describe('correction scope and explicit operations',() => {
   it('does not permit invoice metadata corrections on a REP',async () => {
     expect((await createCorrection(req(),ctx('payment'))).status).toBe(422);expect(m.create).not.toHaveBeenCalled();
   });
+  it('prepares a sandbox REP correction while production operations are enabled',async()=>{
+    vi.stubEnv('DIGESTOR_FISCAL_OPERATIONS_PRODUCTION_ENABLED','true');
+    m.auth.mockResolvedValue({draftId:'server-draft',environment:'sandbox'});
+    const payload={...input,changes:{payment_form:'02'}};
+    expect((await createCorrection(req(payload),ctx('payment'))).status).toBe(201);
+    expect(m.create).toHaveBeenCalledWith('server-draft',payload,'payment');
+  });
+  it.each(['stamp','cancel-original','confirm-cancellation','reconcile'])('allows authenticated sandbox %s without production-only payload',async operation=>{
+    vi.stubEnv('DIGESTOR_FISCAL_OPERATIONS_PRODUCTION_ENABLED','true');
+    m.auth.mockResolvedValue({draftId:'server-draft',environment:'sandbox'});
+    expect((await runCorrectionAction(req(operation==='reconcile'?{receipt_uuid:uuid}:{}),ctx('payment',operation))).status).toBe(200);
+  });
   it.each([readCorrection,createCorrection,runCorrectionAction])('authorizes before any remote operation',async handler => {
     m.auth.mockResolvedValue({error:NextResponse.json({error:'Forbidden'},{status:403})});
     expect((await handler(req(),ctx())).status).toBe(403);

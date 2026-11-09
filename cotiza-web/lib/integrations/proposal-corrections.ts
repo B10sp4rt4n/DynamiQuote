@@ -56,7 +56,7 @@ export async function createCorrection(request: Request, context: Context) {
   if (auth.error) return auth.error;
   const parsed = createInput.safeParse(await request.json().catch(() => null));
   if (!parsed.success) return NextResponse.json({ error: 'Revisa los datos de corrección; los importes y el RFC se conservan' }, { status: 422 });
-  if (process.env['DIGESTOR_FISCAL_OPERATIONS_PRODUCTION_ENABLED'] === 'true' && parsed.data.confirm_real_operation !== true) {
+  if (auth.environment !== 'sandbox' && process.env['DIGESTOR_FISCAL_OPERATIONS_PRODUCTION_ENABLED'] === 'true' && parsed.data.confirm_real_operation !== true) {
     return NextResponse.json({error:'Confirma la preparación de la sustitución real'},{status:422});
   }
   const {confirm_real_operation: _consent, ...input} = parsed.data;
@@ -73,7 +73,7 @@ export async function runCorrectionAction(request: Request, context: Context) {
   if (auth.error) return auth.error;
   const parsedAction = operations.safeParse(operation);
   if (!parsedAction.success) return NextResponse.json({ error: 'Acción no admitida' }, { status: 422 });
-  const production = process.env['DIGESTOR_FISCAL_OPERATIONS_PRODUCTION_ENABLED'] === 'true';
+  const production = auth.environment !== 'sandbox' && process.env['DIGESTOR_FISCAL_OPERATIONS_PRODUCTION_ENABLED'] === 'true';
   let input: {receipt_uuid?:string;revision_id?:string} | undefined;
   if (parsedAction.data === 'reconcile') {
     const parsed = recoveryInput.safeParse(await request.json().catch(() => null));
