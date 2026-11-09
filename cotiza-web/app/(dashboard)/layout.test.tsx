@@ -1,4 +1,5 @@
 import { beforeEach, expect, it, vi } from "vitest";
+vi.mock("server-only", () => ({}));
 import { renderToStaticMarkup } from "react-dom/server";
 const m=vi.hoisted(()=>({context:vi.fn(),tenants:vi.fn(),capability:vi.fn()}));
 vi.mock("next/link",()=>({default:({children,...props}:React.ComponentProps<"a">)=><a {...props}>{children}</a>}));
