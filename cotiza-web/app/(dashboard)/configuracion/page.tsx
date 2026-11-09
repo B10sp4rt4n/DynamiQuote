@@ -1,4 +1,7 @@
 import { SettingsShell } from "@/components/configuracion/settings-shell";
+import { mercadoLibreEnabled } from "@/lib/integrations/mercadolibre/availability";
+import { MERCADOLIBRE_CHANNEL } from "@/lib/tenant-capabilities";
+import { getTenantOperationMode } from "@/lib/db/tenant-operation";
 import { isTenantCapabilityEnabled, THREATDOWN_PDF_IMPORT } from "@/lib/db/tenant-capabilities";
 import { getCurrentTenantContext } from "@/lib/auth/tenant-context";
 import { getMarginPolicyByTenant } from "@/lib/db/margin-policies";
@@ -21,7 +24,7 @@ export default async function SettingsPage() {
   const canSwitchTenant = tenant.isSuperAdmin;
   const canManageUsers = tenant.isSuperAdmin || tenant.userRole === "owner" || tenant.userRole === "admin";
 
-  const [users, issuerProfiles, marginPolicy, tenantOptions, tenantProfile, threatDownImportEnabled, guidedQuotingEnabled, crmWorkspaceEnabled, playbookFieldEnabled] = await Promise.all([
+  const [users, issuerProfiles, marginPolicy, tenantOptions, tenantProfile, threatDownImportEnabled, guidedQuotingEnabled, crmWorkspaceEnabled, playbookFieldEnabled, operationMode, mercadoLibreEntitled, mercadoLibreAvailable] = await Promise.all([
     canManageUsers
       ? tenant.isSuperAdmin
         ? getAppUsersForSuperAdmin()
@@ -35,10 +38,17 @@ export default async function SettingsPage() {
     isTenantCapabilityEnabled(tenant.id, "cpq_guided_preview"),
     isTenantCapabilityEnabled(tenant.id, "crm_workspace_pilot"),
     isTenantCapabilityEnabled(tenant.id, "quote_playbook_field"),
+    canManageUsers ? getTenantOperationMode(tenant.id) : Promise.resolve("consultative" as const),
+    canManageUsers ? isTenantCapabilityEnabled(tenant.id, MERCADOLIBRE_CHANNEL) : Promise.resolve(false),
+    canManageUsers && tenant.authMode === "clerk" ? mercadoLibreEnabled(tenant.id) : Promise.resolve(false),
   ]);
 
   return (
     <SettingsShell
+      key={tenant.id}
+      operationMode={operationMode}
+      mercadoLibreEntitled={mercadoLibreEntitled}
+      mercadoLibreAvailable={mercadoLibreAvailable}
       threatDownImportEnabled={threatDownImportEnabled}
       playbookFieldEnabled={playbookFieldEnabled}
       guidedQuotingEnabled={guidedQuotingEnabled}

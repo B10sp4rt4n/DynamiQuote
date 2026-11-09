@@ -4,11 +4,16 @@ import { useSearchParams } from "next/navigation";
 import { Fragment, startTransition, useEffect, useState, type FormEvent } from "react";
 
 import { TenantCapabilitiesPanel } from "./tenant-capabilities-panel";
+import { TenantOperationPanel } from "./tenant-operation-panel";
+import type { OperationMode } from "@/lib/tenant-operation";
 import type { MarginPolicySummary } from "@/lib/db/margin-policies";
 import type { AppUserSummary, IssuerProfileSummary } from "@/lib/db/settings";
 import type { ActiveTenantOption, ClosingContactLevel, TenantProfile } from "@/lib/db/tenants";
 
 type SettingsShellProps = {
+  operationMode?: OperationMode;
+  mercadoLibreEntitled?: boolean;
+  mercadoLibreAvailable?: boolean;
   playbookFieldEnabled?: boolean;
   crmWorkspaceEnabled?: boolean;
   guidedQuotingEnabled?: boolean;
@@ -28,7 +33,7 @@ type SettingsShellProps = {
   users: AppUserSummary[];
 };
 
-type Tab = "tenant" | "users" | "issuer" | "policy";
+type Tab = "tenant" | "operation" | "users" | "issuer" | "policy";
 
 type TestEmailTemplate = "alta" | "mantenimiento" | "promocion";
 
@@ -2231,9 +2236,12 @@ function IssuerProfilesTab({
   );
 }
 
-const VALID_TABS: Tab[] = ["tenant", "users", "issuer", "policy"];
+const VALID_TABS: Tab[] = ["tenant", "operation", "users", "issuer", "policy"];
 
 export function SettingsShell({
+  operationMode = "consultative",
+  mercadoLibreEntitled = false,
+  mercadoLibreAvailable = false,
   playbookFieldEnabled = false,
   guidedQuotingEnabled = false,
   crmWorkspaceEnabled = false,
@@ -2347,6 +2355,9 @@ export function SettingsShell({
       </div>
 
       <div className="mt-4 flex gap-0 overflow-x-auto border-b border-zinc-200 whitespace-nowrap">
+        {canManageUsers ? <button className={`${tabClass("operation")} shrink-0`} onClick={() => setTab("operation")} type="button">
+          Operación y canales
+        </button> : null}
         {canViewTenantConfig ? (
           <button className={`${tabClass("tenant")} shrink-0`} onClick={() => setTab("tenant")} type="button">
             Tenant
@@ -2372,14 +2383,18 @@ export function SettingsShell({
       </div>
 
       <div className="mt-5">
+        {tab === "operation" && canManageUsers ? <TenantOperationPanel key={`${tenantId}-${operationMode}`}
+          tenantId={tenantId} tenantName={tenantName} initialMode={operationMode}
+          canConfigure={canManageAllTenants} mercadoLibreEntitled={mercadoLibreEntitled}
+          mercadoLibreAvailable={mercadoLibreAvailable} /> : null}
         {tab === "tenant" && canViewTenantConfig && (
           <div className="space-y-4">
             {canManageAllTenants ? <CreateTenantForm /> : null}
-            {canManageAllTenants ? <TenantCapabilitiesPanel key={tenantId} tenantName={tenantName}
+            {canManageAllTenants ? <TenantCapabilitiesPanel key={tenantId} tenantId={tenantId} tenantName={tenantName}
               initialEnabled={threatDownImportEnabled} /> : null}
-            {canManageAllTenants ? <TenantCapabilitiesPanel key={`${tenantId}-cpq`} tenantName={tenantName} initialEnabled={guidedQuotingEnabled} capabilityKey="cpq_guided_preview" /> : null}
-            {canManageAllTenants ? <TenantCapabilitiesPanel key={`${tenantId}-crm`} tenantName={tenantName} initialEnabled={crmWorkspaceEnabled} capabilityKey="crm_workspace_pilot" /> : null}
-            {canManageAllTenants ? <TenantCapabilitiesPanel key={`${tenantId}-playbook`} tenantName={tenantName} initialEnabled={playbookFieldEnabled} capabilityKey="quote_playbook_field" /> : null}
+            {canManageAllTenants ? <TenantCapabilitiesPanel key={`${tenantId}-cpq`} tenantId={tenantId} tenantName={tenantName} initialEnabled={guidedQuotingEnabled} capabilityKey="cpq_guided_preview" /> : null}
+            {canManageAllTenants ? <TenantCapabilitiesPanel key={`${tenantId}-crm`} tenantId={tenantId} tenantName={tenantName} initialEnabled={crmWorkspaceEnabled} capabilityKey="crm_workspace_pilot" /> : null}
+            {canManageAllTenants ? <TenantCapabilitiesPanel key={`${tenantId}-playbook`} tenantId={tenantId} tenantName={tenantName} initialEnabled={playbookFieldEnabled} capabilityKey="quote_playbook_field" /> : null}
             <TenantConfigurationTab
               issuerProfiles={issuerProfilesState}
               marginPolicy={marginPolicyState}

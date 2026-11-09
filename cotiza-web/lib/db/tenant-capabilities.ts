@@ -1,6 +1,7 @@
 import { prisma } from "@/lib/db/prisma";
 
-export const THREATDOWN_PDF_IMPORT = "threatdown_pdf_import";
+import { TENANT_CAPABILITY_KEYS, type TenantCapabilityKey } from "@/lib/tenant-capabilities";
+export { THREATDOWN_PDF_IMPORT } from "@/lib/tenant-capabilities";
 
 /** Missing entitlements are disabled, including for superadmins. Never cache across tenants. */
 export async function isTenantCapabilityEnabled(tenantId: string, capabilityKey: string): Promise<boolean> {
@@ -13,12 +14,12 @@ export async function isTenantCapabilityEnabled(tenantId: string, capabilityKey:
 
 export async function setTenantCapability(input: {
   tenantId: string;
-  capabilityKey: typeof THREATDOWN_PDF_IMPORT | "cpq_guided_preview" | "crm_workspace_pilot" | "quote_playbook_field";
+  capabilityKey: TenantCapabilityKey;
   enabled: boolean;
   actor: { userId: string; isSuperAdmin: boolean };
 }): Promise<boolean | null> {
   if (!input.actor.isSuperAdmin) throw new Error("Solo superadmin puede habilitar capacidades");
-  if (input.capabilityKey !== THREATDOWN_PDF_IMPORT && input.capabilityKey !== "cpq_guided_preview" && input.capabilityKey !== "crm_workspace_pilot" && input.capabilityKey !== "quote_playbook_field") throw new Error("Capacidad no soportada");
+  if (!TENANT_CAPABILITY_KEYS.includes(input.capabilityKey)) throw new Error("Capacidad no soportada");
   return prisma.$transaction(async (tx) => {
     // Serialize writes per tenant/key so concurrent changes retain the correct previous state.
     await tx.$queryRaw`SELECT pg_advisory_xact_lock(hashtextextended(${input.tenantId + ":" + input.capabilityKey}, 0))::text`;
