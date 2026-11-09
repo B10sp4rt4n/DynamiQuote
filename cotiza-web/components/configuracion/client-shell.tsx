@@ -3,6 +3,7 @@
 import Link from "next/link";
 import { useCallback, useEffect, useRef, useState } from "react";
 
+import { CsfReviewPanel } from "@/components/clientes/csf-review-panel";
 import type { ClientContact } from "@/lib/db/client-contacts";
 import type { ClientSummary } from "@/lib/db/clients";
 import type { InteractionLog } from "@/lib/db/interaction-logs";
@@ -14,6 +15,7 @@ type ClientLogoOption = {
 };
 
 type ClientShellProps = {
+  csfEnabled?: boolean;
   clientLogos: ClientLogoOption[];
   initialClients: ClientSummary[];
 };
@@ -173,7 +175,7 @@ function IconEye({ className }: { className?: string }) {
   );
 }
 
-export function ClientShell({ clientLogos, initialClients }: ClientShellProps) {
+export function ClientShell({ clientLogos, initialClients, csfEnabled = false }: ClientShellProps) {
   const [availableClientLogos, setAvailableClientLogos] = useState<ClientLogoOption[]>(clientLogos);
   const [clients, setClients] = useState<ClientSummary[]>(initialClients);
   const [logoFile, setLogoFile] = useState<File | null>(null);
@@ -184,6 +186,7 @@ export function ClientShell({ clientLogos, initialClients }: ClientShellProps) {
   const [editingClient, setEditingClient] = useState<ClientSummary | null>(null);
   const [form, setForm] = useState<FormState>(EMPTY_FORM);
   const [saving, setSaving] = useState(false);
+  const [csfPending, setCsfPending] = useState(false);
   const [message, setMessage] = useState<{ text: string; type: "success" | "error" } | null>(null);
   const [fiscalValidationStatus, setFiscalValidationStatus] = useState<"idle" | "pending" | "done" | "error">("idle");
   const [fiscalValidationResult, setFiscalValidationResult] = useState<FiscalValidationResult | null>(null);
@@ -287,6 +290,7 @@ export function ClientShell({ clientLogos, initialClients }: ClientShellProps) {
   }
 
   function openNew() {
+    setCsfPending(false);
     setEditingClient(null);
     setForm(EMPTY_FORM);
     setLogoFile(null);
@@ -297,6 +301,7 @@ export function ClientShell({ clientLogos, initialClients }: ClientShellProps) {
   }
 
   async function openEdit(client: ClientSummary) {
+    setCsfPending(false);
     setEditingClient(client);
     const hasSplitName = Boolean(client.contactFirstName || client.contactLastName);
     const guessedName = hasSplitName
@@ -636,6 +641,7 @@ export function ClientShell({ clientLogos, initialClients }: ClientShellProps) {
   }
 
   async function handleSave() {
+    if (csfPending || saving) return;
     if (!form.company.trim()) {
       setMessage({ text: "La empresa es requerida.", type: "error" });
       return;
@@ -953,7 +959,7 @@ export function ClientShell({ clientLogos, initialClients }: ClientShellProps) {
       {/* Modal nuevo/editar cliente */}
       {showModal ? (
         <div className="fixed inset-0 z-50 flex items-start justify-center overflow-y-auto bg-black/40 p-4 sm:items-center">
-          <div className="flex w-full max-w-lg max-h-[calc(100vh-2rem)] flex-col overflow-hidden rounded-xl bg-white shadow-xl">
+          <div className={`flex w-full ${csfEnabled ? "max-w-4xl" : "max-w-lg"} max-h-[calc(100vh-2rem)] flex-col overflow-hidden rounded-xl bg-white shadow-xl`}>
             <div className="flex items-center justify-between border-b border-zinc-200 px-6 py-4">
               <h2 className="text-base font-semibold text-zinc-900">
                 {editingClient ? "Editar cliente" : "Nuevo cliente"}
@@ -967,6 +973,10 @@ export function ClientShell({ clientLogos, initialClients }: ClientShellProps) {
               </button>
             </div>
             <div className="grid flex-1 gap-4 overflow-y-auto px-6 py-5 sm:grid-cols-2">
+              {csfEnabled ? <CsfReviewPanel current={{ company: form.company, rfc: form.rfc, fiscalRegime: form.fiscalRegime, zipCode: form.zipCode, address: form.address }}
+                onPendingChange={setCsfPending} onApply={(values) => {
+                  setForm((previous) => ({ ...previous, ...values })); resetFiscalValidation();
+                }} /> : null}
               <div className="sm:col-span-2">
                 <label className="mb-1 block text-xs font-medium text-zinc-700">Empresa *</label>
                 <input
@@ -1361,7 +1371,7 @@ export function ClientShell({ clientLogos, initialClients }: ClientShellProps) {
               </button>
               <button
                 className="rounded-lg bg-zinc-900 px-4 py-2 text-sm font-medium text-white disabled:opacity-50"
-                disabled={saving}
+                disabled={saving || csfPending}
                 onClick={() => { void handleSave(); }}
                 type="button"
               >

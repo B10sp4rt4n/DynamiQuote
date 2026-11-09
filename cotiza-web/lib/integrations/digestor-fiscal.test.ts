@@ -130,11 +130,11 @@ describe("digestor-fiscal: CSF + validacion de receptor", () => {
     global.fetch = fetchMock as unknown as typeof fetch;
 
     const { approveDocument } = await import("./digestor-fiscal");
-    const result = await approveDocument("doc-1", "revisado a mano");
+    const result = await approveDocument("doc-1", "a".repeat(64), "revisado a mano");
 
     expect(result).toEqual({ approvedAt: "2026-09-22T10:00:00Z", documentId: "doc-1", status: "approved" });
     const approveCall = fetchMock.mock.calls[1];
-    expect(JSON.parse(approveCall[1].body as string)).toEqual({ notes: "revisado a mano" });
+    expect(JSON.parse(approveCall[1].body as string)).toEqual({ notes: "revisado a mano", confirm_review: true, expected_revision: "a".repeat(64) });
   });
 
   it("listCsf arma el query string solo con los parametros presentes", async () => {
