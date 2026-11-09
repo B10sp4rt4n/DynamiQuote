@@ -40,6 +40,8 @@ function describe(item: ProposalAuditTimelineItem): { detail: string | null; tit
   const d = item.details;
 
   switch (item.type) {
+    case "fiscal_classification_confirmed":
+      return { title: "Clasificación fiscal confirmada", detail: `Partida ${String(d["itemNumber"])} · producto ${String(d["satProductCode"])} · unidad ${String(d["unitCode"])}`, tone: "ok" };
     case "outcome_date_changed":
       return { title: "Fecha de cierre corregida",
         detail: `${closeDateLabel(d["previousOutcomeAt"])} → ${closeDateLabel(d["outcomeAt"])}. La fecha elegida determina el mes de los KPIs.`,

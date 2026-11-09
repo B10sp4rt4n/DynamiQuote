@@ -1,6 +1,8 @@
 "use client";
 
 import { useEffect, useState } from "react";
+import { FiscalClassificationPicker } from "./fiscal-classification-picker";
+import type { FiscalClassification } from "@/lib/domain/fiscal-classification";
 import { ProposalPaymentPanel } from "./proposal-payment-panel";
 import { ProposalCancellationPanel } from './proposal-cancellation-panel';
 import { ProposalCorrectionPanel } from './proposal-correction-panel';
@@ -73,7 +75,7 @@ export function ProposalInvoicePanel({ proposalId, recipientCompany }: ProposalI
   const [showPreview, setShowPreview] = useState(false);
   const [itemsFingerprint, setItemsFingerprint] = useState("");
   const [invoiceCurrency, setInvoiceCurrency] = useState<string | null>(null);
-  const [fiscalItems, setFiscalItems] = useState<Array<{ itemNumber: number; description: string; satProductCode: string; unitCode: string }>>([]);
+  const [fiscalItems, setFiscalItems] = useState<Array<{ itemNumber: number; description: string; sku?: string } & Partial<FiscalClassification>>>([]);
   const [draftDirty, setDraftDirty] = useState(true);
 
   useEffect(() => {
@@ -89,7 +91,7 @@ export function ProposalInvoicePanel({ proposalId, recipientCompany }: ProposalI
           clientFiscalData?: ClientFiscalData | null;
           error?: string;
           invoice?: InvoiceStatus;
-          fiscalBasis?: { fingerprint: string; currency: string | null; items: Array<{ itemNumber: number; description: string }> };
+          fiscalBasis?: { fingerprint: string; currency: string | null; items: Array<{ itemNumber: number; description: string; sku?: string }> };
         };
 
         if (cancelled) return;
@@ -149,7 +151,7 @@ export function ProposalInvoicePanel({ proposalId, recipientCompany }: ProposalI
     try {
       const res = await fetch(`/api/proposals/${proposalId}/invoice`, {
         body: JSON.stringify({ ...form, itemsFingerprint,
-          fiscalItems: fiscalItems.map(({ itemNumber, satProductCode, unitCode }) => ({ itemNumber, satProductCode, unitCode })) }),
+          fiscalItems: fiscalItems.map(({ itemNumber, satProductCode, unitCode, catalogVersion, classificationEventId }) => ({ itemNumber, satProductCode, unitCode, catalogVersion, classificationEventId })) }),
         headers: { "Content-Type": "application/json" },
         method: "POST",
       });
@@ -391,20 +393,12 @@ export function ProposalInvoicePanel({ proposalId, recipientCompany }: ProposalI
       </div>
 
       <div className="mt-4 space-y-3">
+        <p className="text-xs text-zinc-600">Busca y confirma producto y unidad SAT en cada partida para generar la prefactura.</p>
         {fiscalItems.map((item, index) => (
-          <div key={item.itemNumber} className="rounded-lg border border-zinc-200 p-3">
-            <p className="text-xs font-medium text-zinc-800">{item.itemNumber}. {item.description}</p>
-            <div className="mt-2 grid gap-2 sm:grid-cols-2">
-              <label className="text-xs text-zinc-700">Clave SAT del producto o servicio
-                <input className="mt-1 w-full rounded border border-zinc-300 p-2" inputMode="numeric" maxLength={8}
-                  value={item.satProductCode} onChange={event => { setDraftDirty(true); setFiscalItems(previous => previous.map((row, i) => i === index ? { ...row, satProductCode: event.target.value } : row)); }} />
-              </label>
-              <label className="text-xs text-zinc-700">Clave de unidad SAT
-                <input className="mt-1 w-full rounded border border-zinc-300 p-2" maxLength={3}
-                  value={item.unitCode} onChange={event => { setDraftDirty(true); setFiscalItems(previous => previous.map((row, i) => i === index ? { ...row, unitCode: event.target.value.toUpperCase() } : row)); }} />
-              </label>
-            </div>
-          </div>
+          <FiscalClassificationPicker key={`${itemsFingerprint}:${item.itemNumber}`} proposalId={proposalId} itemNumber={item.itemNumber}
+            description={item.description} sku={item.sku} fingerprint={itemsFingerprint}
+            onChange={classification => { setDraftDirty(true); setFiscalItems(previous => previous.map((row, i) => i === index
+              ? { itemNumber: row.itemNumber, description: row.description, sku: row.sku, ...(classification ?? {}) } : row)); }} />
         ))}
       </div>
       </fieldset>
@@ -421,7 +415,7 @@ export function ProposalInvoicePanel({ proposalId, recipientCompany }: ProposalI
       <div className="mt-4 flex flex-wrap items-center gap-2">
         <button
           className="rounded-lg bg-zinc-900 px-3 py-1.5 text-xs font-medium text-white transition hover:bg-zinc-700 disabled:opacity-60"
-          disabled={generating || stamping || invoiceCurrency !== "MXN" || !itemsFingerprint}
+          disabled={generating || stamping || invoiceCurrency !== "MXN" || !itemsFingerprint || !fiscalItems.length || fiscalItems.some(item => !item.classificationEventId)}
           onClick={() => void handleGenerateDraft()}
           type="button"
         >

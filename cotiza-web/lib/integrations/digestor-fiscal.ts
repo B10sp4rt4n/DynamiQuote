@@ -664,3 +664,13 @@ export function fiscalCorrectionAction(draftId: string, action: 'stamp' | 'recon
   input: { receipt_uuid?: string; revision_id?: string } | undefined, paymentId?: string): Promise<FiscalCorrection> {
   return request(`${correctionPath(draftId, paymentId)}/${action}`, { method: 'POST', body: input ? JSON.stringify(input) : undefined });
 }
+
+// Official local SAT snapshot: no paid model or external search call.
+export function searchSatCatalog(kind: import("@/lib/domain/fiscal-classification").SatCatalogKind, q: string, nature: import("@/lib/domain/fiscal-classification").SaleNature) {
+  return request<import("@/lib/domain/fiscal-classification").SatSearchResult>(`/v1/sat-catalogs/search?${new URLSearchParams({ kind, q, nature })}`,
+    { method: "GET", cache: "no-store", signal: AbortSignal.timeout(15_000) });
+}
+export function validateSatClassifications(items: Array<{ itemNumber: number; satProductCode: string; unitCode: string }>, catalogVersion?: string) {
+  return request<import("@/lib/domain/fiscal-classification").SatValidation>("/v1/sat-catalogs/validate",
+    { method: "POST", cache: "no-store", signal: AbortSignal.timeout(15_000), body: JSON.stringify({ items, catalogVersion }) });
+}

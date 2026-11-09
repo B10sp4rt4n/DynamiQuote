@@ -1,5 +1,6 @@
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 vi.mock("server-only", () => ({}));
+vi.mock("@/lib/db/fiscal-classifications", () => ({ verifyClassification: vi.fn(async () => true) }));
 const m = vi.hoisted(() => ({ tenant: vi.fn(), enabled: vi.fn(), visible: vi.fn(), invoice: vi.fn(), fiscal: vi.fn(), workflow: vi.fn(), create: vi.fn(), stamp: vi.fn(), preview: vi.fn(), pdf: vi.fn(), remoteState: vi.fn(), claim: vi.fn(), reject: vi.fn(), payment: vi.fn() }));
 vi.mock("@/lib/auth/tenant-context", () => ({ getCurrentTenantContext: m.tenant }));
 vi.mock("@/lib/db/proposals", () => ({ isProposalVisibleToViewer: m.visible, getProposalWorkflowByTenant: m.workflow }));
