@@ -1,8 +1,11 @@
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 
 vi.mock("server-only", () => ({}));
+vi.mock("@/lib/db/fiscal-classifications", () => ({ verifyClassification: mocks.verify }));
 
 const mocks = vi.hoisted(() => ({
+  validate: vi.fn(),
+  verify: vi.fn(),
   visible: vi.fn(),
   tenant: vi.fn(),
   enabled: vi.fn(),
@@ -18,6 +21,7 @@ vi.mock("@/lib/auth/tenant-context", () => ({ getCurrentTenantContext: mocks.ten
 vi.mock("@/lib/integrations/digestor-fiscal", () => ({
   isDigestorFiscalEnabledForTenant: mocks.enabled,
   createBillingDraft: mocks.createDraft,
+  validateSatClassifications: mocks.validate,
 }));
 vi.mock("@/lib/db/proposal-invoices", () => ({
   getProposalInvoiceStatusByTenant: mocks.getInvoice,
@@ -47,7 +51,8 @@ const request = (overrides: Record<string, unknown> = {}) => new Request("http:/
     paymentForm: "03",
     paymentMethod: "PUE",
     itemsFingerprint: invoiceBasisFingerprint(proposalFixture),
-    fiscalItems: [{ itemNumber: 1, satProductCode: "80101500", unitCode: "E48" }],
+    fiscalItems: [{ itemNumber: 1, satProductCode: "80101500", unitCode: "E48",
+      catalogVersion: "b".repeat(64), classificationEventId: "fcl_" + "c".repeat(64) }],
     ...overrides,
   }),
 });
@@ -55,6 +60,8 @@ const request = (overrides: Record<string, unknown> = {}) => new Request("http:/
 describe("no regenerar prefacturas timbradas", () => {
   beforeEach(() => {
     vi.resetAllMocks();
+    mocks.validate.mockResolvedValue({ valid: true });
+    mocks.verify.mockResolvedValue(true);
     mocks.visible.mockResolvedValue(true);
     mocks.tenant.mockResolvedValue({ id: "t1", name: "Emisor", userId: "seller-1", userRole: "user", isSuperAdmin: false });
     mocks.enabled.mockReturnValue(true);
@@ -132,6 +139,26 @@ describe("no regenerar prefacturas timbradas", () => {
   it("does not relabel a USD proposal as MXN for billing", async () => {
     mocks.getProposal.mockResolvedValue({ ...proposalFixture, formal: { currency: "USD" } });
     expect((await POST(request(), ctx)).status).toBe(422);
+    expect(mocks.createDraft).not.toHaveBeenCalled();
+  });
+  it("rejects nonexistent codes and changed catalog versions before generating a draft", async () => {
+    mocks.validate.mockResolvedValue({ valid: false });
+    expect((await POST(request(), ctx)).status).toBe(422);
+    mocks.validate.mockResolvedValue({ valid: false, error: "El catálogo cambió" });
+    expect((await POST(request(), ctx)).status).toBe(409);
+    expect(mocks.createDraft).not.toHaveBeenCalled();
+  });
+  it("rejects a confirmation from another actor or document revision", async () => {
+    mocks.verify.mockResolvedValue(false);
+    const fiscalItems = [{ itemNumber: 1, satProductCode: "80101500", unitCode: "E48", catalogVersion: "b".repeat(64), classificationEventId: "fcl_" + "c".repeat(64) }];
+    expect((await POST(request({ fiscalItems }), ctx)).status).toBe(409);
+    expect(mocks.verify.mock.calls[0][0]).toMatchObject({ tenantId: "t1", actorUserId: "seller-1", proposalId: "p1", fingerprint: invoiceBasisFingerprint(proposalFixture) });
+    expect(mocks.createDraft).not.toHaveBeenCalled();
+  });
+  it("rejects direct requests that omit classification receipts before consulting the catalog", async () => {
+    const fiscalItems = [{ itemNumber: 1, satProductCode: "80101500", unitCode: "E48" }];
+    expect((await POST(request({ fiscalItems }), ctx)).status).toBe(422);
+    expect(mocks.validate).not.toHaveBeenCalled();
     expect(mocks.createDraft).not.toHaveBeenCalled();
   });
 });

@@ -14,7 +14,9 @@ export const createProposalInvoiceSchema = z.object({
   fiscalItems: z.array(z.object({
     itemNumber: z.number().int().positive(),
     satProductCode: z.string().trim().regex(/^\d{8}$/, "Captura la clave SAT de ocho dígitos"),
-    unitCode: z.string().trim().regex(/^[A-Z0-9]{2,3}$/, "Captura la clave de unidad SAT"),
+    unitCode: z.string().trim().regex(/^[A-Za-z0-9]{2,3}$/, "Captura la clave de unidad SAT"),
+    catalogVersion: z.string().regex(/^[a-f0-9]{64}$/, "Revisa y confirma la versión del catálogo SAT"),
+    classificationEventId: z.string().regex(/^fcl_[a-f0-9]{64}$/, "Revisa y confirma la clasificación de cada partida"),
   }).strict()).min(1).max(500),
   saveToClient: z.boolean().optional(),
 }).strict().superRefine((data, ctx) => {

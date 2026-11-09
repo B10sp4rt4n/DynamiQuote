@@ -4,6 +4,7 @@ import { NextResponse } from "next/server";
 import { getCurrentTenantContext } from "@/lib/auth/tenant-context";
 import {
   createBillingDraft,
+  validateSatClassifications,
   isDigestorFiscalEnabledForTenant,
 } from "@/lib/integrations/digestor-fiscal";
 import { updateClientForTenant } from "@/lib/db/clients";
@@ -16,6 +17,8 @@ import { getProposalWorkflowByTenant, isProposalVisibleToViewer } from "@/lib/db
 import { getTenantProfileByTenant } from "@/lib/db/tenants";
 import { createProposalInvoiceSchema } from "@/lib/validations/proposal-invoice";
 import { invoiceBasisFingerprint } from "@/lib/domain/invoice-profile";
+
+import { verifyClassification } from "@/lib/db/fiscal-classifications";
 
 type RouteContext = {
   params: Promise<{ proposalId: string }>;
@@ -53,7 +56,7 @@ export async function GET(_: Request, context: RouteContext) {
     cancellationEnabled: canOperateFiscal && process.env['DIGESTOR_FISCAL_CANCELLATION_ENABLED'] === 'true',
     correctionsEnabled: canOperateFiscal && process.env['DIGESTOR_FISCAL_CORRECTIONS_ENABLED'] === 'true',
     fiscalBasis: { fingerprint: invoiceBasisFingerprint(proposal), currency: proposal.formal?.currency,
-      items: proposal.items.map(item => ({ itemNumber: item.itemNumber, description: item.description })) },
+      items: proposal.items.map(item => ({ itemNumber: item.itemNumber, description: item.description, sku: item.sku })) },
   }, { status: 200 });
 }
 
@@ -146,6 +149,17 @@ export async function POST(request: Request, context: RouteContext) {
   }
 
   try {
+    const versions = [...new Set(input.fiscalItems.map(item => item.catalogVersion))];
+    if (versions.length > 1) return NextResponse.json({ error: "Las partidas deben usar la misma versión del catálogo SAT" }, { status: 409 });
+    const validation = await validateSatClassifications(input.fiscalItems.map(({ itemNumber, satProductCode, unitCode }) => ({ itemNumber, satProductCode, unitCode })), versions[0]);
+    if (!validation.valid) return NextResponse.json({ error: validation.error ?? "Revisa las claves SAT: alguna no existe o no está vigente" }, { status: validation.error ? 409 : 422 });
+    for (const item of input.fiscalItems) {
+      if (!tenant.userId || !await verifyClassification({ tenantId: tenant.id, actorUserId: tenant.userId,
+        proposalId, itemNumber: item.itemNumber, fingerprint: input.itemsFingerprint, eventId: item.classificationEventId,
+        satProductCode: item.satProductCode, unitCode: item.unitCode, catalogVersion: item.catalogVersion })) {
+        return NextResponse.json({ error: "La clasificación no corresponde a esta revisión. Revisa y confirma otra vez" }, { status: 409 });
+      }
+    }
     const draft = await createBillingDraft({
       currency,
       customerName: input.customerName,
