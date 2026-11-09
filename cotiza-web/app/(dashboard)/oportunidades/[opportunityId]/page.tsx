@@ -9,7 +9,7 @@ import { QuoteOpportunityPanel } from "@/components/cotizador/quote-opportunity-
 import { OpportunityReview } from "@/components/pipeline/opportunity-review";
 import { OpportunityAmount } from "@/components/pipeline/opportunity-amount";
 import { DISPOSITION_LABELS } from "@/lib/domain/opportunity-disposition";
-import { businessAmountCurrency, businessDocumentSummary, getBusinessFollowUp, proposalStatusLabel, proposalBillingLabel } from "@/lib/domain/business-follow-up";
+import { businessAmountCurrency, businessDocumentSummary, getBusinessFollowUp, proposalStatusLabel, proposalBillingLabel, businessBillingSection, isProposalAuthorized } from "@/lib/domain/business-follow-up";
 
 export const dynamic = "force-dynamic";
 
@@ -58,7 +58,9 @@ export default async function BusinessPage({ params }: { params: Promise<{ oppor
       </div>
     </header>
     <BusinessFollowUp stage={opportunity.stage} action={followUp} />
-    <CommercialFlow current={1} context={context} hideContext summaries={[DISPOSITION_LABELS[opportunity.stage], documents.quotes, documents.proposals]} />
+    <CommercialFlow current={1} context={context} hideContext summaries={[DISPOSITION_LABELS[opportunity.stage], documents.quotes, documents.proposals]}
+      completed={[opportunity.stage === "won", quotes.length > 0, proposals.some(row => row.outcome === "won" && isProposalAuthorized(row))]}
+      billing={businessBillingSection(proposals, billingEnabled, opportunityId, opportunity.commercialOptions?.reviewRequired)} />
     <details id="datos-oportunidad" open={opportunity.stage === "open" && opportunity.intakePending} className="scroll-mt-24 rounded-xl border border-zinc-200 bg-white p-4">
       <summary className="min-h-11 cursor-pointer py-2 font-semibold">Datos comerciales{opportunity.intakePending ? " · datos por completar" : ""}</summary>
       <QuoteOpportunityPanel opportunityId={opportunity.opportunityId} />

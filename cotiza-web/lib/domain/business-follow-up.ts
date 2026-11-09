@@ -34,6 +34,19 @@ export function proposalBillingLabel(proposal: WorkspaceProposal): string {
   return "Sin CFDI registrado";
 }
 
+export function businessBillingSection(proposals: readonly WorkspaceProposal[], enabled: boolean, opportunityId: string, needsReview = false) {
+  const fallback = `/oportunidades/${encodeURIComponent(opportunityId)}#propuestas`;
+  if (!enabled) return { href: fallback, label: "No habilitada para esta empresa" };
+  const winning = proposals.filter(row => row.outcome === "won");
+  if (needsReview || winning.length > 1) return { href: fallback, label: "Revisar propuestas ganadas" };
+  const proposal = winning[0];
+  if (!proposal) return { href: fallback, label: "Sin propuesta ganada vinculada" };
+  const state = proposalBillingLabel(proposal);
+  if (state === "Sin CFDI registrado" && !isProposalAuthorized(proposal)) return { href: `/propuestas/${encodeURIComponent(proposal.proposal_id)}`, label: "Autorización pendiente" };
+  return { href: `/propuestas/${encodeURIComponent(proposal.proposal_id)}#facturacion`,
+    label: state === "Sin CFDI registrado" ? "Pendiente de preparar" : state };
+}
+
 export function businessDocumentSummary(quotes: readonly WorkspaceQuote[], proposals: readonly WorkspaceProposal[]) {
   const quoteCount = new Set(quotes.map(quote => quote.quote_group_id?.trim() || quote.quote_id)).size;
   const authorizedCount = proposals.filter(isProposalAuthorized).length;
