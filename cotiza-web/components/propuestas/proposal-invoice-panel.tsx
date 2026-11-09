@@ -1,6 +1,6 @@
 "use client";
 
-import { useEffect, useState } from "react";
+import { useEffect, useRef, useState } from "react";
 import { FiscalClassificationPicker } from "./fiscal-classification-picker";
 import type { FiscalClassification } from "@/lib/domain/fiscal-classification";
 import { ProposalPaymentPanel } from "./proposal-payment-panel";
@@ -68,6 +68,7 @@ export function ProposalInvoicePanel({ proposalId, recipientCompany }: ProposalI
   const [invoice, setInvoice] = useState<InvoiceStatus | null>(null);
   const [form, setForm] = useState<FormState>(EMPTY_FORM);
   const [generating, setGenerating] = useState(false);
+  const generatingDraft = useRef(false);
   const [stamping, setStamping] = useState(false);
   const [reconciling, setReconciling] = useState(false);
   const [error, setError] = useState<string | null>(null);
@@ -144,6 +145,8 @@ export function ProposalInvoicePanel({ proposalId, recipientCompany }: ProposalI
   }
 
   async function handleGenerateDraft() {
+    if (generatingDraft.current) return;
+    generatingDraft.current = true;
     setGenerating(true);
     setError(null);
     setMissingFields([]);
@@ -178,6 +181,7 @@ export function ProposalInvoicePanel({ proposalId, recipientCompany }: ProposalI
     } catch (err) {
       setError(err instanceof Error ? err.message : "Error desconocido");
     } finally {
+      generatingDraft.current = false;
       setGenerating(false);
     }
   }

@@ -22,6 +22,9 @@ equipo u otra operación. El uso CFDI del receptor es independiente.
   duración. Se ofrece como candidata y siempre requiere una nueva confirmación.
 - Editar una selección bloquea la generación y el timbrado hasta revisar y
   regenerar. No se actualizan XML históricos ni documentos ya emitidos.
+- Un bloqueo síncrono por operación impide que dos clics rápidos dupliquen la
+  confirmación o la creación de prefactura en el mismo panel. Se libera al
+  finalizar también si la operación falla; no sustituye los controles del servidor.
 - Se mantiene el perfil nacional MXN/IVA16 y las restricciones fiscales actuales.
 
 El snapshot inicial de Digestor contiene 52,513 productos/servicios y 2,418
@@ -31,15 +34,31 @@ publicado; la aplicación no descarga actualizaciones silenciosas del SAT.
 
 ## Validación y publicación
 
-900 pruebas aprobadas y 60 omitidas por sus condiciones externas; se excluyó
+904 pruebas aprobadas y 60 omitidas por sus condiciones externas; se excluyó
 validate-quote-lifecycle.e2e.test.ts, que depende de base real. TypeScript y
 ESLint de los archivos nuevos/modificados aprobados. Incluye revisión explícita,
 memoria aislada, consultas obsoletas, permisos y bloqueo de solicitudes directas
 sin recibo. Los servicios fiscales y persistencia están simulados en estas pruebas.
 
+La continuación añade cuatro recorridos integrados en
+`fiscal-classification-flow.test.tsx`: panel React real → handlers de API reales
+→ registro y verificación reales del recibo, con autenticación, almacenamiento y
+Digestor/PAC sustituidos por dobles aislados. Cubren doble clic en confirmación y
+generación, bloqueo de timbrado tras editar claves, memoria como candidata,
+cambio de versión del catálogo y reintento después de errores. La prueba de doble
+clic reprodujo dos solicitudes antes de corregir ambos botones.
+
+Comando de regresión: `npx vitest run --maxWorkers=2 --exclude
+'**/validate-quote-lifecycle.e2e.test.ts'`. Una ejecución sin límite de workers
+agotó el plazo de dos suites del cotizador y produjo seis fallos en cascada;
+la ejecución completa con dos workers aprobó las 904 pruebas sin ampliar
+tiempos límite ni modificar esas suites. TypeScript y ESLint de los tres
+archivos TSX de esta continuación también aprobaron.
+
 La comprobación visual en escritorio y móvil sigue pendiente: el navegador
 automatizado no pudo iniciar por restricciones de sockets y el navegador
-compartido no pudo acceder al servidor local. No se presenta esta comprobación
+compartido no pudo acceder al servidor local y rechazó abrir archivos locales
+por su política de protocolos. No se presenta esta comprobación
 como realizada.
 
 Orden: publicar Digestor feat/sat-catalog-search-aup, verificar /status, /search

@@ -67,6 +67,7 @@ export function FiscalClassificationPicker({ proposalId, itemNumber, description
   const [product, setProduct] = useState<Selected | null>(null), [unit, setUnit] = useState<Selected | null>(null);
   const [reviewed, setReviewed] = useState(false), [remember, setRemember] = useState(true);
   const [confirmed, setConfirmed] = useState(false), [pending, setPending] = useState(false), [error, setError] = useState("");
+  const confirming = useRef(false);
   const [memory, setMemory] = useState<{ memory: ClassificationMemory; validation: SatValidation } | null>(null);
   const catalog = product?.catalog ?? unit?.catalog;
   // Both selects originate in a single immutable snapshot. Never combine versions.
@@ -82,7 +83,8 @@ export function FiscalClassificationPicker({ proposalId, itemNumber, description
   }, [endpoint, nature]);
   function invalidate() { setReviewed(false); setConfirmed(false); setError(""); onChange(null); }
   async function confirm() {
-    if (!nature || !ready || !reviewed || !product || !unit) return;
+    if (confirming.current || confirmed || !nature || !ready || !reviewed || !product || !unit) return;
+    confirming.current = true;
     setPending(true); setError("");
     try {
       const res = await fetch(`/api/proposals/${proposalId}/fiscal-classifications`, { method: "POST", headers: { "Content-Type": "application/json" },
@@ -92,7 +94,7 @@ export function FiscalClassificationPicker({ proposalId, itemNumber, description
       if (!res.ok) throw new Error(data.error ?? "No se pudo confirmar");
       setConfirmed(true); onChange(data.classification);
     } catch (err) { invalidate(); setError(err instanceof Error ? err.message : "No se pudo confirmar"); }
-    finally { setPending(false); }
+    finally { confirming.current = false; setPending(false); }
   }
   return <fieldset disabled={pending} className="min-w-0 space-y-3 rounded-lg border border-zinc-200 p-3">
     <legend className="px-1 text-sm font-semibold text-zinc-900">{itemNumber}. {description}</legend>
