@@ -18,8 +18,9 @@ recuperación repetida y rechazo de un UUID diferente completan el ensayo.
 Este corte ocurre después de que Digestor guardó el timbrado. No simula pérdida
 entre PAC y Digestor ni requiere `ObtieneCFDI` del PAC. Para ese otro límite
 existe el ensayo público separado en `digestor__fiscal/scripts/run_public_invoice_recovery.py`.
-No acredita reintentos de REP, clics reales de navegador, autenticación productiva,
-sellos criptográficos ni comportamiento de un PAC productivo.
+El escenario de factura no acredita clics reales de navegador, autenticación
+productiva, sellos criptográficos ni comportamiento de un PAC productivo.
+La variante de REP se describe al final.
 
 ## Ejecución autorizada
 
@@ -68,3 +69,44 @@ una ejecución limpia desde el inicio.
   el servidor local; no se acredita recuperación desde la interfaz publicada.
 - `recuperado.xml` coincide byte por byte con `aceptacion-remota.xml`.
   El PDF proviene de la ruta real de Cotiza y conserva ese UUID.
+
+## REP: respuesta perdida y pago conservado
+
+El mismo ejecutor admite `COTIZA_LAB_RECOVERY_CASE=rep`. Esta variante ejecuta
+automáticamente las rutas HTTP reales de pagos y complementos, con el mismo
+aislamiento y opt-in. Crea una factura PPD/99 de 116.00 MXN y un pago sintético
+por el total; repetir la declaración con la misma clave devuelve el mismo pago.
+Se usa la misma orden anterior agregando `COTIZA_LAB_RECOVERY_CASE=rep` y una
+carpeta nueva de evidencia; no requiere interacción de navegador.
+
+Dos solicitudes concurrentes de REP llegan al Digestor: una se acepta y la otra
+se bloquea con 409. Se descarta deliberadamente la respuesta aceptada antes de
+que Cotiza la reciba. El reintento posterior también queda bloqueado en Digestor.
+La primera lectura se interrumpe localmente y la siguiente recupera el mismo
+UUID y XML. Reconciliar repetidamente no vuelve a emitir; un UUID ajeno se rechaza.
+El saldo se conserva en 0.00 y existe un solo pago. El XML/PDF se descargan por
+las rutas reales de Cotiza; el XML coincide con la huella SHA-256 capturada en
+la aceptación y conserva parcialidad 1, pago 116.00 y saldo insoluto 0.00.
+
+Resultado del 9 de noviembre de 2026: borrador QA
+`5e1fdd46-70a9-4b33-a4db-32167a846f44`, pago
+`e7da8a57-362b-4cd9-af28-37986b1fd7a2`, REP
+`e96b4a33-13f0-473f-970b-3a92389d6e31`. Una aceptación de REP; tres solicitudes
+HTTP de emisión en total (dos concurrentes y un reintento), dos bloqueadas.
+La factura original se emitió una sola vez para preparar este caso.
+
+Observación: `paymentFailure` convierte el 409 de Digestor en 502 hacia el
+consumidor de Cotiza. El mensaje conserva la instrucción de no repetir y el
+control evita la segunda emisión, pero el estado HTTP puede precisarse.
+El ensayo no modifica ese comportamiento productivo.
+
+Este caso tampoco simula pérdida entre PAC y Digestor: el resultado del REP ya
+está persistido en Digestor cuando se interrumpe su respuesta a Cotiza. Se valida
+por separado con un test sintético el estado `unknown` y su bloqueo de reemisión.
+
+El primer ensayo REP, borrador `8a4c0c16-05dc-47b6-9cab-f32654ccefbf`,
+interrumpió la respuesta por un error del arnés: usaba el lector de facturas I
+para un XML P. Se corrigió la validación y se agregó una aserción que exige
+llegar al corte deliberado. El resultado citado arriba corresponde a la
+repetición limpia corregida; ambos XML de aceptación y recuperación existen
+y coinciden byte por byte. El primer caso no se reemitió ni se borró.

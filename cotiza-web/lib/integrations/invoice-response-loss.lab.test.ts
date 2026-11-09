@@ -10,7 +10,7 @@ vi.mock('server-only',()=>({}));
 vi.mock('@/lib/auth/tenant-context',()=>({getCurrentTenantContext:async()=>({
  id:'90dbf915-de98-4ebb-b88c-f27b6e8c645a',name:'Cotiza Lab — PRUEBAS',userId:'local-recovery-qa',userRole:'user',authMode:'clerk',
 })}));
-const enabled=process.env.COTIZA_LAB_RECOVERY_ENABLED==='true';
+const enabled=process.env.COTIZA_LAB_RECOVERY_ENABLED==='true'&&process.env.COTIZA_LAB_RECOVERY_CASE!=='rep';
 const qa='https://digestor-cotiza-lab-production.up.railway.app';
 const tenant='90dbf915-de98-4ebb-b88c-f27b6e8c645a';
 let proposal='lab-response-loss-'+randomUUID();

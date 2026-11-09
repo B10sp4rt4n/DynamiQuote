@@ -7,6 +7,9 @@ import path from 'node:path';
 import { fileURLToPath } from 'node:url';
 const root=fileURLToPath(new URL('../',import.meta.url)),web=path.join(root,'cotiza-web');
 const require=createRequire(path.join(web,'package.json'));
+const scenario=process.env.COTIZA_LAB_RECOVERY_CASE??'invoice';
+if(!['invoice','rep'].includes(scenario))throw Error('Unknown QA scenario');
+const testFile=scenario==='rep'?'lib/integrations/receipt-response-loss.lab.test.ts':'lib/integrations/invoice-response-loss.lab.test.ts';
 if(process.argv[2]!=='--execute-lab-sandbox')throw Error('Explicit --execute-lab-sandbox required');
 const credentialsFile=process.env.COTIZA_LAB_CREDENTIALS_FILE;
 const evidence=process.env.COTIZA_LAB_RECOVERY_EVIDENCE;
@@ -33,11 +36,11 @@ try{
   DIGESTOR_FISCAL_SANDBOX_ENABLED:'true',DIGESTOR_FISCAL_SANDBOX_TENANT_ID:credentials.tenantId,
   DIGESTOR_FISCAL_SANDBOX_BASE_URL:'https://digestor-cotiza-lab-production.up.railway.app',
   DIGESTOR_FISCAL_SANDBOX_USERNAME:credentials.operatorUsername,DIGESTOR_FISCAL_SANDBOX_PASSWORD:credentials.operatorPassword,
-  DIGESTOR_FISCAL_PPD_PRODUCTION_ENABLED:'true',DIGESTOR_FISCAL_PPD_ENABLED:'false',
+  DIGESTOR_FISCAL_PPD_PRODUCTION_ENABLED:'true',DIGESTOR_FISCAL_PPD_ENABLED:scenario==='rep'?'true':'false',
   DIGESTOR_FISCAL_CANCELLATION_ENABLED:'false',DIGESTOR_FISCAL_CORRECTIONS_ENABLED:'false',
   DIGESTOR_FISCAL_OPERATIONS_PRODUCTION_ENABLED:'true'};
- child=spawn(process.execPath,[path.join(path.dirname(require.resolve('vitest')),'vitest.mjs'),'run','lib/integrations/invoice-response-loss.lab.test.ts','--maxWorkers=1','--no-file-parallelism'],{cwd:web,env,stdio:process.env.COTIZA_LAB_RECOVERY_AUTO==='true'?['ignore','pipe','inherit']:'inherit'});
- if(process.env.COTIZA_LAB_RECOVERY_AUTO==='true'){
+ child=spawn(process.execPath,[path.join(path.dirname(require.resolve('vitest')),'vitest.mjs'),'run',testFile,'--maxWorkers=1','--no-file-parallelism'],{cwd:web,env,stdio:scenario==='invoice'&&process.env.COTIZA_LAB_RECOVERY_AUTO==='true'?['ignore','pipe','inherit']:'inherit'});
+ if(scenario==='invoice'&&process.env.COTIZA_LAB_RECOVERY_AUTO==='true'){
   let launched=false,buffer='';
   child.stdout.on('data',chunk=>{
    process.stdout.write(chunk);buffer+=chunk.toString();
