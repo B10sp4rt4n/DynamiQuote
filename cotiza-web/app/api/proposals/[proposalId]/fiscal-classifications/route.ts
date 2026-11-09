@@ -2,7 +2,7 @@ import { NextResponse } from "next/server";
 import { getCurrentTenantContext } from "@/lib/auth/tenant-context";
 import { getProposalWorkflowByTenant, isProposalVisibleToViewer } from "@/lib/db/proposals";
 import { getProposalInvoiceStatusByTenant } from "@/lib/db/proposal-invoices";
-import { classificationMemory, recordClassification } from "@/lib/db/fiscal-classifications";
+import { classificationMemory, recordClassification, savedClassification } from "@/lib/db/fiscal-classifications";
 import { invoiceBasisFingerprint } from "@/lib/domain/invoice-profile";
 import { confirmClassificationSchema, SALE_NATURES, type SaleNature } from "@/lib/domain/fiscal-classification";
 import { isDigestorFiscalEnabledForTenant, searchSatCatalog, validateSatClassifications } from "@/lib/integrations/digestor-fiscal";
@@ -23,13 +23,32 @@ async function scope(context: Context) {
 export async function GET(request: Request, context: Context) {
   const access = await scope(context);
   if (access.error) return access.error;
-  const { tenant, proposal } = access;
+  const { tenant, proposal, proposalId } = access;
   const params = new URL(request.url).searchParams;
   const nature = params.get("nature") ?? "other";
   if (!Object.hasOwn(SALE_NATURES, nature)) return NextResponse.json({ error: "Selecciona el tipo de operación" }, { status: 422 });
   const item = proposal.items.find(row => row.itemNumber === Number(params.get("itemNumber")));
   if (!item) return NextResponse.json({ error: "Partida no encontrada" }, { status: 404 });
   try {
+    if (params.get("mode") === "resume") {
+      if (params.get("expectedFingerprint") !== invoiceBasisFingerprint(proposal))
+        return NextResponse.json({ error: "La propuesta cambió. Recarga para recuperar su clasificación" }, { status: 409, headers: { "Cache-Control": "no-store" } });
+      const eventId = params.get("eventId");
+      if (eventId && !/^fcl_[a-f0-9]{64}$/.test(eventId)) return NextResponse.json({ error: "Recibo de revisión inválido" }, { status: 422 });
+      const saved = await savedClassification({ tenantId: tenant.id, actorUserId: tenant.userId!,
+        proposalId, itemNumber: item.itemNumber, fingerprint: invoiceBasisFingerprint(proposal), ...(eventId ? { eventId } : {}) });
+      const headers = { "Cache-Control": "no-store" };
+      if (!saved) return NextResponse.json({ saved: null }, { headers });
+      const validation = await validateSatClassifications([saved.classification], saved.classification.catalogVersion);
+      const result = validation.items?.find(row => row.itemNumber === item.itemNumber);
+      if (!validation.valid || validation.catalog?.sourceSha256 !== saved.classification.catalogVersion
+        || !result?.valid || !result.product?.valid || !result.unit?.valid
+        || result.product.code !== saved.classification.satProductCode || result.unit.code !== saved.classification.unitCode) {
+        return NextResponse.json({ saved: null, reviewRequired: true,
+          message: "La clasificación guardada requiere revisión: el catálogo cambió o alguna clave ya no está vigente." }, { headers });
+      }
+      return NextResponse.json({ saved, validation }, { headers });
+    }
     if (params.get("mode") === "memory") {
       const memory = await classificationMemory(tenant.id, item, nature as SaleNature);
       if (!memory) return NextResponse.json({ memory: null });

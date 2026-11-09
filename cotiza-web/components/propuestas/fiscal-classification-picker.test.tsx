@@ -71,6 +71,18 @@ it("discards an older search response after its query was edited", async () => {
   expect(host.textContent).not.toContain("43233205");
 });
 
+it("does not overwrite a local edit with a late saved-classification response", async () => {
+  let finish!: (value: unknown) => void;
+  vi.stubGlobal("fetch", vi.fn((url: string) => url.includes("mode=resume")
+    ? new Promise(resolve => { finish = resolve; }) : json({ memory: null })));
+  await chooseNature();
+  await act(async () => finish({ ok: true, json: async () => ({ saved: { classification, nature: "support", remember: false },
+    validation: { valid: true, catalog, items: [{ itemNumber: 1, valid: true, product, unit }] } }) }));
+  expect(host.querySelector("select")!.value).toBe("license");
+  expect(host.textContent).not.toContain("Claves vigentes y confirmadas para esta revisión.");
+  expect(change).not.toHaveBeenCalledWith(classification, true);
+});
+
 it("guides the operator to the exact pending control, including unit and explicit review", async () => {
   vi.stubGlobal("fetch", vi.fn((url: string) => url.includes("mode=memory") ? json({ memory: null })
     : json({ catalog, results: [url.includes("kind=product") ? product : unit] })));

@@ -51,7 +51,7 @@ try {
   for (const width of [1360, 390]) {
     const page = await browser.newPage({ viewport: { width, height: 900 } });
     const errors = [], unexpected = [], counts = { confirm: 0, draft: 0, stamp: 0 };
-    let drift = false;
+    let drift = false, saved = false, preparation = null;
     page.on('pageerror', error => errors.push(error.message));
     await page.route('**/*', async route => {
       const request = route.request(), url = new URL(request.url());
@@ -64,13 +64,16 @@ try {
           if (drift) return route.fulfill({ status: 409, json: { error: 'El catálogo cambió. Revisa y confirma otra vez la clasificación.' } });
           assert.deepEqual(request.postDataJSON(), { itemNumber: 1, expectedFingerprint: basis.fingerprint, nature: 'license',
             satProductCode: product.code, unitCode: unit.code, catalogVersion: catalog.sourceSha256, confirm: true, remember: true });
-          json = { classification };
-        } else if (url.searchParams.get('mode') === 'memory') json = { memory: null };
+          saved = true; json = { classification };
+        } else if (url.searchParams.get('mode') === 'resume') json = saved && !drift
+          ? { saved: { classification, nature: 'license', remember: true }, validation: { valid: true, catalog, items: [{ itemNumber: 1, valid: true, product, unit }] } }
+          : { saved: null };
+        else if (url.searchParams.get('mode') === 'memory') json = { memory: null };
         else json = { catalog, results: [url.searchParams.get('kind') === 'product' ? product : unit] };
       } else if (url.pathname.endsWith('/invoice')) {
-        if (request.method() === 'POST') { counts.draft++; assert.deepEqual(request.postDataJSON().fiscalItems, [classification]); json = { draft: { id: 'synthetic-draft', missingFields: [] } }; }
+        if (request.method() === 'POST') { counts.draft++; assert.deepEqual(request.postDataJSON().fiscalItems, [classification]); preparation = { input: request.postDataJSON(), missingFields: [] }; json = { draft: { id: 'synthetic-draft', missingFields: [] } }; }
         else json = { ppdEnabled: true, cancellationEnabled: false, correctionsEnabled: false,
-          invoice: { draftId: null, status: null, uuid: null, stampedAt: null }, fiscalBasis: basis,
+          invoice: { draftId: preparation ? 'synthetic-draft' : null, status: preparation ? 'draft' : null, uuid: null, stampedAt: null }, preparation, fiscalBasis: basis,
           clientFiscalData: { company: 'EMPRESA SINTÉTICA SIN VALIDEZ FISCAL', rfc: 'AAA010101AAA', fiscalRegime: '601', zipCode: '01000', cfdiUse: 'G03' } };
       } else { if (url.pathname.endsWith('/stamp')) counts.stamp++; unexpected.push(url.pathname); return route.fulfill({ status: 500, json: { error: 'Unexpected synthetic endpoint' } }); }
       return route.fulfill({ json });
@@ -114,6 +117,11 @@ try {
     assert.equal(counts.draft, 1);
     await page.getByText('Prefactura preparada. Puedes revisar su vista previa.', { exact: true }).waitFor();
     await capture('draft');
+    await page.reload();
+    await page.getByText('Claves vigentes y confirmadas para esta revisión.', { exact: true }).waitFor();
+    await page.getByText('Prefactura preparada. Puedes revisar su vista previa.', { exact: true }).waitFor();
+    assert.deepEqual(counts, { confirm: 1, draft: 1, stamp: 0 });
+    await capture('reopened');
     assert.equal(await page.getByRole('button', { name: 'Timbrar (irreversible)', exact: true }).isEnabled(), true);
     await page.getByLabel('Producto o servicio SAT', { exact: true }).fill('Otra operación');
     assert.equal(await page.getByRole('button', { name: 'Regenerar prefactura', exact: true }).isEnabled(), false);

@@ -3,6 +3,7 @@ import type { ProposalAuditTimelineItem } from "@/lib/db/proposal-audit";
 // Lista positiva: los eventos nuevos quedan reservados a administradores hasta
 // revisar su contenido. No pasar payloads completos, errores ni notas internas.
 const OPERATIONAL_FIELDS: Record<string, readonly string[]> = {
+  invoice_preparation_saved: [],
   fiscal_classification_confirmed: ["itemNumber", "satProductCode", "unitCode", "nature", "catalogVersion", "remember"],
   outcome_date_changed: ["previousOutcomeAt", "outcomeAt"],
   historical_creation_reference: [],

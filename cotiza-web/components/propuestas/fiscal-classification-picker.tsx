@@ -57,9 +57,10 @@ function CatalogSearch({ kind, initialQuery, endpoint, nature, selected, onSelec
   </div>;
 }
 
-export function FiscalClassificationPicker({ proposalId, itemNumber, description, sku, fingerprint, onChange, anchorId }: {
+export function FiscalClassificationPicker({ proposalId, itemNumber, description, sku, fingerprint, onChange, anchorId, initialEventId }: {
   proposalId: string; itemNumber: number; description: string; sku?: string; fingerprint: string; anchorId?: string;
-  onChange: (classification: FiscalClassification | null) => void;
+  onChange: (classification: FiscalClassification | null, restored?: boolean) => void;
+  initialEventId?: string;
 }) {
   const id = useId();
   const fieldset = useRef<HTMLFieldSetElement>(null);
@@ -69,6 +70,30 @@ export function FiscalClassificationPicker({ proposalId, itemNumber, description
   const [reviewed, setReviewed] = useState(false), [remember, setRemember] = useState(true);
   const [confirmed, setConfirmed] = useState(false), [pending, setPending] = useState(false), [error, setError] = useState("");
   const confirming = useRef(false);
+  const editRevision = useRef(0);
+  const initialReceipt = useRef(initialEventId);
+  const changeCallback = useRef(onChange);
+  useEffect(() => { changeCallback.current = onChange; }, [onChange]);
+  useEffect(() => {
+    const controller = new AbortController(), revision = editRevision.current;
+    void fetch(`${endpoint}&mode=resume&expectedFingerprint=${fingerprint}${initialReceipt.current ? `&eventId=${initialReceipt.current}` : ""}`, { signal: controller.signal, cache: "no-store" }).then(async res => {
+      const data = await res.json();
+      if (controller.signal.aborted || editRevision.current !== revision) return;
+      if (!res.ok) { changeCallback.current(null); setError("No se pudo recuperar la clasificación guardada. Puedes revisar y confirmar las claves nuevamente."); return; }
+      if (!data.saved) { if (data.reviewRequired || initialReceipt.current) { changeCallback.current(null); setError(data.message ?? "La revisión guardada ya no se puede recuperar. Revisa y confirma las claves nuevamente."); } return; }
+      const row = data.validation?.items?.find((entry: { itemNumber: number }) => entry.itemNumber === itemNumber);
+      if (!row?.product || !row?.unit) return;
+      setNature(data.saved.nature); setRemember(data.saved.remember);
+      setProduct({ entry: row.product, catalog: data.validation.catalog });
+      setUnit({ entry: row.unit, catalog: data.validation.catalog });
+      setReviewed(true); setConfirmed(true);
+      changeCallback.current(data.saved.classification, true);
+    }).catch(() => {
+      if (!controller.signal.aborted && editRevision.current === revision)
+        { changeCallback.current(null); setError("No se pudo recuperar la clasificación guardada. Puedes revisar y confirmar las claves nuevamente."); }
+    });
+    return () => controller.abort();
+  }, [endpoint, fingerprint, itemNumber]);
   const [memory, setMemory] = useState<{ memory: ClassificationMemory; validation: SatValidation } | null>(null);
   const catalog = product?.catalog ?? unit?.catalog;
   // Both selects originate in a single immutable snapshot. Never combine versions.
@@ -86,15 +111,15 @@ export function FiscalClassificationPicker({ proposalId, itemNumber, description
     fieldset.current?.querySelector<HTMLElement>(target)?.focus();
   }
   useEffect(() => {
-    if (!nature) return;
+    if (!nature || confirmed) return;
     const controller = new AbortController();
     void fetch(`${endpoint}&mode=memory&nature=${nature}`, { signal: controller.signal }).then(async res => {
       const data = await res.json();
       if (res.ok && data.memory && !controller.signal.aborted) setMemory(data);
     }).catch(() => {});
     return () => controller.abort();
-  }, [endpoint, nature]);
-  function invalidate() { setReviewed(false); setConfirmed(false); setError(""); onChange(null); }
+  }, [endpoint, nature, confirmed]);
+  function invalidate() { editRevision.current++; setReviewed(false); setConfirmed(false); setError(""); onChange(null); }
   async function confirm() {
     if (confirming.current || confirmed || !nature || !ready || !reviewed || !product || !unit) return;
     confirming.current = true;
@@ -123,7 +148,7 @@ export function FiscalClassificationPicker({ proposalId, itemNumber, description
       </select>
     </label>
     {nature ? <>
-      {memory ? <div className="rounded bg-blue-50 p-2 text-xs text-blue-900">
+      {!confirmed && memory ? <div className="rounded bg-blue-50 p-2 text-xs text-blue-900">
         <p>Selección anterior de tu empresa: {memory.memory.satProductCode} · {memory.memory.unitCode}. Requiere revisión y nueva confirmación.</p>
         {memory.memory.catalogVersion !== memory.validation.catalog.sourceSha256 ? <p>El catálogo se actualizó desde aquella selección.</p> : null}
         {memory.validation.valid ? <button type="button" className={`${button} mt-2`} onClick={() => {
@@ -139,7 +164,7 @@ export function FiscalClassificationPicker({ proposalId, itemNumber, description
       </div>
       {catalog ? <p className="text-xs text-zinc-500"><a className="underline" href={catalog.sourceUrl} target="_blank" rel="noreferrer">Catálogo oficial SAT CFDI {catalog.cfdiVersion}</a> · publicado {catalog.publishedAt} · consultado {catalog.checkedAt}</p> : null}
       <p className="text-xs text-zinc-600">La búsqueda relaciona conceptos con descripciones oficiales. Revisa que las claves correspondan a la operación que vendes.</p>
-      <label className="flex gap-2 text-xs text-zinc-700"><input type="checkbox" checked={reviewed} onChange={event => { setReviewed(event.target.checked); setConfirmed(false); onChange(null); }} />Revisé la descripción y las dos claves de esta partida.</label>
+      <label className="flex gap-2 text-xs text-zinc-700"><input type="checkbox" checked={reviewed} onChange={event => { invalidate(); setReviewed(event.target.checked); }} />Revisé la descripción y las dos claves de esta partida.</label>
       <label className="flex gap-2 text-xs text-zinc-700"><input type="checkbox" checked={remember} onChange={event => { invalidate(); setRemember(event.target.checked); }} />Recordar para este producto en esta empresa</label>
       <button type="button" data-confirm-classification aria-describedby={`${id}-next`} className="rounded bg-blue-700 px-3 py-2 text-xs font-semibold text-white disabled:opacity-50" disabled={!ready || !reviewed || pending || confirmed} onClick={() => void confirm()}>
         {pending ? "Validando y guardando…" : confirmed ? "Clasificación confirmada" : "Confirmar clasificación"}

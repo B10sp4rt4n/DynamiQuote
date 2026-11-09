@@ -1,7 +1,7 @@
 name: Fiscal cycle (synthetic)
 on:
   push:
-    branches: [feat/fiscal-payment-cancellation, feat/ppd-production-release, feat/fiscal-general-production, feat/fiscal-classification-aup, fix/prefactura-guided-readiness]
+    branches: [feat/fiscal-payment-cancellation, feat/ppd-production-release, feat/fiscal-general-production, feat/fiscal-classification-aup, fix/prefactura-guided-readiness, fix/fiscal-classification-resume]
   workflow_dispatch:
 permissions:
   contents: read
@@ -24,7 +24,7 @@ jobs:
       - run: ./cotiza-web/node_modules/.bin/tsc --noEmit --project cotiza-web/tsconfig.json
       - run: npm --prefix cotiza-web test -- --maxWorkers=2 --exclude validate-quote-lifecycle.e2e.test.ts --reporter=dot
   classification-visual:
-    if: github.ref == 'refs/heads/feat/fiscal-classification-aup' || github.ref == 'refs/heads/fix/prefactura-guided-readiness'
+    if: github.ref == 'refs/heads/feat/fiscal-classification-aup' || github.ref == 'refs/heads/fix/prefactura-guided-readiness' || github.ref == 'refs/heads/fix/fiscal-classification-resume'
     runs-on: ubuntu-24.04
     timeout-minutes: 15
     env:
@@ -55,3 +55,48 @@ jobs:
           path: artifacts/fiscal-classification
           retention-days: 3
           if-no-files-found: warn
+
+  preparation-persistence:
+    if: github.ref == 'refs/heads/fix/fiscal-classification-resume'
+    runs-on: ubuntu-24.04
+    timeout-minutes: 15
+    services:
+      postgres:
+        image: postgres:18
+        env:
+          POSTGRES_PASSWORD: synthetic-local-only
+          POSTGRES_DB: cotiza_synthetic
+        ports:
+          - 5432:5432
+        options: >-
+          --health-cmd pg_isready
+          --health-interval 10s
+          --health-timeout 5s
+          --health-retries 5
+    env:
+      DATABASE_URL: postgresql://postgres:synthetic-local-only@127.0.0.1:5432/cotiza_synthetic
+      COTIZA_TEST_DATABASE_URL: postgresql://postgres:synthetic-local-only@127.0.0.1:5432/cotiza_synthetic
+      NEXT_TELEMETRY_DISABLED: '1'
+    steps:
+      - uses: actions/checkout@11bd71901bbe5b1630ceea73d27597364c9af683
+        with:
+          persist-credentials: false
+      - uses: actions/setup-node@49933ea5288caeca8642d1e84afbd3f7d6820020
+        with:
+          node-version: '22'
+      - run: npm ci --no-audit --no-fund
+      - run: npm --prefix cotiza-web run db:generate
+      - name: Initialize disposable schema
+        working-directory: cotiza-web
+        run: |
+          ./node_modules/.bin/prisma migrate diff --from-empty --to-schema prisma/schema.prisma --script > "$RUNNER_TEMP/schema.sql"
+          SCHEMA_PATH="$RUNNER_TEMP/schema.sql" node --input-type=module <<'JS'
+          import { readFileSync } from 'node:fs';
+          import pg from 'pg';
+          const client = new pg.Client({ connectionString: process.env.DATABASE_URL });
+          await client.connect();
+          try { await client.query(readFileSync(process.env.SCHEMA_PATH, 'utf8')); }
+          finally { await client.end(); }
+          JS
+      - name: Confirm preparation persists, isolates identities, and rolls back on failure
+        run: npm --prefix cotiza-web test -- lib/db/invoice-preparations.integration.test.ts --maxWorkers=1 --no-file-parallelism

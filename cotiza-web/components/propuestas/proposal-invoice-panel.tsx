@@ -97,6 +97,7 @@ export function ProposalInvoicePanel({ proposalId, recipientCompany }: ProposalI
           clientFiscalData?: ClientFiscalData | null;
           error?: string;
           invoice?: InvoiceStatus;
+          preparation?: { input: FormState & { fiscalItems: FiscalClassification[] }; missingFields: string[] } | null;
           fiscalBasis?: { fingerprint: string; currency: string | null; items: Array<{ itemNumber: number; description: string; sku?: string }> };
         };
 
@@ -116,7 +117,8 @@ export function ProposalInvoicePanel({ proposalId, recipientCompany }: ProposalI
         if (data.fiscalBasis) {
           setItemsFingerprint(data.fiscalBasis.fingerprint);
           setInvoiceCurrency(data.fiscalBasis.currency);
-          setFiscalItems(data.fiscalBasis.items.map(item => ({ ...item, satProductCode: "", unitCode: "" })));
+          setFiscalItems(data.fiscalBasis.items.map(item => ({ ...item, satProductCode: "", unitCode: "",
+            ...data.preparation?.input.fiscalItems.find(saved => saved.itemNumber === item.itemNumber) })));
         }
 
         if (data.clientFiscalData) {
@@ -130,6 +132,14 @@ export function ProposalInvoicePanel({ proposalId, recipientCompany }: ProposalI
           }));
         } else if (recipientCompany) {
           setForm((prev) => ({ ...prev, customerName: recipientCompany }));
+        }
+        if (data.preparation) {
+          const saved = data.preparation.input;
+          setForm({ customerName: saved.customerName, customerRegimen: saved.customerRegimen, customerRfc: saved.customerRfc,
+            customerUseCfdi: saved.customerUseCfdi, customerZip: saved.customerZip, paymentForm: saved.paymentForm,
+            paymentMethod: saved.paymentMethod, saveToClient: false });
+          setMissingFields(data.preparation.missingFields);
+          setDraftDirty(false);
         }
       } catch {
         if (!cancelled) setError("Error de red al consultar el estatus de facturación");
@@ -445,7 +455,8 @@ export function ProposalInvoicePanel({ proposalId, recipientCompany }: ProposalI
         {fiscalItems.map((item, index) => (
           <FiscalClassificationPicker key={`${itemsFingerprint}:${item.itemNumber}`} proposalId={proposalId} itemNumber={item.itemNumber}
             description={item.description} sku={item.sku} fingerprint={itemsFingerprint} anchorId={`${id}-item-${item.itemNumber}`}
-            onChange={classification => { setDraftDirty(true); setFiscalItems(previous => previous.map((row, i) => i === index
+            initialEventId={item.classificationEventId}
+            onChange={(classification, restored) => { if (!restored) setDraftDirty(true); setFiscalItems(previous => previous.map((row, i) => i === index
               ? { itemNumber: row.itemNumber, description: row.description, sku: row.sku, ...(classification ?? {}) } : row)); }} />
         ))}
       </div>
