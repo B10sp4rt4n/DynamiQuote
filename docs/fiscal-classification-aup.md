@@ -55,11 +55,21 @@ la ejecución completa con dos workers aprobó las 904 pruebas sin ampliar
 tiempos límite ni modificar esas suites. TypeScript y ESLint de los tres
 archivos TSX de esta continuación también aprobaron.
 
-La comprobación visual en escritorio y móvil sigue pendiente: el navegador
-automatizado no pudo iniciar por restricciones de sockets y el navegador
-compartido no pudo acceder al servidor local y rechazó abrir archivos locales
-por su política de protocolos. No se presenta esta comprobación
-como realizada.
+La vista previa Vercel del commit 339fe5e está READY. Se verificó acceso mediante
+Clerk/GitHub y SynAppsSys, pero el panel fiscal permanece oculto: las variables
+DIGESTOR_FISCAL_BASE_URL/USERNAME/PASSWORD/TENANT_ID están limitadas a Producción.
+El backend del catálogo sigue siendo dependencia de publicación. Esta revisión
+no confirma un recorrido fiscal conectado en Preview.
+
+`scripts/check_fiscal_classification_ui.mjs` usa los componentes reales del
+panel y sus estilos, con respuestas HTTP sintéticas y bloqueo de toda salida
+externa. Comprueba candidatos, confirmación explícita, doble clic, creación de
+prefactura, invalidación por edición, rechazo de catálogo cambiado y desbordamiento
+horizontal a 1360 y 390 px; captura cuatro estados por tamaño. No pulsa Timbrar.
+El job classification-visual de fiscal-cycle.yml lo ejecuta en GitHub y conserva
+capturas y result.json como artefacto fiscal-classification-visual durante 3 días.
+El resultado del job determina si esta comprobación aprobó; la aceptación
+integrada con Digestor real se verifica por separado después de publicarlo.
 
 Orden: publicar Digestor feat/sat-catalog-search-aup, verificar /status, /search
 y /validate con sesión autorizada, y luego publicar Cotiza. El frontend nuevo
