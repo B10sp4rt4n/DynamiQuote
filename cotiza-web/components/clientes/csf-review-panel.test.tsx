@@ -88,6 +88,10 @@ it("integrates with Clients and saves only after review and a separate Guardar",
   await act(async () => button("Confirmar y aplicar al formulario").click());
   expect(container.querySelector<HTMLInputElement>('input[placeholder="Nombre de la empresa"]')!.value).toBe(extracted.company);
   expect(saves).toHaveLength(0); expect(button("Guardar").disabled).toBe(false);
+  await act(async () => {
+    const usage = container.querySelector<HTMLSelectElement>("#client-cfdi-use")!;
+    usage.value = "G03"; usage.dispatchEvent(new Event("change", { bubbles: true }));
+  });
   await act(async () => button("Guardar").click());
-  expect(saves).toHaveLength(1); expect(saves[0]).toMatchObject(extracted);
+  expect(saves).toHaveLength(1); expect(saves[0]).toMatchObject({ ...extracted, cfdiUse: "G03" });
 });

@@ -4,6 +4,8 @@ import Link from "next/link";
 import { useCallback, useEffect, useRef, useState } from "react";
 
 import { CsfReviewPanel } from "@/components/clientes/csf-review-panel";
+import { CfdiUseSelect } from "@/components/clientes/cfdi-use-select";
+import { clientCfdiUseIssue } from "@/lib/domain/cfdi-uses";
 import type { ClientContact } from "@/lib/db/client-contacts";
 import type { ClientSummary } from "@/lib/db/clients";
 import type { InteractionLog } from "@/lib/db/interaction-logs";
@@ -573,6 +575,7 @@ export function ClientShell({ clientLogos, initialClients, csfEnabled = false }:
 
   function setField(field: keyof FormState, value: string) {
     setForm((prev) => ({ ...prev, [field]: value }));
+    if (["rfc", "company", "zipCode", "fiscalRegime", "cfdiUse"].includes(field)) resetFiscalValidation();
   }
 
   async function handleClientLogoUpload() {
@@ -642,6 +645,8 @@ export function ClientShell({ clientLogos, initialClients, csfEnabled = false }:
 
   async function handleSave() {
     if (csfPending || saving) return;
+    const cfdiIssue = clientCfdiUseIssue(form.cfdiUse, form.rfc, form.fiscalRegime);
+    if (cfdiIssue) { setMessage({ text: cfdiIssue, type: "error" }); return; }
     if (!form.company.trim()) {
       setMessage({ text: "La empresa es requerida.", type: "error" });
       return;
@@ -1013,15 +1018,8 @@ export function ClientShell({ clientLogos, initialClients, csfEnabled = false }:
                   value={form.zipCode}
                 />
               </div>
-              <div>
-                <label className="mb-1 block text-xs font-medium text-zinc-700">Uso CFDI</label>
-                <input
-                  className="w-full rounded-lg border border-zinc-300 bg-white px-3 py-2 text-sm text-zinc-900"
-                  onChange={(e) => setField("cfdiUse", e.target.value)}
-                  placeholder="Ej. G03"
-                  value={form.cfdiUse}
-                />
-              </div>
+              <CfdiUseSelect value={form.cfdiUse} rfc={form.rfc} regime={form.fiscalRegime}
+                onChange={(value) => setField("cfdiUse", value)} />
               <div className="rounded-lg border border-zinc-200 bg-zinc-50 p-3 sm:col-span-2">
                 <div className="flex items-center justify-between gap-3">
                   <p className="text-xs text-zinc-600">Valida RFC, CP y régimen contra los catálogos del SAT antes de guardar.</p>
@@ -1371,7 +1369,7 @@ export function ClientShell({ clientLogos, initialClients, csfEnabled = false }:
               </button>
               <button
                 className="rounded-lg bg-zinc-900 px-4 py-2 text-sm font-medium text-white disabled:opacity-50"
-                disabled={saving || csfPending}
+                disabled={saving || csfPending || Boolean(clientCfdiUseIssue(form.cfdiUse, form.rfc, form.fiscalRegime))}
                 onClick={() => { void handleSave(); }}
                 type="button"
               >
