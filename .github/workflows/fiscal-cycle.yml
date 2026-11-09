@@ -1,7 +1,7 @@
 name: Fiscal cycle (synthetic)
 on:
   push:
-    branches: [feat/fiscal-payment-cancellation, feat/ppd-production-release, feat/fiscal-general-production, feat/fiscal-classification-aup]
+    branches: [feat/fiscal-payment-cancellation, feat/ppd-production-release, feat/fiscal-general-production, feat/fiscal-classification-aup, fix/prefactura-guided-readiness]
   workflow_dispatch:
 permissions:
   contents: read
@@ -24,7 +24,7 @@ jobs:
       - run: ./cotiza-web/node_modules/.bin/tsc --noEmit --project cotiza-web/tsconfig.json
       - run: npm --prefix cotiza-web test -- --maxWorkers=2 --exclude validate-quote-lifecycle.e2e.test.ts --reporter=dot
   classification-visual:
-    if: github.ref == 'refs/heads/feat/fiscal-classification-aup'
+    if: github.ref == 'refs/heads/feat/fiscal-classification-aup' || github.ref == 'refs/heads/fix/prefactura-guided-readiness'
     runs-on: ubuntu-24.04
     timeout-minutes: 15
     env:

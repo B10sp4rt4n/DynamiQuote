@@ -75,3 +75,27 @@ Orden: publicar Digestor feat/sat-catalog-search-aup, verificar /status, /search
 y /validate con sesión autorizada, y luego publicar Cotiza. El frontend nuevo
 depende de esas rutas. Sin migración ni variables nuevas. Las ramas quedan para
 revisión; no implican autorización de despliegue ni operaciones fiscales reales.
+
+
+## Guía de preparación de prefactura (9 de noviembre de 2026)
+
+Cada partida muestra el siguiente requisito pendiente: naturaleza de la operación,
+producto SAT, unidad SAT, revisión explícita o confirmación. «Ir al siguiente paso»
+enfoca el control correspondiente; no selecciona ni confirma claves automáticamente.
+El resumen del panel indica cuántas partidas están confirmadas y enlaza a las
+pendientes (hasta tres accesos para mantener compacto el resumen).
+
+Los datos del receptor se revisan con los mismos esquemas de campo utilizados en
+la API. El resumen explica el error y lleva al campo; generar queda bloqueado hasta
+corregirlo. Esta revisión de formato no acredita validación SAT/PAC. Se conservan
+los controles del servidor, el perfil MXN, la confirmación de clasificación, la
+invalidación por edición y el paso separado de timbrado. No añade migraciones,
+variables, servicios ni operaciones reales.
+
+Las pruebas de recorrido conectan React con handlers reales y el registro/verificación
+de recibos; autenticación, persistencia y Digestor/PAC siguen aislados. Comprueban
+el foco en el control pendiente, la corrección de CP, el acceso a la vista previa,
+el bloqueo USD y la conservación de receptor, moneda, descripción, cantidad, precio,
+IVA y método/forma de pago al preparar el borrador. La comprobación de navegador
+incluye el estado de unidad pendiente y el borrador preparado en ambos tamaños.
+No equivale a una prueba productiva ni a aceptación fiscal de una operación real.

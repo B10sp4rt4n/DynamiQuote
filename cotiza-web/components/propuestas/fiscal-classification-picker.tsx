@@ -32,7 +32,7 @@ function CatalogSearch({ kind, initialQuery, endpoint, nature, selected, onSelec
       if (!controller.signal.aborted) setError(err instanceof Error ? err.message : "No se pudo buscar");
     } finally { if (!controller.signal.aborted) setLoading(false); }
   }
-  return <div className="min-w-0 space-y-2">
+  return <div data-catalog={kind} className="min-w-0 space-y-2">
     <label htmlFor={id} className="text-xs font-semibold text-zinc-700">{kind === "product" ? "Producto o servicio SAT" : "Unidad SAT"}</label>
     <div className="flex items-start gap-2">
       <input id={id} className={control} maxLength={200} value={query} placeholder={kind === "product" ? "Ej. software de seguridad o clave" : "Ej. unidad de servicio, pieza o E48"}
@@ -57,11 +57,12 @@ function CatalogSearch({ kind, initialQuery, endpoint, nature, selected, onSelec
   </div>;
 }
 
-export function FiscalClassificationPicker({ proposalId, itemNumber, description, sku, fingerprint, onChange }: {
-  proposalId: string; itemNumber: number; description: string; sku?: string; fingerprint: string;
+export function FiscalClassificationPicker({ proposalId, itemNumber, description, sku, fingerprint, onChange, anchorId }: {
+  proposalId: string; itemNumber: number; description: string; sku?: string; fingerprint: string; anchorId?: string;
   onChange: (classification: FiscalClassification | null) => void;
 }) {
   const id = useId();
+  const fieldset = useRef<HTMLFieldSetElement>(null);
   const endpoint = `/api/proposals/${proposalId}/fiscal-classifications?itemNumber=${itemNumber}`;
   const [nature, setNature] = useState<SaleNature | "">("");
   const [product, setProduct] = useState<Selected | null>(null), [unit, setUnit] = useState<Selected | null>(null);
@@ -72,6 +73,18 @@ export function FiscalClassificationPicker({ proposalId, itemNumber, description
   const catalog = product?.catalog ?? unit?.catalog;
   // Both selects originate in a single immutable snapshot. Never combine versions.
   const ready = product?.entry.valid && unit?.entry.valid && product.catalog.sourceSha256 === unit.catalog.sourceSha256;
+  const nextStep = !nature ? "Selecciona qué estás facturando."
+    : !product?.entry.valid ? "Busca y selecciona el producto o servicio SAT."
+    : !unit?.entry.valid ? "Busca y selecciona la Unidad SAT."
+    : !ready ? "Vuelve a seleccionar las dos claves del mismo catálogo."
+    : !reviewed ? "Marca la casilla de revisión de las dos claves."
+    : "Pulsa Confirmar clasificación para guardar tu revisión.";
+  function focusNextStep() {
+    const target = !nature ? "select" : !product?.entry.valid ? '[data-catalog="product"] input'
+      : !unit?.entry.valid ? '[data-catalog="unit"] input' : !ready ? '[data-catalog="product"] input'
+      : !reviewed ? 'input[type="checkbox"]' : '[data-confirm-classification]';
+    fieldset.current?.querySelector<HTMLElement>(target)?.focus();
+  }
   useEffect(() => {
     if (!nature) return;
     const controller = new AbortController();
@@ -96,8 +109,12 @@ export function FiscalClassificationPicker({ proposalId, itemNumber, description
     } catch (err) { invalidate(); setError(err instanceof Error ? err.message : "No se pudo confirmar"); }
     finally { confirming.current = false; setPending(false); }
   }
-  return <fieldset disabled={pending} className="min-w-0 space-y-3 rounded-lg border border-zinc-200 p-3">
+  return <fieldset ref={fieldset} id={anchorId} tabIndex={-1} disabled={pending} className="min-w-0 space-y-3 rounded-lg border border-zinc-200 p-3">
     <legend className="px-1 text-sm font-semibold text-zinc-900">{itemNumber}. {description}</legend>
+    <div className={confirmed ? "rounded bg-emerald-50 p-2 text-xs text-emerald-900" : "rounded bg-amber-50 p-2 text-xs text-amber-900"}>
+      <p id={`${id}-next`} role="status">{pending ? "Validando y guardando la clasificación…" : confirmed ? "Partida lista para generar la prefactura." : `Siguiente paso: ${nextStep}`}</p>
+      {!confirmed && !pending ? <button type="button" className="mt-2 min-h-9 font-semibold underline" onClick={focusNextStep}>Ir al siguiente paso</button> : null}
+    </div>
     {sku ? <p className="text-xs text-zinc-500">SKU: {sku}</p> : null}
     <label htmlFor={id} className="block text-xs font-semibold text-zinc-700">¿Qué estás facturando?
       <select id={id} className={control} value={nature} onChange={event => { invalidate(); setNature(event.target.value as SaleNature | ""); setProduct(null); setUnit(null); setMemory(null); }}>
@@ -124,7 +141,7 @@ export function FiscalClassificationPicker({ proposalId, itemNumber, description
       <p className="text-xs text-zinc-600">La búsqueda relaciona conceptos con descripciones oficiales. Revisa que las claves correspondan a la operación que vendes.</p>
       <label className="flex gap-2 text-xs text-zinc-700"><input type="checkbox" checked={reviewed} onChange={event => { setReviewed(event.target.checked); setConfirmed(false); onChange(null); }} />Revisé la descripción y las dos claves de esta partida.</label>
       <label className="flex gap-2 text-xs text-zinc-700"><input type="checkbox" checked={remember} onChange={event => { invalidate(); setRemember(event.target.checked); }} />Recordar para este producto en esta empresa</label>
-      <button type="button" className="rounded bg-blue-700 px-3 py-2 text-xs font-semibold text-white disabled:opacity-50" disabled={!ready || !reviewed || pending || confirmed} onClick={() => void confirm()}>
+      <button type="button" data-confirm-classification aria-describedby={`${id}-next`} className="rounded bg-blue-700 px-3 py-2 text-xs font-semibold text-white disabled:opacity-50" disabled={!ready || !reviewed || pending || confirmed} onClick={() => void confirm()}>
         {pending ? "Validando y guardando…" : confirmed ? "Clasificación confirmada" : "Confirmar clasificación"}
       </button>
       {confirmed ? <p role="status" className="text-xs font-medium text-emerald-800">Claves vigentes y confirmadas para esta revisión.</p> : null}

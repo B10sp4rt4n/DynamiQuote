@@ -70,3 +70,29 @@ it("discards an older search response after its query was edited", async () => {
   await act(async () => resolve({ ok: true, json: async () => ({ catalog, results: [product] }) }));
   expect(host.textContent).not.toContain("43233205");
 });
+
+it("guides the operator to the exact pending control, including unit and explicit review", async () => {
+  vi.stubGlobal("fetch", vi.fn((url: string) => url.includes("mode=memory") ? json({ memory: null })
+    : json({ catalog, results: [url.includes("kind=product") ? product : unit] })));
+  await act(async () => root.render(<FiscalClassificationPicker {...props} />));
+  expect(host.textContent).toContain("Siguiente paso: Selecciona qué estás facturando.");
+  await act(async () => button("Ir al siguiente paso").click());
+  expect(document.activeElement).toBe(host.querySelector("select"));
+  await chooseNature();
+  expect(host.textContent).toContain("Busca y selecciona el producto o servicio SAT.");
+  await act(async () => buttons().filter(row => row.textContent === "Buscar")[0].click());
+  await act(async () => button("43233205").click());
+  expect(host.textContent).toContain("Siguiente paso: Busca y selecciona la Unidad SAT.");
+  await act(async () => button("Ir al siguiente paso").click());
+  expect(document.activeElement).toBe(host.querySelector('[data-catalog="unit"] input'));
+  await act(async () => setInput(document.activeElement as HTMLInputElement, "E48"));
+  await act(async () => buttons().filter(row => row.textContent === "Buscar")[1].click());
+  await act(async () => button("E48").click());
+  expect(host.textContent).toContain("Marca la casilla de revisión de las dos claves.");
+  await act(async () => button("Ir al siguiente paso").click());
+  expect(document.activeElement).toBe(host.querySelector('input[type="checkbox"]'));
+  await act(async () => host.querySelector<HTMLInputElement>('input[type="checkbox"]')!.click());
+  await act(async () => button("Ir al siguiente paso").click());
+  expect(document.activeElement).toBe(button("Confirmar clasificación"));
+  expect(change).not.toHaveBeenCalledWith(classification);
+});
