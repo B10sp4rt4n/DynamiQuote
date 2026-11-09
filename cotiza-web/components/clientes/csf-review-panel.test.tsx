@@ -52,6 +52,18 @@ it("discards a review without modifying client data and releases its preview", a
   expect(pending).toHaveBeenLastCalledWith(false); expect(container.querySelector('input[type="checkbox"]')).toBeNull();
 });
 
+it("highlights doubtful OCR fields and keeps human consent mandatory", async () => {
+  const scanned = { ...review, extraction: { method: "ocr", reviewRequired: true },
+    fieldWarnings: { rfc: "Lectura OCR dudosa. Compara este dato con el PDF y corrígelo si hace falta." } };
+  fetchMock.mockImplementation(async (_url, init) => ({ ok: true, json: async () => init?.method === "POST"
+    ? { token: "synthetic" } : { status: "done", review: scanned } }));
+  await uploadAndRead();
+  expect(container.textContent).toContain("Se leyó un escaneo");
+  expect(container.textContent).toContain("Lectura OCR dudosa");
+  expect(button("Confirmar y aplicar al formulario").disabled).toBe(true);
+  expect(apply).not.toHaveBeenCalled();
+});
+
 it("integrates with Clients and saves only after review and a separate Guardar", async () => {
   const saves: Record<string, unknown>[] = [];
   fetchMock.mockImplementation(async (url, init) => {

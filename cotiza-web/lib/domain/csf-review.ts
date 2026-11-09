@@ -22,6 +22,9 @@ export type CsfReview = {
   suggestions: { field: string; suggested_value: string; reason?: string; confidence?: number }[];
   validationScope: string;
   regimeOptions?: { code: string; label: string }[];
+  extraction?: { method: "native" | "ocr" | "mixed"; reviewRequired?: boolean; pageCount?: number;
+    ocrPages?: { page: number; rotation: number }[] };
+  fieldWarnings?: Record<string, string>;
 };
 
 export const CSF_FIELDS = [

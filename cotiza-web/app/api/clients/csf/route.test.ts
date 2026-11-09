@@ -89,4 +89,12 @@ describe("CSF upload, ownership and explicit confirmation", () => {
     expect((await read()).status).toBe(502); expect((await read()).status).toBe(200);
     expect(mocks.upload).not.toHaveBeenCalled();
   });
+  it.each(["OCR_UNAVAILABLE", "OCR_TIMEOUT", "OCR_UNREADABLE", "PDF_LIMIT", "PDF_ENCRYPTED", "PDF_INVALID"])("provides an actionable scan failure without exposing internal errors: %s", async (code) => {
+    mocks.job.mockResolvedValue({ status: "failed", error: code + ": private engine details" });
+    const response = await GET(new Request("http://localhost/api/clients/csf", { headers: { "X-CSF-Review": signCsfJob("job-a", tenant) } }));
+    const body = await response.json();
+    expect(body.status).toBe("failed");
+    expect(body.error).not.toContain("private engine details");
+    expect(body.error).not.toContain("requieren OCR");
+  });
 });

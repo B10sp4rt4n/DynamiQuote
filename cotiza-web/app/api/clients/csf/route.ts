@@ -109,7 +109,18 @@ export async function GET(request: Request) {
   if (!jobId) return json({ error: "La sesión de revisión caducó o no pertenece a este usuario" }, 403);
   try {
     const job = await getDocumentJobStatus(jobId);
-    if (job.status === "failed") return json({ status: "failed", error: "No se pudo leer la CSF. Usa el PDF original con texto; los escaneados requieren OCR" });
+    if (job.status === "failed") {
+      const code = job.error?.split(":")[0] ?? "";
+      const messages: Record<string, string> = {
+        OCR_UNAVAILABLE: "La lectura de escaneos no está disponible en este momento. Intenta más tarde o usa el PDF con texto.",
+        OCR_TIMEOUT: "El escaneo tardó demasiado en leerse. Usa una copia más clara o separa las páginas.",
+        OCR_UNREADABLE: "No se pudo leer el escaneo. Usa una copia más clara de la constancia.",
+        PDF_LIMIT: "El PDF supera los límites de lectura. Separa la constancia en un archivo más pequeño.",
+        PDF_ENCRYPTED: "El PDF tiene contraseña. Guarda una copia sin contraseña para leerla.",
+        PDF_INVALID: "El PDF está dañado o no se puede abrir. Vuelve a guardarlo y cárgalo de nuevo.",
+      };
+      return json({ status: "failed", error: messages[code] ?? "No se identificó una CSF legible. Revisa el archivo o usa una copia más clara." });
+    }
     if (job.status !== "done" || !job.documentId) return json({ status: job.status });
     const csf = await getCsf(job.documentId);
     if (!csf.review) return json({ error: "Digestor requiere la actualización de revisión de CSF" }, 503);
