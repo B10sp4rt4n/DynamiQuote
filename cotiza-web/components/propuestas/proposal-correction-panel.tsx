@@ -86,6 +86,10 @@ export function ProposalCorrectionPanel({ proposalId, paymentId }: { proposalId:
     {state ? <>
       <p className="mt-2 break-all text-xs">Comprobante activo en Cotiza: {state.active_uuid}</p>
       <div className="mt-2 flex flex-wrap gap-2 text-sm"><a className="rounded border px-3 py-2" href={`${path}?format=xml`}>XML activo</a><a className="rounded border px-3 py-2" target="_blank" rel="noreferrer" href={`${path}?format=pdf`}>PDF activo</a></div>
+      {state.history.length ? <div className="mt-2 text-sm">
+        <a className="inline-block rounded border px-3 py-2" href={`${path}?format=diagnostic`}>Descargar diagnóstico de conciliación</a>
+        <p className="mt-1 text-xs text-zinc-600">Incluye referencias y estados para consultar al proveedor. La descarga no emite ni cancela comprobantes.</p>
+      </div> : null}
       {state.can_correct === false ? <p className="mt-3 text-sm text-amber-900">El comprobante tiene una cancelación registrada. Conserva su expediente y revisa el estado fiscal antes de corregir.</p> : null}
       {!current && state.can_correct !== false ? <fieldset disabled={busy} className="mt-4 grid gap-3 sm:grid-cols-2">
         <legend className="mb-2 font-medium">Datos para la sustituta</legend>

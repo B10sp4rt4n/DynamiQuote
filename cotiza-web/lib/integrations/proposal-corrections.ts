@@ -1,4 +1,5 @@
 import 'server-only';
+import { createHash } from 'node:crypto';
 import { NextResponse } from 'next/server';
 import { z } from 'zod';
 import { authorizeProposalFiscalDocument, paymentFailure } from './proposal-payments';
@@ -25,6 +26,32 @@ export async function readCorrection(request: Request, context: Context) {
     const result = await getFiscalCorrection(auth.draftId, paymentId);
     const query = new URL(request.url).searchParams;
     const format = query.get('format');
+    if (format === 'diagnostic') {
+      const revisionId = query.get('revision');
+      const rows = revisionId ? result.history.filter(item => item.id === revisionId) : result.history;
+      if (revisionId && !rows.length) return NextResponse.json({ error: 'Sustitución no encontrada' }, { status: 404 });
+      // Allowlist the support references. Never export raw XML, credentials or free text.
+      const diagnostic = {
+        schema: 'cotiza.fiscal-correction-diagnostic', version: 1,
+        generated_at: new Date().toISOString(),
+        environment: auth.environment,
+        proposal_id: proposalId, draft_id: auth.draftId, payment_id: paymentId ?? null,
+        kind: result.kind, active_uuid: result.active_uuid, pending: result.pending,
+        guidance: 'Este diagnóstico no confirma la emisión ni la cancelación ante el PAC. Ante un resultado incierto, consulta al proveedor antes de repetir la operación.',
+        revisions: rows.map(row => ({
+          revision_id: row.id,
+          pac_reference: { field: 'IdComprobante', value: `revision-${row.id}` },
+          status: row.status, source_uuid: row.source_uuid, result_uuid: row.result_uuid,
+          source_cancellation_status: row.source_cancellation_status,
+          request_xml_sha256: row.request_xml_base64
+            ? createHash('sha256').update(Buffer.from(row.request_xml_base64, 'base64')).digest('hex') : null,
+        })),
+      };
+      return NextResponse.json(diagnostic, { headers: {
+        'Content-Disposition': 'attachment; filename="diagnostico-sustitucion-fiscal.json"',
+        'Cache-Control': 'no-store', 'X-Content-Type-Options': 'nosniff',
+      } });
+    }
     if (format === 'xml' || format === 'pdf') {
       const revisionId = query.get('revision');
       const row = revisionId ? result.history.find(item => item.id === revisionId) : undefined;
