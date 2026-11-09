@@ -8,8 +8,8 @@ Salvador. Base revisada: Cotiza `ddda1a5` y Digestor `e3aede1`.
 | Orden | Pendiente | Criterio verificable | Estado |
 | --- | --- | --- | --- |
 | 1 | Preparar, guardar y reabrir prefactura | Recuperar datos y claves exactamente revisados; validar identidad, empresa, revisión y catálogo; conservar vista previa y bloquear información obsoleta. Probar persistencia y reapertura. | Publicado y verificado en producción |
-| 2 | Prefactura → CFDI y recuperación | Un solo timbrado ante doble clic, concurrencia o respuesta perdida; recuperación de UUID/XML/PDF sin volver a emitir. | Implementado y probado con HTTP/SQL, PostgreSQL real, navegador y PAC público sandbox; publicación pendiente |
-| 3 | Pagos PPD → REP → saldo | Varias parcialidades, recuperación y saldo comprobables; cobros económicos separados del estado fiscal. | Publicado; falta acreditar recorrido completo conectado |
+| 2 | Prefactura → CFDI y recuperación | Un solo timbrado ante doble clic, concurrencia o respuesta perdida; recuperación de UUID/XML/PDF sin volver a emitir. | Publicado y comprobado en producción: Digestor #15 y Cotiza #74 |
+| 3 | Pagos PPD → REP → saldo | Varias parcialidades, recuperación y saldo comprobables; cobros económicos separados del estado fiscal. | Recorrido HTTP/SQL y PAC sandbox acreditados; mejoras de recuperación/completitud en revisión |
 | 4 | Cancelación, sustitución y corrección | Acuse separado de confirmación SAT; UUID/revisión exactos; motivo 01 y corrección REP conservando documentos y pagos. | Una cancelación real acreditada; otros perfiles pendientes |
 | 5 | Alcance fiscal restante | Matriz de USD/tipo de cambio, notas de crédito y facturas con pagos: soporte demostrado o bloqueo explícito; evidencia y siguiente acción. | Pendiente de consolidación |
 
@@ -178,3 +178,40 @@ límite explícito de que la aceptación sandbox corresponde al transporte REST
 público; no se ejercitó el transporte SOAP de la instalación productiva ni se
 certificaron sellos. No declarar desplegado este cambio. Después de publicarlo,
 el siguiente pendiente es el recorrido PPD → REP → saldo.
+
+
+### Cierre productivo del pendiente 2
+
+Digestor #15 publicado en Railway, commit
+`6aae71216e9d1faaecd9f05deafe6bfb1bea7c63`, deployment
+`b2370809-988d-46d5-b551-c775988381b1` SUCCESS y health200. Cotiza #74 publicado
+después, commit `f5b8d456d7e606c97ec120e205f3d0220f35d959`, deployment
+`dpl_CU8eqjmGccWKDCAQTvr5mtfCcmhv` READY. Comprobación conectada: descarga
+XML/PDF de CFDI existente con UUID coincidente, preparación recuperada y rutas
+sin sesión rechazadas401. Sin emisión, pago, cancelación ni correo productivos.
+
+## Pendiente 3: cierre conectado PPD → pagos → REP → saldo
+
+Implementado en `fix/ppd-connected-cycle`, dependiente de Digestor PR #16.
+
+- Distingue saldo económico liquidado y complementos pendientes; saldo0 no
+  declara completitud fiscal mientras existan REP por resolver.
+- La recuperación sólo modifica `unknown`: un trabajador de timbrado activo
+  conserva su reserva. Verifica solicitud original, declaración, factura e
+  historial antes y después de consultar al proveedor.
+- La pantalla conserva bloqueo si se pierde la respuesta del REP y evita una
+  segunda confirmación por doble clic. XML y PDF deben representar el mismo UUID.
+- Integración real de código por HTTP y SQL desechables: dos pagos, pérdida de
+  respuesta al registrarlos, claves/referencias duplicadas, concurrencia, REP2
+  desconocido, UUID ajeno, recuperación idempotente, XML/PDF y bloqueo de sobrepago.
+- PAC REST público sandbox: diez comprobaciones aprobadas; factura PPD116.00,
+  dos pagos58.00, dos REP y recuperación del segundo tras pérdida deliberada de
+  respuesta. Tres TimbraCFDI y dos ObtieneCFDI200; saldo0 y complementos completos.
+  Evidencia sintética en Digestor `docs/evidence/ppd-recovery-20261109/`.
+
+Pruebas con PostgreSQL y navegador desktop/móvil registradas en los PR de esta
+entrega. No hay migración, capacidad o servicio adicional. No se registraron
+pagos ficticios en producción. Los casos reales autorizados permanecen separados
+de la evidencia sandbox; no se acreditan bancos, sellos criptográficos ni todos
+los perfiles del SAT. Publicar backend antes del consumidor. El siguiente
+pendiente funcional sigue siendo cancelación, sustitución y corrección.

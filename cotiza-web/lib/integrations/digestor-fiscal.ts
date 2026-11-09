@@ -595,6 +595,7 @@ export type BillingPayment = {
   has_active_revision?: boolean;
 };
 export type BillingPayments = {
+  receipts_pending_count?: number; economic_settled?: boolean; fiscal_complete?: boolean;
   environment?: 'sandbox' | 'production';
   supported: boolean; reason?: string; currency?: string; invoice_uuid?: string; total?: string;
   paid?: string; balance?: string; receipt_stamp_enabled?: boolean; payments: BillingPayment[];

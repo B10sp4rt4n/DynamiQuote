@@ -1,5 +1,7 @@
+import { REP_BASE64, REP_XML, RECEIPT_UUID } from "@/tests/fixtures/synthetic-rep";
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 import { NextResponse } from "next/server";
+vi.mock("server-only", () => ({}));
 const m = vi.hoisted(() => ({ auth: vi.fn(), list: vi.fn(), register: vi.fn(), receipt: vi.fn(), prepare: vi.fn(), stamp: vi.fn() }));
 vi.mock("@/lib/integrations/proposal-payments", () => ({ authorizeProposalPayments: m.auth, paymentFailure: () => NextResponse.json({ error: "Uncertain result" }, { status: 502 }) }));
 vi.mock("@/lib/integrations/digestor-fiscal", () => ({ getBillingPayments: m.list, registerBillingPayment: m.register, getPaymentReceipt: m.receipt, preparePaymentReceipt: m.prepare, stampPaymentReceipt: m.stamp }));
@@ -35,9 +37,9 @@ describe("payment proxy boundaries", () => {
     const req = new Request("https://cotiza.test/receipt?download=1");
     m.receipt.mockResolvedValue({ receipt_status: "unknown", xml_base64: null });
     expect((await readReceipt(req, ctx)).status).toBe(409);
-    m.receipt.mockResolvedValue({ receipt_status: "stamped", xml_base64: Buffer.from("<synthetic-rep/>").toString("base64") });
+    m.receipt.mockResolvedValue({ receipt_status: "stamped", receipt_uuid: RECEIPT_UUID, xml_base64: REP_BASE64 });
     const response = await readReceipt(req, ctx);
-    expect(await response.text()).toBe("<synthetic-rep/>"); expect(response.headers.get("cache-control")).toBe("no-store");
+    expect(await response.text()).toBe(REP_XML); expect(response.headers.get("cache-control")).toBe("no-store");
     expect(m.stamp).not.toHaveBeenCalled();
   });
   it("prepares preliminary XML without calling stamp", async () => {
@@ -56,4 +58,10 @@ describe("payment proxy boundaries", () => {
     m.stamp.mockRejectedValue(new Error("synthetic timeout"));
     expect((await stampReceipt(request(), ctx)).status).toBe(502); expect(m.stamp).toHaveBeenCalledTimes(1);
   });
+});
+
+it('refuses a downloaded REP whose XML belongs to a different UUID',async()=>{
+ m.auth.mockResolvedValue({draftId:'server-resolved-draft'});
+ m.receipt.mockResolvedValue({receipt_status:'stamped',receipt_uuid:'22222222-2222-4333-8444-555555555555',xml_base64:REP_BASE64});
+ expect((await readReceipt(new Request('https://cotiza.test/receipt?download=1'),ctx)).status).toBe(502);
 });

@@ -71,10 +71,15 @@ export function ProposalPaymentPanel({ proposalId, cancellationEnabled = false, 
   }
 
   async function receipt(paymentId: string, action: "prepare" | "stamp") {
+    if (operation.current) return;
     const real = summary?.environment === 'production';
     const payment = summary?.payments.find(item => item.id === paymentId);
     if (action === 'stamp' && real && !window.confirm(`Emitir complemento fiscal real por ${money(payment?.amount)} para la factura ${summary?.invoice_uuid}. ¿Confirmas que recibiste este pago?`)) return;
     await run(async () => {
+      // Keep emission blocked even if both the POST response and the following
+      // status read are lost. A later explicit read reconciles the saved state.
+      if (action === 'stamp') setSummary(previous => previous ? { ...previous,
+        payments: previous.payments.map(item => item.id === paymentId ? { ...item, receipt_status: 'processing' } : item) } : previous);
       const response = await fetch(`${path}/${encodeURIComponent(paymentId)}/receipt/${action}`, {
         method: "POST", headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({ confirm_real_receipt: action === 'stamp' && real }),
@@ -111,6 +116,9 @@ export function ProposalPaymentPanel({ proposalId, cancellationEnabled = false, 
     <button type="button" disabled={busy} onClick={() => void run(refresh)} className="mt-2 rounded border px-3 py-2 text-sm disabled:opacity-50">Consultar saldo y estado</button>
     {summary?.supported ? <>
       <p className="mt-3 text-sm">Total: {money(summary.total)} · Pagos registrados: {money(summary.paid)} · Saldo: <strong>{money(summary.balance)}</strong></p>
+      {Number(summary.balance) === 0 && summary.payments.some(payment => !(payment.fiscal_ready ?? (payment.receipt_status === 'stamped' && !['processing','requested','unknown','cancelled'].includes(payment.cancellation_status ?? ''))))
+        ? <p role="status" className="mt-2 text-sm font-medium text-amber-900">El saldo está liquidado, pero hay complementos por resolver. Consulta el estado de cada pago.</p>
+        : summary.fiscal_complete === true ? <p role="status" className="mt-2 text-sm font-medium text-emerald-800">Saldo liquidado y complementos completos.</p> : null}
       {summary.invoice_fiscal_ready === false ? <p className="mt-2 text-sm text-amber-900">Hay una sustitución o cancelación pendiente. Completa su revisión antes de registrar nuevos pagos.</p> : null}
       {Number(summary.balance) > 0 && summary.invoice_fiscal_ready !== false && !invoiceBlocked && !['processing', 'requested', 'unknown', 'cancelled'].includes(summary.invoice_cancellation_status ?? '') ? <fieldset disabled={busy} className="mt-4 grid gap-3 sm:grid-cols-2">
         <legend className="mb-2 text-sm font-medium">Registrar pago recibido</legend>
@@ -137,9 +145,10 @@ export function ProposalPaymentPanel({ proposalId, cancellationEnabled = false, 
             {canIssue && summary.receipt_stamp_enabled && previousIssued && ["not_sent", "rejected"].includes(payment.receipt_status) ? <button type="button" disabled={busy} className="rounded border border-amber-500 px-3 py-2 disabled:opacity-50" onClick={() => void receipt(payment.id, "stamp")}>{summary.environment === 'production' ? 'Emitir complemento fiscal real' : 'Timbrar complemento en pruebas'}</button> : null}
           </div>
           {["processing", "unknown"].includes(payment.receipt_status) ? <p className="mt-2 text-xs text-amber-900">No repitas el timbrado. Consulta el estado y concilia con el proveedor antes de continuar.</p> : null}
-          {canIssue && ['processing', 'unknown'].includes(payment.receipt_status) ? <div className="mt-3 space-y-2">
+          {payment.receipt_status === 'processing' ? <p className="mt-2 text-xs text-amber-900">El complemento sigue en proceso. Usa Consultar saldo y estado; si el proceso quedó detenido, requiere revisión.</p> : null}
+          {canIssue && payment.receipt_status === 'unknown' ? <div className="mt-3 space-y-2">
             <label className="block text-sm">UUID del complemento confirmado por el proveedor<input className="mt-1 w-full rounded border p-2" value={recoveryUuid[payment.id] ?? ''} onChange={event => setRecoveryUuid(previous => ({ ...previous, [payment.id]: event.target.value }))} /></label>
-            <button type="button" disabled={busy || !recoveryUuid[payment.id]} className="rounded border px-3 py-2 disabled:opacity-50" onClick={() => void recover(payment.id)}>Recuperar XML sin volver a timbrar</button>
+            <button type="button" disabled={busy || !/^[a-f0-9]{8}(?:-[a-f0-9]{4}){3}-[a-f0-9]{12}$/i.test(recoveryUuid[payment.id] ?? '')} className="rounded border px-3 py-2 disabled:opacity-50" onClick={() => void recover(payment.id)}>Recuperar XML sin volver a timbrar</button>
           </div> : null}
           {payment.cancellation_status && payment.cancellation_status !== 'not_requested' ? <p className="mt-2 text-xs text-amber-900">Cancelación del complemento: {payment.cancellation_status === 'cancelled' ? 'confirmada' : 'requiere seguimiento'}. El pago recibido se conserva.</p> : null}
           {cancellationEnabled && payment.receipt_status === 'stamped' ? <ProposalCancellationPanel proposalId={proposalId} paymentId={payment.id} onStatusChange={receiptCancellationChanged} /> : null}
