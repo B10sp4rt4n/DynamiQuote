@@ -4,6 +4,7 @@ import { getCurrentTenantContext } from "@/lib/auth/tenant-context";
 import { isProposalVisibleToViewer } from "@/lib/db/proposals";
 import { getProposalInvoiceStatusByTenant } from "@/lib/db/proposal-invoices";
 import { isDigestorFiscalEnabledForTenant } from "@/lib/integrations/digestor-fiscal";
+import { isDigestorFiscalSandboxTenant } from "@/lib/integrations/digestor-routing";
 
 export function isPpdCaptureEnabled(): boolean {
   return process.env["DIGESTOR_FISCAL_PPD_ENABLED"] === "true";
@@ -37,7 +38,10 @@ export async function authorizeProposalFiscalDocument(proposalId: string, featur
   if (!invoice?.draftId || invoice.status !== "stamped" || !invoice.uuid || !invoice.xmlBase64) {
     return { error: NextResponse.json({ error: "Se requiere una factura timbrada" }, { status: 409 }) };
   }
-  return { draftId: invoice.draftId };
+  return {
+    draftId: invoice.draftId,
+    environment: isDigestorFiscalSandboxTenant(tenant.id) ? 'sandbox' as const : 'production' as const,
+  };
 }
 
 export function authorizeProposalPayments(proposalId: string, request?: Request) {
