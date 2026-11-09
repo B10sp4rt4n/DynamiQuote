@@ -56,4 +56,17 @@ describe("payment proxy boundaries", () => {
     m.stamp.mockRejectedValue(new Error("synthetic timeout"));
     expect((await stampReceipt(request(), ctx)).status).toBe(502); expect(m.stamp).toHaveBeenCalledTimes(1);
   });
+  it("allows the authenticated sandbox REP while the production flag is enabled", async () => {
+    vi.stubEnv('DIGESTOR_FISCAL_PPD_PRODUCTION_ENABLED','true');
+    m.auth.mockResolvedValue({draftId:'server-resolved-draft',environment:'sandbox'});
+    m.stamp.mockResolvedValue({ok:true});
+    expect((await stampReceipt(request({confirm_real_receipt:false}),ctx)).status).toBe(200);
+    expect(m.stamp).toHaveBeenCalledExactlyOnceWith('server-resolved-draft','payment-one');
+  });
+  it("cannot bypass production consent with a client-supplied sandbox environment", async () => {
+    vi.stubEnv('DIGESTOR_FISCAL_PPD_PRODUCTION_ENABLED','true');
+    m.auth.mockResolvedValue({draftId:'server-resolved-draft',environment:'production'});
+    expect((await stampReceipt(request({environment:'sandbox',confirm_real_receipt:false}),ctx)).status).toBe(422);
+    expect(m.stamp).not.toHaveBeenCalled();
+  });
 });

@@ -18,8 +18,15 @@ describe('production payment authorization',()=>{
   expect((await authorizeProposalPayments('p1')).error?.status).toBe(401);expect(m.invoice).not.toHaveBeenCalled();
  });
  it('resolves source invoice on server for authorized session and origin',async()=>{
-  expect(await authorizeProposalPayments('p1',new Request('https://cotiza.test/payments',{method:'POST',headers:{origin:'https://cotiza.test'}}))).toEqual({draftId:'resolved'});
+  expect(await authorizeProposalPayments('p1',new Request('https://cotiza.test/payments',{method:'POST',headers:{origin:'https://cotiza.test'}}))).toEqual({draftId:'resolved',environment:'production'});
   expect(m.invoice).toHaveBeenCalledWith('tenant','p1');
+ });
+ it('identifies the lab only from the authenticated tenant and server configuration',async()=>{
+  vi.stubEnv('DIGESTOR_FISCAL_SANDBOX_TENANT_ID','tenant');
+  const request=new Request('https://cotiza.test/payments',{method:'POST',headers:{origin:'https://cotiza.test'}});
+  expect(await authorizeProposalPayments('p1',request)).toEqual({draftId:'resolved',environment:'sandbox'});
+  m.tenant.mockResolvedValue({id:'other-tenant',userId:'seller',userRole:'user',authMode:'clerk'});
+  expect(await authorizeProposalPayments('p1',request)).toEqual({draftId:'resolved',environment:'production'});
  });
 });
 
@@ -27,7 +34,7 @@ describe('production fiscal administration',()=>{
  beforeEach(()=>{vi.resetAllMocks();vi.stubEnv('DIGESTOR_FISCAL_OPERATIONS_PRODUCTION_ENABLED','true');vi.stubEnv('DIGESTOR_FISCAL_CANCELLATION_ENABLED','true');m.tenant.mockResolvedValue({id:'tenant',userId:'admin',userRole:'admin',authMode:'clerk'});m.visible.mockResolvedValue(true);m.invoice.mockResolvedValue({status:'stamped',draftId:'resolved',uuid:'synthetic',xmlBase64:'synthetic'});});
  afterEach(()=>vi.unstubAllEnvs());
  it('permits same-origin reads without Origin header',async()=>{
-  expect(await authorizeProposalFiscalDocument('p','cancellation',new Request('https://cotiza.test/cancellation'))).toEqual({draftId:'resolved'});
+  expect(await authorizeProposalFiscalDocument('p','cancellation',new Request('https://cotiza.test/cancellation'))).toEqual({draftId:'resolved',environment:'production'});
  });
  it('blocks nonadministrative identity even with visibility',async()=>{
   m.tenant.mockResolvedValue({id:'tenant',userId:'seller',userRole:'user',authMode:'clerk'});

@@ -4,7 +4,7 @@ on:
     branches: [feat/tenant-fiscal-sandbox]
   pull_request:
     branches: [main]
-    paths: ['cotiza-web/lib/integrations/digestor-*.ts', 'cotiza-web/app/(dashboard)/layout*', '.github/workflows/tenant-fiscal-sandbox.yml']
+    paths: ['cotiza-web/lib/integrations/digestor-*.ts', 'cotiza-web/lib/integrations/proposal-payments*.ts', 'cotiza-web/app/api/proposals/**/invoice/payments/**', 'cotiza-web/app/(dashboard)/layout*', '.github/workflows/tenant-fiscal-sandbox.yml']
   workflow_dispatch:
 permissions:
   contents: read
