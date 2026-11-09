@@ -1,6 +1,7 @@
 import "server-only";
 import type { CsfReview } from "@/lib/domain/csf-review";
 import { readInvoiceStamp } from "@/lib/domain/invoice-stamp";
+import { DigestorHttpError } from "./digestor-error";
 import { getPrimaryDigestorConfig, getRequestDigestorConfig, getSandboxDigestorConfig,
   isDigestorFiscalSandboxTenant, type DigestorFiscalConfig } from "./digestor-routing";
 
@@ -119,7 +120,7 @@ async function request<T>(path: string, init: RequestInit = {}): Promise<T> {
   const body = await response.json().catch(() => null);
 
   if (!response.ok) {
-    throw new Error(extractErrorMessage(body, response.status));
+    throw new DigestorHttpError(extractErrorMessage(body, response.status), response.status);
   }
 
   return body as T;

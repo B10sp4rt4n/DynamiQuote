@@ -5,7 +5,20 @@ vi.mock('@/lib/auth/tenant-context',()=>({getCurrentTenantContext:m.tenant}));
 vi.mock('@/lib/db/proposals',()=>({isProposalVisibleToViewer:m.visible}));
 vi.mock('@/lib/db/proposal-invoices',()=>({getProposalInvoiceStatusByTenant:m.invoice}));
 vi.mock('@/lib/integrations/digestor-fiscal',()=>({isDigestorFiscalEnabledForTenant:()=>true}));
-import {authorizeProposalPayments,authorizeProposalFiscalDocument} from './proposal-payments';
+import {authorizeProposalPayments,authorizeProposalFiscalDocument,paymentFailure} from './proposal-payments';
+import {DigestorHttpError} from './digestor-error';
+
+describe('fiscal error response',()=>{
+ it('preserves a received conflict and its instruction to avoid reissuing',async()=>{
+  const message='El complemento ya fue procesado; consulta el estado antes de reintentar';
+  const response=paymentFailure(new DigestorHttpError(message,409));
+  expect(response.status).toBe(409);expect(await response.json()).toEqual({error:message});
+ });
+ it.each([new Error('synthetic timeout'),new DigestorHttpError('unavailable',503),new DigestorHttpError('unauthorized upstream',401),{status:409},null])('keeps communication or unclassified failures as gateway errors: %s',async error=>{
+  const response=paymentFailure(error);expect(response.status).toBe(502);
+  if(!(error instanceof Error))expect(await response.json()).toEqual({error:'No se pudo confirmar la operación; consulta el estado antes de reintentar'});
+ });
+});
 describe('production payment authorization',()=>{
  beforeEach(()=>{vi.resetAllMocks();vi.stubEnv('DIGESTOR_FISCAL_PPD_ENABLED','true');vi.stubEnv('DIGESTOR_FISCAL_PPD_PRODUCTION_ENABLED','true');m.tenant.mockResolvedValue({id:'tenant',userId:'seller',userRole:'user',authMode:'clerk'});m.visible.mockResolvedValue(true);m.invoice.mockResolvedValue({status:'stamped',draftId:'resolved',uuid:'synthetic',xmlBase64:'synthetic'});});
  afterEach(()=>vi.unstubAllEnvs());

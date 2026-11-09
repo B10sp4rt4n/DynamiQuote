@@ -5,6 +5,7 @@ import { isProposalVisibleToViewer } from "@/lib/db/proposals";
 import { getProposalInvoiceStatusByTenant } from "@/lib/db/proposal-invoices";
 import { isDigestorFiscalEnabledForTenant } from "@/lib/integrations/digestor-fiscal";
 import { isDigestorFiscalSandboxTenant } from "@/lib/integrations/digestor-routing";
+import { DigestorHttpError } from "./digestor-error";
 
 export function isPpdCaptureEnabled(): boolean {
   return process.env["DIGESTOR_FISCAL_PPD_ENABLED"] === "true";
@@ -49,5 +50,6 @@ export function authorizeProposalPayments(proposalId: string, request?: Request)
 }
 
 export function paymentFailure(error: unknown): NextResponse {
-  return NextResponse.json({ error: error instanceof Error ? error.message : "No se pudo confirmar la operación; consulta el estado antes de reintentar" }, { status: 502 });
+  const status = error instanceof DigestorHttpError && error.status === 409 ? 409 : 502;
+  return NextResponse.json({ error: error instanceof Error ? error.message : "No se pudo confirmar la operación; consulta el estado antes de reintentar" }, { status });
 }

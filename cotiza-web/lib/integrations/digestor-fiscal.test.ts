@@ -23,6 +23,20 @@ describe("consulta de timbrado persistido", () => {
     expect(fetchMock.mock.calls[1][1].method).toBe("GET");
     expect(fetchMock.mock.calls.some(([url]) => String(url).endsWith("/stamp"))).toBe(false);
   });
+  it('retains a REP conflict without retrying the stamp', async()=>{
+    vi.resetModules();setConfigEnv();
+    const message='El REP ya está timbrado; consulta el estado antes de reintentar';
+    const fetchMock=vi.fn()
+      .mockResolvedValueOnce(jsonResponse({access_token:'fixture-token',expires_in:3600}))
+      .mockResolvedValueOnce(jsonResponse({detail:message},409));
+    global.fetch=fetchMock as unknown as typeof fetch;
+    const {stampPaymentReceipt}=await import('./digestor-fiscal');
+    const {DigestorHttpError}=await import('./digestor-error');
+    const error=await stampPaymentReceipt('draft/one','payment/one').catch(error=>error);
+    expect(error).toBeInstanceOf(DigestorHttpError);expect(error.status).toBe(409);expect(error.message).toBe(message);
+    expect(fetchMock).toHaveBeenCalledTimes(2);
+    expect(fetchMock.mock.calls[1][0]).toBe('https://digestor.test/v1/billing/drafts/draft%2Fone/payments/payment%2Fone/receipt/stamp');
+  });
 });
 
 const ENV_KEYS = ["DIGESTOR_FISCAL_BASE_URL", "DIGESTOR_FISCAL_USERNAME", "DIGESTOR_FISCAL_PASSWORD"] as const;
