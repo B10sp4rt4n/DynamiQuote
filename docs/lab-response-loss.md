@@ -99,6 +99,11 @@ Observación: `paymentFailure` convierte el 409 de Digestor en 502 hacia el
 consumidor de Cotiza. El mensaje conserva la instrucción de no repetir y el
 control evita la segunda emisión, pero el estado HTTP puede precisarse.
 El ensayo no modifica ese comportamiento productivo.
+El ajuste de estado HTTP se prepara por separado en el PR #81. El arnés de
+recuperación admite el 409 corregido y el 502 histórico para rechazos recibidos,
+exige 502 para la respuesta deliberadamente perdida y siempre comprueba el 409
+real de Digestor. Los códigos citados arriba describen la ejecución capturada;
+la corrección tiene sus propias pruebas estrictas de transporte y respuesta.
 
 Este caso tampoco simula pérdida entre PAC y Digestor: el resultado del REP ya
 está persistido en Digestor cuando se interrumpe su respuesta a Cotiza. Se valida

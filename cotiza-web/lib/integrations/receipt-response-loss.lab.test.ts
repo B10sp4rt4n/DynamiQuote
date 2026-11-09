@@ -110,15 +110,18 @@ it.skipIf(!enabled)('recovers the same REP and preserves one payment and zero ba
  const prepared=await call(receiptSuffix+'/prepare','POST',{});expect(prepared.status).toBe(200);
  await writeFile(path.join(folder(),'rep-preliminar.xml'),Buffer.from(prepared.body.xml_base64,'base64'));
  const concurrent=await Promise.all([call(receiptSuffix+'/stamp','POST',{confirm_real_receipt:false}),call(receiptSuffix+'/stamp','POST',{confirm_real_receipt:false})]);
- expect(concurrent.map(r=>r.status)).toEqual([502,502]);expect(receiptAcceptances).toBe(1);
+ // Historical Cotiza maps upstream conflicts to 502; the HTTP-status fix preserves 409.
+ // The deliberately lost acceptance must still be a transport failure (502).
+ expect(concurrent.some(r=>r.status===502)).toBe(true);
+ expect(concurrent.every(r=>[409,502].includes(r.status))).toBe(true);expect(receiptAcceptances).toBe(1);
  expect(responseLossInjected).toBe(true);checks.deliberate_response_loss_injected=true;
  expect(remote.filter(r=>r.path.endsWith(receiptSuffix+'/stamp')).map(r=>r.status).sort()).toEqual([200,409]);
  checks.concurrent_cotiza_http=concurrent.map(r=>r.status);checks.concurrent_digestor_http=[200,409];checks.one_rep_accepted=true;
- const retry=await call(receiptSuffix+'/stamp','POST',{confirm_real_receipt:false});expect(retry.status).toBe(502);expect(remote.at(-1)?.status).toBe(409);expect(receiptAcceptances).toBe(1);checks.retry_blocked_by_digestor=409;
+ const retry=await call(receiptSuffix+'/stamp','POST',{confirm_real_receipt:false});expect([409,502]).toContain(retry.status);expect(remote.at(-1)?.status).toBe(409);expect(receiptAcceptances).toBe(1);checks.retry_blocked_by_digestor=409;
  loseRead=true;expect((await call(receiptSuffix)).status).toBe(502);checks.first_read_interrupted=true;
  const recovered=await call(receiptSuffix);expect(recovered.status).toBe(200);expect(recovered.body.receipt_uuid).toBe(receiptUuid);expect(recovered.body.xml_base64).toBe(acceptedXml);
  for(let i=0;i<2;i++){const r=await call(receiptSuffix+'/reconcile','POST',{receipt_uuid:receiptUuid});expect(r.status).toBe(200);expect(r.body.receipt_uuid).toBe(receiptUuid);expect(r.body.xml_base64).toBe(acceptedXml);}
- const other=await call(receiptSuffix+'/reconcile','POST',{receipt_uuid:invoiceUuid});expect(other.status).toBe(502);expect(remote.at(-1)?.status).toBe(409);checks.foreign_uuid_rejected=true;
+ const other=await call(receiptSuffix+'/reconcile','POST',{receipt_uuid:invoiceUuid});expect([409,502]).toContain(other.status);expect(remote.at(-1)?.status).toBe(409);checks.foreign_uuid_rejected=true;
  const after=(await call('')).body;expect(after.payments).toHaveLength(1);expect(after.paid).toBe('116.00');expect(after.balance).toBe(before.balance);expect(after.economic_settled).toBe(true);expect(after.fiscal_complete).toBe(true);
  expect(after.payments[0].id).toBe(paymentId);expect(after.payments[0].receipt_uuid).toBe(receiptUuid);expect(after.payments[0].xml_base64).toBe(acceptedXml);
  await writeFile(path.join(folder(),'saldo-despues.json'),JSON.stringify(after,null,2));
