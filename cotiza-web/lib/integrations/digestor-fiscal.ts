@@ -1,4 +1,5 @@
 import "server-only";
+import type { CsfReview } from "@/lib/domain/csf-review";
 
 // Cliente HTTP hacia Digestor Fiscal (repo aparte, B10sp4rt4n/digestor__fiscal).
 // Motor de un solo emisor por ahora (solo SynAppsSys tiene CSD real cargado
@@ -395,8 +396,10 @@ export async function uploadCsfDocument(file: Buffer, filename: string): Promise
   const form = new FormData();
   form.append("file", new Blob([new Uint8Array(file)], { type: "application/pdf" }), filename);
   form.append("document_type", "csf");
+  form.append("use_ai", "false");
 
   const response = await fetch(`${config.baseUrl}/v1/documents`, {
+    signal: AbortSignal.timeout(25_000),
     body: form,
     headers: { Authorization: `Bearer ${token}` },
     method: "POST",
@@ -411,7 +414,7 @@ export async function uploadCsfDocument(file: Buffer, filename: string): Promise
 }
 
 export async function getDocumentJobStatus(jobId: string): Promise<DigestorFiscalDocumentJob> {
-  const raw = await request<RawDocumentJob>(`/v1/documents/${jobId}`, { method: "GET" });
+  const raw = await request<RawDocumentJob>(`/v1/documents/${encodeURIComponent(jobId)}`, { method: "GET", cache: "no-store", signal: AbortSignal.timeout(25_000) });
   return mapDocumentJob(raw);
 }
 
@@ -421,10 +424,10 @@ export type ApproveDocumentResult = {
   status: string;
 };
 
-export async function approveDocument(documentId: string, notes?: string): Promise<ApproveDocumentResult> {
+export async function approveDocument(documentId: string, expectedRevision: string, notes?: string): Promise<ApproveDocumentResult> {
   const raw = await request<{ approved_at: string; company_id: string; document_id: string; status: string }>(
     `/v1/documents/${documentId}/approve`,
-    { body: JSON.stringify(notes ? { notes } : {}), method: "POST" },
+    { body: JSON.stringify({ notes, confirm_review: true, expected_revision: expectedRevision }), method: "POST" },
   );
 
   return { approvedAt: raw.approved_at, documentId: raw.document_id, status: raw.status };
@@ -487,14 +490,15 @@ export async function listCsf(query?: { limit?: number; q?: string }): Promise<{
 }
 
 export type DigestorFiscalCsf = DigestorFiscalCsfSummary & {
+  review: CsfReview | null;
   crmAutofill: Record<string, string> | null;
 };
 
 export async function getCsf(csfId: string): Promise<DigestorFiscalCsf> {
-  const raw = await request<RawCsfSummary & { crm_autofill: Record<string, string> | null }>(`/csf/${csfId}`, {
-    method: "GET",
+  const raw = await request<RawCsfSummary & { crm_autofill: Record<string, string> | null; review?: CsfReview }>(`/csf/${encodeURIComponent(csfId)}`, {
+    method: "GET", cache: "no-store", signal: AbortSignal.timeout(25_000),
   });
-  return { ...mapCsfSummary(raw), crmAutofill: raw.crm_autofill ?? null };
+  return { ...mapCsfSummary(raw), crmAutofill: raw.crm_autofill ?? null, review: raw.review ?? null };
 }
 
 export type ReceptorValidationInput = {

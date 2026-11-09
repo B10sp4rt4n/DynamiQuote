@@ -3,6 +3,7 @@ import Link from "next/link";
 import { ClientShell } from "@/components/configuracion/client-shell";
 import { getCurrentTenantContext } from "@/lib/auth/tenant-context";
 import { listClientsByTenant } from "@/lib/db/clients";
+import { isDigestorFiscalEnabledForTenant } from "@/lib/integrations/digestor-fiscal";
 import { getIssuerProfilesByTenant } from "@/lib/db/settings";
 
 export const dynamic = "force-dynamic";
@@ -30,7 +31,7 @@ export default async function ClientsPage() {
         {" / "}
         <span className="text-zinc-900">Clientes</span>
       </nav>
-      <ClientShell clientLogos={clientLogos} initialClients={clients} />
+      <ClientShell csfEnabled={isDigestorFiscalEnabledForTenant(tenant.id)} clientLogos={clientLogos} initialClients={clients} />
     </div>
   );
 }
