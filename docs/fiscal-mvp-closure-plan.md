@@ -1,5 +1,7 @@
 # Plan de cierre del MVP fiscal de Cotiza
 
+Estado consolidado al10nov2026: consultar [la matriz de aceptación actual](fiscal-mvp-acceptance.md). Las secciones inferiores conservan evidencia y pendientes tal como se registraron en cada entrega; no deben interpretarse como una lista vigente de cambios aún sin publicar. La matriz distingue pruebas, sandbox, producción y bloqueos externos.
+
 Establecido el 9 de noviembre de 2026 (Ciudad de México), por instrucción de
 Salvador. Base revisada: Cotiza `ddda1a5` y Digestor `e3aede1`.
 

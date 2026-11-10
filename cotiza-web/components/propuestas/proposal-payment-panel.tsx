@@ -9,6 +9,10 @@ import { ProposalSatStatus } from './proposal-sat-status';
 
 const STATUS = { not_sent: "Pendiente de complemento", processing: "Timbrado pendiente de confirmar", unknown: "Requiere conciliación", rejected: "Rechazado por el PAC", stamped: "Complemento timbrado" };
 const money = (value?: string) => new Intl.NumberFormat("es-MX", { style: "currency", currency: "MXN" }).format(Number(value ?? 0));
+const fiscalActive = (status?: string) => !['processing', 'requested', 'unknown', 'cancelled'].includes(status ?? '');
+const receiptReady = (payment: BillingPayments['payments'][number]) =>
+  payment.receipt_status === 'stamped' && payment.fiscal_ready !== false &&
+  (payment.has_active_revision && payment.fiscal_ready === true || fiscalActive(payment.cancellation_status));
 
 type Props = { proposalId: string; satTrackingEnabled?: boolean; cancellationEnabled?: boolean; invoiceBlocked?: boolean; correctionsEnabled?: boolean; invoiceCancellationStatus?: BillingCancellation['status'] };
 export function ProposalPaymentPanel({ proposalId, satTrackingEnabled = false, cancellationEnabled = false, invoiceBlocked = false, correctionsEnabled = false, invoiceCancellationStatus }: Props) {
@@ -26,7 +30,9 @@ export function ProposalPaymentPanel({ proposalId, satTrackingEnabled = false, c
   const receiptCancellationChanged = useCallback((status: BillingCancellation['status'], paymentId?: string) => {
     setSummary(previous => {
       if (!previous || previous.payments.find(payment => payment.id === paymentId)?.cancellation_status === status) return previous;
-      return { ...previous, payments: previous.payments.map(payment => payment.id === paymentId ? { ...payment, cancellation_status: status } : payment) };
+      return { ...previous, payments: previous.payments.map(payment => payment.id === paymentId
+        ? { ...payment, cancellation_status: status, ...(!fiscalActive(status) ? { fiscal_ready: false } : {}) }
+        : payment) };
     });
   }, []);
 
@@ -112,6 +118,7 @@ export function ProposalPaymentPanel({ proposalId, satTrackingEnabled = false, c
   if (summary && !summary.supported) return null;
   // A confirmed cancellation takes precedence over a stale payment summary.
   const invoiceCancelled = invoiceCancellationStatus === 'cancelled' || summary?.invoice_cancellation_status === 'cancelled';
+  const pendingReceipts = summary?.payments.filter(payment => !receiptReady(payment)).length ?? 0;
   return <section className="mt-4 rounded-lg border border-zinc-300 bg-white p-4 text-zinc-900">
     <h3 className="font-semibold">{invoiceCancelled ? 'Historial de pagos · factura cancelada' : 'Pagos de factura PPD'}{summary?.environment === 'sandbox' ? ' · pruebas' : ''}</h3>
     <p className="mt-1 text-xs text-zinc-600">Registra únicamente pagos recibidos. Este registro no verifica movimientos bancarios.{summary?.environment === 'production' ? ' Los complementos emitidos son comprobantes fiscales reales.' : summary?.environment === 'sandbox' ? ' Entorno de pruebas del PAC.' : ''}</p>
@@ -119,6 +126,15 @@ export function ProposalPaymentPanel({ proposalId, satTrackingEnabled = false, c
     <button type="button" disabled={busy} onClick={() => void run(refresh)} className="mt-2 rounded border px-3 py-2 text-sm disabled:opacity-50">Consultar saldo y estado</button>
     {summary?.supported ? <>
       <p className="mt-3 text-sm">{invoiceCancelled ? 'Total original' : 'Total'}: {money(summary.total)} · Pagos registrados: {money(summary.paid)} · {invoiceCancelled ? 'Saldo histórico del comprobante' : 'Saldo'}: <strong>{money(summary.balance)}</strong></p>
+      {!invoiceCancelled && summary.payments.length > 0 ? <div role="status" aria-label="Seguimiento de pagos y complementos" className="mt-3 rounded border border-zinc-200 bg-zinc-50 p-3 text-sm">
+        <p className="font-medium">{Number(summary.balance) === 0 ? 'Pago total registrado' : 'Pagos parciales registrados'}</p>
+        <p className="mt-1">{pendingReceipts > 0
+          ? `${pendingReceipts} ${pendingReceipts === 1 ? 'pago con complemento pendiente' : 'pagos con complemento pendiente'} de emisión, recuperación o revisión.`
+          : 'Complementos de los pagos registrados: sin pendientes en Cotiza.'}</p>
+        <p className="mt-1 text-xs text-zinc-600">{pendingReceipts > 0
+          ? 'Revisa el detalle de cada pago para continuar. Un saldo de $0 no confirma que los complementos estén completos. No registres otra vez el mismo pago.'
+          : 'Este resumen corresponde al expediente en Cotiza; el estado ante el SAT se consulta por separado.'}</p>
+      </div> : null}
       {invoiceCancelled ? <p className="mt-2 text-sm text-zinc-600">Cancelación confirmada. Los importes se conservan como historial; este saldo no determina por sí mismo una deuda comercial. No se pueden registrar nuevos pagos sobre esta factura cancelada.</p>
         : summary.invoice_fiscal_ready === false ? <p className="mt-2 text-sm text-amber-900">Hay una sustitución o cancelación pendiente. Completa su revisión antes de registrar nuevos pagos.</p> : null}
       {!invoiceCancelled && Number(summary.balance) > 0 && summary.invoice_fiscal_ready !== false && !invoiceBlocked && !['processing', 'requested', 'unknown', 'cancelled'].includes(summary.invoice_cancellation_status ?? '') ? <fieldset disabled={busy} className="mt-4 grid gap-3 sm:grid-cols-2">
@@ -133,8 +149,7 @@ export function ProposalPaymentPanel({ proposalId, satTrackingEnabled = false, c
         <button type="button" disabled={!amount || !reference.trim() || !paidAt} onClick={() => void register()} className="rounded bg-zinc-900 px-3 py-2 text-sm text-white disabled:opacity-50">Registrar pago recibido</button>
       </fieldset> : null}
       <ol className="mt-4 space-y-3">{summary.payments.map((payment, index) => {
-        const fiscalActive = (status?: string) => !['processing', 'requested', 'unknown', 'cancelled'].includes(status ?? '');
-        const previousIssued = summary.payments.slice(0, index).every(item => item.fiscal_ready ?? (item.receipt_status === 'stamped' && fiscalActive(item.cancellation_status)));
+        const previousIssued = summary.payments.slice(0, index).every(receiptReady);
         const canIssue = !invoiceCancelled && summary.invoice_fiscal_ready !== false && !invoiceBlocked && fiscalActive(summary.invoice_cancellation_status) && fiscalActive(payment.cancellation_status);
         return <li key={payment.id} className="rounded border p-3 text-sm">
           <p><strong>Pago {payment.sequence}: {money(payment.amount)}</strong> · {payment.reference}</p>
