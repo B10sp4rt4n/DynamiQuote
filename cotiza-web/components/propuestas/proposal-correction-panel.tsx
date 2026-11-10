@@ -3,12 +3,14 @@ import { useEffect, useRef, useState } from 'react';
 import { CANCELLATION_LABELS } from './proposal-fiscal-evidence';
 import type { FiscalCorrection } from '@/lib/integrations/digestor-fiscal';
 
+import { ProposalSatStatus } from './proposal-sat-status';
+
 const STATUS = { prepared: 'Corrección preparada para revisión', processing: 'Emisión pendiente de confirmar',
   unknown: 'Resultado incierto: recupera el XML antes de continuar', rejected: 'Sustituta rechazada por el proveedor', stamped: 'Sustituta timbrada' };
 const FIELD_LABELS: Record<string, string> = { customer_name: 'Nombre o razón social', customer_zip: 'Código postal fiscal',
   customer_regimen: 'Régimen fiscal', customer_use_cfdi: 'Uso CFDI', operation_reference: 'Referencia fiscal del pago', payment_form: 'Forma de pago', payment_method: 'Método de pago' };
 
-export function ProposalCorrectionPanel({ proposalId, paymentId }: { proposalId: string; paymentId?: string }) {
+export function ProposalCorrectionPanel({ proposalId, paymentId, satTrackingEnabled = false, originalUuid }: { proposalId: string; paymentId?: string; satTrackingEnabled?: boolean; originalUuid?: string }) {
   const base = `/api/proposals/${encodeURIComponent(proposalId)}/invoice`;
   const path = paymentId ? `${base}/payments/${encodeURIComponent(paymentId)}/receipt/correction` : `${base}/correction`;
   const [state, setState] = useState<FiscalCorrection | null>(null);
@@ -85,6 +87,7 @@ export function ProposalCorrectionPanel({ proposalId, paymentId }: { proposalId:
     {error ? <p role="alert" className="mt-2 text-sm text-rose-800">{error}</p> : null}
     <button type="button" disabled={busy} className="mt-2 rounded border px-3 py-2 text-sm disabled:opacity-50" onClick={() => void run('read')}>Consultar historial y estado</button>
     {state ? <>
+      {satTrackingEnabled && state.active_uuid !== originalUuid ? <ProposalSatStatus key={state.active_uuid} proposalId={proposalId} paymentId={paymentId} uuid={state.active_uuid}/> : null}
       <p className="mt-2 break-all text-xs">Comprobante seleccionado en Cotiza: {state.active_uuid}</p>
       <div className="mt-2 flex flex-wrap gap-2 text-sm"><a className="rounded border px-3 py-2" href={`${path}?format=xml`}>XML del comprobante seleccionado</a><a className="rounded border px-3 py-2" target="_blank" rel="noreferrer" href={`${path}?format=pdf`}>PDF del comprobante seleccionado</a></div>
       {state.history.length ? <div className="mt-2 text-sm">

@@ -10,6 +10,8 @@ import { ProposalCorrectionPanel } from './proposal-correction-panel';
 import { ProposalLiveCancellation } from './proposal-live-cancellation';
 import type { BillingCancellation } from '@/lib/integrations/digestor-fiscal';
 
+import { ProposalSatStatus } from './proposal-sat-status';
+
 const PAYMENT_FORM_OPTIONS = [
   { label: "01 - Efectivo", value: "01" },
   { label: "02 - Cheque nominativo", value: "02" },
@@ -67,6 +69,7 @@ type ProposalInvoicePanelProps = {
 export function ProposalInvoicePanel({ canPrepareInvoice, proposalId, recipientCompany }: ProposalInvoicePanelProps) {
   const panel = useRef<HTMLDivElement>(null);
   const id = useId();
+  const [satTrackingEnabled, setSatTrackingEnabled] = useState(false);
   const [ppdEnabled, setPpdEnabled] = useState(false);
   const [cancellationEnabled, setCancellationEnabled] = useState(false);
   const [correctionsEnabled, setCorrectionsEnabled] = useState(false);
@@ -96,6 +99,7 @@ export function ProposalInvoicePanel({ canPrepareInvoice, proposalId, recipientC
       try {
         const res = await fetch(`/api/proposals/${proposalId}/invoice`);
         const data = (await res.json()) as {
+          satTrackingEnabled?: boolean;
           ppdEnabled?: boolean;
           cancellationEnabled?: boolean;
           correctionsEnabled?: boolean;
@@ -113,6 +117,7 @@ export function ProposalInvoicePanel({ canPrepareInvoice, proposalId, recipientC
           return;
         }
 
+        setSatTrackingEnabled(data.satTrackingEnabled === true);
         setPpdEnabled(data.ppdEnabled === true);
         setCancellationEnabled(data.cancellationEnabled === true);
         setCorrectionsEnabled(data.correctionsEnabled === true);
@@ -360,12 +365,13 @@ export function ProposalInvoicePanel({ canPrepareInvoice, proposalId, recipientC
         >
           {correctionsEnabled ? 'PDF de origen' : 'Descargar PDF'}
         </a>
-        {ppdEnabled ? <ProposalPaymentPanel proposalId={proposalId} cancellationEnabled={cancellationEnabled}
+        {satTrackingEnabled && invoice.uuid ? <ProposalSatStatus key={invoice.uuid} proposalId={proposalId} uuid={invoice.uuid}/> : null}
+        {ppdEnabled ? <ProposalPaymentPanel proposalId={proposalId} satTrackingEnabled={satTrackingEnabled} cancellationEnabled={cancellationEnabled}
           correctionsEnabled={correctionsEnabled}
           invoiceCancellationStatus={invoiceCancellationStatus}
           invoiceBlocked={['processing', 'requested', 'unknown', 'cancelled'].includes(invoiceCancellationStatus)} /> : null}
         {cancellationEnabled ? <ProposalCancellationPanel proposalId={proposalId} onStatusChange={setInvoiceCancellationStatus} /> : null}
-        {correctionsEnabled ? <ProposalCorrectionPanel proposalId={proposalId} /> : null}
+        {correctionsEnabled ? <ProposalCorrectionPanel proposalId={proposalId} satTrackingEnabled={satTrackingEnabled} originalUuid={invoice.uuid ?? undefined} /> : null}
         {invoice.uuid && !cancellationEnabled ? <ProposalLiveCancellation proposalId={proposalId} uuid={invoice.uuid} onStatusChange={setInvoiceCancellationStatus}/> : null}
       </div>
     );
