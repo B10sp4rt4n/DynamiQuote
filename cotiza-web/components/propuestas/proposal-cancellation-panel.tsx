@@ -2,11 +2,7 @@
 import { useEffect, useRef, useState } from 'react';
 import type { BillingCancellation } from '@/lib/integrations/digestor-fiscal';
 
-const LABEL = {
-  not_requested: 'Sin solicitud de cancelación', not_sent: 'Solicitud no enviada', processing: 'Envío pendiente de confirmar',
-  requested: 'Cancelación solicitada; pendiente de confirmación', unknown: 'Resultado incierto; consulta al proveedor',
-  rejected: 'Solicitud rechazada', cancelled: 'Cancelación confirmada',
-};
+import { CANCELLATION_LABELS as LABEL, ProposalFiscalEvidence } from './proposal-fiscal-evidence';
 export function ProposalCancellationPanel({ proposalId, paymentId, onStatusChange }: {
   proposalId: string; paymentId?: string; onStatusChange?: (status: BillingCancellation['status'], paymentId?: string) => void;
 }) {
@@ -60,6 +56,7 @@ export function ProposalCancellationPanel({ proposalId, paymentId, onStatusChang
   return <section className="mt-3 rounded border border-zinc-300 bg-white p-3 text-zinc-900">
     <h4 className="font-medium">Cancelación de {paymentId ? 'complemento' : 'factura'}{state?.environment === 'production' ? ' · comprobante real' : ' · pruebas'}</h4>
     <p className="mt-1 text-sm" role="status">{state ? LABEL[state.status] : 'Consultando estado…'}</p>
+    {state ? <ProposalFiscalEvidence evidence={state} /> : null}
     {state?.document_uuid ? <p className="mt-1 break-all text-xs">UUID del comprobante: {state.document_uuid}</p> : null}
     {error ? <p role="alert" className="mt-2 text-sm text-rose-800">{error}</p> : null}
     {state?.status === 'not_requested' || state?.status === 'not_sent' ? <fieldset disabled={busy} className="mt-3 space-y-2">

@@ -1,5 +1,6 @@
 'use client';
 import { useEffect, useRef, useState } from 'react';
+import { CANCELLATION_LABELS } from './proposal-fiscal-evidence';
 import type { FiscalCorrection } from '@/lib/integrations/digestor-fiscal';
 
 const STATUS = { prepared: 'Corrección preparada para revisión', processing: 'Emisión pendiente de confirmar',
@@ -84,12 +85,13 @@ export function ProposalCorrectionPanel({ proposalId, paymentId }: { proposalId:
     {error ? <p role="alert" className="mt-2 text-sm text-rose-800">{error}</p> : null}
     <button type="button" disabled={busy} className="mt-2 rounded border px-3 py-2 text-sm disabled:opacity-50" onClick={() => void run('read')}>Consultar historial y estado</button>
     {state ? <>
-      <p className="mt-2 break-all text-xs">Comprobante activo en Cotiza: {state.active_uuid}</p>
-      <div className="mt-2 flex flex-wrap gap-2 text-sm"><a className="rounded border px-3 py-2" href={`${path}?format=xml`}>XML activo</a><a className="rounded border px-3 py-2" target="_blank" rel="noreferrer" href={`${path}?format=pdf`}>PDF activo</a></div>
+      <p className="mt-2 break-all text-xs">Comprobante seleccionado en Cotiza: {state.active_uuid}</p>
+      <div className="mt-2 flex flex-wrap gap-2 text-sm"><a className="rounded border px-3 py-2" href={`${path}?format=xml`}>XML del comprobante seleccionado</a><a className="rounded border px-3 py-2" target="_blank" rel="noreferrer" href={`${path}?format=pdf`}>PDF del comprobante seleccionado</a></div>
       {state.history.length ? <div className="mt-2 text-sm">
         <a className="inline-block rounded border px-3 py-2" href={`${path}?format=diagnostic`}>Descargar diagnóstico de conciliación</a>
         <p className="mt-1 text-xs text-zinc-600">Incluye referencias y estados para consultar al proveedor. La descarga no emite ni cancela comprobantes.</p>
       </div> : null}
+      <p className="mt-1 text-xs text-zinc-600">Esta selección identifica el documento del expediente; no acredita su vigencia ante el SAT.</p>
       {state.can_correct === false ? <p className="mt-3 text-sm text-amber-900">El comprobante tiene una cancelación registrada. Conserva su expediente y revisa el estado fiscal antes de corregir.</p> : null}
       {!current && state.can_correct !== false ? <fieldset disabled={busy} className="mt-4 grid gap-3 sm:grid-cols-2">
         <legend className="mb-2 font-medium">Datos para la sustituta</legend>
@@ -123,7 +125,7 @@ export function ProposalCorrectionPanel({ proposalId, paymentId }: { proposalId:
         </> : null}
         {current.status === 'stamped' && !['not_requested','not_sent'].includes(current.source_cancellation_status) ? <button type="button" disabled={busy} className="rounded border px-3 py-2 disabled:opacity-50" onClick={() => void run('confirm-cancellation')}>Consultar confirmación de cancelación</button> : null}
       </div> : null}
-      {state.history.length ? <details className="mt-3 text-sm"><summary>Historial de sustituciones ({state.history.length})</summary><ol className="mt-2 space-y-2">{state.history.map(row => <li key={row.id} className="break-all rounded border p-2 text-xs">{row.source_uuid} → {row.result_uuid ?? 'pendiente'} · Cancelación anterior: {row.source_cancellation_status}</li>)}</ol></details> : null}
+      {state.history.length ? <details className="mt-3 text-sm"><summary>Historial de sustituciones ({state.history.length})</summary><ol className="mt-2 space-y-2">{state.history.map(row => <li key={row.id} className="break-all rounded border p-2 text-xs">{row.source_uuid} → {row.result_uuid ?? 'pendiente'} · Cancelación anterior: {CANCELLATION_LABELS[row.source_cancellation_status] ?? 'Estado no reconocido'}</li>)}</ol></details> : null}
       {state.archived_history?.length ? <details className="mt-3 text-sm"><summary>Correcciones descartadas sin emitir ({state.archived_history.length})</summary><ol className="mt-2 space-y-2">{state.archived_history.map(row => <li key={row.id} className="break-all rounded border p-2 text-xs">{row.source_uuid} · {row.reason}</li>)}</ol></details> : null}
     </> : !error ? <p className="mt-2 text-sm">Consultando datos fiscales…</p> : null}
   </section>;

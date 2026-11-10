@@ -18,6 +18,7 @@ export type LiveCancellation = {
   status: 'not_requested' | 'processing' | 'unknown' | 'requested' | 'cancelled';
   document_uuid?: string;
   reason: '03';
+  checked_at?: string | null;
   acknowledgement_xml: string | null;
   sat_response?: { Estado?: string; EsCancelable?: string; EstatusCancelacion?: string | null } | null;
 };
@@ -647,6 +648,7 @@ export type BillingCancellation = {
   document_uuid?: string; reason?: string; replacement_uuid?: string | null;
   idempotency_key?: string;
   acknowledgement_xml: string | null; checked_at?: string | null;
+  sat_response?: LiveCancellation['sat_response'];
 };
 export type CancelDocumentInput = { idempotency_key: string; expected_uuid?: string; reason: '01' | '02' | '03'; replacement_draft_id?: string };
 const cancellationPath = (draftId: string, paymentId?: string) => paymentId

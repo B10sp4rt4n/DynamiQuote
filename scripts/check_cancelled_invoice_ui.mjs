@@ -50,7 +50,7 @@ try {
    if(request.method()!=='GET')writes.push(url.pathname);
    if(url.pathname.endsWith('/invoice'))return route.fulfill({json:{ppdEnabled:true,cancellationEnabled:true,correctionsEnabled:false,invoice:{status:'stamped',uuid:'synthetic-cancelled',draftId:'synthetic'}}});
    if(url.pathname.endsWith('/payments'))return route.fulfill({json:{supported:true,environment:'production',total:'1.16',paid:'0.00',balance:'1.16',invoice_fiscal_ready:false,invoice_cancellation_status:'cancelled',payments:[]}});
-   if(url.pathname.endsWith('/cancellation'))return route.fulfill({json:{environment:'production',status:'cancelled',document_uuid:'synthetic-cancelled',acknowledgement_xml:'synthetic-ack'}});
+   if(url.pathname.endsWith('/cancellation'))return route.fulfill({json:{environment:'production',status:'cancelled',document_uuid:'synthetic-cancelled',acknowledgement_xml:'synthetic-ack',checked_at:'2026-11-10T18:00:00Z'}});
    unexpected.push(url.pathname);return route.fulfill({status:500,json:{error:'Unexpected route'}});
   });
   await page.goto(origin);
@@ -61,6 +61,9 @@ try {
   assert.equal(await page.getByRole('button',{name:'Emitir complemento fiscal real',exact:true}).count(),0);
   assert.equal(await page.getByRole('link',{name:'Descargar XML',exact:true}).count(),1);
   assert.equal(await page.getByRole('link',{name:'Descargar acuse de cancelación',exact:true}).count(),1);
+  await page.getByText('Respuesta SAT conservada',{exact:true}).waitFor();
+  await page.getByText('Sin detalle SAT disponible en esta respuesta;', {exact:false}).waitFor();
+  assert.equal(await page.locator('time').getAttribute('datetime'),'2026-11-10T18:00:00.000Z');
   await page.getByRole('button',{name:'Consultar saldo y estado',exact:true}).click();
   assert.equal(await page.evaluate(()=>document.documentElement.scrollWidth>innerWidth),false);
   await page.screenshot({path:path.join(artifacts,`cancelled-${width}.png`),fullPage:true});

@@ -60,7 +60,7 @@ try {
   await until(()=>button('Consultar confirmación de cancelación'));
   assert.ok(window.document.body.textContent.includes(original));
   button('Consultar confirmación de cancelación').click();
-  await until(()=>window.document.body.textContent.includes('Comprobante activo en Cotiza: '+replacement));
+  await until(()=>window.document.body.textContent.includes('Comprobante seleccionado en Cotiza: '+replacement));
   assert.deepEqual(calls,{create:1,stamp:1,cancel:1,query:1});
   console.log(JSON.stringify({passed:true,mode:'React/JSDOM synthetic HTTP',doubleClicksDeduplicated:true,calls}));
 } finally {dom.window.close();}
