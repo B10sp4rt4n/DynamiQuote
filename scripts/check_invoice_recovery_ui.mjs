@@ -16,7 +16,7 @@ const artifacts = path.resolve(process.env.FISCAL_UI_SCREENSHOTS || 'artifacts/i
 await mkdir(artifacts, { recursive: true });
 await build({ stdin: { contents: `import React from 'react'; import {createRoot} from 'react-dom/client';
 import {ProposalInvoicePanel} from ${JSON.stringify(root+'components/propuestas/proposal-invoice-panel.tsx')};
-createRoot(document.getElementById('root')).render(<main className="mx-auto max-w-5xl p-4"><h1 className="mb-3 text-lg font-bold">Ensayo sintético · Recuperación de factura</h1><p className="mb-4 text-sm">Sin validez fiscal · API simulada · no conectado al PAC</p><ProposalInvoicePanel proposalId="synthetic" recipientCompany="EMPRESA SINTÉTICA"/></main>);`,
+createRoot(document.getElementById('root')).render(<main className="mx-auto max-w-5xl p-4"><h1 className="mb-3 text-lg font-bold">Ensayo sintético · Recuperación de factura</h1><p className="mb-4 text-sm">Sin validez fiscal · API simulada · no conectado al PAC</p><ProposalInvoicePanel canPrepareInvoice proposalId="synthetic" recipientCompany="EMPRESA SINTÉTICA"/></main>);`,
   loader: 'tsx', resolveDir: root }, bundle: true, jsx: 'automatic', tsconfig: root+'tsconfig.json',
   outfile: out+'/app.js', define: { 'process.env.NODE_ENV': '"production"' } });
 const css = await require('postcss')([require('@tailwindcss/postcss')({ base: root })])
