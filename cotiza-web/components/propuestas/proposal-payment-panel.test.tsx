@@ -64,3 +64,48 @@ it.each(['requested','unknown','processing'])('keeps pending review wording for 
  expect(container.textContent).not.toContain('Cancelación confirmada.');
  expect(container.textContent).not.toContain('Registrar pago recibido');
 });
+
+it.each(['not_sent','unknown','processing','rejected','revision-pending'])('distinguishes a settled balance from a pending %s REP',async status=>{
+ const payment={id:'payment',sequence:1,reference:'RECEIVED',amount:'116.00',balance_after:'0.00',
+  receipt_status:status==='revision-pending'?'stamped':status,receipt_uuid:status==='revision-pending'?'synthetic-rep':null,
+  fiscal_ready:false};
+ fetchMock.mockResolvedValue({ok:true,json:async()=>({supported:true,environment:'production',total:'116.00',paid:'116.00',balance:'0.00',invoice_fiscal_ready:true,payments:[payment]})});
+ await act(async()=>root.render(<ProposalPaymentPanel key={status} proposalId="synthetic"/>));
+ const statusBox=container.querySelector('[aria-label="Seguimiento de pagos y complementos"]')!;
+ expect(statusBox.textContent).toContain('Pago total registrado');
+ expect(statusBox.textContent).toContain('1 pago con complemento pendiente');
+ expect(statusBox.textContent).toContain('No registres otra vez el mismo pago');
+ expect(statusBox.textContent).not.toContain('sin pendientes');
+ expect(container.textContent).not.toContain('Registrar pago recibido');
+ expect(fetchMock.mock.calls.filter(([,init])=>init?.method==='POST')).toHaveLength(0);
+});
+
+it.each(['requested','unknown','processing','cancelled'])('blocks the following REP immediately after a %s cancellation read despite stale fiscal_ready',async status=>{
+ const summary={supported:true,environment:'production',total:'116.00',paid:'116.00',balance:'0.00',receipt_stamp_enabled:true,invoice_fiscal_ready:true,payments:[
+  {id:'first',sequence:1,reference:'ONE',amount:'58.00',balance_after:'58.00',receipt_status:'stamped',receipt_uuid:'synthetic-rep',fiscal_ready:true,cancellation_status:'not_requested'},
+  {id:'second',sequence:2,reference:'TWO',amount:'58.00',balance_after:'0.00',receipt_status:'not_sent',fiscal_ready:false}]};
+ fetchMock.mockImplementation(async(url:string)=>({ok:true,json:async()=>url.endsWith('/cancellation')?{status,document_uuid:'synthetic-rep',environment:'production'}:summary}));
+ await act(async()=>root.render(<ProposalPaymentPanel key={status} proposalId="synthetic" cancellationEnabled/>));
+ expect(issue()).toBeUndefined();
+ expect(container.querySelector('[aria-label="Seguimiento de pagos y complementos"]')?.textContent).toContain('2 pagos con complemento pendiente');
+ expect(fetchMock.mock.calls.filter(([,init])=>init?.method==='POST')).toHaveLength(0);
+});
+
+it('counts a completed substitution by its effective readiness, preserving historical original cancellation',async()=>{
+ const summary={supported:true,environment:'production',total:'116.00',paid:'116.00',balance:'0.00',receipt_stamp_enabled:true,invoice_fiscal_ready:true,payments:[
+  {id:'first',sequence:1,reference:'ONE',amount:'58.00',balance_after:'58.00',receipt_status:'stamped',receipt_uuid:'original',fiscal_ready:true,has_active_revision:true,cancellation_status:'cancelled'},
+  {id:'second',sequence:2,reference:'TWO',amount:'58.00',balance_after:'0.00',receipt_status:'not_sent',fiscal_ready:false}]};
+ fetchMock.mockResolvedValue({ok:true,json:async()=>summary});
+ await act(async()=>root.render(<ProposalPaymentPanel key="substituted" proposalId="synthetic"/>));
+ expect(issue()).toBeDefined();
+ expect(container.querySelector('[aria-label="Seguimiento de pagos y complementos"]')?.textContent).toContain('1 pago con complemento pendiente');
+});
+
+it('describes partial payments whose current REP are complete without claiming SAT status',async()=>{
+ fetchMock.mockResolvedValue({ok:true,json:async()=>({supported:true,environment:'production',total:'116.00',paid:'58.00',balance:'58.00',payments:[
+  {id:'first',sequence:1,reference:'ONE',amount:'58.00',balance_after:'58.00',receipt_status:'stamped',receipt_uuid:'synthetic-rep',fiscal_ready:true}]})});
+ await act(async()=>root.render(<ProposalPaymentPanel key="partial" proposalId="synthetic"/>));
+ const box=container.querySelector('[aria-label="Seguimiento de pagos y complementos"]')!;
+ expect(box.textContent).toContain('Pagos parciales registrados');expect(box.textContent).toContain('sin pendientes en Cotiza');
+ expect(box.textContent).toContain('estado ante el SAT se consulta por separado');expect(box.textContent).not.toContain('Pago total registrado');
+});
