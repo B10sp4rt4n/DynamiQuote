@@ -8,8 +8,8 @@ import { ProposalCorrectionPanel } from './proposal-correction-panel';
 const STATUS = { not_sent: "Pendiente de complemento", processing: "Timbrado pendiente de confirmar", unknown: "Requiere conciliación", rejected: "Rechazado por el PAC", stamped: "Complemento timbrado" };
 const money = (value?: string) => new Intl.NumberFormat("es-MX", { style: "currency", currency: "MXN" }).format(Number(value ?? 0));
 
-type Props = { proposalId: string; cancellationEnabled?: boolean; invoiceBlocked?: boolean; correctionsEnabled?: boolean };
-export function ProposalPaymentPanel({ proposalId, cancellationEnabled = false, invoiceBlocked = false, correctionsEnabled = false }: Props) {
+type Props = { proposalId: string; cancellationEnabled?: boolean; invoiceBlocked?: boolean; correctionsEnabled?: boolean; invoiceCancellationStatus?: BillingCancellation['status'] };
+export function ProposalPaymentPanel({ proposalId, cancellationEnabled = false, invoiceBlocked = false, correctionsEnabled = false, invoiceCancellationStatus }: Props) {
   const path = `/api/proposals/${encodeURIComponent(proposalId)}/invoice/payments`;
   const [summary, setSummary] = useState<BillingPayments | null>(null);
   const [error, setError] = useState<string | null>(null);
@@ -108,15 +108,18 @@ export function ProposalPaymentPanel({ proposalId, cancellationEnabled = false, 
   }
 
   if (summary && !summary.supported) return null;
+  // A confirmed cancellation takes precedence over a stale payment summary.
+  const invoiceCancelled = invoiceCancellationStatus === 'cancelled' || summary?.invoice_cancellation_status === 'cancelled';
   return <section className="mt-4 rounded-lg border border-zinc-300 bg-white p-4 text-zinc-900">
-    <h3 className="font-semibold">Pagos de factura PPD{summary?.environment === 'sandbox' ? ' · pruebas' : ''}</h3>
+    <h3 className="font-semibold">{invoiceCancelled ? 'Historial de pagos · factura cancelada' : 'Pagos de factura PPD'}{summary?.environment === 'sandbox' ? ' · pruebas' : ''}</h3>
     <p className="mt-1 text-xs text-zinc-600">Registra únicamente pagos recibidos. Este registro no verifica movimientos bancarios.{summary?.environment === 'production' ? ' Los complementos emitidos son comprobantes fiscales reales.' : summary?.environment === 'sandbox' ? ' Entorno de pruebas del PAC.' : ''}</p>
     {error ? <p role="alert" className="mt-2 text-sm text-rose-800">{error}</p> : null}
     <button type="button" disabled={busy} onClick={() => void run(refresh)} className="mt-2 rounded border px-3 py-2 text-sm disabled:opacity-50">Consultar saldo y estado</button>
     {summary?.supported ? <>
-      <p className="mt-3 text-sm">Total: {money(summary.total)} · Pagos registrados: {money(summary.paid)} · Saldo: <strong>{money(summary.balance)}</strong></p>
-      {summary.invoice_fiscal_ready === false ? <p className="mt-2 text-sm text-amber-900">Hay una sustitución o cancelación pendiente. Completa su revisión antes de registrar nuevos pagos.</p> : null}
-      {Number(summary.balance) > 0 && summary.invoice_fiscal_ready !== false && !invoiceBlocked && !['processing', 'requested', 'unknown', 'cancelled'].includes(summary.invoice_cancellation_status ?? '') ? <fieldset disabled={busy} className="mt-4 grid gap-3 sm:grid-cols-2">
+      <p className="mt-3 text-sm">{invoiceCancelled ? 'Total original' : 'Total'}: {money(summary.total)} · Pagos registrados: {money(summary.paid)} · {invoiceCancelled ? 'Saldo histórico del comprobante' : 'Saldo'}: <strong>{money(summary.balance)}</strong></p>
+      {invoiceCancelled ? <p className="mt-2 text-sm text-zinc-600">Cancelación confirmada. Los importes se conservan como historial; este saldo no determina por sí mismo una deuda comercial. No se pueden registrar nuevos pagos sobre esta factura cancelada.</p>
+        : summary.invoice_fiscal_ready === false ? <p className="mt-2 text-sm text-amber-900">Hay una sustitución o cancelación pendiente. Completa su revisión antes de registrar nuevos pagos.</p> : null}
+      {!invoiceCancelled && Number(summary.balance) > 0 && summary.invoice_fiscal_ready !== false && !invoiceBlocked && !['processing', 'requested', 'unknown', 'cancelled'].includes(summary.invoice_cancellation_status ?? '') ? <fieldset disabled={busy} className="mt-4 grid gap-3 sm:grid-cols-2">
         <legend className="mb-2 text-sm font-medium">Registrar pago recibido</legend>
         <label className="text-sm">Importe MXN<input className="mt-1 w-full rounded border p-2" inputMode="decimal" value={amount} onChange={event => setAmount(event.target.value)} placeholder="0.00" /></label>
         <label className="text-sm">Referencia bancaria o de recibo<input className="mt-1 w-full rounded border p-2" maxLength={100} value={reference} onChange={event => setReference(event.target.value)} /></label>
@@ -130,7 +133,7 @@ export function ProposalPaymentPanel({ proposalId, cancellationEnabled = false, 
       <ol className="mt-4 space-y-3">{summary.payments.map((payment, index) => {
         const fiscalActive = (status?: string) => !['processing', 'requested', 'unknown', 'cancelled'].includes(status ?? '');
         const previousIssued = summary.payments.slice(0, index).every(item => item.fiscal_ready ?? (item.receipt_status === 'stamped' && fiscalActive(item.cancellation_status)));
-        const canIssue = summary.invoice_fiscal_ready !== false && !invoiceBlocked && fiscalActive(summary.invoice_cancellation_status) && fiscalActive(payment.cancellation_status);
+        const canIssue = !invoiceCancelled && summary.invoice_fiscal_ready !== false && !invoiceBlocked && fiscalActive(summary.invoice_cancellation_status) && fiscalActive(payment.cancellation_status);
         return <li key={payment.id} className="rounded border p-3 text-sm">
           <p><strong>Pago {payment.sequence}: {money(payment.amount)}</strong> · {payment.reference}</p>
           <p className="mt-1">Saldo después del pago: {money(payment.balance_after)}</p>

@@ -1,16 +1,17 @@
 'use client';
 import {useEffect,useRef,useState} from 'react';
-import type {LiveCancellation} from '@/lib/integrations/digestor-fiscal';
+import type {LiveCancellation, BillingCancellation} from '@/lib/integrations/digestor-fiscal';
 
 type State = LiveCancellation & {enabled:boolean};
 const labels = {not_requested:'Sin solicitud de cancelación',processing:'Solicitud en proceso',
   unknown:'Resultado pendiente de conciliación',requested:'Acuse recibido; falta confirmación del SAT',cancelled:'Cancelada: confirmada por el SAT'};
 
-export function ProposalLiveCancellation({proposalId,uuid}:{proposalId:string;uuid:string}) {
+export function ProposalLiveCancellation({proposalId,uuid,onStatusChange}:{proposalId:string;uuid:string;onStatusChange?:(status:BillingCancellation['status'])=>void}) {
   const [data,setData] = useState<State|null>(null), [consent,setConsent] = useState(false);
   const [busy,setBusy] = useState(false), [error,setError] = useState('');
   const active = useRef(false);
   const path = `/api/proposals/${proposalId}/invoice/production-cancellation`;
+  useEffect(()=>{if(data?.enabled)onStatusChange?.(data.status);},[data?.enabled,data?.status,onStatusChange]);
   useEffect(()=>{let closed=false;fetch(path,{cache:'no-store'}).then(async r=>{
     if(r.ok){const result=await r.json() as State;if(!closed)setData(result);}
   }).catch(()=>{});return ()=>{closed=true;};},[path]);
