@@ -58,11 +58,12 @@ const EMPTY_FORM: FormState = {
 };
 
 type ProposalInvoicePanelProps = {
+  canPrepareInvoice: boolean;
   proposalId: string;
   recipientCompany: string | null;
 };
 
-export function ProposalInvoicePanel({ proposalId, recipientCompany }: ProposalInvoicePanelProps) {
+export function ProposalInvoicePanel({ canPrepareInvoice, proposalId, recipientCompany }: ProposalInvoicePanelProps) {
   const panel = useRef<HTMLDivElement>(null);
   const id = useId();
   const [ppdEnabled, setPpdEnabled] = useState(false);
@@ -162,7 +163,7 @@ export function ProposalInvoicePanel({ proposalId, recipientCompany }: ProposalI
     return result.success ? [] : [{ field, message: result.error.issues[0].message }];
   });
   const unconfirmedItems = fiscalItems.filter(item => !item.classificationEventId);
-  const canGenerate = invoiceCurrency === "MXN" && !!itemsFingerprint && fiscalItems.length > 0
+  const canGenerate = canPrepareInvoice && invoiceCurrency === "MXN" && !!itemsFingerprint && fiscalItems.length > 0
     && unconfirmedItems.length === 0 && recipientIssues.length === 0;
   function focusTarget(targetId: string) {
     const target = document.getElementById(targetId);
@@ -223,7 +224,7 @@ export function ProposalInvoicePanel({ proposalId, recipientCompany }: ProposalI
   }
 
   async function handleStamp() {
-    if (stampingRequest.current || !invoice?.draftId || draftDirty) return;
+    if (!canPrepareInvoice || stampingRequest.current || !invoice?.draftId || draftDirty) return;
     stampingRequest.current = true;
     const confirmed = window.confirm(
       "Esto genera un CFDI real ante el SAT y NO se puede deshacer. ¿Confirmas que quieres timbrar esta factura?",
@@ -360,6 +361,27 @@ export function ProposalInvoicePanel({ proposalId, recipientCompany }: ProposalI
         {cancellationEnabled ? <ProposalCancellationPanel proposalId={proposalId} onStatusChange={setInvoiceCancellationStatus} /> : null}
         {correctionsEnabled ? <ProposalCorrectionPanel proposalId={proposalId} /> : null}
         {invoice.uuid && !cancellationEnabled ? <ProposalLiveCancellation proposalId={proposalId} uuid={invoice.uuid}/> : null}
+      </div>
+    );
+  }
+
+  // Issued documents and uncertain results remain accessible independently of
+  // the commercial outcome. Only preparing/issuing a new invoice needs a win.
+  if (!canPrepareInvoice) {
+    if (!invoice?.draftId && !error) return null;
+    return (
+      <div className="rounded-lg border border-zinc-200 p-4">
+        <p className="text-sm font-semibold text-zinc-900">Expediente fiscal</p>
+        {error ? <p role="alert" className="mt-2 text-sm text-rose-700">{error}</p> : null}
+        {invoice?.draftId ? <>
+          <p className="mt-2 text-sm text-zinc-600">La prefactura se conserva para consulta. Para preparar o timbrar una factura, la propuesta debe estar marcada como Ganada.</p>
+          <button type="button" className="mt-3 rounded-lg border border-zinc-300 px-3 py-2 text-sm"
+            onClick={() => setShowPreview(previous => !previous)}>
+            {showPreview ? "Ocultar vista previa" : "Ver vista previa"}
+          </button>
+          {showPreview ? <iframe className="mt-4 h-[600px] w-full rounded-lg border border-zinc-200"
+            src={`/api/proposals/${proposalId}/invoice/preview`} title="Vista previa de la prefactura" /> : null}
+        </> : null}
       </div>
     );
   }

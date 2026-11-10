@@ -26,7 +26,7 @@ suite("Prefactura persistence against disposable PostgreSQL; catalog synthetic a
   });
   beforeEach(async () => {
     vi.resetAllMocks(); proposalId = `synthetic-preparation-${++sequence}`;
-    await db.proposals.create({ data: { proposal_id: proposalId, tenant_id: tenantId, status: "draft", created_by: actorUserId, created_at: new Date() } });
+    await db.proposals.create({ data: { proposal_id: proposalId, tenant_id: tenantId, status: "draft", outcome: "won", created_by: actorUserId, created_at: new Date() } });
     const event = await classifications.recordClassification({ tenantId, actorUserId, proposalId, fingerprint,
       item: { itemNumber: 1, sku: "SYNTHETIC-EDR", description: "Licencia sintética 12 meses" }, nature: "license",
       satProductCode: "43233205", unitCode: "E48", catalogVersion, remember: false });

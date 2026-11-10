@@ -28,6 +28,7 @@ describe("proteccion atomica del timbrado local", () => {
       where: {
         proposal_id: "p1",
         tenant_id: "t1",
+        outcome: "won",
         invoice_draft_id: "d1",
         invoice_uuid: null,
         invoice_xml_base64: null,

@@ -39,7 +39,7 @@ describe("timbrado: nunca emitir dos veces", () => {
     mocks.visible.mockResolvedValue(true);
     mocks.getCurrentTenantContext.mockResolvedValue({ id: "t1", userId: "seller-1", userRole: "user", isSuperAdmin: false });
     mocks.enabled.mockReturnValue(true);
-    mocks.getInvoice.mockResolvedValue({ draftId: "d1", status: "draft" });
+    mocks.getInvoice.mockResolvedValue({ draftId: "d1", status: "draft", outcome: "won" });
     mocks.claim.mockResolvedValue(true);
     mocks.markStamped.mockResolvedValue(true);
     mocks.markRejected.mockResolvedValue(true);
@@ -60,6 +60,13 @@ describe("timbrado: nunca emitir dos veces", () => {
   it("si pierde la reserva atomica, nunca llama al PAC", async () => {
     mocks.claim.mockResolvedValue(false);
     expect((await POST(req(), ctx)).status).toBe(409);
+    expect(mocks.stamp).not.toHaveBeenCalled();
+  });
+
+  it.each([null, "lost", "discarded"])("no emite una prefactura anterior si el desenlace actual es %s", async outcome => {
+    mocks.getInvoice.mockResolvedValue({ draftId: "d1", status: "draft", outcome });
+    expect((await POST(req(), ctx)).status).toBe(422);
+    expect(mocks.claim).not.toHaveBeenCalled();
     expect(mocks.stamp).not.toHaveBeenCalled();
   });
 

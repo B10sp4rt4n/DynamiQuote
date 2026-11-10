@@ -63,11 +63,15 @@ export async function POST(request: Request, context: RouteContext) {
   if (!input.success) return NextResponse.json({ error: "Confirma el timbrado de la prefactura revisada" }, { status: 422 });
   if (input.data.expectedDraftId !== invoice.draftId) return NextResponse.json({ error: "La prefactura cambió. Recarga y revisa antes de timbrar" }, { status: 409 });
 
+  if (invoice.outcome !== "won") {
+    return NextResponse.json({ error: "Solo se puede timbrar una propuesta marcada como Ganada. El expediente fiscal sigue disponible para consulta." }, { status: 422 });
+  }
+
   // El compare-and-set en BD evita que dos solicitudes concurrentes lancen
   // al PAC el mismo borrador. Ante timeout el estado queda en 'stamping'.
   const claimed = await claimProposalInvoiceStampByTenant(tenant.id, proposalId, invoice.draftId);
   if (!claimed) {
-    return NextResponse.json({ error: "Otra solicitud ya inicio el timbrado o cambio la prefactura." }, { status: 409 });
+    return NextResponse.json({ error: "La propuesta o prefactura cambió, o ya hay un timbrado iniciado. Recarga antes de continuar." }, { status: 409 });
   }
 
   try {
