@@ -27,7 +27,7 @@ it('protects a lost replacement response until a server read confirms the same r
  await click('Timbrar sustituta en pruebas');
  expect(button('Timbrar sustituta en pruebas')).toBeUndefined();
  expect(button('Descartar corrección sin emitir')).toBeUndefined();
- expect(container.textContent).toContain('No repitas');expect(container.textContent).toContain('Comprobante activo en Cotiza: '+original);
+ expect(container.textContent).toContain('No repitas');expect(container.textContent).toContain('Comprobante seleccionado en Cotiza: '+original);
  const diagnostic=[...container.querySelectorAll('a')].find(el=>el.textContent==='Descargar diagnóstico de conciliación');
  expect(diagnostic?.getAttribute('href')).toBe('/api/proposals/synthetic/invoice/payments/payment/receipt/correction?format=diagnostic');
  fetchMock.mockResolvedValueOnce(reply(state('stamped')));await click('Consultar historial y estado');
@@ -40,9 +40,9 @@ it('keeps a lost cancellation protected and activates the replacement only on co
  fetchMock.mockRejectedValueOnce(new TypeError('Failed to fetch'));await click('Solicitar cancelación del anterior en pruebas');
  expect(button('Solicitar cancelación del anterior en pruebas')).toBeUndefined();
  expect(button('Consultar confirmación de cancelación')).toBeDefined();
- expect(container.textContent).toContain('Comprobante activo en Cotiza: '+original);
+ expect(container.textContent).toContain('Comprobante seleccionado en Cotiza: '+original);
  fetchMock.mockResolvedValueOnce(reply(state('stamped','cancelled',replacement)));await click('Consultar confirmación de cancelación');
- expect(container.textContent).toContain('Comprobante activo en Cotiza: '+replacement);
+ expect(container.textContent).toContain('Comprobante seleccionado en Cotiza: '+replacement);
  expect(fetchMock.mock.calls.filter(([url])=>url.endsWith('/cancel-original'))).toHaveLength(1);
  expect(fetchMock.mock.calls.filter(([url])=>url.endsWith('/stamp'))).toHaveLength(0);
 });

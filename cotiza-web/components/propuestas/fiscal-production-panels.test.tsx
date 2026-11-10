@@ -33,7 +33,7 @@ it('labels real replacement issuance and requires confirmation before a single r
 it('hides preparation when cancellation has already been recorded',async()=>{
  fetchMock.mockResolvedValue({ok:true,json:async()=>({environment:'production',active_uuid:'synthetic-original',pending:false,kind:'invoice',defaults:{},history:[],can_correct:false})});
  await act(async()=>root.render(<ProposalCorrectionPanel proposalId="synthetic"/>));
- expect(container.textContent).toContain('cancelación registrada');expect(click('Preparar sustitución para revisión')).toBeUndefined();
+ expect(container.textContent).toContain('Comprobante seleccionado en Cotiza:');expect(container.textContent).not.toContain('Comprobante activo');expect(container.textContent).not.toContain('XML activo');expect(container.textContent).toContain('cancelación registrada');expect(click('Preparar sustitución para revisión')).toBeUndefined();
 });
 
 it.each(['cancelled','requested'])('labels the acknowledgement for %s without writes',async status=>{
