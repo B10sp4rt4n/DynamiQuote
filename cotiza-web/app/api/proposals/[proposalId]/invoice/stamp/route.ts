@@ -1,4 +1,4 @@
-import { getProposalWorkflowByTenant, isProposalVisibleToViewer } from "@/lib/db/proposals";
+import { isProposalVisibleToViewer } from "@/lib/db/proposals";
 import { NextResponse } from "next/server";
 import { z } from "zod";
 import { readInvoiceStamp } from "@/lib/domain/invoice-stamp";
@@ -63,9 +63,7 @@ export async function POST(request: Request, context: RouteContext) {
   if (!input.success) return NextResponse.json({ error: "Confirma el timbrado de la prefactura revisada" }, { status: 422 });
   if (input.data.expectedDraftId !== invoice.draftId) return NextResponse.json({ error: "La prefactura cambió. Recarga y revisa antes de timbrar" }, { status: 409 });
 
-  const proposal = await getProposalWorkflowByTenant(tenant.id, proposalId);
-  if (!proposal) return NextResponse.json({ error: "Propuesta no encontrada" }, { status: 404 });
-  if (proposal.outcome !== "won") {
+  if (invoice.outcome !== "won") {
     return NextResponse.json({ error: "Solo se puede timbrar una propuesta marcada como Ganada. El expediente fiscal sigue disponible para consulta." }, { status: 422 });
   }
 

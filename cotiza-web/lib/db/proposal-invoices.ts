@@ -6,6 +6,7 @@ import { preparationEvent, type InvoicePreparation } from "./invoice-preparation
 export type ProposalInvoiceStatus = "draft" | "stamping" | "stamped" | "rejected" | null;
 
 export type ProposalInvoiceInfo = {
+  outcome: string | null;
   draftId: string | null;
   stampedAt: string | null;
   status: ProposalInvoiceStatus;
@@ -23,6 +24,7 @@ export async function getProposalInvoiceStatusByTenant(
 ): Promise<ProposalInvoiceInfo | null> {
   const row = await prisma.proposals.findFirst({
     select: {
+      outcome: true,
       invoice_draft_id: true,
       invoice_stamped_at: true,
       invoice_status: true,
@@ -37,6 +39,7 @@ export async function getProposalInvoiceStatusByTenant(
   }
 
   return {
+    outcome: row.outcome,
     draftId: row.invoice_draft_id,
     stampedAt: row.invoice_stamped_at ? row.invoice_stamped_at.toISOString() : null,
     status: normalizeInvoiceStatus(row.invoice_status),

@@ -2,7 +2,6 @@ import { INVOICE_UUID, INVOICE_BASE64 } from "@/tests/fixtures/synthetic-invoice
 import { beforeEach, describe, expect, it, vi } from "vitest";
 
 const mocks = vi.hoisted(() => ({
-  proposal: vi.fn(),
   visible: vi.fn(),
   getCurrentTenantContext: vi.fn(),
   enabled: vi.fn(),
@@ -27,7 +26,7 @@ vi.mock("@/lib/db/proposal-invoices", () => ({
   markProposalInvoiceRejectedByTenant: mocks.markRejected,
 }));
 
-vi.mock("@/lib/db/proposals", () => ({ isProposalVisibleToViewer: mocks.visible, getProposalWorkflowByTenant: mocks.proposal }));
+vi.mock("@/lib/db/proposals", () => ({ isProposalVisibleToViewer: mocks.visible }));
 
 import { POST } from "./route";
 
@@ -38,10 +37,9 @@ describe("timbrado: nunca emitir dos veces", () => {
   beforeEach(() => {
     vi.resetAllMocks();
     mocks.visible.mockResolvedValue(true);
-    mocks.proposal.mockResolvedValue({ outcome: "won" });
     mocks.getCurrentTenantContext.mockResolvedValue({ id: "t1", userId: "seller-1", userRole: "user", isSuperAdmin: false });
     mocks.enabled.mockReturnValue(true);
-    mocks.getInvoice.mockResolvedValue({ draftId: "d1", status: "draft" });
+    mocks.getInvoice.mockResolvedValue({ draftId: "d1", status: "draft", outcome: "won" });
     mocks.claim.mockResolvedValue(true);
     mocks.markStamped.mockResolvedValue(true);
     mocks.markRejected.mockResolvedValue(true);
@@ -66,7 +64,7 @@ describe("timbrado: nunca emitir dos veces", () => {
   });
 
   it.each([null, "lost", "discarded"])("no emite una prefactura anterior si el desenlace actual es %s", async outcome => {
-    mocks.proposal.mockResolvedValue({ outcome });
+    mocks.getInvoice.mockResolvedValue({ draftId: "d1", status: "draft", outcome });
     expect((await POST(req(), ctx)).status).toBe(422);
     expect(mocks.claim).not.toHaveBeenCalled();
     expect(mocks.stamp).not.toHaveBeenCalled();
