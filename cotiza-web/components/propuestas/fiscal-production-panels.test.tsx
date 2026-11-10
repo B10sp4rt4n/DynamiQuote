@@ -35,3 +35,10 @@ it('hides preparation when cancellation has already been recorded',async()=>{
  await act(async()=>root.render(<ProposalCorrectionPanel proposalId="synthetic"/>));
  expect(container.textContent).toContain('cancelación registrada');expect(click('Preparar sustitución para revisión')).toBeUndefined();
 });
+
+it.each(['cancelled','requested'])('labels the acknowledgement for %s without writes',async status=>{
+ fetchMock.mockResolvedValue({ok:true,json:async()=>({environment:'production',status,acknowledgement_xml:'synthetic-ack'})});
+ await act(async()=>root.render(<ProposalCancellationPanel proposalId="synthetic"/>));
+ expect(container.querySelector('a')?.textContent).toBe(status==='cancelled'?'Descargar acuse de cancelación':'Descargar acuse de solicitud');
+ expect(fetchMock.mock.calls.every(([,init])=>!init?.method || init.method==='GET')).toBe(true);
+});

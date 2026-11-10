@@ -8,6 +8,7 @@ import { ProposalPaymentPanel } from "./proposal-payment-panel";
 import { ProposalCancellationPanel } from './proposal-cancellation-panel';
 import { ProposalCorrectionPanel } from './proposal-correction-panel';
 import { ProposalLiveCancellation } from './proposal-live-cancellation';
+import type { BillingCancellation } from '@/lib/integrations/digestor-fiscal';
 
 const PAYMENT_FORM_OPTIONS = [
   { label: "01 - Efectivo", value: "01" },
@@ -69,7 +70,7 @@ export function ProposalInvoicePanel({ canPrepareInvoice, proposalId, recipientC
   const [ppdEnabled, setPpdEnabled] = useState(false);
   const [cancellationEnabled, setCancellationEnabled] = useState(false);
   const [correctionsEnabled, setCorrectionsEnabled] = useState(false);
-  const [invoiceCancellationStatus, setInvoiceCancellationStatus] = useState('not_requested');
+  const [invoiceCancellationStatus, setInvoiceCancellationStatus] = useState<BillingCancellation['status']>('not_requested');
   const [loading, setLoading] = useState(true);
   const [invoice, setInvoice] = useState<InvoiceStatus | null>(null);
   const [form, setForm] = useState<FormState>(EMPTY_FORM);
@@ -341,10 +342,14 @@ export function ProposalInvoicePanel({ canPrepareInvoice, proposalId, recipientC
   }
 
   if (invoice?.status === "stamped") {
+    const cancelled = invoiceCancellationStatus === 'cancelled';
     return (
-      <div className="rounded-lg border border-emerald-300 bg-emerald-50 p-4">
-        <p className="text-sm font-semibold text-emerald-900">{correctionsEnabled ? 'Factura de origen timbrada' : 'Factura timbrada'}</p>
-        <p className="mt-1 break-all text-sm text-emerald-800">UUID: {invoice.uuid ?? "N/D"}</p>
+      <div className={`rounded-lg border p-4 ${cancelled ? 'border-zinc-300 bg-zinc-50' : 'border-emerald-300 bg-emerald-50'}`}>
+        <p className={`text-sm font-semibold ${cancelled ? 'text-zinc-900' : 'text-emerald-900'}`}>{cancelled
+          ? correctionsEnabled ? 'Factura de origen cancelada' : 'Factura cancelada'
+          : correctionsEnabled ? 'Factura de origen timbrada' : 'Factura timbrada'}</p>
+        {cancelled ? <p className="mt-1 text-sm text-zinc-600">El XML timbrado original y el acuse se conservan para consulta.</p> : null}
+        <p className={`mt-1 break-all text-sm ${cancelled ? 'text-zinc-700' : 'text-emerald-800'}`}>UUID: {invoice.uuid ?? "N/D"}</p>
         <a className="mr-2 mt-2 inline-block rounded-lg border border-emerald-400 bg-white px-3 py-1.5 text-xs font-medium text-emerald-800 transition hover:bg-emerald-100"
           href={`/api/proposals/${proposalId}/invoice/xml`}>Descargar XML</a>
         <a
@@ -357,10 +362,11 @@ export function ProposalInvoicePanel({ canPrepareInvoice, proposalId, recipientC
         </a>
         {ppdEnabled ? <ProposalPaymentPanel proposalId={proposalId} cancellationEnabled={cancellationEnabled}
           correctionsEnabled={correctionsEnabled}
+          invoiceCancellationStatus={invoiceCancellationStatus}
           invoiceBlocked={['processing', 'requested', 'unknown', 'cancelled'].includes(invoiceCancellationStatus)} /> : null}
         {cancellationEnabled ? <ProposalCancellationPanel proposalId={proposalId} onStatusChange={setInvoiceCancellationStatus} /> : null}
         {correctionsEnabled ? <ProposalCorrectionPanel proposalId={proposalId} /> : null}
-        {invoice.uuid && !cancellationEnabled ? <ProposalLiveCancellation proposalId={proposalId} uuid={invoice.uuid}/> : null}
+        {invoice.uuid && !cancellationEnabled ? <ProposalLiveCancellation proposalId={proposalId} uuid={invoice.uuid} onStatusChange={setInvoiceCancellationStatus}/> : null}
       </div>
     );
   }

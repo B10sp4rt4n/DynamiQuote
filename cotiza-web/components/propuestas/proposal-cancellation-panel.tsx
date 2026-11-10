@@ -71,7 +71,7 @@ export function ProposalCancellationPanel({ proposalId, paymentId, onStatusChang
       <button type="button" disabled={!confirmed || busy || (state?.environment === 'production' && !state.document_uuid)} onClick={() => void execute('request')} className="rounded border border-rose-500 px-3 py-2 text-sm text-rose-900 disabled:opacity-50">{state?.environment === 'production' ? 'Solicitar cancelación real' : 'Solicitar cancelación en pruebas'}</button>
     </fieldset> : null}
     {state && !['not_requested', 'cancelled', 'not_sent'].includes(state.status) ? <button type="button" disabled={busy} onClick={() => void execute('reconcile')} className="mt-2 rounded border px-3 py-2 text-sm disabled:opacity-50">Consultar estado fiscal sin repetir solicitud</button> : null}
-    {state?.acknowledgement_xml ? <a className="mt-2 inline-block rounded border px-3 py-2 text-sm" href={`${path}?download=1`}>Descargar acuse de solicitud</a> : null}
+    {state?.acknowledgement_xml ? <a className="mt-2 inline-block rounded border px-3 py-2 text-sm" href={`${path}?download=1`}>{state.status === 'cancelled' ? 'Descargar acuse de cancelación' : 'Descargar acuse de solicitud'}</a> : null}
     {paymentId ? <p className="mt-2 text-xs text-zinc-600">Cancelar el complemento conserva el pago recibido y su historial. La corrección del complemento requiere revisión.</p> : null}
   </section>;
 }
