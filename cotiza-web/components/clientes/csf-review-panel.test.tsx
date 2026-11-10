@@ -95,3 +95,31 @@ it("integrates with Clients and saves only after review and a separate Guardar",
   await act(async () => button("Guardar").click());
   expect(saves).toHaveLength(1); expect(saves[0]).toMatchObject({ ...extracted, cfdiUse: "G03" });
 });
+
+it("provides an explicit button connected to the PDF picker",async()=>{
+ await act(async()=>root.render(<CsfReviewPanel current={current} onApply={apply} onPendingChange={pending}/>));
+ const input=container.querySelector<HTMLInputElement>('input[type=file]')!;
+ const picker=vi.spyOn(input,'click').mockImplementation(()=>{});
+ await act(async()=>button('Cargar y leer CSF (PDF)').click());
+ expect(picker).toHaveBeenCalledOnce();expect(fetchMock).not.toHaveBeenCalled();picker.mockRestore();
+});
+it("bounds a stuck status request and retries the same job without another upload",async()=>{
+ fetchMock.mockImplementation(async(_url,init)=>{
+  if(init?.method==='POST')return {ok:true,json:async()=>({token:'synthetic',status:'queued'})};
+  return new Promise((_resolve,reject)=>init.signal.addEventListener('abort',()=>reject(new Error('aborted'))));
+ });
+ await uploadAndRead();await act(async()=>vi.advanceTimersByTimeAsync(15000));
+ expect(container.textContent).toContain('La consulta tardó demasiado');
+ fetchMock.mockResolvedValueOnce({ok:true,json:async()=>({status:'done',review})});
+ await act(async()=>button('Consultar de nuevo').click());await act(async()=>vi.advanceTimersByTimeAsync(0));
+ expect(container.textContent).toContain('Extraído: EXTRAIDO');
+ expect(fetchMock.mock.calls.filter(([,init])=>init?.method==='POST')).toHaveLength(1);
+});
+it("stops a responsive but stuck queue after wall-clock 90 seconds",async()=>{
+ fetchMock.mockImplementation(async(_url,init)=>({ok:true,json:async()=>init?.method==='POST'?{token:'synthetic',status:'queued'}:{status:'queued'}}));
+ await uploadAndRead();expect(container.textContent).toContain('esperando turno');
+ await act(async()=>vi.advanceTimersByTimeAsync(90000));
+ expect(container.textContent).toContain('después de 90 segundos');
+ await act(async()=>button('Descartar esta revisión y continuar con captura manual').click());
+ expect(pending).toHaveBeenLastCalledWith(false);expect(apply).not.toHaveBeenCalled();
+});

@@ -23,6 +23,8 @@ export function CsfReviewPanel({ current, onApply, onPendingChange }: Props) {
   const [values, setValues] = useState<ClientFiscalValues>(current);
   const [confirmed, setConfirmed] = useState(false);
   const [error, setError] = useState("");
+  const [jobStatus, setJobStatus] = useState("queued");
+  const [elapsed, setElapsed] = useState(0);
   const [pollCount, setPollCount] = useState(0);
   const controller = useRef<AbortController | null>(null);
   const busy = useRef(false);
@@ -35,9 +37,25 @@ export function CsfReviewPanel({ current, onApply, onPendingChange }: Props) {
   useEffect(() => () => { if (preview) URL.revokeObjectURL(preview); }, [preview]);
 
   useEffect(() => {
+    if (!["uploading", "processing", "confirming"].includes(phase)) return;
+    const start = Date.now();
+    const timer = setInterval(() => setElapsed(Math.floor((Date.now() - start) / 1000)), 1000);
+    return () => clearInterval(timer);
+  }, [phase]);
+  useEffect(() => {
+    if (phase !== "processing" || !token) return;
+    const deadline = setTimeout(() => {
+      setError("La lectura sigue pendiente después de 90 segundos. Consulta de nuevo sin volver a subir el archivo o continúa con captura manual.");
+      setPhase("error");
+    }, 90_000);
+    return () => clearTimeout(deadline);
+  }, [phase, token]);
+  useEffect(() => {
     if (phase !== "processing" || !token) return;
     const abort = new AbortController();
+    let timedOut = false;
     const timer = setTimeout(async () => {
+      const timeout = setTimeout(() => { timedOut = true; abort.abort(); }, 15_000);
       try {
         const response = await fetch("/api/clients/csf", { headers: { "X-CSF-Review": token }, signal: abort.signal });
         const data = await response.json();
@@ -50,11 +68,11 @@ export function CsfReviewPanel({ current, onApply, onPendingChange }: Props) {
         } else if (pollCount >= 59) {
           setError("La lectura sigue pendiente. Consulta de nuevo sin volver a subir el archivo.");
           setPhase("error");
-        } else setPollCount((n) => n + 1);
+        } else { setJobStatus(data.status === "queued" ? "queued" : "processing"); setPollCount((n) => n + 1); }
       } catch (e) {
-        if (!abort.signal.aborted) { setError(e instanceof Error ? e.message : "Error de conexión"); setPhase("error"); }
-      }
-    }, 1500);
+        if (timedOut || !abort.signal.aborted) { setError(timedOut ? "La consulta tardó demasiado. Consulta de nuevo sin volver a subir el archivo." : e instanceof Error ? e.message : "Error de conexión"); setPhase("error"); }
+      } finally { clearTimeout(timeout); }
+    }, pollCount === 0 ? 0 : 1500);
     return () => { clearTimeout(timer); abort.abort(); };
   }, [phase, token, pollCount, current.address]);
 
@@ -73,16 +91,18 @@ export function CsfReviewPanel({ current, onApply, onPendingChange }: Props) {
     }
     busy.current = true;
     const abort = new AbortController(); controller.current = abort;
-    setFilename(file.name); setPreview(URL.createObjectURL(file)); setPhase("uploading");
+    let timedOut = false;
+    const timeout = setTimeout(() => { timedOut = true; abort.abort(); }, 30_000);
+    setFilename(file.name); setPreview(URL.createObjectURL(file)); setElapsed(0); setPhase("uploading");
     try {
       const body = new FormData(); body.append("file", file);
       const response = await fetch("/api/clients/csf", { body, method: "POST", signal: abort.signal });
       const data = await response.json();
       if (!response.ok) throw new Error(data.error ?? "No fue posible cargar la CSF");
-      if (!abort.signal.aborted) { setToken(data.token); setPollCount(0); setPhase("processing"); }
+      if (!abort.signal.aborted) { setToken(data.token); setJobStatus(data.status === "processing" ? "processing" : "queued"); setPollCount(0); setElapsed(0); setPhase("processing"); }
     } catch (e) {
-      if (!abort.signal.aborted) { setError(e instanceof Error ? e.message : "Error de conexión"); setPhase("error"); }
-    } finally { busy.current = false; }
+      if (timedOut || !abort.signal.aborted) { setError(timedOut ? "La carga tardó demasiado. No se confirmó su recepción; intenta más tarde o continúa manualmente." : e instanceof Error ? e.message : "Error de conexión"); setPhase("error"); }
+    } finally { clearTimeout(timeout); busy.current = false; }
   }
 
   function change(field: keyof ClientFiscalValues, value: string) {
@@ -91,8 +111,10 @@ export function CsfReviewPanel({ current, onApply, onPendingChange }: Props) {
 
   async function apply() {
     if (busy.current || !review || !confirmed || !clientFiscalValuesSchema.safeParse(values).success) return;
-    busy.current = true; setPhase("confirming"); setError("");
+    busy.current = true; setElapsed(0); setPhase("confirming"); setError("");
     const abort = new AbortController(); controller.current = abort;
+    let timedOut = false;
+    const timeout = setTimeout(() => { timedOut = true; abort.abort(); }, 30_000);
     try {
       const response = await fetch("/api/clients/csf", { method: "POST", signal: abort.signal,
         headers: { "Content-Type": "application/json" },
@@ -101,8 +123,8 @@ export function CsfReviewPanel({ current, onApply, onPendingChange }: Props) {
       if (!response.ok) throw new Error(data.error ?? "Revisa los datos fiscales");
       if (!abort.signal.aborted) { onApply(data.values); setPhase("applied"); }
     } catch (e) {
-      if (!abort.signal.aborted) { setError(e instanceof Error ? e.message : "Error de conexión"); setConfirmed(false); setPhase("review"); }
-    } finally { busy.current = false; }
+      if (timedOut || !abort.signal.aborted) { setError(timedOut ? "La comprobación tardó demasiado. Tu revisión se conserva; puedes intentarlo de nuevo." : e instanceof Error ? e.message : "Error de conexión"); setConfirmed(false); setPhase("review"); }
+    } finally { clearTimeout(timeout); busy.current = false; }
   }
 
   const validation = clientFiscalValuesSchema.safeParse(values);
@@ -111,15 +133,18 @@ export function CsfReviewPanel({ current, onApply, onPendingChange }: Props) {
     <section aria-label="Cargar y revisar CSF" className="min-w-0 rounded-xl border border-teal-200 bg-teal-50/50 p-4 sm:col-span-2">
       <h3 className="text-sm font-semibold text-zinc-900">Completar datos con una CSF</h3>
       <p className="mt-1 text-xs text-zinc-600">1. Carga el PDF · 2. Revisa los datos · 3. Confirma y guarda el cliente.</p>
-      <label className="mt-3 block text-xs font-medium text-zinc-700">
+      <button type="button" disabled={working} onClick={() => input.current?.click()}
+        className="mt-3 rounded-lg bg-teal-700 px-4 py-2 text-sm font-semibold text-white disabled:opacity-50">Cargar y leer CSF (PDF)</button>
+      <label className="sr-only">
         Cargar CSF en PDF
-        <input ref={input} aria-label="Cargar CSF en PDF" className="mt-1 block w-full text-sm" type="file" accept=".pdf,application/pdf"
+        <input ref={input} aria-label="Cargar CSF en PDF" className="sr-only" type="file" accept=".pdf,application/pdf"
           disabled={working} onChange={(e) => { void upload(e.target.files?.[0]); }} />
       </label>
-      <p className="mt-1 text-xs text-zinc-500">PDF con texto o escaneado, hasta 4 MB. El archivo se almacena para su revisión. El cliente se modifica al pulsar Guardar.</p>
-      {working ? <p role="status" className="mt-3 text-sm text-teal-800">{phase === "uploading" ? "Cargando constancia…" : phase === "confirming" ? "Comprobando los datos revisados…" : "Leyendo datos fiscales…"}</p> : null}
+      {filename ? <p className="mt-2 break-words text-xs text-zinc-700">Archivo: {filename}</p> : null}
+      <p className="mt-1 text-xs text-zinc-500">Al seleccionar el archivo comienza la lectura. PDF con texto o escaneado, hasta 4 MB. El archivo se almacena para su revisión. El cliente se modifica al pulsar Guardar.</p>
+      {working ? <p role="status" className="mt-3 text-sm text-teal-800">{phase === "uploading" ? "Cargando constancia…" : phase === "confirming" ? "Comprobando los datos revisados…" : jobStatus === "queued" ? "Archivo recibido; esperando turno de lectura…" : "Extrayendo datos fiscales; un escaneo puede tardar más…"} · {elapsed} s</p> : null}
       {error ? <p role="alert" className="mt-3 text-sm text-rose-700">{error}</p> : null}
-      {phase === "error" && token ? <button type="button" className="mt-2 text-sm font-semibold text-teal-800 underline" onClick={() => { setError(""); setPollCount(0); setPhase("processing"); }}>Consultar de nuevo</button> : null}
+      {phase === "error" && token ? <button type="button" className="mt-2 text-sm font-semibold text-teal-800 underline" onClick={() => { setError(""); setPollCount(0); setElapsed(0); setPhase("processing"); }}>Consultar de nuevo</button> : null}
       {preview && review ? (
         <div className="mt-4 grid gap-4 lg:grid-cols-2">
           <div className="min-w-0">
