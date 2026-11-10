@@ -56,7 +56,7 @@ try {
   await page.goto(origin);await page.getByText('Vigente',{exact:true}).waitFor();
   assert.equal(queries,0);
   await page.getByRole('button',{name:'Consultar estado en SAT',exact:true}).click();
-  await page.getByText('Consulta fallida ·',{exact:false}).waitFor();
+  await page.getByRole('alert').filter({hasText:'Consulta fallida ·'}).waitFor();
   await page.getByText('Vigente',{exact:true}).waitFor();
   await page.getByRole('button',{name:'Actualizar historial sin consultar SAT',exact:true}).click();
   assert.equal(await page.evaluate(()=>document.documentElement.scrollWidth>innerWidth),false);
