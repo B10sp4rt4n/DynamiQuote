@@ -5,11 +5,13 @@ import type { BillingCancellation, BillingPayments } from "@/lib/integrations/di
 import { ProposalCancellationPanel } from './proposal-cancellation-panel';
 import { ProposalCorrectionPanel } from './proposal-correction-panel';
 
+import { ProposalSatStatus } from './proposal-sat-status';
+
 const STATUS = { not_sent: "Pendiente de complemento", processing: "Timbrado pendiente de confirmar", unknown: "Requiere conciliación", rejected: "Rechazado por el PAC", stamped: "Complemento timbrado" };
 const money = (value?: string) => new Intl.NumberFormat("es-MX", { style: "currency", currency: "MXN" }).format(Number(value ?? 0));
 
-type Props = { proposalId: string; cancellationEnabled?: boolean; invoiceBlocked?: boolean; correctionsEnabled?: boolean; invoiceCancellationStatus?: BillingCancellation['status'] };
-export function ProposalPaymentPanel({ proposalId, cancellationEnabled = false, invoiceBlocked = false, correctionsEnabled = false, invoiceCancellationStatus }: Props) {
+type Props = { proposalId: string; satTrackingEnabled?: boolean; cancellationEnabled?: boolean; invoiceBlocked?: boolean; correctionsEnabled?: boolean; invoiceCancellationStatus?: BillingCancellation['status'] };
+export function ProposalPaymentPanel({ proposalId, satTrackingEnabled = false, cancellationEnabled = false, invoiceBlocked = false, correctionsEnabled = false, invoiceCancellationStatus }: Props) {
   const path = `/api/proposals/${encodeURIComponent(proposalId)}/invoice/payments`;
   const [summary, setSummary] = useState<BillingPayments | null>(null);
   const [error, setError] = useState<string | null>(null);
@@ -138,6 +140,7 @@ export function ProposalPaymentPanel({ proposalId, cancellationEnabled = false, 
           <p><strong>Pago {payment.sequence}: {money(payment.amount)}</strong> · {payment.reference}</p>
           <p className="mt-1">Saldo después del pago: {money(payment.balance_after)}</p>
           <p className="mt-1">{payment.has_active_revision ? 'Complemento original sustituido' : STATUS[payment.receipt_status]}</p>
+          {satTrackingEnabled && payment.receipt_uuid && payment.receipt_status === 'stamped' ? <ProposalSatStatus key={payment.receipt_uuid} proposalId={proposalId} paymentId={payment.id} uuid={payment.receipt_uuid}/> : null}
           {payment.receipt_uuid ? <p className="mt-1 break-all text-xs">UUID: {payment.receipt_uuid}</p> : null}
           <div className="mt-2 flex flex-wrap gap-2">
             {payment.receipt_status === "stamped" ? <><a className="rounded border px-3 py-2" href={`${path}/${encodeURIComponent(payment.id)}/receipt?download=1`}>Descargar XML timbrado</a><a className="rounded border px-3 py-2" href={`${path}/${encodeURIComponent(payment.id)}/receipt/pdf`} target="_blank" rel="noreferrer">Descargar PDF</a></> : <button type="button" disabled={busy || !canIssue} className="rounded border px-3 py-2 disabled:opacity-50" onClick={() => void receipt(payment.id, "prepare")}>Ver XML preliminar</button>}
@@ -150,7 +153,7 @@ export function ProposalPaymentPanel({ proposalId, cancellationEnabled = false, 
           </div> : null}
           {payment.cancellation_status && payment.cancellation_status !== 'not_requested' ? <p className="mt-2 text-xs text-amber-900">Cancelación del complemento: {payment.cancellation_status === 'cancelled' ? 'confirmada' : 'requiere seguimiento'}. El pago recibido se conserva.</p> : null}
           {cancellationEnabled && payment.receipt_status === 'stamped' ? <ProposalCancellationPanel proposalId={proposalId} paymentId={payment.id} onStatusChange={receiptCancellationChanged} /> : null}
-          {correctionsEnabled && payment.receipt_status === 'stamped' ? <ProposalCorrectionPanel proposalId={proposalId} paymentId={payment.id} /> : null}
+          {correctionsEnabled && payment.receipt_status === 'stamped' ? <ProposalCorrectionPanel proposalId={proposalId} paymentId={payment.id} satTrackingEnabled={satTrackingEnabled} originalUuid={payment.receipt_uuid ?? undefined} /> : null}
         </li>;
       })}</ol>
     </> : !error ? <p className="mt-2 text-sm">Consultando pagos…</p> : null}

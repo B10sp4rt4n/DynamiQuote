@@ -701,3 +701,15 @@ export function validateSatClassifications(items: Array<{ itemNumber: number; sa
   return request<import("@/lib/domain/fiscal-classification").SatValidation>("/v1/sat-catalogs/validate",
     { method: "POST", cache: "no-store", signal: AbortSignal.timeout(15_000), body: JSON.stringify({ items: pairs, catalogVersion }) });
 }
+
+
+export type SatObservation = {
+  id: string; checked_at: string | null; source: string; outcome: 'answered' | 'query_failed';
+  response: { Estado: 'Vigente' | 'Cancelado' | 'No localizado'; CodigoEstatus?: string | null; EsCancelable?: string | null; EstatusCancelacion?: string | null } | null;
+  error?: string | null; origin: string;
+};
+export type SatTracking = { document_uuid: string; history: SatObservation[]; latest_attempt: SatObservation | null; last_answer: SatObservation | null; cached?: boolean };
+export function getSatTracking(draftId: string, uuid: string, consult = false, paymentId?: string): Promise<SatTracking> {
+  const path = paymentId ? `${paymentPath(draftId)}/${encodeURIComponent(paymentId)}/receipt/sat-status` : `/v1/billing/drafts/${encodeURIComponent(draftId)}/sat-status`;
+  return request(`${path}?expected_uuid=${encodeURIComponent(uuid)}`, { method: consult ? 'POST' : 'GET', cache: 'no-store', signal: AbortSignal.timeout(55_000) });
+}

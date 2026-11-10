@@ -57,3 +57,15 @@ describe('production fiscal administration',()=>{
   expect((await authorizeProposalFiscalDocument('p','cancellation',new Request('https://cotiza.test/cancellation',{method:'POST',headers:{origin:'https://foreign.test'}}))).error?.status).toBe(403);expect(m.invoice).not.toHaveBeenCalled();
  });
 });
+
+describe('SAT observation authorization',()=>{
+ beforeEach(()=>{vi.resetAllMocks();vi.stubEnv('DIGESTOR_FISCAL_OPERATIONS_PRODUCTION_ENABLED','false');m.tenant.mockResolvedValue({id:'tenant',userId:'reader',userRole:'user',authMode:'clerk'});m.visible.mockResolvedValue(true);m.invoice.mockResolvedValue({status:'stamped',draftId:'resolved',uuid:'synthetic',xmlBase64:'synthetic'});});
+ afterEach(()=>vi.unstubAllEnvs());
+ it('allows a visible document reader but still requires same origin and Clerk with fiscal writes disabled',async()=>{
+  expect((await authorizeProposalFiscalDocument('p','sat_status',new Request('https://cotiza.test/status',{method:'POST',headers:{origin:'https://foreign.test'}}))).error?.status).toBe(403);
+  const request=new Request('https://cotiza.test/status',{method:'POST',headers:{origin:'https://cotiza.test'}});
+  expect(await authorizeProposalFiscalDocument('p','sat_status',request)).toEqual({draftId:'resolved',environment:'production',tenantId:'tenant'});
+  m.tenant.mockResolvedValue({id:'tenant',userId:'bootstrap',authMode:'bootstrap'});
+  expect((await authorizeProposalFiscalDocument('p','sat_status',request)).error?.status).toBe(401);
+ });
+});

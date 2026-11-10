@@ -11,20 +11,20 @@ export function isPpdCaptureEnabled(): boolean {
   return process.env["DIGESTOR_FISCAL_PPD_ENABLED"] === "true";
 }
 
-export async function authorizeProposalFiscalDocument(proposalId: string, feature: 'payments' | 'cancellation' | 'correction' | 'correction_read', request?: Request) {
+export async function authorizeProposalFiscalDocument(proposalId: string, feature: 'payments' | 'cancellation' | 'correction' | 'correction_read' | 'sat_status', request?: Request) {
   const tenant = await getCurrentTenantContext();
   if (!tenant) return { error: NextResponse.json({ error: "No autorizado" }, { status: 401 }) };
-  const enabled = feature === 'payments' ? isPpdCaptureEnabled() : feature === 'correction_read' ? true
+  const enabled = feature === 'payments' ? isPpdCaptureEnabled() : ['correction_read','sat_status'].includes(feature) ? true
     : feature === 'correction' ? process.env['DIGESTOR_FISCAL_CORRECTIONS_ENABLED'] === 'true'
     : process.env['DIGESTOR_FISCAL_CANCELLATION_ENABLED'] === 'true';
   if (!enabled || !isDigestorFiscalEnabledForTenant(tenant.id)) {
     return { error: NextResponse.json({ error: "La operación fiscal aún no está habilitada" }, { status: 403 }) };
   }
-  const production = feature === 'payments' ? process.env['DIGESTOR_FISCAL_PPD_PRODUCTION_ENABLED'] === 'true'
+  const production = feature === 'sat_status' ? !isDigestorFiscalSandboxTenant(tenant.id) : feature === 'payments' ? process.env['DIGESTOR_FISCAL_PPD_PRODUCTION_ENABLED'] === 'true'
     : process.env['DIGESTOR_FISCAL_OPERATIONS_PRODUCTION_ENABLED'] === 'true';
   if (production) {
     if (tenant.authMode !== 'clerk') return { error: NextResponse.json({ error: "Inicia sesión para operar facturas reales" }, { status: 401 }) };
-    if (feature !== 'payments' && !(tenant.isSuperAdmin || tenant.userRole === 'owner' || tenant.userRole === 'admin')) {
+    if (feature !== 'payments' && feature !== 'sat_status' && !(tenant.isSuperAdmin || tenant.userRole === 'owner' || tenant.userRole === 'admin')) {
       return { error: NextResponse.json({ error: 'Acceso fiscal administrativo requerido' }, { status: 403 }) };
     }
     if (request && !['GET','HEAD'].includes(request.method) && request.headers.get('origin') !== new URL(request.url).origin) {
@@ -41,6 +41,7 @@ export async function authorizeProposalFiscalDocument(proposalId: string, featur
   }
   return {
     draftId: invoice.draftId,
+    ...(feature === 'sat_status' ? {tenantId: tenant.id} : {}),
     environment: isDigestorFiscalSandboxTenant(tenant.id) ? 'sandbox' as const : 'production' as const,
   };
 }

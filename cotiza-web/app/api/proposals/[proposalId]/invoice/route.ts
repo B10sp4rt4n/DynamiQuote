@@ -1,3 +1,4 @@
+import { isDigestorFiscalSandboxTenant } from '@/lib/integrations/digestor-routing';
 import { isPpdCaptureEnabled } from "@/lib/integrations/proposal-payments";
 import { NextResponse } from "next/server";
 
@@ -65,7 +66,8 @@ export async function GET(_: Request, context: RouteContext) {
   }
   const canOperateFiscal = process.env['DIGESTOR_FISCAL_OPERATIONS_PRODUCTION_ENABLED'] !== 'true'
     || (tenant.authMode === 'clerk' && canSeeAll);
-  return NextResponse.json({ clientFiscalData, invoice, preparation, ppdEnabled: isPpdCaptureEnabled(),
+  return NextResponse.json({ clientFiscalData, invoice, preparation, satTrackingEnabled: !isDigestorFiscalSandboxTenant(tenant.id),
+    ppdEnabled: isPpdCaptureEnabled(),
     cancellationEnabled: canOperateFiscal && process.env['DIGESTOR_FISCAL_CANCELLATION_ENABLED'] === 'true',
     correctionsEnabled: canOperateFiscal && process.env['DIGESTOR_FISCAL_CORRECTIONS_ENABLED'] === 'true',
     fiscalBasis: { fingerprint: invoiceBasisFingerprint(proposal), currency: proposal.formal?.currency,
