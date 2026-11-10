@@ -53,6 +53,7 @@ suite("Invoice safety against disposable PostgreSQL; fiscal provider simulated",
     proposalId = `invoice-fixture-${++sequence}`;
     await db.proposals.create({ data: {
       proposal_id: proposalId, tenant_id: tenant, status: "draft", created_by: seller,
+      outcome: "won",
       created_by_user_id: seller, created_at: new Date(), invoice_draft_id: "draft-original", invoice_status: "draft",
     } });
   });
@@ -83,6 +84,15 @@ suite("Invoice safety against disposable PostgreSQL; fiscal provider simulated",
     expect(results.filter(Boolean)).toHaveLength(1);
     expect((await read()).invoice_draft_id).toBe(results[0] ? "draft-a" : "draft-b");
     expect((await read()).invoice_status).toBe("draft");
+  });
+
+  it.each([null, "lost", "discarded"])("keeps fiscal history but blocks preparation and issuance after outcome changes to %s", async outcome => {
+    await db.proposals.update({ where: { proposal_id: proposalId }, data: { outcome } });
+    expect(await service.saveProposalInvoiceDraftByTenant(tenant, proposalId, "new-draft", "draft-original")).toBe(false);
+    expect(await service.claimProposalInvoiceStampByTenant(tenant, proposalId, "draft-original")).toBe(false);
+    expect((await stamp(req(), ctx())).status).toBe(422);
+    expect(remote.stamp).not.toHaveBeenCalled();
+    expect(await service.getProposalInvoiceStatusByTenant(tenant, proposalId)).toMatchObject({ draftId: "draft-original", status: "draft" });
   });
 
   it("keeps a timeout reserved and reconciles the original result without another stamp", async () => {

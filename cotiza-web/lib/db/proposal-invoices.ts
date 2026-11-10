@@ -67,6 +67,7 @@ export async function saveProposalInvoiceDraftByTenant(
       tenant_id: tenantId,
       // Compare-and-set the observed draft to prevent overwriting a concurrent winner.
       // A losing request may leave an unlinked remote draft; it never changes the local reference.
+      outcome: "won",
       invoice_draft_id: expectedDraftId,
       invoice_uuid: null,
       invoice_xml_base64: null,
@@ -95,6 +96,7 @@ export async function claimProposalInvoiceStampByTenant(
       proposal_id: proposalId,
       tenant_id: tenantId,
       invoice_draft_id: draftId,
+      outcome: "won",
       invoice_uuid: null,
       invoice_xml_base64: null,
       invoice_stamped_at: null,

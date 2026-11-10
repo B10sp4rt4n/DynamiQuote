@@ -47,7 +47,7 @@ function setValue(input: HTMLInputElement, value: string) {
   input.dispatchEvent(new Event("input", { bubbles: true }));
 }
 async function click(text: string) { await act(async () => button(text).click()); }
-async function mount() { await act(async () => root.render(<ProposalInvoicePanel proposalId="p1" recipientCompany="EMPRESA SINTÉTICA" />)); }
+async function mount() { await act(async () => root.render(<ProposalInvoicePanel canPrepareInvoice proposalId="p1" recipientCompany="EMPRESA SINTÉTICA" />)); }
 async function nature() {
   await act(async () => {
     const select = host.querySelector<HTMLSelectElement>('select[id]')!;
