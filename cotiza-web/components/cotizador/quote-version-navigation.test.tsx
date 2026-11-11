@@ -88,6 +88,23 @@ afterEach(async () => {
 });
 
 describe("quote version navigation through the real shell and editor", () => {
+  it('keeps unsaved line edits while opening a separate new quotation and returning',async()=>{
+    await render();
+    const add=[...container.querySelectorAll('button')].find(button=>button.textContent==='+ Partida')!;
+    await act(async()=>add.click());
+    const inputCount=container.querySelectorAll('input').length;
+    await act(async()=>[...container.querySelectorAll('button')].find(button=>button.textContent==='Nueva cotización')!.click());
+    await settle();
+    expect(container.querySelector<HTMLElement>('[aria-label="Contexto de la cotización seleccionada"]')!.hidden).toBe(true);
+    expect(m.search).not.toContain('quoteId=');
+    await act(async()=>[...container.querySelectorAll('button')].find(button=>button.textContent==='Volver a cotización seleccionada')!.click());
+    await settle();
+    expect(container.querySelector<HTMLElement>('[aria-label="Contexto de la cotización seleccionada"]')!.hidden).toBe(false);
+    expect(container.querySelectorAll('input').length).toBe(inputCount);
+    expect(historyRow(4).textContent).toContain('(actual)');
+    expect(m.search).toBe('quoteId=COT-0066-v4');
+    expect(m.fetch.mock.calls.every(([,init])=>!init||init.method==='GET')).toBe(true);
+  });
   it("opens v3, then v2 and returns to v4 without the latest-groups fallback bouncing selection", async () => {
     await render();
     for (const version of [3, 2, 4]) {
