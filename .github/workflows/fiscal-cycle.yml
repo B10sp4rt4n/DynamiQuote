@@ -1,7 +1,7 @@
 name: Fiscal cycle (synthetic)
 on:
   push:
-    branches: [fix/quote-edit-access, fix/commercial-date-override, fix/quote-creation-history, fix/quote-creation-context, fix/fiscal-mvp-acceptance, fix/fiscal-stamp-recovery, feat/fiscal-payment-cancellation, feat/ppd-production-release, feat/fiscal-general-production, feat/fiscal-classification-aup, fix/prefactura-guided-readiness, fix/fiscal-classification-resume, fix/sat-validation-contract, fix/fiscal-history-without-won, fix/cancelled-invoice-presentation, fix/fiscal-state-provenance, fix/csf-explicit-read-progress, feat/sat-status-evidence]
+    branches: [fix/proposal-quote-sync, fix/quote-edit-access, fix/commercial-date-override, fix/quote-creation-history, fix/quote-creation-context, fix/fiscal-mvp-acceptance, fix/fiscal-stamp-recovery, feat/fiscal-payment-cancellation, feat/ppd-production-release, feat/fiscal-general-production, feat/fiscal-classification-aup, fix/prefactura-guided-readiness, fix/fiscal-classification-resume, fix/sat-validation-contract, fix/fiscal-history-without-won, fix/cancelled-invoice-presentation, fix/fiscal-state-provenance, fix/csf-explicit-read-progress, feat/sat-status-evidence]
   workflow_dispatch:
 permissions:
   contents: read

@@ -316,6 +316,8 @@ export function ProposalShell({
     }>
   >([]);
   const [loadingDetail, setLoadingDetail] = useState(false);
+  const [quoteSyncToken, setQuoteSyncToken] = useState<string | null>(null);
+  const [syncMessage, setSyncMessage] = useState<string | null>(null);
   const [saveStatus, setSaveStatus] = useState<"idle" | "saving" | "success" | "error">("idle");
   const [errorMessage, setErrorMessage] = useState<string | null>(null);
   const [importFile, setImportFile] = useState<File | null>(null);
@@ -649,13 +651,31 @@ export function ProposalShell({
     }
   }
 
+  async function syncFromQuote() {
+    if (!selectedProposalId || !quoteSyncToken || !canEditContent) return;
+    if (!window.confirm("Se reemplazarán las partidas de esta propuesta por las de su cotización original guardada. Los cambios de partidas sin guardar se perderán. La propuesta quedará en borrador y requerirá nueva autorización. ¿Continuar?")) return;
+    const id = selectedProposalId;
+    setSaveStatus("saving"); setErrorMessage(null); setSyncMessage(null);
+    try {
+      const response = await fetch(`/api/proposals/${id}/sync-quote`, { method: "POST", headers: { "Content-Type": "application/json" }, body: JSON.stringify({ expectedToken: quoteSyncToken }) });
+      const data = await response.json() as { error?: string };
+      if (!response.ok) throw new Error(data.error ?? "No se pudo actualizar desde la cotización");
+      if (!await loadProposalDetail(id)) throw new Error("La actualización terminó, pero no se pudo recargar la propuesta. Recarga antes de continuar.");
+      setSyncMessage("Partidas actualizadas desde la cotización original. Margen recalculado; revisa los datos antes de autorizar.");
+      setSaveStatus("idle");
+    } catch (error) { setErrorMessage(error instanceof Error ? error.message : "No se pudo actualizar"); setSaveStatus("error"); }
+  }
+
   async function loadProposalDetail(proposalId: string) {
+    setQuoteSyncToken(null);
+    setSyncMessage(null);
     setLoadingDetail(true);
     setErrorMessage(null);
 
     try {
       const response = await fetch(`/api/proposals/${proposalId}`, { method: "GET" });
       const data = (await response.json()) as {
+        quoteSyncToken?: string;
         error?: string;
         proposal?: {
           outcome?: "won" | "lost" | "discarded" | null;
@@ -703,6 +723,7 @@ export function ProposalShell({
         throw new Error(data.error ?? "No fue posible cargar la propuesta");
       }
 
+      setQuoteSyncToken(data.quoteSyncToken ?? null);
       setIssuerCompany(data.proposal.formal?.issuerCompany ?? "");
       setIssuerEmail(data.proposal.formal?.issuerEmail ?? "");
       setIssuerPhone(data.proposal.formal?.issuerPhone ?? "");
@@ -773,8 +794,10 @@ export function ProposalShell({
             : item,
         ),
       );
+      return true;
     } catch (error) {
       setErrorMessage(error instanceof Error ? error.message : "Error interno");
+      return false;
     } finally {
       setLoadingDetail(false);
     }
@@ -2046,7 +2069,12 @@ export function ProposalShell({
                       Reabrir a borrador
                     </button>
                   ) : null}
-                  <span className="text-xs text-zinc-500">Guardar recalcula margen y puede quitar el bloqueo.</span>
+                  <button type="button" className="rounded-lg border border-blue-300 bg-blue-50 px-4 py-2 text-sm font-medium text-blue-900 disabled:opacity-50"
+                    disabled={!canEditContent || !quoteSyncToken || saveStatus === "saving" || loadingDetail}
+                    title={canEditContent ? "Toma las partidas guardadas de la cotización original de esta propuesta" : "Primero reabre la propuesta a borrador"}
+                    onClick={() => void syncFromQuote()}>Actualizar desde cotización</button>
+                  <span className="text-xs text-zinc-500">Guardar conserva las partidas actuales. Actualizar desde cotización importa sus cambios y recalcula el margen.</span>
+                  {syncMessage ? <p role="status" className="text-sm text-emerald-800">{syncMessage}</p> : null}
                   <button
                     className="rounded-lg border border-zinc-300 bg-white px-4 py-2 text-sm font-medium text-zinc-700 transition hover:bg-zinc-100 disabled:cursor-not-allowed disabled:opacity-60"
                     disabled={loadingDetail || issuanceGate.kind === "blocked"}

@@ -87,3 +87,18 @@ la sincronización automática existente sólo aplica a propuestas en borrador.
 Para actualizar una propuesta autorizada, se reabre primero y luego se vuelve a guardar
 la cotización; la propuesta necesita nueva autorización. No se alteran aprobaciones,
 importes ni documentos históricos de forma silenciosa.
+
+
+## Recuperar cambios de una cotización en propuesta existente
+
+Guardar cambios en Propuestas conserva sus partidas actuales: no vuelve a importar
+la cotización. Para importar cambios ya guardados, reabrir la propuesta a borrador y
+pulsar **Actualizar desde cotización**. Se confirma el reemplazo de partidas antes de
+aplicarlo, se utiliza la versión exacta de origen (no la última del grupo) y se recarga
+el margen del servidor. No publica ni autoriza la propuesta.
+
+La transacción bloquea grupo de cotización y propuesta, exige borrador en el registro y
+su documento, verifica tenant, vendedor y huella de las partidas leídas. Rechaza cualquier
+preparación fiscal o factura asociada. Limpia autorizaciones y override de margen, conserva
+antes/después en auditoría y no escribe si las partidas ya coinciden. La prueba reproduce
+costo 160 → 137.93 con venta 172.41, sin tocar datos reales.

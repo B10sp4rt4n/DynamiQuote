@@ -1330,7 +1330,7 @@ export function QuoteLineEditor({
         </div>
         <aside className="rounded-lg border border-blue-200 bg-blue-50 p-3 text-sm text-blue-950" aria-label="Cambios de cotización y propuesta">
           <p className="font-semibold">Guardar cotización y actualizar propuesta</p>
-          <p className="mt-1">Guardar recalcula esta cotización. Su propuesta sólo se actualiza automáticamente mientras esté en borrador. Para actualizar una propuesta autorizada, reábrela a borrador y vuelve a guardar aquí; después autorízala de nuevo.</p>
+          <p className="mt-1">Guardar recalcula esta cotización. Su propuesta sólo se actualiza automáticamente mientras esté en borrador. Para recuperar cambios anteriores en una propuesta, reábrela a borrador y usa Actualizar desde cotización en Propuestas; después autorízala de nuevo.</p>
         </aside>
         <div className="flex flex-wrap items-center gap-3">
           <label className="text-sm text-zinc-600" htmlFor="quote-selector">

@@ -1,0 +1,12 @@
+import { beforeEach, expect, it, vi } from "vitest";
+const m = vi.hoisted(() => ({ tenant: vi.fn(), sync: vi.fn(), rate: vi.fn() }));
+vi.mock("@/lib/auth/tenant-context", () => ({ getCurrentTenantContext: m.tenant }));
+vi.mock("@/lib/db/proposal-quote-sync", () => ({ syncProposalFromQuote: m.sync }));
+vi.mock("@/lib/utils/rate-limit", () => ({ enforceRateLimit: m.rate }));
+import { POST } from "./route";
+const request = (body: unknown = { expectedToken: "a".repeat(64) }) => new Request("http://localhost/api/proposals/p/sync-quote", { method: "POST", body: JSON.stringify(body) });
+const ctx = { params: Promise.resolve({ proposalId: "p" }) };
+beforeEach(() => { vi.clearAllMocks(); m.tenant.mockResolvedValue({ id: "t", userId: "seller", userRole: "user", isSuperAdmin: false }); m.rate.mockReturnValue({ allowed: true }); m.sync.mockResolvedValue("updated"); });
+it("uses authenticated tenant and seller identity", async () => { expect((await POST(request(), ctx)).status).toBe(200); expect(m.sync).toHaveBeenCalledWith("t", "p", { userId: "seller", canSeeAll: false }, "a".repeat(64)); });
+it("requires identity and edit reference", async () => { expect((await POST(request({}), ctx)).status).toBe(422); m.tenant.mockResolvedValue(null); expect((await POST(request(), ctx)).status).toBe(401); expect(m.sync).not.toHaveBeenCalled(); });
+it.each([["not_draft", 409], ["fiscal_document", 409], ["conflict", 409], ["missing_quote", 409], ["forbidden", 403], ["not_found", 404]])("does not claim success for %s", async (result, status) => { m.sync.mockResolvedValue(result); expect((await POST(request(), ctx)).status).toBe(status); });
