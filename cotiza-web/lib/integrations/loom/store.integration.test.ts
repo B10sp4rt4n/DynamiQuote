@@ -89,8 +89,8 @@ suite("Loom copies on disposable PostgreSQL", () => {
   });
   it("saves a dated task in the existing task table and refuses a stale source review", async () => {
     const draft = await reviewed("task"); await followups.saveLoomFollowup(target, draft);
-    const tasks = await pool.query("SELECT *,due_date::text day FROM tasks");
-    expect(tasks.rows).toHaveLength(1); expect(tasks.rows[0]).toMatchObject({ tenant_id: tenant, client_id: client, opportunity_id: opp, day: "2026-11-12", completed_at: null });
+    const tasks = await pool.query("SELECT *,due_date::text AS due_day FROM tasks");
+    expect(tasks.rows).toHaveLength(1); expect(tasks.rows[0]).toMatchObject({ tenant_id: tenant, client_id: client, opportunity_id: opp, due_day: "2026-11-12", completed_at: null });
     const stale = await reviewed("task", "Stale review");
     await store.saveLoomLink(target, { ...snapshot, transcript: "[0:01] Revised", title: "New source title" }, 2);
     await expect(followups.saveLoomFollowup(target, stale)).rejects.toMatchObject({ status: 409 });

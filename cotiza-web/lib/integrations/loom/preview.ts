@@ -5,6 +5,7 @@ import { LoomError, type LoomSnapshot, type LoomTarget } from "./domain";
 
 export function snapshotHash(snapshot: LoomSnapshot) {
   const { observedAt: _observedAt, ...content } = snapshot;
+  void _observedAt;
   return createHash("sha256").update(JSON.stringify(content)).digest("hex");
 }
 function binding(target: LoomTarget, sourceId: string) {
