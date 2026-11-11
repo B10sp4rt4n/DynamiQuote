@@ -1,0 +1,11 @@
+# Seguimiento periódico SAT desde Cotiza
+
+El panel de seguimiento de cada factura, REP y comprobante seleccionado permite activar o pausar revisiones automáticas. Muestra ejecución efectiva, intervalo, próxima revisión en Ciudad de México, reintentos y el origen manual/automático de cada observación. La consulta manual y la actualización de historial permanecen separadas.
+
+La programación se ejecuta en Digestor Fiscal, incluso con Cotiza cerrado. No se agrega cron a Vercel ni se usa IA. Publicar después de la migración y el backend de `B10sp4rt4n/digestor__fiscal:feat/sat-periodic-tracking`; mantener desactivado el rollout hasta elegir explícitamente los tenants. La entrega de código no inscribe documentos ni programa consultas productivas por sí misma.
+
+Las rutas POST `/api/proposals/{proposalId}/invoice/sat-status/schedule` y `/api/proposals/{proposalId}/invoice/payments/{paymentId}/receipt/sat-status/schedule` reciben `expected_uuid` en query y un cuerpo estricto `{enabled:boolean}`. Se resuelve draft y tenant en servidor, requiere sesión Clerk productiva, permiso owner/admin/superadmin, visibilidad de propuesta y origen válido. El backend vuelve a validar UUID, XML, tenant y emisor. Usuarios sin permiso administrativo pueden leer el seguimiento de sus propuestas y usar la consulta manual con sus permisos existentes.
+
+El backend publica disponibilidad por tenant; sólo en ese caso se ofrece activar. Una inscripción conservada con configuración revocada se muestra pausada y permite desinscribir. No se afirma que el SAT esté actualizado por abrir la pantalla; cada respuesta conserva su propia fecha/fuente. El seguimiento no altera XML, pagos ni estados internos y no emite ni cancela comprobantes.
+
+Validación: pruebas de rutas y componentes, contrato estricto, rechazo de gestión por vendedor y doble clic, lectura compatible con el backend anterior, pausas y configuración revocada. `scripts/check_sat_status_ui.mjs` recorre consulta, conservación de última respuesta, activación y pausa a 1360/390 px con HTTP sintético. Las pruebas de concurrencia y programación real residen en Digestor. No acredita una consulta externa automática ni habilitación productiva hasta su publicación y verificación.

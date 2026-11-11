@@ -41,7 +41,7 @@ export async function authorizeProposalFiscalDocument(proposalId: string, featur
   }
   return {
     draftId: invoice.draftId,
-    ...(feature === 'sat_status' ? {tenantId: tenant.id} : {}),
+    ...(feature === 'sat_status' ? {tenantId: tenant.id, canManageSatSchedule: canSeeAll} : {}),
     environment: isDigestorFiscalSandboxTenant(tenant.id) ? 'sandbox' as const : 'production' as const,
   };
 }

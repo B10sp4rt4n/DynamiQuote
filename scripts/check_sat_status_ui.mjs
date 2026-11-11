@@ -38,9 +38,9 @@ const origin = 'http://127.0.0.1:'+server.address().port;
 const { chromium } = await import(process.env.PLAYWRIGHT_MODULE || 'playwright');
 let browser;
 try {
- browser=await chromium.launch({headless:true,args:['--no-sandbox','--disable-dev-shm-usage']});
+ browser=await chromium.launch({headless:true,executablePath:process.env.PLAYWRIGHT_CHROMIUM_EXECUTABLE_PATH,args:['--no-sandbox','--disable-dev-shm-usage']});
  for(const width of [1360,390]){
-  const page=await browser.newPage({viewport:{width,height:900}}),errors=[],unexpected=[];let reads=0,queries=0;
+  const page=await browser.newPage({viewport:{width,height:900}}),errors=[],unexpected=[];let reads=0,queries=0,schedules=0,enabled=false;
   const uuid='11111111-2222-4333-8444-555555555555';
   const answer={id:'first',checked_at:'2026-11-10T18:00:00Z',source:'SAT ConsultaCFDIService',outcome:'answered',response:{Estado:'Vigente'},origin:'status_query'};
   const fail={id:'failed',checked_at:'2026-11-10T18:01:00Z',source:'SAT ConsultaCFDIService',outcome:'query_failed',response:null,error:'Consulta sin confirmar',origin:'status_query'};
@@ -49,9 +49,12 @@ try {
    const req=route.request(),url=new URL(req.url());
    if(url.origin!==origin){unexpected.push(url.origin);return route.abort();}
    if(!url.pathname.startsWith('/api/'))return route.continue();
-   if(!url.pathname.endsWith('/sat-status') || url.searchParams.get('expected_uuid')!==uuid){unexpected.push(url.pathname);return route.abort();}
-   if(req.method()==='POST')queries++;else reads++;
-   return route.fulfill({json:{document_uuid:uuid,history:queries?[fail,answer]:[answer],last_answer:answer,latest_attempt:queries?fail:answer}});
+   const scheduling=url.pathname.endsWith('/sat-status/schedule');
+   if((!url.pathname.endsWith('/sat-status') && !scheduling) || url.searchParams.get('expected_uuid')!==uuid){unexpected.push(url.pathname);return route.abort();}
+   if(scheduling){assert.equal(req.method(),'POST');enabled=req.postDataJSON().enabled;schedules++;}
+   else if(req.method()==='POST')queries++;else reads++;
+   return route.fulfill({json:{document_uuid:uuid,history:queries?[fail,answer]:[answer],last_answer:answer,latest_attempt:queries?fail:answer,
+    schedule:{available:true,can_manage:true,enabled,running:enabled,interval_seconds:21600,next_check_at:enabled?'2026-11-11T00:00:00Z':null,failures:0,last_outcome:null}}});
   });
   await page.goto(origin);await page.getByText('Vigente',{exact:true}).waitFor();
   assert.equal(queries,0);
@@ -59,9 +62,15 @@ try {
   await page.getByRole('alert').filter({hasText:'Consulta fallida ·'}).waitFor();
   await page.getByText('Vigente',{exact:true}).waitFor();
   await page.getByRole('button',{name:'Actualizar historial sin consultar SAT',exact:true}).click();
+  await page.getByRole('button',{name:'Activar seguimiento automático',exact:true}).click();
+  await page.getByText('Seguimiento automático: activo',{exact:true}).waitFor();
+  await page.getByText(/Revisión cada 6 horas/).waitFor();
+  await page.screenshot({path:path.join(artifacts,`sat-active-${width}.png`),fullPage:true});
+  await page.getByRole('button',{name:'Pausar seguimiento automático',exact:true}).click();
+  await page.getByText('Seguimiento automático: pausado',{exact:true}).waitFor();
   assert.equal(await page.evaluate(()=>document.documentElement.scrollWidth>innerWidth),false);
   await page.screenshot({path:path.join(artifacts,`sat-${width}.png`),fullPage:true});
-  assert.equal(queries,1);assert.equal(reads,2);assert.deepEqual(errors,[]);assert.deepEqual(unexpected,[]);
-  console.log(JSON.stringify({width,queries,reads,errors,unexpected}));await page.close();
+  assert.equal(queries,1);assert.equal(reads,2);assert.equal(schedules,2);assert.deepEqual(errors,[]);assert.deepEqual(unexpected,[]);
+  console.log(JSON.stringify({width,queries,reads,schedules,errors,unexpected}));await page.close();
  }
 }finally{if(browser)await browser.close();await new Promise(resolve=>server.close(resolve));}
