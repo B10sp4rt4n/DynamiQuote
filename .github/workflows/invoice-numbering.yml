@@ -1,0 +1,36 @@
+name: Invoice numbering visual
+on:
+  push:
+    branches: [feat/invoice-numbering]
+  workflow_dispatch:
+permissions:
+  contents: read
+jobs:
+  visual:
+    runs-on: ubuntu-24.04
+    timeout-minutes: 12
+    env:
+      DATABASE_URL: postgresql://unused:unused@127.0.0.1:1/unused
+      NEXT_TELEMETRY_DISABLED: '1'
+    steps:
+      - uses: actions/checkout@11bd71901bbe5b1630ceea73d27597364c9af683
+        with:
+          persist-credentials: false
+      - uses: actions/setup-node@49933ea5288caeca8642d1e84afbd3f7d6820020
+        with:
+          node-version: '22'
+      - run: npm ci --no-audit --no-fund
+      - run: npm install --prefix "$RUNNER_TEMP/numbering-ui-tools" --no-save --no-package-lock --no-audit --no-fund esbuild@0.28.2 playwright@1.62.1
+      - run: node "$RUNNER_TEMP/numbering-ui-tools/node_modules/playwright/cli.js" install --with-deps chromium
+      - name: Real panel at desktop and mobile sizes, synthetic data
+        run: |
+          ESBUILD_MODULE="$RUNNER_TEMP/numbering-ui-tools/node_modules/esbuild" \
+          PLAYWRIGHT_MODULE="$RUNNER_TEMP/numbering-ui-tools/node_modules/playwright/index.mjs" \
+          node scripts/check_invoice_numbering_ui.mjs
+      - uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02
+        if: always()
+        with:
+          name: invoice-numbering-visual
+          path: artifacts/invoice-numbering
+          retention-days: 3
+          if-no-files-found: warn
