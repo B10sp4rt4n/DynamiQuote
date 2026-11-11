@@ -1,3 +1,4 @@
+import { proposalQuoteSyncToken } from "@/lib/domain/proposal-quote-sync-token";
 import { NextResponse } from "next/server";
 import { closeDateInstant } from "@/lib/domain/commercial-close-date";
 
@@ -76,7 +77,7 @@ export async function GET(request: Request, context: RouteContext) {
       }
     : proposal;
 
-  return NextResponse.json({ proposal: normalizedProposal }, { status: 200 });
+  return NextResponse.json({ proposal: normalizedProposal, quoteSyncToken: proposalQuoteSyncToken(normalizedProposal.items) }, { status: 200 });
 }
 
 export async function PUT(request: Request, context: RouteContext) {

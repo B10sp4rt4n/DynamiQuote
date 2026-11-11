@@ -42,6 +42,8 @@ function describe(item: ProposalAuditTimelineItem): { detail: string | null; tit
     ? ` · Excepción anterior al alta: ${String(d["closeDateOverrideReason"] ?? "motivo reservado")}` : "";
 
   switch (item.type) {
+    case "proposal_synced_from_quote":
+      return { title: "Partidas actualizadas desde cotización", detail: "Se recalculó el margen. La propuesta requiere nueva autorización.", tone: "neutral" };
     case "invoice_preparation_saved":
       return { title: "Prefactura preparada", detail: "Datos y clasificación guardados para recuperar esta revisión.", tone: "ok" };
     case "fiscal_classification_confirmed":
