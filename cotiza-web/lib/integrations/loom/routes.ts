@@ -13,6 +13,23 @@ function failure(error: unknown) {
     { status: error instanceof LoomError ? error.status : 503, headers: { ...headers,
       ...(error instanceof LoomError && error.retryAfter ? { "Retry-After": error.retryAfter } : {}) } });
 }
+async function boundedBody(request: Request) {
+  const reader = request.body?.getReader();
+  if (!reader) throw new LoomError("Solicitud vacía", 422);
+  const decoder = new TextDecoder("utf-8", { fatal: true });
+  let text = "", bytes = 0;
+  try {
+    while (true) {
+      const chunk = await reader.read();
+      if (chunk.value) {
+        bytes += chunk.value.byteLength;
+        if (bytes > 10_000) throw new LoomError("Solicitud demasiado grande", 413);
+        text += decoder.decode(chunk.value, { stream: true });
+      }
+      if (chunk.done) return text + decoder.decode();
+    }
+  } finally { await reader.cancel().catch(() => {}); }
+}
 export function loomHandlers(kind: "client" | "opportunity") {
   return {
     async read(request: Request, id: string) {
@@ -24,8 +41,7 @@ export function loomHandlers(kind: "client" | "opportunity") {
       try {
         const target = await authorizeLoom(request, kind, id);
         if (Number(request.headers.get("content-length") ?? 0) > 10_000) throw new LoomError("Solicitud demasiado grande", 413);
-        const text = await request.text();
-        if (text.length > 10_000) throw new LoomError("Solicitud demasiado grande", 413);
+        const text = await boundedBody(request);
         const input = loomRequestSchema.safeParse(JSON.parse(text));
         if (!input.success) throw new LoomError("Revisa el enlace y la vista previa", 422);
         const { sourceId, url } = normalizeLoomUrl(input.data.url), config = loomConfig();

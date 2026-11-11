@@ -43,7 +43,7 @@ export class LoomMcp {
     }
     const reader = response.body?.getReader();
     if (!reader) throw new LoomError("Loom devolvió una respuesta vacía", 502);
-    const decoder = new TextDecoder();
+    const decoder = new TextDecoder("utf-8", { fatal: true });
     const sse = response.headers.get("content-type")?.includes("text/event-stream");
     if (!sse && !response.headers.get("content-type")?.includes("application/json")) { await reader.cancel(); throw new LoomError("Formato de respuesta de Loom no soportado", 502); }
     let buffer = "", bytes = 0;

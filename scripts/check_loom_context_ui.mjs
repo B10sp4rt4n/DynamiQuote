@@ -32,7 +32,7 @@ try {
   browser = await chromium.launch({ headless: true, args: ["--no-sandbox", "--disable-dev-shm-usage"] });
   for (const width of [1360, 390]) {
     const page = await browser.newPage({ viewport: { width, height: 900 } });
-    const errors = [], unexpected = []; let reads = 0, previews = 0, writes = 0, fail = false, delay = false, release;
+    const errors = [], unexpected = []; let reads = 0, previews = 0, writes = 0, fail = false, delay = false, release, delayedStarted;
     const source = "https://www.loom.com/share/" + "a".repeat(32);
     const snapshot = { sourceId: "a".repeat(32), ari: "ari:synthetic", url: source, title: "Reunión comercial sintética",
       type: "ASYNC_VIDEO", createdAt: "2026-11-10T18:00:00Z", durationSeconds: 60,
@@ -50,7 +50,7 @@ try {
       const input = req.postDataJSON();
       if (input.action === "preview") {
         previews++;
-        if (delay) await new Promise(resolve => { release = resolve; });
+        if (delay) await new Promise(resolve => { release = resolve; delayedStarted?.(); });
         return route.fulfill({ json: { snapshot: { ...snapshot, title: tenant === "tenant-b" ? "Otro expediente" : snapshot.title }, previewToken: "synthetic-reviewed" } }).catch(() => {});
       }
       if (input.action !== "link" || input.previewToken !== "synthetic-reviewed") { unexpected.push(input.action); return route.abort(); }
@@ -83,9 +83,10 @@ try {
     await page.screenshot({ path: path.join(artifacts, "preserved-copy-" + width + ".png"), fullPage: true });
     // A response from an old company must not reappear after changing context.
     fail = false; delay = true;
+    const started = new Promise(resolve => { delayedStarted = resolve; });
     await page.getByLabel("Enlace de la grabación", { exact: true }).fill(source);
     await page.getByRole("button", { name: "Revisar grabación", exact: true }).click();
-    await page.waitForFunction(() => document.querySelector('button[type="submit"]')?.textContent.includes("Consultando"));
+    await started;
     await page.getByRole("button", { name: "Cambiar empresa de prueba", exact: true }).click();
     if (release) release();
     await page.getByText("Reuniones y videos · Loom", { exact: true }).click();
