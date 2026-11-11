@@ -26,7 +26,7 @@ jobs:
           POSTGRES_PASSWORD: synthetic-local-only
           POSTGRES_DB: cotiza_loom_synthetic
         ports: ['5432:5432']
-        options: --health-cmd 'pg_isready -U postgres' --health-interval 10s --health-timeout 5s --health-retries 5
+        options: --health-cmd pg_isready --health-interval 10s --health-timeout 5s --health-retries 5
     env:
       DATABASE_URL: postgresql://postgres:synthetic-local-only@127.0.0.1:5432/cotiza_loom_synthetic
       NEXT_TELEMETRY_DISABLED: '1'
