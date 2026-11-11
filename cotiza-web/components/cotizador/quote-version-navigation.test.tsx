@@ -88,6 +88,21 @@ afterEach(async () => {
 });
 
 describe("quote version navigation through the real shell and editor", () => {
+  it("opens the editor from the explicit saved quotation action, focuses it and enables saving", async () => {
+    m.search = "panel=open";
+    await render();
+    const editor = container.querySelector<HTMLElement>('[aria-label="Partidas de la cotización seleccionada"]')!;
+    expect(editor.hidden).toBe(true);
+    const edit = container.querySelector<HTMLButtonElement>('[aria-label="Editar cotización COT-0066 v4"]')!;
+    expect(edit).not.toBeNull();
+    await act(async () => edit.click()); await settle();
+    expect(editor.hidden).toBe(false);
+    expect(document.activeElement).toBe(editor);
+    expect((container.querySelector("#quote-selector") as HTMLSelectElement).value).toBe("COT-0066-v4");
+    expect([...container.querySelectorAll<HTMLButtonElement>("button")].find(b => b.textContent === "Guardar")!.disabled).toBe(false);
+    expect(editor.textContent).toContain("sólo se actualiza automáticamente mientras esté en borrador");
+    expect(m.fetch.mock.calls.every(([,init])=>!init||init.method==='GET')).toBe(true);
+  });
   it('retains an exact historical quote when opening creation removes its server-provided URL summary',async()=>{
     m.search='quoteId=COT-0066-v2';await render(quote(2));
     await act(async()=>[...container.querySelectorAll('button')].find(button=>button.textContent==='+ Partida')!.click());

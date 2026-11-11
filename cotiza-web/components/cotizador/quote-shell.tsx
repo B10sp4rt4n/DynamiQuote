@@ -86,6 +86,8 @@ export function QuoteShell({
   const searchParams = useSearchParams();
   const [quoteItems, setQuoteItems] = useState<QuoteGroupSummary[]>(() => sortQuotes(items));
   const [editorReload, setEditorReload] = useState(0);
+  const editorRef = useRef<HTMLDivElement>(null);
+  const pendingEditorFocus = useRef(false);
   const [creationOpen, setCreationOpen] = useState(() => Boolean(initialOpportunity) || (!requestedQuote && !searchParams.get('quoteId')));
   const [activeQuoteId, setActiveQuoteId] = useState<string | null>(() => initialOpportunity ? null
     : requestedQuote?.quoteId ?? (searchParams.get('quoteId') ? resolveSelectedQuoteId(items, searchParams.get('quoteId')) : null));
@@ -114,11 +116,26 @@ export function QuoteShell({
     if (quote) setSelectedVersion(quote);
     setActiveQuoteId(quoteId);
   }
+  function openQuoteEditor(quoteId: string) {
+    if (!creationOpen && activeQuoteId === quoteId) {
+      editorRef.current?.focus({ preventScroll: true });
+      editorRef.current?.scrollIntoView({ behavior: "smooth", block: "start" });
+    } else {
+      pendingEditorFocus.current = true;
+      handleSelectedQuoteChange(quoteId);
+    }
+  }
+  useEffect(() => {
+    if (creationOpen || !pendingEditorFocus.current) return;
+    pendingEditorFocus.current = false;
+    editorRef.current?.focus({ preventScroll: true });
+    editorRef.current?.scrollIntoView({ behavior: "smooth", block: "start" });
+  }, [activeQuoteId, creationOpen]);
   const lastHandledQuoteIdFromQueryRef = useRef<string | null>(null);
-  const [isQuotesPanelOpen, setIsQuotesPanelOpen] = useState(false);
-  const [quoteSearch, setQuoteSearch] = useState("");
+  const [isQuotesPanelOpen, setIsQuotesPanelOpen] = useState(() => normalizeQuotePanelState(searchParams.get("panel")));
+  const [quoteSearch, setQuoteSearch] = useState(() => searchParams.get("q") ?? "");
   const [showArchived, setShowArchived] = useState(false);
-  const [quoteSort, setQuoteSort] = useState<QuoteSort>("date_desc");
+  const [quoteSort, setQuoteSort] = useState<QuoteSort>(() => normalizeQuoteSort(searchParams.get("sort")));
   const [clientName, setClientName] = useState(initialOpportunity?.company ?? "");
   const [selectedClientId, setSelectedClientId] = useState<string | null>(initialOpportunity?.clientId ?? null);
   const [clientSearch, setClientSearch] = useState(initialOpportunity?.company ?? "");
@@ -829,6 +846,11 @@ export function QuoteShell({
                         {item.avgMargin !== null ? `${item.avgMargin.toFixed(1)}%` : "N/D"}
                       </td>
                       <td className="px-4 py-3">
+                        <button type="button" aria-label={`Editar cotización ${item.quoteGroupId} v${item.version}`}
+                          className="mr-2 rounded-lg border border-blue-300 bg-blue-50 px-3 py-2 text-xs font-semibold text-blue-900 hover:bg-blue-100 focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-blue-700"
+                          onClick={(event) => { event.stopPropagation(); openQuoteEditor(item.quoteId); }}>
+                          {item.status === "archived" ? "Ver cotización" : "Editar cotización"}
+                        </button>
                         {item.status.trim().toLowerCase() !== "closed" ? (
                           <button
                             className="rounded-lg border border-rose-200 bg-rose-50 px-3 py-1.5 text-xs font-medium text-rose-700 transition hover:bg-rose-100 disabled:opacity-60"
@@ -865,7 +887,7 @@ export function QuoteShell({
           </div>
         ) : null}
       </div>
-      <div hidden={creationOpen} aria-label="Partidas de la cotización seleccionada">
+      <div ref={editorRef} tabIndex={-1} hidden={creationOpen} aria-label="Partidas de la cotización seleccionada" className="scroll-mt-6 outline-none">
       {editorQuotes.length > 0 && activeQuoteId ? (
         <QuoteLineEditor
         key={editorReload}

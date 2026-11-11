@@ -76,3 +76,14 @@ Después de una creación aceptada, el editor y el aviso de datos pendientes cor
 Regresiones: creación con cotizaciones anteriores disponibles, separación del alta desde una selección abierta, payload sin oportunidad anterior, acceso a la oportunidad nueva tras guardar y conservación de partidas sin guardar al regresar. Navegador sintético de QuoteShell y editor reales en 1360/390px mediante scripts/check_quote_creation_context_ui.mjs; sólo la creación de cotización simulada puede escribir, nunca el expediente anterior.
 
 Al abrir el alta desde una versión histórica, se conserva su resumen antes de retirar quoteId de la URL. Así, una nueva respuesta del servidor sin requestedQuote no elimina la versión del conjunto del editor ni provoca un salto a la más reciente al regresar. La regresión reproduce el refresco de props y verifica selección y partidas sin guardar.
+
+
+## Edición desde Cotizaciones
+
+La lista de guardadas ofrece **Editar cotización** por folio/versión. Abre el editor
+correspondiente, desplaza la vista a sus partidas y coloca el foco en él, sin guardar
+ni crear una versión. El editor explica cómo guardar y el alcance sobre la propuesta:
+la sincronización automática existente sólo aplica a propuestas en borrador.
+Para actualizar una propuesta autorizada, se reabre primero y luego se vuelve a guardar
+la cotización; la propuesta necesita nueva autorización. No se alteran aprobaciones,
+importes ni documentos históricos de forma silenciosa.
