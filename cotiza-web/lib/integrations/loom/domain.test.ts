@@ -37,3 +37,8 @@ describe("Loom identity and reviewed import", () => {
     expect(snapshotHash({ ...snapshot, transcript: "new" })).not.toBe(snapshotHash(snapshot));
   });
 });
+
+it("keeps the same source digest after JSONB reorders keys", () => {
+  const reordered = Object.fromEntries(Object.entries(snapshot).reverse()) as LoomSnapshot;
+  expect(snapshotHash(reordered)).toBe(snapshotHash(snapshot));
+});

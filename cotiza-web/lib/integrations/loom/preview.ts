@@ -4,8 +4,10 @@ import { z } from "zod";
 import { LoomError, type LoomSnapshot, type LoomTarget } from "./domain";
 
 export function snapshotHash(snapshot: LoomSnapshot) {
-  const { observedAt: _observedAt, ...content } = snapshot;
-  void _observedAt;
+  // Fixed field order makes the digest independent of PostgreSQL JSONB key ordering.
+  const content = { sourceId: snapshot.sourceId, ari: snapshot.ari, url: snapshot.url, title: snapshot.title,
+    type: snapshot.type, createdAt: snapshot.createdAt, durationSeconds: snapshot.durationSeconds,
+    transcript: snapshot.transcript, transcriptStatus: snapshot.transcriptStatus, sourceStatus: snapshot.sourceStatus };
   return createHash("sha256").update(JSON.stringify(content)).digest("hex");
 }
 function binding(target: LoomTarget, sourceId: string) {
