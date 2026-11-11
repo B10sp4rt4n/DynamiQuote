@@ -65,3 +65,12 @@ El harness local valida rechazo de otro host, ensayo sin cambio de esquema,
 aplicación/repetición, consulta y preservación de un registro sintético antes
 de ejecutar las diez integraciones del flujo. La ejecución remota y la
 publicación sólo quedan acreditadas con sus logs y estado de despliegue.
+# Separación de alta y cotización seleccionada · 10 noviembre 2026
+
+La entrada sin quoteId abre exclusivamente el alta nueva; no selecciona automáticamente la última cotización ni consulta su oportunidad. Un enlace con quoteId conserva la apertura exacta del documento y sus versiones.
+
+«Nueva cotización» abre un espacio de alta independiente. El flujo comercial, la oportunidad y las partidas seleccionadas permanecen fuera de la vista del alta. «Volver a cotización seleccionada» recupera el trabajo anterior sin desmontar sus formularios ni perder cambios locales. El borrador de alta también se conserva al volver entre ambas vistas. Estos cambios de vista no guardan ni reasignan datos.
+
+Después de una creación aceptada, el editor y el aviso de datos pendientes corresponden al nuevo quoteId. La selección en el listado vuelve explícitamente a revisar ese documento. La declaración de nueva oportunidad sigue enviando opportunityMode:new sin arrastrar opportunityId; el backend y el aislamiento existentes no se modifican. El contexto de una oportunidad de origen sólo aparece en el alta si siguen seleccionados esa oportunidad y su cliente.
+
+Regresiones: creación con cotizaciones anteriores disponibles, separación del alta desde una selección abierta, payload sin oportunidad anterior, acceso a la oportunidad nueva tras guardar y conservación de partidas sin guardar al regresar. Navegador sintético de QuoteShell y editor reales en 1360/390px mediante scripts/check_quote_creation_context_ui.mjs; sólo la creación de cotización simulada puede escribir, nunca el expediente anterior.

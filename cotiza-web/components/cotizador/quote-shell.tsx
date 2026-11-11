@@ -86,7 +86,9 @@ export function QuoteShell({
   const searchParams = useSearchParams();
   const [quoteItems, setQuoteItems] = useState<QuoteGroupSummary[]>(() => sortQuotes(items));
   const [editorReload, setEditorReload] = useState(0);
-  const [activeQuoteId, setActiveQuoteId] = useState<string | null>(initialOpportunity ? null : requestedQuote?.quoteId ?? items.find(item => item.status !== "archived")?.quoteId ?? null);
+  const [creationOpen, setCreationOpen] = useState(() => Boolean(initialOpportunity) || (!requestedQuote && !searchParams.get('quoteId')));
+  const [activeQuoteId, setActiveQuoteId] = useState<string | null>(() => initialOpportunity ? null
+    : requestedQuote?.quoteId ?? (searchParams.get('quoteId') ? resolveSelectedQuoteId(items, searchParams.get('quoteId')) : null));
   const [selectedVersion, setSelectedVersion] = useState<QuoteGroupSummary | null>(null);
   // The list stays one row per group; the editor also accepts the exact version
   // selected in history or resolved by the server from the URL.
@@ -100,6 +102,7 @@ export function QuoteShell({
   const activeQuoteGroupId = editorQuotes.find((quote) => quote.quoteId === activeQuoteId)?.quoteGroupId;
 
   function handleSelectedQuoteChange(quoteId: string, quote?: QuoteGroupSummary) {
+    setCreationOpen(false);
     if (quote) setSelectedVersion(quote);
     setActiveQuoteId(quoteId);
   }
@@ -220,8 +223,12 @@ export function QuoteShell({
     }
 
     lastHandledQuoteIdFromQueryRef.current = nextQuoteId;
+    if (!nextQuoteId) return;
     const validQuoteId = resolveSelectedQuoteId(nextQuoteId ? editorQuotes : editorQuotes.filter(quote => quote.status !== "archived"), nextQuoteId);
 
+    // Synchronize the workspace with an explicit navigation to a quote URL.
+    // eslint-disable-next-line react-hooks/set-state-in-effect
+    setCreationOpen(false);
     setActiveQuoteId((current) => (current === validQuoteId ? current : validQuoteId));
   }, [editorQuotes, searchParams]);
 
@@ -249,22 +256,23 @@ export function QuoteShell({
 
   useEffect(() => {
     const currentQuoteId = searchParams.get("quoteId");
+    const selectedQuoteId = creationOpen ? null : activeQuoteId;
 
-    if ((activeQuoteId ?? null) === (currentQuoteId ?? null)) {
+    if ((selectedQuoteId ?? null) === (currentQuoteId ?? null)) {
       return;
     }
 
     const nextParams = new URLSearchParams(searchParams.toString());
 
-    if (activeQuoteId) {
-      nextParams.set("quoteId", activeQuoteId);
+    if (selectedQuoteId) {
+      nextParams.set("quoteId", selectedQuoteId);
     } else {
       nextParams.delete("quoteId");
     }
 
     const nextQuery = nextParams.toString();
     router.replace(nextQuery.length > 0 ? `${pathname}?${nextQuery}` : pathname, { scroll: false });
-  }, [activeQuoteId, pathname, router, searchParams]);
+  }, [activeQuoteId, creationOpen, pathname, router, searchParams]);
 
   useEffect(() => {
     const currentSearch = searchParams.get("q") ?? "";
@@ -326,7 +334,7 @@ export function QuoteShell({
   }, [pathname, quoteSort, router, searchParams]);
 
   useEffect(() => {
-    if (initialOpportunity && !activeQuoteId) return;
+    if (creationOpen || (initialOpportunity && !activeQuoteId)) return;
     if (editorQuotes.length === 0) {
       if (activeQuoteId !== null) {
         // eslint-disable-next-line react-hooks/set-state-in-effect
@@ -342,7 +350,7 @@ export function QuoteShell({
       // No debe depender del filtro de búsqueda, para no "rebotar" la selección.
       setActiveQuoteId(editorQuotes[0].quoteId);
     }
-  }, [activeQuoteId, editorQuotes, initialOpportunity]);
+  }, [activeQuoteId, creationOpen, editorQuotes, initialOpportunity]);
 
   // Buscar clientes con debounce al escribir en el campo de cliente
   useEffect(() => {
@@ -496,6 +504,7 @@ export function QuoteShell({
       }
 
       setQuoteItems((current) => sortQuotes([data.quote!, ...current]));
+      setCreationOpen(false);
       setActiveQuoteId(data.quote.quoteId);
       setClientName("");
       setSelectedClientId(null);
@@ -611,11 +620,13 @@ export function QuoteShell({
     <section className="min-w-0 rounded-xl border border-zinc-200 bg-white p-4 shadow-sm sm:p-6">
       <div className="flex flex-col gap-2 border-b border-zinc-200 pb-4">
         <h1 className="text-2xl font-semibold text-zinc-900">Cotizaciones de {tenantName}</h1>
-
+        {!creationOpen ? <button type="button" className="self-start rounded-lg bg-zinc-900 px-4 py-2 text-sm font-medium text-white" onClick={() => setCreationOpen(true)}>Nueva cotización</button>
+          : activeQuoteId ? <button type="button" className="self-start rounded-lg border border-zinc-300 px-4 py-2 text-sm" onClick={() => setCreationOpen(false)}>Volver a cotización seleccionada</button> : null}
+        {!creationOpen && createMessage ? <p role="status" className="text-sm text-emerald-700">{createMessage}</p> : null}
       </div>
-      <div className="mt-6 rounded-xl border border-zinc-200 bg-zinc-50 p-4">
+      <div hidden={!creationOpen} aria-label="Alta de nueva cotización" className="mt-6 rounded-xl border border-zinc-200 bg-zinc-50 p-4">
         <div className="flex flex-col gap-2">
-          {activeQuoteId ? <DocumentCommercialFlow key={activeQuoteId} kind="quote" id={activeQuoteId}/> : <CommercialFlow current={2} context={initialOpportunity ? {opportunityId:initialOpportunity.opportunityId,title:initialOpportunity.title} : undefined} next={activeQuoteId ? "Completa las partidas y usa Crear propuesta en el editor." : "Prepara la cotización de la oportunidad seleccionada."} />}
+          <CommercialFlow current={2} context={initialOpportunity && opportunityMode === 'existing' && opportunityId === initialOpportunity.opportunityId && selectedClientId === initialOpportunity.clientId ? {opportunityId:initialOpportunity.opportunityId,title:initialOpportunity.title} : undefined} next="Crea la cotización para continuar con sus partidas." />
           <h2 className="text-lg font-semibold text-zinc-900">Nueva cotización</h2>
           <p className="text-sm text-zinc-600">
             Crea la cotizacion base y despues edita lineas o genera su propuesta formal.
@@ -728,7 +739,11 @@ export function QuoteShell({
           ) : null}
         </div>
       </div>
-      {activeQuoteId ? <QuoteOpportunityPanel key={activeQuoteId} quoteId={activeQuoteId} /> : null}
+      {activeQuoteId ? <div hidden={creationOpen} className="mt-6" aria-label="Contexto de la cotización seleccionada">
+        <DocumentCommercialFlow key={`flow-${activeQuoteId}`} kind="quote" id={activeQuoteId}/>
+        <h2 className="mt-3 text-lg font-semibold text-zinc-900">Cotización seleccionada · {editorQuotes.find(quote => quote.quoteId === activeQuoteId)?.quoteGroupId}</h2>
+        <QuoteOpportunityPanel key={activeQuoteId} quoteId={activeQuoteId} />
+      </div> : null}
       <div className="mt-6 rounded-xl border border-zinc-200 bg-white">
         <button
           aria-expanded={isQuotesPanelOpen}
@@ -790,7 +805,7 @@ export function QuoteShell({
                     <tr
                       className={activeQuoteGroupId === item.quoteGroupId ? "bg-emerald-50/60" : "hover:bg-zinc-50"}
                       key={item.quoteId}
-                      onClick={() => setActiveQuoteId(item.quoteId)}
+                      onClick={() => handleSelectedQuoteChange(item.quoteId)}
                     >
                       <td className="px-4 py-3 text-zinc-900">{item.clientName}</td>
                       <td className="px-4 py-3 text-zinc-600">{item.proposalName}</td>
@@ -842,7 +857,8 @@ export function QuoteShell({
           </div>
         ) : null}
       </div>
-      {editorQuotes.length > 0 && (!initialOpportunity || activeQuoteId) ? (
+      <div hidden={creationOpen} aria-label="Partidas de la cotización seleccionada">
+      {editorQuotes.length > 0 && activeQuoteId ? (
         <QuoteLineEditor
         key={editorReload}
           threatDownImportEnabled={threatDownImportEnabled}
@@ -907,6 +923,7 @@ export function QuoteShell({
           ) : null}
         </div>
       ) : null}
+      </div>
     </section>
   );
 }

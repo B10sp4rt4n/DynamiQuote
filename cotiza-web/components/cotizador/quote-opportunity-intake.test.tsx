@@ -47,6 +47,41 @@ async function renderPanel() { await act(async () => root.render(<QuoteOpportuni
 function field(label: string) { const element = [...container.querySelectorAll("label")].find(item => item.textContent?.startsWith(label))?.querySelector("input, textarea"); if (!element) throw Error(`No field ${label}`); return element as HTMLInputElement; }
 
 describe("deferred opportunity intake from quotation", () => {
+  it("starts a new quotation without selecting or querying the previous customer's opportunity",async()=>{
+    const old={...quote,quoteId:'old-quote',quoteGroupId:'COT-OLD',clientName:'Previous company',proposalName:'Previous pilot'};
+    await act(async()=>root.render(<QuoteShell items={[old]} tenantName="Test"/>));
+    await input(container.querySelector('[aria-label="Cliente de la cotización"]')!, 'New customer');
+    expect(container.querySelector('[aria-label="Contexto de la cotización seleccionada"]')).toBeNull();
+    expect(container.textContent).not.toContain('Editor de partidas disponible');
+    expect(m.fetch.mock.calls.some(([url])=>url.includes('old-quote'))).toBe(false);
+    await click('Crear cotizacion');
+    const request=JSON.parse(m.fetch.mock.calls.find(([url,init])=>url==='/api/quotes'&&init?.method==='POST')![1].body);
+    expect(request).toMatchObject({clientName:'New customer',opportunityMode:'new'});
+    expect(request).not.toHaveProperty('opportunityId');
+    expect(m.fetch.mock.calls.some(([url])=>url==='/api/quotes/new-quote/opportunity')).toBe(true);
+    expect(m.fetch.mock.calls.some(([url])=>url.includes('old-quote'))).toBe(false);
+  });
+  it("separates a new draft from the selected quote and shows only the newly created context after saving",async()=>{
+    const old={...quote,quoteId:'old-quote',quoteGroupId:'COT-OLD',clientName:'Previous company'};
+    const fallback=m.fetch.getMockImplementation()!;
+    m.fetch.mockImplementation((url:string,init?:RequestInit)=>url==='/api/quotes/old-quote/opportunity'
+      ? Promise.resolve(response({opportunity:{...saved,opportunityId:'old-opp',opportunityNumber:'OPP-OLD',clientCompany:'Previous company'}})) : fallback(url,init));
+    await act(async()=>root.render(<QuoteShell items={[old]} requestedQuote={old} tenantName="Test"/>));
+    const context=()=>container.querySelector<HTMLElement>('[aria-label="Contexto de la cotización seleccionada"]')!;
+    expect(context().hidden).toBe(false);expect(context().textContent).toContain('OPP-OLD');
+    await click('Nueva cotización');
+    expect(context().hidden).toBe(true);
+    await input(container.querySelector('[aria-label="Cliente de la cotización"]')!, 'New customer');
+    await input(container.querySelector('[aria-label="Nombre de propuesta"]')!, 'New service');
+    await click('Volver a cotización seleccionada');expect(context().hidden).toBe(false);
+    await click('Nueva cotización');
+    expect((container.querySelector('[aria-label="Cliente de la cotización"]') as HTMLInputElement).value).toBe('New customer');
+    await click('Crear cotizacion');expect(context().hidden).toBe(false);
+    expect(context().textContent).toContain('OPP-TEST');expect(context().textContent).not.toContain('OPP-OLD');
+    const writes=m.fetch.mock.calls.filter(([,init])=>init?.method && init.method!=='GET');
+    expect(writes).toHaveLength(1);expect(writes[0][0]).toBe('/api/quotes');
+    expect(JSON.parse(writes[0][1].body)).toMatchObject({opportunityMode:'new',clientName:'New customer',proposalName:'New service'});
+  });
   it("shows and submits the variable field when the tenant explicitly enables it", async () => {
     await renderShell(true);
     await input(container.querySelector('[aria-label="Cliente de la cotización"]')!, "Synthetic company");
