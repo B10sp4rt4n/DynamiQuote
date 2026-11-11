@@ -7,6 +7,7 @@ vi.mock("@/lib/integrations/digestor-fiscal", () => ({ isDigestorFiscalEnabledFo
 vi.mock("next/link", () => ({ default: ({ children, ...props }: React.ComponentProps<"a">) => <a {...props}>{children}</a> }));
 vi.mock("next/navigation", () => ({ notFound: () => { throw Error("not-found"); }, redirect: (url: string) => { throw Error(`redirect:${url}`); }, useRouter: () => ({ refresh: vi.fn() }) }));
 vi.mock("@/components/cotizador/quote-opportunity-panel", () => ({ QuoteOpportunityPanel: () => <p>Datos del negocio</p> }));
+vi.mock("@/lib/integrations/loom/availability", () => ({ loomPilotVisible: async () => false }));
 import BusinessPage from "./page";
 
 const opportunity = { opportunityId: "opp-a", opportunityNumber: "OPP-0066", title: "Renovación de prueba",
