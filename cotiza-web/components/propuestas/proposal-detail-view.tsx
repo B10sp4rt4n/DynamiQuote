@@ -39,6 +39,7 @@ function formatDate(value: string | null): string {
 }
 
 type ProposalDetailViewProps = {
+  canOverrideCloseDate?: boolean;
   derivationInfo: ProposalDerivationInfo;
   digestorFiscalEnabled?: boolean;
   proposal: ProposalWorkflowDetail;
@@ -49,6 +50,7 @@ type ProposalDetailViewProps = {
 };
 
 export function ProposalDetailView({
+  canOverrideCloseDate = false,
   derivationInfo,
   digestorFiscalEnabled = false,
   proposal,
@@ -144,7 +146,7 @@ export function ProposalDetailView({
         </div>
       </div>
 
-      <ProposalOutcomeActions key={`${proposal.proposalId}:${proposal.outcome}:${proposal.outcomeAt}`} createdAt={proposal.createdAt} closeDateMinimum={proposal.closeDateMinimum} opportunityCreatedAt={proposal.opportunityCreatedAt} initialOutcome={proposal.outcome} initialOutcomeAt={proposal.outcomeAt} proposalId={proposal.proposalId} status={status} />
+      <ProposalOutcomeActions canOverrideCloseDate={canOverrideCloseDate} key={`${proposal.proposalId}:${proposal.outcome}:${proposal.outcomeAt}`} createdAt={proposal.createdAt} closeDateMinimum={proposal.closeDateMinimum} opportunityCreatedAt={proposal.opportunityCreatedAt} initialOutcome={proposal.outcome} initialOutcomeAt={proposal.outcomeAt} proposalId={proposal.proposalId} status={status} />
 
       {digestorFiscalEnabled ? (
         <div id="facturacion" className="scroll-mt-24"><ProposalInvoicePanel

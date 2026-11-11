@@ -13,6 +13,7 @@ const OUTCOME_BADGE_CLASS = {
 };
 
 type ProposalOutcomeActionsProps = {
+  canOverrideCloseDate?: boolean;
   initialOutcome: ProposalOutcome;
   initialOutcomeAt?: string | null;
   createdAt?: string;
@@ -26,12 +27,14 @@ function displayDate(iso: string): string {
   return new Intl.DateTimeFormat("es-MX", { dateStyle: "medium", timeZone: "America/Mexico_City" }).format(new Date(iso));
 }
 
-export function ProposalOutcomeActions({ initialOutcome, initialOutcomeAt, createdAt, closeDateMinimum, opportunityCreatedAt, proposalId, status }: ProposalOutcomeActionsProps) {
+export function ProposalOutcomeActions({ canOverrideCloseDate = false, initialOutcome, initialOutcomeAt, createdAt, closeDateMinimum, opportunityCreatedAt, proposalId, status }: ProposalOutcomeActionsProps) {
   const router = useRouter();
   const [outcome, setOutcome] = useState<ProposalOutcome>(initialOutcome);
   const [outcomeAt, setOutcomeAt] = useState(initialOutcomeAt ?? null);
   const [pendingOutcome, setPendingOutcome] = useState<"won" | "lost" | null>(null);
   const [closedOn, setClosedOn] = useState("");
+  const [overrideEnabled, setOverrideEnabled] = useState(false);
+  const [overrideReason, setOverrideReason] = useState("");
   const [saving, setSaving] = useState(false);
   const [error, setError] = useState<string | null>(null);
   const canAssignWonLost = status === "approved";
@@ -41,6 +44,8 @@ export function ProposalOutcomeActions({ initialOutcome, initialOutcomeAt, creat
 
   function openCalendar(next: "won" | "lost") {
     setError(null);
+    setOverrideEnabled(false);
+    setOverrideReason("");
     setPendingOutcome(next);
     // Historical decisions require an explicit choice, never a silent "today".
     setClosedOn(outcome === next ? outcomeAt ? mexicoCalendarDate(outcomeAt) : "" : mexicoCalendarDate(new Date()));
@@ -52,6 +57,7 @@ export function ProposalOutcomeActions({ initialOutcome, initialOutcomeAt, creat
     try {
       const response = await fetch(`/api/proposals/${proposalId}`, {
         body: JSON.stringify({ outcome: next, closedOn: selectedDate,
+          ...(selectedDate && overrideEnabled && canOverrideCloseDate ? { closeDateOverrideReason: overrideReason.trim() } : {}),
           expectedOutcome: outcome, expectedOutcomeAt: outcomeAt }),
         headers: { "Content-Type": "application/json" }, method: "PATCH",
       });
@@ -112,13 +118,28 @@ export function ProposalOutcomeActions({ initialOutcome, initialOutcomeAt, creat
           ¿En qué fecha se cerró como {OUTCOME_LABELS[pendingOutcome].toLowerCase()}?
         </label>
         <input className="mt-2 max-w-full rounded-lg border border-zinc-300 bg-white px-3 py-2 text-zinc-900"
-          id={dateId} type="date" value={closedOn} min={minimumDay} max={mexicoCalendarDate(new Date())}
+          id={dateId} type="date" value={closedOn} min={overrideEnabled && canOverrideCloseDate ? undefined : minimumDay} max={mexicoCalendarDate(new Date())}
           required disabled={saving} onChange={(event) => setClosedOn(event.target.value)} aria-describedby={`${dateId}-help`} />
         <p className="mt-2 text-xs text-zinc-600" id={`${dateId}-help`}>
           Usa la fecha real del cierre. Revenue y margen se asignarán a ese mes. Se conservará quién registró el cambio y cuándo.
         </p>
+        <p className="mt-2 text-xs text-zinc-600">La fecha de pago se registra por separado en Pagos de factura PPD.</p>
+        {canOverrideCloseDate ? <div className="mt-3 space-y-2">
+          <label className="flex items-start gap-2 text-sm text-zinc-800">
+            <input type="checkbox" checked={overrideEnabled} disabled={saving}
+              onChange={(event) => setOverrideEnabled(event.target.checked)} />
+            Permitir cierre anterior al alta (caso especial)
+          </label>
+          {overrideEnabled ? <>
+            <label className="block text-sm text-zinc-900" htmlFor={`${dateId}-reason`}>Motivo de la excepción</label>
+            <textarea id={`${dateId}-reason`} required minLength={10} maxLength={1000} disabled={saving}
+              className="w-full rounded-lg border border-zinc-300 bg-white p-2 text-zinc-900" value={overrideReason}
+              onChange={(event) => setOverrideReason(event.target.value)} />
+            <p className="text-xs text-amber-900">El cierre moverá revenue y margen al mes elegido. Se registrarán tu usuario, el motivo y la fecha anterior. No cambia la factura ni acredita un pago.</p>
+          </> : null}
+        </div> : null}
         <div className="mt-3 flex flex-wrap gap-2">
-          <button className="rounded-lg bg-blue-700 px-4 py-2 text-sm font-medium text-white disabled:opacity-60" type="submit" disabled={saving || !closedOn}>
+          <button className="rounded-lg bg-blue-700 px-4 py-2 text-sm font-medium text-white disabled:opacity-60" type="submit" disabled={saving || !closedOn || (overrideEnabled && overrideReason.trim().length < 10)}>
             {saving ? "Guardando..." : outcome === pendingOutcome ? "Guardar fecha de cierre" : `Confirmar ${OUTCOME_LABELS[pendingOutcome].toLowerCase()}`}
           </button>
           <button className="rounded-lg border border-zinc-300 bg-white px-4 py-2 text-sm text-zinc-700" type="button"

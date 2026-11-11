@@ -17,12 +17,12 @@ export function closeDateInstant(day: string): Date {
   return new Date(`${day}T06:00:00.000Z`);
 }
 
-export function isValidCloseDate(day: string, startedAt: Date | string, now: Date): boolean {
+export function isValidCloseDate(day: string, startedAt: Date | string, now: Date, allowBeforeCreation = false): boolean {
   if (!/^\d{4}-\d{2}-\d{2}$/.test(day)) return false;
   const date = closeDateInstant(day);
   if (!Number.isFinite(date.getTime()) || date.toISOString().slice(0, 10) !== day) return false;
   const startDay = mexicoCalendarDate(startedAt);
-  return startDay !== "" && day >= startDay && day <= mexicoCalendarDate(now);
+  return startDay !== "" && (allowBeforeCreation || day >= startDay) && day <= mexicoCalendarDate(now);
 }
 
 /** Preserve original commercial history after late linking or reopening. */

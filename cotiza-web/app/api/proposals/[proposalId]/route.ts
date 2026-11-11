@@ -206,7 +206,7 @@ export async function PATCH(request: Request, context: RouteContext) {
     parsed.data.outcome,
     { isSuperAdmin: tenant.isSuperAdmin, userId: tenant.userId, userRole: tenant.userRole },
     canSeeAll,
-    { closedOn: parsed.data.closedOn, expectedOutcome: parsed.data.expectedOutcome, expectedOutcomeAt: parsed.data.expectedOutcomeAt },
+    { ...(parsed.data.closeDateOverrideReason !== undefined ? { closeDateOverrideReason: parsed.data.closeDateOverrideReason } : {}), closedOn: parsed.data.closedOn, expectedOutcome: parsed.data.expectedOutcome, expectedOutcomeAt: parsed.data.expectedOutcomeAt },
   );
 
   if (result === "not_found") {
@@ -225,7 +225,7 @@ export async function PATCH(request: Request, context: RouteContext) {
   }
 
   if (result === "invalid_date") {
-    return NextResponse.json({ error: "El cierre debe ser una fecha válida, desde la creación de la oportunidad hasta hoy" }, { status: 422 });
+    return NextResponse.json({ error: "El cierre debe ser una fecha válida hasta hoy. Para un cierre anterior al alta, un administrador debe registrar una excepción con motivo" }, { status: 422 });
   }
   if (result === "business_already_won") {
     return NextResponse.json({ error: "Este negocio ya tiene una propuesta ganada. Si necesitas corregirla, retira primero ese resultado antes de cerrar otra versión o alternativa" }, { status: 409 });

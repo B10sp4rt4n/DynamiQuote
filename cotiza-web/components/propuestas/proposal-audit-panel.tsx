@@ -38,6 +38,8 @@ function closeDateLabel(value: unknown): string {
 
 function describe(item: ProposalAuditTimelineItem): { detail: string | null; title: string; tone: Tone } {
   const d = item.details;
+  const exception = d["closeDateOverride"] === true
+    ? ` · Excepción anterior al alta: ${String(d["closeDateOverrideReason"] ?? "motivo reservado")}` : "";
 
   switch (item.type) {
     case "invoice_preparation_saved":
@@ -46,7 +48,7 @@ function describe(item: ProposalAuditTimelineItem): { detail: string | null; tit
       return { title: "Clasificación fiscal confirmada", detail: `Partida ${String(d["itemNumber"])} · producto ${String(d["satProductCode"])} · unidad ${String(d["unitCode"])}`, tone: "ok" };
     case "outcome_date_changed":
       return { title: "Fecha de cierre corregida",
-        detail: `${closeDateLabel(d["previousOutcomeAt"])} → ${closeDateLabel(d["outcomeAt"])}. La fecha elegida determina el mes de los KPIs.`,
+        detail: `${closeDateLabel(d["previousOutcomeAt"])} → ${closeDateLabel(d["outcomeAt"])}. La fecha elegida determina el mes de los KPIs.${exception}`,
         tone: "neutral" };
     case "historical_creation_reference":
       return { title: "Referencia histórica asignada",
@@ -55,7 +57,7 @@ function describe(item: ProposalAuditTimelineItem): { detail: string | null; tit
       const labels: Record<string, string> = { won: "Ganada", lost: "Perdida", discarded: "Descartada" };
       const label = (value: unknown) => typeof value === "string" ? labels[value] ?? value : "Sin desenlace";
       return { title: "Decisión comercial registrada",
-        detail: `${label(d["fromOutcome"])} → ${label(d["toOutcome"])}${d["trigger"] === "workflow_status" ? " · reapertura por cambio de estatus" : ""}${d["selectedCloseDate"] ? ` · cierre: ${closeDateLabel(d["outcomeAt"])}` : ""}`,
+        detail: `${label(d["fromOutcome"])} → ${label(d["toOutcome"])}${d["trigger"] === "workflow_status" ? " · reapertura por cambio de estatus" : ""}${d["selectedCloseDate"] ? ` · cierre: ${closeDateLabel(d["outcomeAt"])}` : ""}${exception}`,
         tone: "neutral" };
     }
     case "status_change_requested": {
