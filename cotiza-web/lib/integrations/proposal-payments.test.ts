@@ -66,7 +66,7 @@ describe('SAT observation authorization',()=>{
   const request=new Request('https://cotiza.test/status',{method:'POST',headers:{origin:'https://cotiza.test'}});
   expect(await authorizeProposalFiscalDocument('p','sat_status',request)).toEqual({draftId:'resolved',environment:'production',tenantId:'tenant',canManageSatSchedule:false});
   m.tenant.mockResolvedValue({id:'tenant',userId:'owner',userRole:'owner',authMode:'clerk'});
-  expect((await authorizeProposalFiscalDocument('p','sat_status',request)).canManageSatSchedule).toBe(true);
+  expect(await authorizeProposalFiscalDocument('p','sat_status',request)).toMatchObject({canManageSatSchedule:true});
   m.tenant.mockResolvedValue({id:'tenant',userId:'bootstrap',authMode:'bootstrap'});
   expect((await authorizeProposalFiscalDocument('p','sat_status',request)).error?.status).toBe(401);
  });
