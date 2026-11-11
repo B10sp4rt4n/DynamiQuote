@@ -1,4 +1,5 @@
 "use client";
+import { LoomFollowupForm } from "./loom-followup-form";
 import { useEffect, useRef, useState } from "react";
 import type { LoomLink, LoomSnapshot } from "@/lib/integrations/loom/domain";
 
@@ -92,7 +93,7 @@ function LoomContextSession({ tenantId, targetId, kind }: Props) {
       </div>
     </section> : null}
     <div className="mt-5 space-y-4">
-      {links.map(row => <article key={row.linkId} className="min-w-0 rounded-lg border border-zinc-200 bg-zinc-50 p-4"><Recording snapshot={row.snapshot} /><p className="mt-2 text-xs text-zinc-600">Revisión conservada: {row.revision}</p></article>)}
+      {links.map(row => <article key={row.linkId} className="min-w-0 rounded-lg border border-zinc-200 bg-zinc-50 p-4"><Recording snapshot={row.snapshot} /><LoomFollowupForm key={row.linkId + ":" + row.revision} link={row} endpoint={endpoint} tenantId={tenantId} /><p className="mt-2 text-xs text-zinc-600">Revisión conservada: {row.revision}</p></article>)}
       {loaded && !links.length ? <p className="text-sm text-zinc-600">Todavía no hay grabaciones vinculadas por ti en este expediente.</p> : null}
     </div>
   </details>;

@@ -1,9 +1,10 @@
 import { afterEach, beforeEach, expect, it, vi } from "vitest";
 vi.mock("server-only", () => ({}));
-const m = vi.hoisted(() => ({ auth: vi.fn(), read: vi.fn(), list: vi.fn(), save: vi.fn(), revision: vi.fn() }));
+const m = vi.hoisted(() => ({ auth: vi.fn(), read: vi.fn(), list: vi.fn(), save: vi.fn(), revision: vi.fn(), find: vi.fn(), followup: vi.fn() }));
 vi.mock("./access", () => ({ authorizeLoom: m.auth }));
 vi.mock("./client", () => ({ readLoomSnapshot: m.read }));
 vi.mock("./store", () => ({ listLoomLinks: m.list, getLoomRevision: m.revision, saveLoomLink: m.save }));
+vi.mock("./followup-store", () => ({ findLoomLink: m.find, saveLoomFollowup: m.followup }));
 import { GET, POST } from "@/app/api/clients/[clientId]/loom/route";
 import { GET as opportunityGet } from "@/app/api/opportunities/[opportunityId]/loom/route";
 import { LoomError, type LoomSnapshot } from "./domain";
@@ -18,6 +19,7 @@ beforeEach(() => {
   vi.stubEnv("COTIZA_LOOM_EMAIL", "reader@example.test"); vi.stubEnv("COTIZA_LOOM_API_TOKEN", "synthetic-private");
   vi.stubEnv("COTIZA_LOOM_PREVIEW_KEY", "ab".repeat(32)); vi.stubEnv("COTIZA_LOOM_APP_ORIGIN", "https://cotiza.test");
   m.auth.mockResolvedValue(target); m.read.mockResolvedValue(snapshot); m.list.mockResolvedValue([]);
+  m.find.mockResolvedValue({ linkId: "link", revision: 1, snapshot }); m.followup.mockResolvedValue({ kind: "note", resultId: "note-a", unchanged: false });
   m.revision.mockResolvedValue(null); m.save.mockResolvedValue({ link: { linkId: "link", revision: 1, snapshot }, unchanged: false });
 });
 afterEach(() => vi.unstubAllEnvs());
@@ -63,4 +65,23 @@ it("surfaces rate limits with retry metadata and rejects oversized bodies", asyn
   const limited = await GET(new Request("https://cotiza.test/api"), context); expect(limited.headers.get("retry-after")).toBe("30");
   m.auth.mockResolvedValue(target);
   expect((await POST(request({ action: "preview", url: "x".repeat(11000) }), context)).status).toBe(413);
+});
+
+it("reviews a source-backed follow-up without writing, then saves exactly the signed action locally", async () => {
+  const reviewed = await POST(request({ action: "review_followup", linkId: "link", revision: 1,
+    followup: { kind: "note", excerpt: "Prueba", description: "Confirmar siguiente paso", dueDate: null } }), context);
+  expect(reviewed.status).toBe(200); const data = await reviewed.json();
+  expect(m.followup).not.toHaveBeenCalled(); expect(m.read).not.toHaveBeenCalled();
+  expect((await POST(request({ action: "save_followup", token: data.token }), context)).status).toBe(201);
+  expect(m.followup).toHaveBeenCalledWith(target, expect.objectContaining({ linkId: "link", revision: 1,
+    followup: { kind: "note", excerpt: "Prueba", description: "Confirmar siguiente paso", dueDate: null } }));
+});
+it("rejects a missing task date, stale copy and follow-up token from another dossier", async () => {
+  const followup = { kind: "task", excerpt: "Prueba", description: "Pedir cantidades", dueDate: "" };
+  expect((await POST(request({ action: "review_followup", linkId: "link", revision: 1, followup }), context)).status).toBe(422);
+  expect((await POST(request({ action: "review_followup", linkId: "link", revision: 2, followup: { ...followup, dueDate: "2026-11-12" } }), context)).status).toBe(409);
+  const data = await (await POST(request({ action: "review_followup", linkId: "link", revision: 1, followup: { ...followup, dueDate: "2026-11-12" } }), context)).json();
+  m.auth.mockResolvedValue({ ...target, opportunityId: "foreign" });
+  expect((await POST(request({ action: "save_followup", token: data.token }), context)).status).toBe(409);
+  expect(m.followup).not.toHaveBeenCalled();
 });

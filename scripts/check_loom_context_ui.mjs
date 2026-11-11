@@ -10,9 +10,11 @@ const root = fileURLToPath(new URL("../cotiza-web/", import.meta.url));
 const require = createRequire(root + "package.json"), { build } = require(process.env.ESBUILD_MODULE || "esbuild");
 const out = await mkdtemp(path.join(tmpdir(), "cotiza-loom-ui-")), artifacts = path.resolve("artifacts/loom-context");
 await mkdir(artifacts, { recursive: true });
-await build({ stdin: { contents: `import React,{useState} from 'react';import {createRoot} from 'react-dom/client';
+await writeFile(out + "/router.js", "export function useRouter(){return {refresh(){window.dispatchEvent(new Event('synthetic-followup-refresh'))}}}");
+await build({ plugins: [{name:"synthetic-router",setup(build){build.onResolve({filter:new RegExp("^next/navigation$")},()=>({path:out+'/router.js'}));}}], stdin: { contents: `import React,{useState,useEffect} from 'react';import {createRoot} from 'react-dom/client';
 import {LoomContextPanel} from ${JSON.stringify(root + "components/integraciones/loom-context-panel.tsx")};
-function App(){const [tenant,setTenant]=useState('tenant-a');return <main className="mx-auto max-w-3xl p-4"><h1>Expediente de prueba</h1><button onClick={()=>setTenant('tenant-b')}>Cambiar empresa de prueba</button><LoomContextPanel tenantId={tenant} targetId="synthetic-client" kind="client"/></main>}
+import {ClientTasksPanel} from ${JSON.stringify(root + "components/clientes/client-tasks-panel.tsx")};
+function App(){const [tenant,setTenant]=useState('tenant-a'),[tasks,setTasks]=useState([]);useEffect(()=>{const listener=()=>setTasks([{taskId:'synthetic-task',description:'Pedir cantidades antes de preparar la propuesta',dueDate:'2026-11-12T00:00:00Z',opportunityId:null,opportunityNumber:null}]);window.addEventListener('synthetic-followup-refresh',listener);return ()=>window.removeEventListener('synthetic-followup-refresh',listener)},[]);return <main className="mx-auto max-w-3xl p-4"><h1>Expediente de prueba</h1><button onClick={()=>{setTenant('tenant-b');setTasks([])}}>Cambiar empresa de prueba</button><LoomContextPanel tenantId={tenant} targetId="synthetic-client" kind="client"/><section aria-label="Tareas del expediente"><ClientTasksPanel tasks={tasks}/></section></main>}
 createRoot(document.getElementById('root')).render(<App/>);`, loader: "tsx", resolveDir: root },
   bundle: true, jsx: "automatic", tsconfig: root + "tsconfig.json", outfile: out + "/app.js", define: { "process.env.NODE_ENV": '"production"' } });
 const css = await require("postcss")([require("@tailwindcss/postcss")({ base: root })]).process('@import "tailwindcss";', { from: root + "app/globals.css" });
@@ -31,8 +33,8 @@ let browser;
 try {
   browser = await chromium.launch({ headless: true, args: ["--no-sandbox", "--disable-dev-shm-usage"] });
   for (const width of [1360, 390]) {
-    const page = await browser.newPage({ viewport: { width, height: 900 } });
-    const errors = [], unexpected = []; let reads = 0, previews = 0, writes = 0, fail = false, delay = false, release, delayedStarted;
+    const page = await browser.newPage({ timezoneId: "America/Mexico_City", viewport: { width, height: 900 } });
+    const errors = [], unexpected = []; let reads = 0, previews = 0, writes = 0, fail = false, delay = false, release, delayedStarted, followupWrites = 0;
     const source = "https://www.loom.com/share/" + "a".repeat(32);
     const snapshot = { sourceId: "a".repeat(32), ari: "ari:synthetic", url: source, title: "Reunión comercial sintética",
       type: "ASYNC_VIDEO", createdAt: "2026-11-10T18:00:00Z", durationSeconds: 60,
@@ -48,6 +50,14 @@ try {
       const tenant = req.headers()["x-tenant-context"];
       if (req.method() === "GET") { reads++; return route.fulfill({ json: { links: [] } }); }
       const input = req.postDataJSON();
+      if (input.action === "review_followup") {
+        assert.equal(input.followup.excerpt, "Confirmar cantidades");
+        return route.fulfill({ json: { token: "synthetic-followup", followup: input.followup, source: { title: snapshot.title, url: source, observedAt: snapshot.observedAt, revision: 1 } } });
+      }
+      if (input.action === "save_followup") {
+        assert.equal(input.token, "synthetic-followup"); followupWrites++;
+        return route.fulfill({ status: 201, json: { kind: "task", resultId: "synthetic-task", unchanged: false } });
+      }
       if (input.action === "preview") {
         previews++;
         if (delay) await new Promise(resolve => { release = resolve; delayedStarted?.(); });
@@ -72,6 +82,24 @@ try {
     await page.getByRole("button", { name: "Confirmar vínculo", exact: true }).click();
     await page.getByRole("status").filter({ hasText: "Grabación vinculada" }).waitFor();
     assert.equal(writes, 1);
+    await page.getByText("Crear nota o tarea desde esta grabación", { exact: true }).click();
+    await page.getByLabel("Tipo de seguimiento", { exact: true }).selectOption("task");
+    await page.getByLabel("Fragmento de origen", { exact: true }).fill("Confirmar cantidades");
+    await page.getByLabel("Qué se debe hacer", { exact: true }).fill("Pedir cantidades antes de preparar la propuesta");
+    // Browser validation prevents a task without an explicit date.
+    await page.getByRole("button", { name: "Revisar seguimiento", exact: true }).click();
+    assert.equal(await page.getByRole("region", { name: "Revisión del seguimiento" }).count(), 0);
+    await page.getByLabel("Fecha de seguimiento", { exact: true }).fill("2026-11-12");
+    await page.getByRole("button", { name: "Revisar seguimiento", exact: true }).click();
+    await page.getByRole("region", { name: "Revisión del seguimiento" }).waitFor();
+    assert.equal(followupWrites, 0);
+    assert.equal(await page.evaluate(() => document.documentElement.scrollWidth > innerWidth), false);
+    await page.screenshot({ path: path.join(artifacts, "followup-review-" + width + ".png"), fullPage: true });
+    await page.getByRole("button", { name: "Confirmar seguimiento", exact: true }).click();
+    await page.getByRole("status").filter({ hasText: "Tarea guardada" }).waitFor();
+    assert.equal(followupWrites, 1);
+    await page.getByRole("region", { name: "Tareas del expediente" }).getByText("Pedir cantidades antes de preparar la propuesta", { exact: true }).waitFor();
+    await page.getByText("vence 12 nov 2026", { exact: true }).waitFor();
     await page.getByLabel("Enlace de la grabación", { exact: true }).fill(source);
     await page.getByRole("button", { name: "Revisar grabación", exact: true }).click();
     await page.getByRole("region", { name: "Vista previa de Loom" }).waitFor();
@@ -95,7 +123,7 @@ try {
     assert.equal(await page.getByRole("region", { name: "Vista previa de Loom" }).count(), 0);
     assert.equal(await page.evaluate(() => document.documentElement.scrollWidth > innerWidth), false);
     assert.deepEqual(errors, []); assert.deepEqual(unexpected, []);
-    console.log(JSON.stringify({ width, reads, previews, writes, errors, unexpected, preservedOnFailure: true, clearedOnCompanyChange: true }));
+    console.log(JSON.stringify({ width, reads, previews, writes, followupWrites, errors, unexpected, preservedOnFailure: true, clearedOnCompanyChange: true }));
     await page.close();
   }
 } finally { if (browser) await browser.close(); await new Promise(resolve => server.close(resolve)); }

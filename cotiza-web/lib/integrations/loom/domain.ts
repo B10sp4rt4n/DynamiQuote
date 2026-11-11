@@ -22,7 +22,20 @@ export function normalizeLoomUrl(value: string) {
   return { sourceId, url: "https://www.loom.com/share/" + sourceId };
 }
 
+const excerpt = z.string().trim().min(3).max(600);
+const description = z.string().trim().min(3).max(1000);
+const dueDate = z.string().regex(/^\d{4}-\d{2}-\d{2}$/).refine(value => {
+  const date = new Date(value + "T12:00:00Z");
+  return Number.isFinite(date.getTime()) && date.toISOString().slice(0, 10) === value;
+}, "Introduce una fecha válida");
+export const loomFollowupSchema = z.discriminatedUnion("kind", [
+  z.object({ kind: z.literal("note"), excerpt, description, dueDate: z.null() }).strict(),
+  z.object({ kind: z.literal("task"), excerpt, description, dueDate }).strict(),
+]);
+export type LoomFollowup = z.infer<typeof loomFollowupSchema>;
 export const loomRequestSchema = z.discriminatedUnion("action", [
+  z.object({ action: z.literal("review_followup"), linkId: z.string().min(1).max(200), revision: z.number().int().positive(), followup: loomFollowupSchema }).strict(),
+  z.object({ action: z.literal("save_followup"), token: z.string().min(1).max(9000) }).strict(),
   z.object({ action: z.literal("preview"), url: z.string().min(1).max(2048) }).strict(),
   z.object({ action: z.literal("link"), url: z.string().min(1).max(2048), previewToken: z.string().min(1).max(4096) }).strict(),
 ]);

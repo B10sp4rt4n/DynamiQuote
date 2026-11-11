@@ -4,6 +4,8 @@ import { authorizeLoom } from "./access";
 import { readLoomSnapshot } from "./client";
 import { loomConfig } from "./config";
 import { LoomError, loomRequestSchema, normalizeLoomUrl } from "./domain";
+import { findLoomLink, saveLoomFollowup } from "./followup-store";
+import { reviewLoomFollowup, verifyLoomFollowup } from "./followup";
 import { signPreview, snapshotHash, verifyPreview } from "./preview";
 import { getLoomRevision, listLoomLinks, saveLoomLink } from "./store";
 
@@ -44,7 +46,18 @@ export function loomHandlers(kind: "client" | "opportunity") {
         const text = await boundedBody(request);
         const input = loomRequestSchema.safeParse(JSON.parse(text));
         if (!input.success) throw new LoomError("Revisa el enlace y la vista previa", 422);
-        const { sourceId, url } = normalizeLoomUrl(input.data.url), config = loomConfig();
+        const config = loomConfig();
+        if (input.data.action === "review_followup") {
+          const link = await findLoomLink(target, input.data.linkId);
+          if (!link || link.revision !== input.data.revision) throw new LoomError("La copia de origen cambió o no está disponible", 409);
+          return NextResponse.json(reviewLoomFollowup(target, link, input.data.followup, config.key), { headers });
+        }
+        if (input.data.action === "save_followup") {
+          const claims = verifyLoomFollowup(input.data.token, target, config.key);
+          const result = await saveLoomFollowup(target, claims);
+          return NextResponse.json(result, { status: result.unchanged ? 200 : 201, headers });
+        }
+        const { sourceId, url } = normalizeLoomUrl(input.data.url);
         const preview = input.data.action === "link" ? verifyPreview(input.data.previewToken, target, sourceId, config.key) : null;
         const snapshot = await readLoomSnapshot(url);
         if (preview) {

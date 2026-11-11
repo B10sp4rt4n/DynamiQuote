@@ -29,4 +29,21 @@ CREATE TABLE IF NOT EXISTS loom_recording_versions (
 );
 CREATE INDEX IF NOT EXISTS loom_recordings_dossier
   ON loom_recording_links(tenant_id, actor_id, connection_key, client_id, imported_at DESC);
+CREATE UNIQUE INDEX IF NOT EXISTS loom_recordings_actor_key ON loom_recording_links(tenant_id, actor_id, link_id);
+CREATE TABLE IF NOT EXISTS loom_followup_receipts (
+  draft_id text PRIMARY KEY,
+  tenant_id text NOT NULL,
+  actor_id text NOT NULL,
+  link_id text NOT NULL,
+  revision integer NOT NULL,
+  kind text NOT NULL CHECK (kind IN ('note','task')),
+  result_id text NOT NULL,
+  source_excerpt text NOT NULL,
+  description text NOT NULL,
+  due_date date,
+  created_at timestamptz NOT NULL DEFAULT now(),
+  FOREIGN KEY (tenant_id, actor_id, link_id) REFERENCES loom_recording_links(tenant_id, actor_id, link_id),
+  FOREIGN KEY (link_id, revision) REFERENCES loom_recording_versions(link_id, revision),
+  CHECK ((kind='note' AND due_date IS NULL) OR (kind='task' AND due_date IS NOT NULL))
+);
 COMMIT;

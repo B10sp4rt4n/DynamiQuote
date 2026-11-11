@@ -1,4 +1,5 @@
 import "server-only";
+import type { Prisma } from "@prisma/client";
 import { randomUUID } from "node:crypto";
 import { prisma } from "@/lib/db/prisma";
 import { LOOM_CONTEXT } from "@/lib/tenant-capabilities";
@@ -20,9 +21,7 @@ export async function getLoomRevision(target: LoomTarget, sourceId: string): Pro
       AND client_id=${target.clientId} AND opportunity_id IS NOT DISTINCT FROM ${target.opportunityId} AND source_id=${sourceId}`;
   return rows[0]?.revision ?? null;
 }
-export async function saveLoomLink(target: LoomTarget, snapshot: LoomSnapshot, expectedRevision: number | null) {
-  const hash = snapshotHash(snapshot);
-  return prisma.$transaction(async tx => {
+export async function assertLoomTarget(tx: Prisma.TransactionClient, target: LoomTarget) {
     // Recheck and lock authorization after the remote read, before committing any copy.
     const member = await tx.$queryRaw<{ user_id: string }[]>`SELECT user_id FROM app_users
       WHERE user_id=${target.actorId} AND active=true AND lower(role) IN ('superadmin','super_admin','platform_admin','root') FOR SHARE`;
@@ -38,6 +37,11 @@ export async function saveLoomLink(target: LoomTarget, snapshot: LoomSnapshot, e
         WHERE tenant_id=${target.tenantId} AND client_id=${target.clientId} AND opportunity_id=${target.opportunityId} FOR SHARE`;
       if (!opportunity.length) throw new LoomError("La oportunidad cambió de cliente o empresa", 409);
     }
+}
+export async function saveLoomLink(target: LoomTarget, snapshot: LoomSnapshot, expectedRevision: number | null) {
+  const hash = snapshotHash(snapshot);
+  return prisma.$transaction(async tx => {
+    await assertLoomTarget(tx, target);
     const lock = JSON.stringify([target.tenantId, target.actorId, target.connectionKey, target.clientId, target.opportunityId, snapshot.sourceId]);
     await tx.$queryRaw`SELECT pg_advisory_xact_lock(hashtextextended(${lock},0))::text`;
     const rows = await tx.$queryRaw<Row[]>`SELECT link_id, revision, snapshot, snapshot_hash FROM loom_recording_links

@@ -2,9 +2,9 @@
 
 ## Resultado de la primera entrega
 
-Cliente 360° y expediente de oportunidad muestran “Reuniones y videos · Loom” exclusivamente en el piloto de superadmin. Se pega un enlace share/embed HTTPS, se consulta la grabación y se confirma una copia privada. Los componentes de Loom son evidencia de origen; no confirman compromisos comerciales.
+Cliente 360° y expediente de oportunidad muestran “Reuniones y videos · Loom” exclusivamente en el piloto de superadmin. Se pega un enlace share/embed HTTPS, se consulta la grabación y se confirma una copia privada. Las notas y tareas usan las tablas actuales, con usuario creador y enlace al origen. Los componentes de Loom son evidencia de origen; no confirman compromisos comerciales.
 
-La primera entrega usa URL explícita. Selección de videoteca, tareas desde fragmentos, responsables independientes, OAuth por usuario y grabación desde Cotiza corresponden a entregas posteriores. La conexión de ChatGPT no se reutiliza como credencial del servidor.
+La primera entrega usa URL explícita. Desde cada copia con transcripción se puede revisar y confirmar una nota o tarea con pasaje de origen. Las tareas exigen fecha expresa; no se interpreta «mañana» automáticamente. Selección de videoteca, responsables independientes y OAuth por usuario y grabación desde Cotiza corresponden a entregas posteriores. La conexión de ChatGPT no se reutiliza como credencial del servidor.
 
 ## Preparación y activación
 
@@ -30,6 +30,8 @@ GET en las rutas `/api/clients/[id]/loom` y `/api/opportunities/[id]/loom` solo 
 POST `preview` consulta el endpoint fijo de Atlassian mediante Streamable HTTP MCP; solicita únicamente `getLoomObjectsContent` y `transcript`. El cliente acotado implementa initialize, initialized, tools/call y cierre de sesión con el protocolo 2025-11-25. Un protocolo incompatible falla de forma explícita. No ofrece ejecución arbitraria de herramientas ni URLs remotas.
 
 La vista previa lleva HMAC y caduca a los diez minutos. Vincula tenant, actor, identidad de conexión, cliente, oportunidad, video, hash de contenido y revisión local. POST `link` verifica la firma, vuelve a leer el origen y rechaza cambios de contenido antes de persistir.
+
+La revisión de nota/tarea se firma con propósito separado y liga el contenido exacto, fragmento, fecha, copia y destino. Confirmar revalida la revisión conservada y crea la nota/tarea existente junto con un recibo de procedencia en una única transacción. Un recibo por borrador evita duplicados bajo confirmaciones simultáneas; si no se guarda el recibo, también se revierte el seguimiento. La confirmación avisa que la nota/tarea usa los permisos habituales del expediente; solo ese fragmento se incorpora al seguimiento compartido.
 
 Cada copia se guarda en `loom_recording_links` y cada cambio confirmado añade una fila inmutable en `loom_recording_versions`. Confirmaciones simultáneas del mismo contenido convergen en un solo vínculo. Una revisión concurrente diferente exige revisar de nuevo. La transacción revalida rol, tenant activo, capacidad y pertenencia cliente/oportunidad antes de escribir. Las FK compuestas refuerzan el aislamiento en PostgreSQL.
 
@@ -60,3 +62,5 @@ La evidencia de CI es sintética. La prueba real de conexión propia desde Cotiz
 - https://developer.atlassian.com/cloud/rovo-mcp/guides/configuring-authentication-via-api-token/
 - https://modelcontextprotocol.io/specification/2025-11-25/basic/transports
 - https://modelcontextprotocol.io/specification/2025-11-25/basic/lifecycle
+
+Las tareas tienen fecha civil (DATE): los paneles de pendientes la muestran en UTC para conservar el día escrito, también en Ciudad de México. Los paneles derivan tareas de las props actuales y solo conservan los IDs completados localmente, para que una tarea recién creada aparezca después de router.refresh.

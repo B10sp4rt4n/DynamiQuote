@@ -5,7 +5,7 @@ on:
     paths:
       - 'cotiza-web/lib/integrations/loom/**'
       - 'cotiza-web/app/api/**/loom/**'
-      - 'cotiza-web/components/integraciones/loom-context-panel.tsx'
+      - 'cotiza-web/components/integraciones/loom-*.tsx'
       - 'cotiza-web/app/(dashboard)/clientes/**'
       - 'cotiza-web/app/(dashboard)/oportunidades/**'
       - 'cotiza-web/lib/tenant-capabilities.ts'
@@ -48,7 +48,7 @@ jobs:
           COTIZA_LOOM_TEST_DATABASE_URL: postgresql://postgres:synthetic-local-only@127.0.0.1:5432/cotiza_loom_synthetic
       - name: Lint new Loom modules
         working-directory: cotiza-web
-        run: ./node_modules/.bin/eslint lib/integrations/loom components/integraciones/loom-context-panel.tsx 'app/api/clients/[clientId]/loom/route.ts' 'app/api/opportunities/[opportunityId]/loom/route.ts' lib/tenant-capabilities.ts
+        run: ./node_modules/.bin/eslint lib/integrations/loom components/integraciones/loom-context-panel.tsx components/integraciones/loom-followup-form.tsx 'app/api/clients/[clientId]/loom/route.ts' 'app/api/opportunities/[opportunityId]/loom/route.ts' lib/tenant-capabilities.ts
       - run: npm --prefix cotiza-web run build
   browser:
     runs-on: ubuntu-24.04
