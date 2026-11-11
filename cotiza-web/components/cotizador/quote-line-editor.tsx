@@ -1325,9 +1325,13 @@ export function QuoteLineEditor({
         <div className="max-w-2xl">
           <h2 className="text-xl font-semibold text-zinc-900">Editor de lineas</h2>
           <p className="text-sm text-zinc-600">
-            Ajusta cantidad, costo, precio o margen. El calculo precio/margen es bidireccional.
+            Ajusta cantidad, costo, precio o margen y pulsa Guardar. El cálculo precio/margen es bidireccional.
           </p>
         </div>
+        <aside className="rounded-lg border border-blue-200 bg-blue-50 p-3 text-sm text-blue-950" aria-label="Cambios de cotización y propuesta">
+          <p className="font-semibold">Guardar cotización y actualizar propuesta</p>
+          <p className="mt-1">Guardar recalcula esta cotización. Su propuesta sólo se actualiza automáticamente mientras esté en borrador. Para actualizar una propuesta autorizada, reábrela a borrador y vuelve a guardar aquí; después autorízala de nuevo.</p>
+        </aside>
         <div className="flex flex-wrap items-center gap-3">
           <label className="text-sm text-zinc-600" htmlFor="quote-selector">
             Cotizacion
