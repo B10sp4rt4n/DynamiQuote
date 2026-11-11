@@ -88,6 +88,17 @@ afterEach(async () => {
 });
 
 describe("quote version navigation through the real shell and editor", () => {
+  it('retains an exact historical quote when opening creation removes its server-provided URL summary',async()=>{
+    m.search='quoteId=COT-0066-v2';await render(quote(2));
+    await act(async()=>[...container.querySelectorAll('button')].find(button=>button.textContent==='+ Partida')!.click());
+    const count=container.querySelectorAll('input').length;
+    await act(async()=>[...container.querySelectorAll('button')].find(button=>button.textContent==='Nueva cotización')!.click());await settle();
+    await render(null); // App Router resolves requestedQuote:null after quoteId is removed.
+    await act(async()=>[...container.querySelectorAll('button')].find(button=>button.textContent==='Volver a cotización seleccionada')!.click());await settle();
+    expect((container.querySelector('#quote-selector') as HTMLSelectElement).value).toBe('COT-0066-v2');
+    expect(historyRow(2).textContent).toContain('(actual)');expect(container.querySelectorAll('input').length).toBe(count);
+    expect(m.fetch.mock.calls.every(([,init])=>!init||init.method==='GET')).toBe(true);
+  });
   it('keeps unsaved line edits while opening a separate new quotation and returning',async()=>{
     await render();
     const add=[...container.querySelectorAll('button')].find(button=>button.textContent==='+ Partida')!;
