@@ -35,3 +35,12 @@ describe("historical close after late opportunity creation", () => {
     expect(earliestCommercialStart(null, undefined, "invalid")).toBeNull();
   });
 });
+
+ it("an authorized exception only removes the creation lower bound", () => {
+   const now = new Date("2026-11-11T01:00:00Z");
+   expect(isValidCloseDate("2026-10-29", "2026-11-10T18:00Z", now)).toBe(false);
+   expect(isValidCloseDate("2026-10-29", "2026-11-10T18:00Z", now, true)).toBe(true);
+   for (const day of ["2026-11-11", "2026-02-30", "not-a-date"]) {
+     expect(isValidCloseDate(day, "2026-11-10T18:00Z", now, true)).toBe(false);
+   }
+ });

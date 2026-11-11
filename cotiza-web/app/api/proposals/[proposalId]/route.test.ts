@@ -76,6 +76,21 @@ describe("PATCH commercial close date", () => {
     setProposalOutcomeByTenantMock.mockResolvedValue(result);
     expect((await PATCH(request({ outcome: "won", closedOn: "2026-09-01" }), ctx("p1"))).status).toBe(status);
   });
+  it("requires a meaningful reason and edit reference for an exception", async () => {
+    for (const extra of [{ closeDateOverrideReason: "short" }, { closeDateOverrideReason: "Registro tardío del negocio" }]) {
+      expect((await PATCH(request({ outcome: "won", closedOn: "2026-10-29", ...extra }), ctx("p1"))).status).toBe(422);
+    }
+    expect(setProposalOutcomeByTenantMock).not.toHaveBeenCalled();
+  });
+  it("forwards the reason with authenticated administrative identity", async () => {
+    getCurrentTenantContextMock.mockResolvedValue({ id: "t1", userId: "owner1", userRole: "owner", isSuperAdmin: false });
+    const result = await PATCH(request({ outcome: "won", closedOn: "2026-10-29", expectedOutcome: "won",
+      expectedOutcomeAt: null, closeDateOverrideReason: "  Registro tardío del negocio  " }), ctx("p1"));
+    expect(result.status).toBe(200);
+    expect(setProposalOutcomeByTenantMock).toHaveBeenCalledWith("t1", "p1", "won",
+      { isSuperAdmin: false, userId: "owner1", userRole: "owner" }, true,
+      { closedOn: "2026-10-29", expectedOutcome: "won", expectedOutcomeAt: null, closeDateOverrideReason: "Registro tardío del negocio" });
+  });
   it("does not write without a signed-in tenant", async () => {
     getCurrentTenantContextMock.mockResolvedValue(null);
     expect((await PATCH(request({ outcome: "won", closedOn: "2026-09-01" }), ctx("p1"))).status).toBe(401);

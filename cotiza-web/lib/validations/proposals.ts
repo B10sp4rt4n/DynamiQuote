@@ -78,6 +78,7 @@ export const proposalOutcomeSchema = z.enum(["won", "lost", "discarded"]).nullab
 
 export const updateProposalOutcomeSchema = z.object({
   outcome: proposalOutcomeSchema,
+  closeDateOverrideReason: z.string().trim().min(10, "Explica la excepción en al menos 10 caracteres").max(1000).optional(),
   closedOn: z.string().regex(/^\d{4}-\d{2}-\d{2}$/).optional(),
   expectedOutcome: proposalOutcomeSchema.optional(),
   expectedOutcomeAt: z.string().datetime({ offset: true }).nullable().optional(),
@@ -85,6 +86,11 @@ export const updateProposalOutcomeSchema = z.object({
   ? value.closedOn !== undefined : value.closedOn === undefined, {
   message: "Selecciona la fecha de cierre para una propuesta ganada o perdida",
   path: ["closedOn"],
+}).refine((value) => value.closeDateOverrideReason === undefined ||
+  ((value.outcome === "won" || value.outcome === "lost") && value.closedOn !== undefined
+    && value.expectedOutcome !== undefined && value.expectedOutcomeAt !== undefined), {
+  message: "La excepción requiere fecha de cierre y referencia de la decisión actual",
+  path: ["closeDateOverrideReason"],
 }).refine((value) => (value.expectedOutcome === undefined) === (value.expectedOutcomeAt === undefined), {
   message: "La referencia de la decisión debe incluir estado y fecha",
   path: ["expectedOutcome"],

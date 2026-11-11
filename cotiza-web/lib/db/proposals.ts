@@ -1796,6 +1796,7 @@ export type SetProposalOutcomeResult = "forbidden" | "invalid_status" | "invalid
 
 export type ProposalOutcomeDateInput = {
   closedOn?: string;
+  closeDateOverrideReason?: string;
   expectedOutcome?: ProposalOutcome;
   expectedOutcomeAt?: string | null;
 };
@@ -1842,7 +1843,16 @@ export async function setProposalOutcomeByTenant(
     if (outcome === "won" && row.outcome !== "won" && await hasAnotherBusinessWin(tx, tenantId, row)) {
       return "business_already_won";
     }
+    const overrideReason = dateInput.closeDateOverrideReason?.trim();
+    if (dateInput.closeDateOverrideReason !== undefined) {
+      if (!actor.userId || !(actor.isSuperAdmin || actor.userRole === "superadmin" || actor.userRole === "owner" || actor.userRole === "admin")) return "forbidden";
+      if (!overrideReason || overrideReason.length < 10 || overrideReason.length > 1000
+        || dateInput.closedOn === undefined || (outcome !== "won" && outcome !== "lost")) return "invalid_date";
+      if (dateInput.expectedOutcome === undefined || dateInput.expectedOutcomeAt === undefined) return "conflict";
+    }
     const now = new Date();
+    let overrideApplied = false;
+    let commercialStartDay: string | null = null;
     let outcomeAt = outcome ? now : null;
     if (dateInput.closedOn !== undefined) {
       if (outcome !== "won" && outcome !== "lost") return "invalid_date";
@@ -1854,7 +1864,9 @@ export async function setProposalOutcomeByTenant(
         orderBy: { issued_date: "asc" }, select: { issued_date: true },
       });
       const commercialStart = earliestCommercialStart(row.created_at, opportunity?.created_at, originalFormal?.issued_date)!;
-      if (!isValidCloseDate(dateInput.closedOn, commercialStart, now)) return "invalid_date";
+      commercialStartDay = mexicoCalendarDate(commercialStart);
+      overrideApplied = Boolean(overrideReason) && dateInput.closedOn < commercialStartDay;
+      if (!isValidCloseDate(dateInput.closedOn, commercialStart, now, overrideApplied)) return "invalid_date";
       outcomeAt = closeDateInstant(dateInput.closedOn);
     } else if (row.outcome === outcome) {
       // Legacy callers/retries never manufacture a historical close.
@@ -1874,6 +1886,8 @@ export async function setProposalOutcomeByTenant(
         event_type: row.outcome === outcome ? "outcome_date_changed" : "outcome_changed",
         payload: JSON.stringify({ actorUserId: actor.userId, fromOutcome: row.outcome, toOutcome: outcome,
           previousOutcomeAt: row.outcome_at?.toISOString() ?? null, outcomeAt: outcomeAt?.toISOString() ?? null,
+          ...(overrideReason ? { closeDateOverride: overrideApplied, closeDateOverrideReason: overrideReason,
+            authorizedByUserId: actor.userId, authorizerRole: actor.userRole, commercialStartDay } : {}),
           selectedCloseDate: dateInput.closedOn ?? null, datePrecision: dateInput.closedOn ? "day" : "instant",
           recordedAt: now.toISOString() }),
         proposal_id: proposalId,

@@ -114,6 +114,7 @@ export default async function ProposalDetailPage({ params }: ProposalDetailPageP
       </div>
 
       <ProposalDetailView
+        canOverrideCloseDate={tenant.isSuperAdmin || tenant.userRole === "owner" || tenant.userRole === "admin"}
         derivationInfo={derivationInfo}
         digestorFiscalEnabled={isDigestorFiscalEnabledForTenant(tenant.id)}
         proposal={normalizedProposal}
