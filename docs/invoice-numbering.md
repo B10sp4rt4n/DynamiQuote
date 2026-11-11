@@ -22,3 +22,7 @@ Implementación local en feat/invoice-numbering; sin publicación, despliegue ni
 - La suite amplia de Digestor reportó 338 aprobadas, 54 subtests aprobados y 10 fallos de OCR de CSF. Un caso OCR falló igual en el código base 631244c sin esta implementación. No se cambió el lector OCR. La suite completa no se presenta como aprobada.
 - Revisión visual pendiente: Chromium local falla al abrir su socket y la descarga alternativa del navegador no entregó un ZIP válido. El ensayo a 1360/390 px está preparado, pero no se presenta como ejecutado con éxito.
 - Envío a GitHub y apertura de PRs autorizados por el usuario el 11 de noviembre de 2026. La validación remota y el despliegue se informan por separado; este cambio no aplica migraciones productivas ni configura la numeración real.
+
+## Preparación de liberación
+
+Ensayo del panel real aprobado en Chromium headless 153 a 1360/390 px con datos sintéticos: vistas previa simple/anual, conflicto, guardado y cambio de empresa; cero errores del navegador y cero desbordamientos. La compilación Vercel de la rama 3b1db9f está READY. GitHub Actions sigue en cola; no se declara aprobado.
