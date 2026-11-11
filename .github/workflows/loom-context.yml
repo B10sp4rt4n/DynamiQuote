@@ -1,0 +1,77 @@
+name: Loom context pilot (synthetic)
+on:
+  pull_request:
+    branches: [main]
+    paths:
+      - 'cotiza-web/lib/integrations/loom/**'
+      - 'cotiza-web/app/api/**/loom/**'
+      - 'cotiza-web/components/integraciones/loom-context-panel.tsx'
+      - 'cotiza-web/app/(dashboard)/clientes/**'
+      - 'cotiza-web/app/(dashboard)/oportunidades/**'
+      - 'cotiza-web/lib/tenant-capabilities.ts'
+      - 'cotiza-web/prisma/manual/20261110_loom_context.sql'
+      - 'scripts/check_loom_context_ui.mjs'
+      - '.github/workflows/loom-context.yml'
+  workflow_dispatch:
+permissions:
+  contents: read
+jobs:
+  verify:
+    runs-on: ubuntu-24.04
+    timeout-minutes: 15
+    services:
+      postgres:
+        image: postgres:18
+        env:
+          POSTGRES_PASSWORD: synthetic-local-only
+          POSTGRES_DB: cotiza_loom_synthetic
+        ports: ['5432:5432']
+        options: --health-cmd pg_isready --health-interval 10s --health-timeout 5s --health-retries 5
+    env:
+      DATABASE_URL: postgresql://postgres:synthetic-local-only@127.0.0.1:5432/cotiza_loom_synthetic
+      NEXT_TELEMETRY_DISABLED: '1'
+    steps:
+      - uses: actions/checkout@11bd71901bbe5b1630ceea73d27597364c9af683
+        with:
+          persist-credentials: false
+      - uses: actions/setup-node@49933ea5288caeca8642d1e84afbd3f7d6820020
+        with:
+          node-version: '22'
+      - run: npm ci --no-audit --no-fund
+      - run: npm --prefix cotiza-web run db:generate
+      - run: ./cotiza-web/node_modules/.bin/tsc --noEmit --project cotiza-web/tsconfig.json
+      - name: Complete unit suite with synthetic providers
+        run: npm --prefix cotiza-web test -- --maxWorkers=2 --exclude validate-quote-lifecycle.e2e.test.ts --reporter=dot
+      - name: Disposable PostgreSQL isolation, versioning and concurrency
+        run: npm --prefix cotiza-web test -- lib/integrations/loom/store.integration.test.ts --maxWorkers=1
+        env:
+          COTIZA_LOOM_TEST_DATABASE_URL: postgresql://postgres:synthetic-local-only@127.0.0.1:5432/cotiza_loom_synthetic
+      - name: Lint new Loom modules
+        working-directory: cotiza-web
+        run: ./node_modules/.bin/eslint lib/integrations/loom components/integraciones/loom-context-panel.tsx 'app/api/clients/[clientId]/loom/route.ts' 'app/api/opportunities/[opportunityId]/loom/route.ts' lib/tenant-capabilities.ts
+      - run: npm --prefix cotiza-web run build
+  browser:
+    runs-on: ubuntu-24.04
+    timeout-minutes: 10
+    steps:
+      - uses: actions/checkout@11bd71901bbe5b1630ceea73d27597364c9af683
+        with:
+          persist-credentials: false
+      - uses: actions/setup-node@49933ea5288caeca8642d1e84afbd3f7d6820020
+        with:
+          node-version: '22'
+      - run: npm ci --no-audit --no-fund
+      - run: npm install --prefix "$RUNNER_TEMP/loom-ui-tools" --no-save --no-package-lock --no-audit --no-fund esbuild@0.28.2 playwright@1.62.1
+      - run: node "$RUNNER_TEMP/loom-ui-tools/node_modules/playwright/cli.js" install --with-deps chromium
+      - name: Actual panel with synthetic responses in desktop and mobile
+        run: |
+          ESBUILD_MODULE="$RUNNER_TEMP/loom-ui-tools/node_modules/esbuild" \
+          PLAYWRIGHT_MODULE="$RUNNER_TEMP/loom-ui-tools/node_modules/playwright/index.mjs" \
+          node scripts/check_loom_context_ui.mjs
+      - uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02
+        if: always()
+        with:
+          name: loom-context-synthetic
+          path: artifacts/loom-context
+          retention-days: 3
+          if-no-files-found: warn
