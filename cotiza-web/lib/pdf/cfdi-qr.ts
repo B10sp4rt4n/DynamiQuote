@@ -8,12 +8,14 @@ import type { ParsedCfdi } from "@/lib/pdf/cfdi-xml";
 // (https://verificacfdi.facturaelectronica.sat.gob.mx). `fe` son los
 // ultimos 8 caracteres del sello digital del CFDI (no del SAT).
 function buildVerificationUrl(cfdi: ParsedCfdi): string {
+  // Conservar la secuencia del Anexo 20: id, re, rr, tt, fe. El enlace
+  // impreso debe comenzar con ?id= para la precarga del verificador SAT.
   const params = new URLSearchParams({
-    fe: cfdi.sello.slice(-8),
     id: cfdi.timbre.uuid,
     re: cfdi.emisor.rfc,
     rr: cfdi.receptor.rfc,
     tt: cfdi.total.toFixed(6),
+    fe: cfdi.sello.slice(-8),
   });
   return `https://verificacfdi.facturaelectronica.sat.gob.mx/default.aspx?${params.toString()}`;
 }
