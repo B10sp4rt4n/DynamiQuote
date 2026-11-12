@@ -40,10 +40,17 @@ jobs:
                       self.fields[name]=a.get('value','')
           # Public fixture: nodecfdi/cfdi-expresiones tests/unit/extractors/comprobante40.spec.ts
           query='id=04BF2854-FE7D-4377-9196-71248F060ABB&re=CSM190311AH6&rr=MCI7306249Y1&tt=459.36&fe=5tSZhA=='
-          for label,prefix in [('without_separator','?'),('with_separator','?&')]:
+          cases=[
+              ('literal_reference','?', '04BF2854-FE7D-4377-9196-71248F060ABB','459.36','5tSZhA=='),
+              ('encoded_seal','?', '04BF2854-FE7D-4377-9196-71248F060ABB','459.36','5tSZhA%3D%3D'),
+              ('lowercase_uuid','?', '04bf2854-fe7d-4377-9196-71248f060abb','459.36','5tSZhA=='),
+              ('six_decimals','?', '04BF2854-FE7D-4377-9196-71248F060ABB','459.360000','5tSZhA=='),
+              ('generated_with_separator','?&', '04bf2854-fe7d-4377-9196-71248f060abb','459.360000','5tSZhA%3D%3D'),
+          ]
+          for label,prefix,uuid,total,seal in cases:
+              query='id='+uuid+'&re=CSM190311AH6&rr=MCI7306249Y1&tt='+total+'&fe='+seal
               with urlopen(base+prefix+query,timeout=25,context=ctx) as response:
                   html=response.read(500000).decode('utf-8',errors='replace')
                   parser=Fields();parser.feed(html)
-                  print('PREFIX_RESULT',label,'HTTP',response.status,'FIELDS',parser.fields)
-                  print('RESULT_PANEL',label,'ctl00_MainContent_PnlResultados' in html)
+                  print('FACTOR_RESULT',label,'HTTP',response.status,'FIELDS',parser.fields)
           PY
