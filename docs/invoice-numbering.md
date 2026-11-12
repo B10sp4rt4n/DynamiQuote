@@ -32,3 +32,11 @@ Ensayo del panel real aprobado en Chromium headless 153 a 1360/390 px con datos 
 En la propuesta, junto a “Ver vista previa”, aparece “Descargar PDF de prefactura” cuando existe una prefactura vigente. Si se edita la captura, se oculta la descarga hasta regenerar; el historial de prefacturas continúa accesible aunque la oportunidad ya no esté ganada. La ruta PDF mantiene permisos por tenant y visibilidad de propuesta, devuelve attachment con ?download=1 y conserva la representación de CFDI timbrado. La vista previa y el PDF incluyen el próximo folio estimado cuando Digestor administra la numeración y aún no hay reserva. El aviso aclara que puede cambiar y se confirma al iniciar el timbrado.
 
 Comprobados 26 casos de flujo/interfaz y API, TypeScript y ESLint. Sin solicitudes de timbrado real.
+
+## Formato profesional de CFDI timbrado
+
+La representación impresa de Cotiza usa fuentes DejaVu incrustadas, colores y jerarquía coherentes con la prefactura, folio completo, unidad SAT y referencia por concepto, total destacado y una ficha de certificación con QR. Los sellos y la cadena se dividen en líneas explícitas sin añadir guiones. Las fechas sin offset se muestran con la hora fiscal del XML; sólo las fechas con zona explícita se convierten a CDMX. Se conservan cancelaciones y complementos REP. El XML, el timbrado y sus importes no se modifican.
+
+Los archivos de fuente están en public/fonts y next.config.ts fuerza su inclusión en el paquete de las rutas API. Se comprobó su presencia en route.js.nft.json. LICENSE-DejaVu.txt conserva los avisos originales. No hay fuentes remotas ni dependencias productivas nuevas. Subconjuntos locales con FontTools: U+0000-024F,U+0370-052F,U+1E00-1EFF,U+2000-206F,U+20A0-20CF,U+2100-214F.
+
+Validación: 174 pruebas de PDF/XML/acceso aprobadas, TypeScript, ESLint y build Next. Extracción exacta de UUID, folio, certificados, sellos y cadena; equivalencia píxel a píxel del QR con el generado desde el XML; revisión visual de factura de una hoja y documentos sintéticos de siete hojas/REP cancelado, con geometría dentro de márgenes. El script scripts/render_cfdi_pdf.mjs permite revisar un XML local sin conexión al PAC o a bases de datos. Los XML y PDFs de clientes no se incluyen en el repositorio.

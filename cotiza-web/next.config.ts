@@ -19,6 +19,7 @@ const nextConfig: NextConfig = {
   ),
   // Solo necesario en local para trazar desde el root del monorepo
   ...(isVercel ? {} : { outputFileTracingRoot: workspaceRoot }),
+  outputFileTracingIncludes: { "/api/**": ["./public/fonts/*.ttf"] },
   experimental: {
     serverActions: {
       allowedOrigins: ["localhost:3000", "127.0.0.1:3000", codespaceHost].filter(
