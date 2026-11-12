@@ -122,10 +122,12 @@ it("requires review, makes one confirmation/draft on double click, and blocks st
     paymentMethod: "PUE", paymentForm: "03", items: [{ description: proposal.items[0].description,
       quantity: 2, unitPrice: 100, taxRate: 0.16, satProductCode: product.code, unitCode: "E48" }] });
   expect(host.textContent).toContain("Prefactura preparada. Puedes revisar su vista previa.");
+  expect(host.querySelector('a[href="/api/proposals/p1/invoice/pdf?download=1"]')?.textContent).toBe("Descargar PDF de prefactura");
   expect(button("Timbrar (irreversible)").disabled).toBe(false);
   await act(async () => setValue(host.querySelector<HTMLInputElement>('input[id]')!, "Otra operación"));
   expect(button("Regenerar prefactura").disabled).toBe(true);
   expect(button("Timbrar (irreversible)").disabled).toBe(true);
+  expect(host.querySelector('a[href="/api/proposals/p1/invoice/pdf?download=1"]')).toBeNull();
 });
 
 it("uses commercial memory only as a candidate after the document revision changes", async () => {

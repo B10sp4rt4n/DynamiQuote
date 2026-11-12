@@ -1,3 +1,5 @@
+import { LoomContextPanel } from "@/components/integraciones/loom-context-panel";
+import { loomPilotVisible } from "@/lib/integrations/loom/availability";
 import Link from "next/link";
 import { notFound, redirect } from "next/navigation";
 import { getCurrentTenantContext } from "@/lib/auth/tenant-context";
@@ -27,6 +29,7 @@ export default async function BusinessPage({ params }: { params: Promise<{ oppor
   if (!workspace) notFound();
   const { opportunity: opportunity, quotes, proposals, tasks, optionLabels, ownerName } = workspace;
   if (opportunity.opportunityId !== opportunityId) redirect(`/oportunidades/${encodeURIComponent(opportunity.opportunityId)}`);
+  const showLoom = await loomPilotVisible(tenant);
   const billingEnabled = isDigestorFiscalEnabledForTenant(tenant.id);
   const context = { opportunityId: opportunity.opportunityId, opportunityNumber: opportunity.opportunityNumber, title: opportunity.title, stage: opportunity.stage,
     quoteId: quotes[0]?.quote_id, proposalId: proposals[0]?.proposal_id };
@@ -57,6 +60,7 @@ export default async function BusinessPage({ params }: { params: Promise<{ oppor
         </div>
       </div>
     </header>
+    {showLoom ? <LoomContextPanel key={tenant.id + ":" + tenant.userId + ":" + opportunity.opportunityId} tenantId={tenant.id} targetId={opportunity.opportunityId} kind="opportunity" /> : null}
     <BusinessFollowUp stage={opportunity.stage} action={followUp} />
     <CommercialFlow current={1} context={context} hideContext summaries={[DISPOSITION_LABELS[opportunity.stage], documents.quotes, documents.proposals]}
       completed={[opportunity.stage === "won", quotes.length > 0, proposals.some(row => row.outcome === "won" && isProposalAuthorized(row))]}

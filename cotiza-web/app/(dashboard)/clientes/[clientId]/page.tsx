@@ -1,3 +1,5 @@
+import { LoomContextPanel } from "@/components/integraciones/loom-context-panel";
+import { loomPilotVisible } from "@/lib/integrations/loom/availability";
 import Link from "next/link";
 import { OpportunityReview } from "@/components/pipeline/opportunity-review";
 import { OpportunityAmount } from "@/components/pipeline/opportunity-amount";
@@ -97,6 +99,7 @@ export default async function ClientDetailPage({ params }: ClientDetailPageProps
     );
   }
 
+  const showLoom = await loomPilotVisible(tenant);
   const canSeeAll = tenant.isSuperAdmin || tenant.userRole === "owner" || tenant.userRole === "admin";
 
   const [contacts, opportunities, quoteGroups, proposals, tasks, interactions] = await Promise.all([
@@ -141,6 +144,8 @@ export default async function ClientDetailPage({ params }: ClientDetailPageProps
           </div>
         </div>
       </section>
+
+      {showLoom ? <LoomContextPanel key={tenant.id + ":" + tenant.userId + ":" + clientId} tenantId={tenant.id} targetId={clientId} kind="client" /> : null}
 
       {contacts.length > 0 ? (
         <section className="rounded-xl border border-zinc-200 bg-white p-4">

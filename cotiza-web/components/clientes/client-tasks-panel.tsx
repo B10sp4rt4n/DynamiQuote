@@ -5,13 +5,14 @@ import { useState } from "react";
 import type { ClientTask } from "@/lib/db/tasks";
 
 function formatDueDate(iso: string): string {
-  return new Intl.DateTimeFormat("es-MX", { day: "2-digit", month: "short", year: "numeric" }).format(
+  return new Intl.DateTimeFormat("es-MX", { day: "2-digit", month: "short", year: "numeric", timeZone: "UTC" }).format(
     new Date(iso),
   );
 }
 
 export function ClientTasksPanel({ tasks: initialTasks }: { tasks: ClientTask[] }) {
-  const [tasks, setTasks] = useState(initialTasks);
+  const [completedIds, setCompletedIds] = useState<string[]>([]);
+  const tasks = initialTasks.filter(task => !completedIds.includes(task.taskId));
   const [completingId, setCompletingId] = useState<string | null>(null);
   const [error, setError] = useState<string | null>(null);
 
@@ -27,7 +28,7 @@ export function ClientTasksPanel({ tasks: initialTasks }: { tasks: ClientTask[] 
         throw new Error(data.error ?? "No se pudo completar la tarea");
       }
 
-      setTasks((prev) => prev.filter((task) => task.taskId !== taskId));
+      setCompletedIds((prev) => [...prev, taskId]);
     } catch (err) {
       setError(err instanceof Error ? err.message : "Error desconocido");
     } finally {

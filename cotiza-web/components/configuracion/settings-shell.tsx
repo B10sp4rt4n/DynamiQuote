@@ -2355,6 +2355,7 @@ export function SettingsShell({
       </div>
 
       <div className="mt-4 flex gap-0 overflow-x-auto border-b border-zinc-200 whitespace-nowrap">
+        {canViewTenantConfig ? <a href="/configuracion/facturacion" className="shrink-0 rounded-lg px-3 py-1.5 text-sm font-medium text-zinc-700 hover:bg-zinc-100">Facturación: series y folios</a> : null}
         {canManageUsers ? <button className={`${tabClass("operation")} shrink-0`} onClick={() => setTab("operation")} type="button">
           Operación y canales
         </button> : null}

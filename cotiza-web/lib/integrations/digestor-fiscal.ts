@@ -2,6 +2,7 @@ import "server-only";
 import type { CsfReview } from "@/lib/domain/csf-review";
 import { readInvoiceStamp } from "@/lib/domain/invoice-stamp";
 import { DigestorHttpError } from "./digestor-error";
+import { invoiceNumberingState, type InvoiceNumberingInput } from "@/lib/domain/invoice-numbering";
 import { getPrimaryDigestorConfig, getRequestDigestorConfig, getSandboxDigestorConfig,
   isDigestorFiscalSandboxTenant, type DigestorFiscalConfig } from "./digestor-routing";
 
@@ -43,6 +44,16 @@ type CachedToken = {
 };
 
 const cachedTokens = new Map<string, CachedToken>();
+
+export async function getInvoiceNumbering() {
+  return invoiceNumberingState.parse(await request("/v1/billing/invoice-numbering", { method: "GET", cache: "no-store", signal: AbortSignal.timeout(15_000) }));
+}
+
+export async function updateInvoiceNumbering(input: InvoiceNumberingInput, actorUserId: string) {
+  return invoiceNumberingState.parse(await request("/v1/billing/invoice-numbering", {
+    method: "PUT", body: JSON.stringify({ ...input, declared_actor: actorUserId }), signal: AbortSignal.timeout(15_000),
+  }));
+}
 
 async function verifySandboxProvider(config: DigestorFiscalConfig, token: string): Promise<void> {
   if (config.environment !== "sandbox") return;
