@@ -39,7 +39,19 @@ jobs:
           try:
               html=fetch(base)
           except (HTTPError,URLError,TimeoutError) as error:
-              print('PAGE_UNAVAILABLE',type(error).__name__,str(error)); raise SystemExit(0)
+              print('PAGE_UNAVAILABLE',type(error).__name__,str(error))
+              import subprocess, tempfile
+              host=urlparse(base).netloc
+              probe=subprocess.run(['openssl','s_client','-connect',host+':443','-servername',host,'-showcerts','-verify_return_error','-verify_hostname',host],input='',capture_output=True,text=True,timeout=25)
+              print('TLS_VERIFY',probe.returncode,probe.stderr[-4000:])
+              certs=re.findall(r'-----BEGIN CERTIFICATE-----.*?-----END CERTIFICATE-----',probe.stdout,re.S)
+              with tempfile.TemporaryDirectory() as directory:
+                  for index,cert in enumerate(certs):
+                      certpath=directory+'/'+str(index)+'.pem'
+                      open(certpath,'w').write(cert)
+                      metadata=subprocess.run(['openssl','x509','-in',certpath,'-noout','-subject','-issuer','-ext','authorityInfoAccess'],capture_output=True,text=True,check=True)
+                      print('CERTIFICATE_METADATA',index,metadata.stdout)
+              raise SystemExit(0)
           page=Page(); page.feed(html)
           print('SCRIPT_SOURCES',page.scripts)
           print('INLINE_SCRIPTS_BEGIN')
