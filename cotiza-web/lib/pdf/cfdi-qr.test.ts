@@ -19,7 +19,7 @@ it("genera el QR con la secuencia SAT para precargar UUID y ambos RFC", async ()
 
   const encoded = String(render.mock.calls[0]?.[0]);
   expect(encoded).toBe(
-    `https://verificacfdi.facturaelectronica.sat.gob.mx/default.aspx?id=${cfdi.timbre.uuid}` +
+    `https://verificacfdi.facturaelectronica.sat.gob.mx/default.aspx?&id=${cfdi.timbre.uuid}` +
     `&re=${cfdi.emisor.rfc}&rr=${cfdi.receptor.rfc}&tt=116.000000&fe=${encodeURIComponent(cfdi.sello.slice(-8))}`,
   );
   expect([...new URL(encoded).searchParams.keys()]).toEqual(["id", "re", "rr", "tt", "fe"]);
@@ -49,7 +49,7 @@ it("usa el UUID y total cero del REP en su propio enlace SAT", async () => {
   await buildCfdiQrDataUrl(cfdi);
 
   const url = new URL(String(render.mock.calls[0]?.[0]));
-  expect(url.search).toMatch(/^\?id=/);
+  expect(url.search).toMatch(/^\?&id=/);
   expect(url.searchParams.get("id")).toBe(RECEIPT_UUID);
   expect(url.searchParams.get("re")).toBe(cfdi.emisor.rfc);
   expect(url.searchParams.get("rr")).toBe(cfdi.receptor.rfc);
