@@ -1,0 +1,63 @@
+name: Diagnose public SAT form
+on:
+  push:
+    branches: [diagnose/sat-portal-fields]
+permissions: {}
+jobs:
+  inspect:
+    runs-on: ubuntu-24.04
+    timeout-minutes: 3
+    steps:
+      - name: Read public verification page and relevant scripts
+        shell: bash
+        run: |
+          python - <<'PY'
+          from urllib.request import urlopen
+          from urllib.error import HTTPError, URLError
+          from urllib.parse import urljoin, urlparse
+          from html.parser import HTMLParser
+          import re
+          base = 'https://verificacfdi.facturaelectronica.sat.gob.mx/default.aspx'
+          class Page(HTMLParser):
+              def __init__(self):
+                  super().__init__(); self.scripts=[]; self.inline=[]; self.active=False
+              def handle_starttag(self, tag, attrs):
+                  attrs=dict(attrs)
+                  if tag=='script':
+                      self.active=True
+                      if attrs.get('src'): self.scripts.append(attrs['src'])
+                  if tag=='input':
+                      print('INPUT',attrs.get('id',''),attrs.get('name',''),attrs.get('type','text'))
+              def handle_endtag(self,tag):
+                  if tag=='script': self.active=False
+              def handle_data(self,data):
+                  if self.active: self.inline.append(data)
+          def fetch(url):
+              with urlopen(url,timeout=25) as response:
+                  print('HTTP',response.status,url)
+                  return response.read(500000).decode('utf-8',errors='replace')
+          try:
+              html=fetch(base)
+          except (HTTPError,URLError,TimeoutError) as error:
+              print('PAGE_UNAVAILABLE',type(error).__name__,str(error)); raise SystemExit(0)
+          page=Page(); page.feed(html)
+          print('SCRIPT_SOURCES',page.scripts)
+          print('INLINE_SCRIPTS_BEGIN')
+          print('\n'.join(page.inline)[:60000])
+          print('INLINE_SCRIPTS_END')
+          for src in page.scripts[:25]:
+              url=urljoin(base,src)
+              if urlparse(url).netloc!=urlparse(base).netloc: continue
+              if re.search(r'jquery|bootstrap|modernizr|WebResource|ScriptResource|angular|respond|popper',src,re.I): continue
+              try:
+                  script=fetch(url)
+              except (HTTPError,URLError,TimeoutError) as error:
+                  print('SCRIPT_UNAVAILABLE',src,type(error).__name__); continue
+              lines=script.splitlines()
+              indexes=set()
+              for i,line in enumerate(lines):
+                  if re.search(r'location|query|string.*id|uuid|rfc|expres|[Pp]aram|decode|onload',line,re.I):
+                      indexes.update(range(max(0,i-2),min(len(lines),i+4)))
+              print('SCRIPT_RELEVANT',src)
+              for i in sorted(indexes)[:150]: print(str(i+1)+': '+lines[i][:3000])
+          PY
