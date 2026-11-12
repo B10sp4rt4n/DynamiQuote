@@ -64,7 +64,9 @@ describe('SAT observation authorization',()=>{
  it('allows a visible document reader but still requires same origin and Clerk with fiscal writes disabled',async()=>{
   expect((await authorizeProposalFiscalDocument('p','sat_status',new Request('https://cotiza.test/status',{method:'POST',headers:{origin:'https://foreign.test'}}))).error?.status).toBe(403);
   const request=new Request('https://cotiza.test/status',{method:'POST',headers:{origin:'https://cotiza.test'}});
-  expect(await authorizeProposalFiscalDocument('p','sat_status',request)).toEqual({draftId:'resolved',environment:'production',tenantId:'tenant'});
+  expect(await authorizeProposalFiscalDocument('p','sat_status',request)).toEqual({draftId:'resolved',environment:'production',tenantId:'tenant',canManageSatSchedule:false});
+  m.tenant.mockResolvedValue({id:'tenant',userId:'owner',userRole:'owner',authMode:'clerk'});
+  expect(await authorizeProposalFiscalDocument('p','sat_status',request)).toMatchObject({canManageSatSchedule:true});
   m.tenant.mockResolvedValue({id:'tenant',userId:'bootstrap',authMode:'bootstrap'});
   expect((await authorizeProposalFiscalDocument('p','sat_status',request)).error?.status).toBe(401);
  });

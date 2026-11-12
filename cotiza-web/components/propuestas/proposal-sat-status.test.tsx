@@ -33,3 +33,29 @@ it('labels no localizado independently of cancellation',async()=>{
  fetcher.mockResolvedValueOnce({ok:true,json:async()=>({...state,last_answer:missing,history:[missing],latest_attempt:missing})});await show();
  expect(host.textContent).toContain('no acredita una cancelación');
 });
+const schedule={available:true,can_manage:true,enabled:false,running:false,interval_seconds:21600,next_check_at:null,failures:0,last_outcome:null};
+it('activates and pauses only the selected schedule, guarding double clicks',async()=>{
+ fetcher.mockResolvedValueOnce({ok:true,json:async()=>({...state,schedule})});await show();
+ fetcher.mockResolvedValueOnce({ok:true,json:async()=>({...state,schedule:{...schedule,enabled:true,running:true,next_check_at:'2026-11-11T00:00:00Z'}})});
+ await act(async()=>{button('Activar seguimiento automático').click();button('Activar seguimiento automático').click();});
+ expect(fetcher.mock.calls.filter(([path])=>path.includes('/schedule?'))).toHaveLength(1);
+ expect(fetcher.mock.calls.at(-1)?.[1].body).toBe('{"enabled":true}');
+ expect(host.textContent).toContain('Revisión cada 6 horas');
+ expect(host.textContent).toContain('Seguimiento automático: activo');
+ fetcher.mockResolvedValueOnce({ok:true,json:async()=>({...state,schedule})});
+ await act(async()=>button('Pausar seguimiento automático').click());
+ expect(fetcher.mock.calls.at(-1)?.[1].body).toBe('{"enabled":false}');
+ expect(host.textContent).toContain('Seguimiento automático: pausado');
+});
+it('shows a revoked configuration as paused and still lets an administrator stop enrollment',async()=>{
+ fetcher.mockResolvedValueOnce({ok:true,json:async()=>({...state,schedule:{...schedule,enabled:true,available:false}})});await show();
+ expect(host.textContent).toContain('pausado por la configuración');
+ expect(button('Pausar seguimiento automático')).toBeDefined();
+});
+it('offers no activation when unavailable or without management permission',async()=>{
+ fetcher.mockResolvedValueOnce({ok:true,json:async()=>({...state,schedule:{...schedule,available:false}})});await show();
+ expect(button('Activar seguimiento automático')).toBeUndefined();
+ fetcher.mockResolvedValueOnce({ok:true,json:async()=>({...state,schedule:{...schedule,can_manage:false}})});
+ await act(async()=>button('Actualizar historial sin consultar SAT').click());
+ expect(button('Activar seguimiento automático')).toBeUndefined();
+});

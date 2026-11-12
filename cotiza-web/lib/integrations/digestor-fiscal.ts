@@ -717,10 +717,21 @@ export function validateSatClassifications(items: Array<{ itemNumber: number; sa
 export type SatObservation = {
   id: string; checked_at: string | null; source: string; outcome: 'answered' | 'query_failed';
   response: { Estado: 'Vigente' | 'Cancelado' | 'No localizado'; CodigoEstatus?: string | null; EsCancelable?: string | null; EstatusCancelacion?: string | null } | null;
-  error?: string | null; origin: string;
+  error?: string | null; origin: string; trigger?: 'manual' | 'scheduled' | null;
 };
-export type SatTracking = { document_uuid: string; history: SatObservation[]; latest_attempt: SatObservation | null; last_answer: SatObservation | null; cached?: boolean };
+export type SatSchedule = {
+  available: boolean; can_manage: boolean; enabled: boolean; running: boolean;
+  interval_seconds: number; next_check_at: string | null; failures: number; last_outcome: string | null;
+};
+export type SatTracking = { document_uuid: string; history: SatObservation[]; latest_attempt: SatObservation | null; last_answer: SatObservation | null; cached?: boolean; schedule?: SatSchedule };
 export function getSatTracking(draftId: string, uuid: string, consult = false, paymentId?: string): Promise<SatTracking> {
   const path = paymentId ? `${paymentPath(draftId)}/${encodeURIComponent(paymentId)}/receipt/sat-status` : `/v1/billing/drafts/${encodeURIComponent(draftId)}/sat-status`;
   return request(`${path}?expected_uuid=${encodeURIComponent(uuid)}`, { method: consult ? 'POST' : 'GET', cache: 'no-store', signal: AbortSignal.timeout(55_000) });
+}
+
+export function setSatSchedule(draftId: string, uuid: string, enabled: boolean, paymentId?: string): Promise<SatTracking> {
+  const path = paymentId ? `${paymentPath(draftId)}/${encodeURIComponent(paymentId)}/receipt/sat-status` : `/v1/billing/drafts/${encodeURIComponent(draftId)}/sat-status`;
+  return request(`${path}/schedule?expected_uuid=${encodeURIComponent(uuid)}`, {
+    method: 'POST', cache: 'no-store', signal: AbortSignal.timeout(15_000), body: JSON.stringify({ enabled }),
+  });
 }
