@@ -22,6 +22,16 @@ it('submits explicit consent once on a double click',async()=>{
  const writes=fetchMock.mock.calls.filter(([,init])=>init?.method==='POST');expect(writes).toHaveLength(1);
  expect(JSON.parse(writes[0][1].body)).toEqual({confirm_real_receipt:true});
 });
+it.each(['processing','unknown'])('offers UUID recovery only after %s is resolved as uncertain',async status=>{
+ fetchMock.mockResolvedValue({ok:true,json:async()=>({supported:true,environment:'sandbox',total:'116.00',paid:'116.00',balance:'0.00',receipt_stamp_enabled:true,
+  invoice_fiscal_ready:true,payments:[{id:'payment',sequence:1,reference:'RECEIVED',amount:'116.00',balance_after:'0.00',receipt_status:status,fiscal_ready:false}]})});
+ await act(async()=>root.render(<ProposalPaymentPanel key={status} proposalId="synthetic"/>));
+ const recover=[...container.querySelectorAll('button')].find(b=>b.textContent==='Recuperar XML sin volver a timbrar');
+ expect(Boolean(recover)).toBe(status==='unknown');
+ expect(issue()).toBeUndefined();
+ expect(container.textContent).toContain('No repitas el timbrado');
+ expect(fetchMock.mock.calls.filter(([,init])=>init?.method==='POST')).toHaveLength(0);
+});
 it.each(['stamp_response','status_read'])('protects a lost %s and recovers by reading without another stamp',async failure=>{
  confirmMock.mockReturnValue(true);
  if(failure==='status_read')fetchMock.mockResolvedValueOnce({ok:true,json:async()=>({ok:true})});

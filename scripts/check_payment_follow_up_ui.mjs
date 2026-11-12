@@ -34,10 +34,10 @@ let browser;
 const results=[];
 try {
   browser=await chromium.launch({headless:true,...(process.env.CHROMIUM_PATH ? {executablePath:process.env.CHROMIUM_PATH} : {}),args:['--no-sandbox','--disable-dev-shm-usage']});
-  for(const width of [1360,390]) for(const scenario of ['unknown','ready','cancellation','cancelled-invoice']) {
+  for(const width of [1360,390]) for(const scenario of ['processing','unknown','ready','cancellation','cancelled-invoice']) {
     const page=await browser.newPage({viewport:{width,height:900}}),errors=[],writes=[],unexpected=[];
     const first={id:'first',sequence:1,reference:'SYNTHETIC-ONE',amount:'58.00',balance_after:'58.00',receipt_status:'stamped',receipt_uuid:'synthetic-rep-1',fiscal_ready:true,cancellation_status:'not_requested'};
-    const second={id:'second',sequence:2,reference:'SYNTHETIC-TWO',amount:'58.00',balance_after:'0.00',receipt_status:scenario==='ready'?'stamped':scenario==='unknown'?'unknown':'not_sent',receipt_uuid:scenario==='ready'?'synthetic-rep-2':null,fiscal_ready:scenario==='ready'};
+    const second={id:'second',sequence:2,reference:'SYNTHETIC-TWO',amount:'58.00',balance_after:'0.00',receipt_status:scenario==='ready'?'stamped':['processing','unknown'].includes(scenario)?scenario:'not_sent',receipt_uuid:scenario==='ready'?'synthetic-rep-2':null,fiscal_ready:scenario==='ready'};
     const summary={supported:true,environment:'sandbox',receipt_stamp_enabled:true,invoice_fiscal_ready:scenario!=='cancelled-invoice',invoice_cancellation_status:scenario==='cancelled-invoice'?'cancelled':'not_requested',total:'116.00',paid:'116.00',balance:'0.00',payments:[first,second]};
     page.on('pageerror',e=>errors.push(e.message));
     await page.route('**/*',async route=>{
@@ -60,6 +60,7 @@ try {
       await box.getByText(scenario==='ready'?'Complementos de los pagos registrados: sin pendientes en Cotiza.':scenario==='cancellation'?'2 pagos con complemento pendiente de emisión, recuperación o revisión.':'1 pago con complemento pendiente de emisión, recuperación o revisión.',{exact:true}).waitFor();
     }
     assert.equal(await page.getByRole('button',{name:'Timbrar complemento en pruebas',exact:true}).count(),0);
+    if(['processing','unknown'].includes(scenario))assert.equal(await page.getByRole('button',{name:'Recuperar XML sin volver a timbrar',exact:true}).count(),scenario==='unknown'?1:0);
     assert.equal(await page.evaluate(()=>document.documentElement.scrollWidth>innerWidth),false);
     await page.screenshot({path:path.join(artifacts,`${scenario}-${width}.png`),fullPage:true});
     assert.deepEqual(errors,[]);assert.deepEqual(writes,[]);assert.deepEqual(unexpected,[]);

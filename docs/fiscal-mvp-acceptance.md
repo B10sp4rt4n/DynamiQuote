@@ -1,6 +1,6 @@
 # Matriz de aceptación del MVP fiscal de Cotiza
 
-Actualización: 10 de noviembre de 2026. Base de Cotiza: `ae9c960b76a137332ed19aa5be9fd731a2693b85` (PR89); Digestor publicado: `631244c5d66abce83fa93f1676325cc4f19a2910` (PR20). Las correcciones de seguimiento descritas al final están preparadas en esta rama; su publicación se informa por separado.
+Actualización: 11 de noviembre de 2026. La aceptación controlada de recuperación REP se detalla en [rep-recovery-acceptance.md](rep-recovery-acceptance.md); la evidencia de esta revisión se registra en su PR. Las referencias siguientes conservan su procedencia histórica. Fecha base: 10 de noviembre de 2026. Base de Cotiza: `ae9c960b76a137332ed19aa5be9fd731a2693b85` (PR89); Digestor publicado: `631244c5d66abce83fa93f1676325cc4f19a2910` (PR20). Las correcciones de seguimiento descritas al final están preparadas en esta rama; su publicación se informa por separado.
 
 El perfil de salida es factura nacional MXN con IVA16, PUE o PPD/99, pagos y REP del mismo perfil. No incluye todas las modalidades de CFDI. Código aprobado, prueba aislada, prueba del PAC sandbox y operación productiva son evidencias diferentes.
 
@@ -14,7 +14,8 @@ El perfil de salida es factura nacional MXN con IVA16, PUE o PPD/99, pagos y REP
 | Factura y cancelación reales | Conservar XML y acuse; distinguir solicitud de cancelación confirmada | PROP-2026-0299, total1.16, UUID a1974ca9-3fab-4911-95d4-551533546034; última consulta SAT documentada Cancelado | Recorrido productivo comprobado; sin pago ni REP |
 | PPD/99 y pago total | Un pago, un REP, relación con factura, IVA, total y saldo0 | PROP-2026-0297,116; `test_payment_cycle.py`, `test_ppd_production.py`, `fiscal-cycle.integration.test.ts` | Comprobado en sandbox y pruebas aisladas; REP productivo abierto |
 | Dos parcialidades | Secuencias1/2, saldos116→76→0, base100+IVA16; no duplicar pagos | PROP-2026-0298, pagos40 y76; XML cotejados | Recorrido sandbox comprobado; su sustitución sigue abierta |
-| Respuesta perdida del REP | Una emisión; bloqueo de repetición y recuperación por UUID confirmado; saldo intacto | `proposal-payment-panel.test.tsx`, `test_billing_cancellations.py`, `test_payment_cycle.py`; ensayo público de recuperación del9nov | Comprobado en pruebas aisladas/sandbox; no acredita pérdida en transporte SOAP productivo |
+| Respuesta perdida del REP | Una emisión; bloqueo de repetición y recuperación por UUID confirmado; saldo intacto | `rep-recovery.integration.test.ts`, `proposal-payment-panel.test.tsx`, PostgreSQL de ambos sistemas y fixture sin PAC; ensayo público histórico del9nov | Aceptación controlada conectada comprobada; falta caso PPD/REP productivo |
+| REP todavía en proceso | Bloquear reemisión y recuperación mientras el trabajador está activo; consultar antes de continuar | Regresión de UI processing/unknown y concurrencia HTTP/PostgreSQL | Ajuste de pantalla preparado; bloqueo backend ya existente |
 | Cancelación de REP | Acuse no equivale a cancelación; cancelar XML no borra pago | `test_billing_cancellations.py`, `test_fiscal_production_operations.py`, `proposal-cancellations.test.ts` | Controles probados; validación productiva con operación real pendiente |
 | Sustitución de factura | Relación04, mismos importes/RFC; seleccionar sustituta sólo después de cancelar anterior | `test_fiscal_revisions.py`, `fiscal-correction.integration.test.ts`, `proposal-correction-panel.test.tsx` | Pruebas controladas; no declarar recorrido productivo completo |
 | Sustitución de REP | Corregir forma/referencia sin cambiar pago, secuencia, saldo o XML original | Mismas suites; sustituto ec235394-e017-4169-be60-ee3445fbea71 en PROP-2026-0298 | Emisión sandbox demostrada; cancelación del anterior pendiente del PAC QA |
@@ -38,7 +39,7 @@ Los nombres cortos de pruebas frontend corresponden a `cotiza-web/`; los de Pyth
 | Factura con pagos ya registrados | Corrección de factura bloqueada; cancelación directa bloqueada por pagos; no borrar cobros para continuar | Revisión de documentos y REP; sin cancelación económica automática |
 | REP de una parcialidad anterior | Corrección limitada al último complemento; cancelaciones se resuelven en orden inverso cuando corresponde | Mantener control de secuencia y pagos |
 | Pérdida de respuesta antes de conocer UUID | Consulta al proveedor con referencia exacta; no reemitir, descartar ni liberar por tiempo | Bloqueo hasta evidencia concluyente |
-| Seguimiento periódico SAT, descarga emitidos/recibidos y CIMA | Consulta manual publicada; programación, e.firma/descarga y contrato CIMA aún pendientes | Ampliaciones posteriores; no sirven para declarar cerrado el REP productivo |
+| Seguimiento periódico SAT, descarga emitidos/recibidos y CIMA | Consulta manual y periódica publicadas/verificadas (PR96/21); e.firma/descarga y contrato CIMA pendientes | El seguimiento no cierra REP productivo ni resuelve incidentes del PAC |
 
 Controles de moneda e impuestos: `invoice/route.test.ts`, `proposal-invoice.test.ts` y `test_fiscal_rules.py`. Corrección/cancelación con pagos: `test_fiscal_revisions.py`, `test_billing_cancellations.py`. No se compró servicio ni se consumieron timbres en esta entrega.
 

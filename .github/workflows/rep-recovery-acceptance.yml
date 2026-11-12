@@ -1,0 +1,86 @@
+name: REP recovery acceptance
+on:
+  push:
+    branches: [test/rep-recovery-acceptance]
+  pull_request:
+    branches: [main]
+    paths:
+      - 'cotiza-web/**/rep-recovery*'
+      - 'cotiza-web/components/propuestas/proposal-payment-panel*'
+      - 'cotiza-web/lib/integrations/proposal-payments*'
+      - 'cotiza-web/app/api/proposals/**/invoice/payments/**'
+      - 'scripts/check_rep_recovery.mjs'
+      - '.github/workflows/rep-recovery-acceptance.yml'
+permissions:
+  contents: read
+concurrency:
+  group: rep-recovery-${{ github.ref }}
+  cancel-in-progress: true
+jobs:
+  connected:
+    runs-on: ubuntu-24.04
+    timeout-minutes: 15
+    services:
+      postgres:
+        image: postgres:18
+        env:
+          POSTGRES_USER: fiscal_ci
+          POSTGRES_PASSWORD: synthetic-ci-only
+          POSTGRES_DB: cotiza_synthetic
+        ports: ['5432:5432']
+        options: >-
+          --health-cmd 'pg_isready -U fiscal_ci -d cotiza_synthetic'
+          --health-interval 5s --health-timeout 5s --health-retries 10
+    env:
+      DATABASE_URL: postgresql://fiscal_ci:synthetic-ci-only@127.0.0.1:5432/cotiza_synthetic
+      COTIZA_TEST_DATABASE_URL: postgresql://fiscal_ci:synthetic-ci-only@127.0.0.1:5432/cotiza_synthetic
+      REP_FIXTURE_DATABASE_URL: postgresql+psycopg://fiscal_ci:synthetic-ci-only@127.0.0.1:5432/digestor_fiscal_test
+      NEXT_TELEMETRY_DISABLED: '1'
+    steps:
+      - uses: actions/checkout@11bd71901bbe5b1630ceea73d27597364c9af683
+        with:
+          persist-credentials: false
+      - uses: actions/setup-node@49933ea5288caeca8642d1e84afbd3f7d6820020
+        with:
+          node-version: '22'
+      - run: npm ci --no-audit --no-fund
+      - name: Checkout exact synthetic Digestor fixture
+        uses: actions/checkout@11bd71901bbe5b1630ceea73d27597364c9af683
+        with:
+          repository: B10sp4rt4n/digestor__fiscal
+          ref: e833926c7bbc78072707e3440253078108664dbb
+          path: digestor-fixture
+          persist-credentials: false
+      - name: Install isolated Digestor test dependencies
+        run: |
+          python3 -m venv "$RUNNER_TEMP/rep-venv"
+          "$RUNNER_TEMP/rep-venv/bin/pip" install --index-url https://pypi.org/simple --only-binary=:all: -r digestor-fixture/requirements.txt -r digestor-fixture/requirements.fiscal-test.txt
+      - run: npm --prefix cotiza-web run db:generate
+      - name: Initialize both disposable SQL stores
+        working-directory: cotiza-web
+        run: |
+          ./node_modules/.bin/prisma migrate diff --from-empty --to-schema prisma/schema.prisma --script > "$RUNNER_TEMP/rep-schema.sql"
+          SCHEMA_PATH="$RUNNER_TEMP/rep-schema.sql" node --input-type=module <<'JS'
+          import pg from 'pg'; import {readFileSync} from 'node:fs';
+          const client=new pg.Client({connectionString:process.env.DATABASE_URL});
+          await client.connect();
+          try {
+            await client.query('CREATE DATABASE digestor_fiscal_test');
+            await client.query(readFileSync(process.env.SCHEMA_PATH,'utf8'));
+          } finally {await client.end();}
+          JS
+      - name: Prove exact recovery and no duplicate payment or REP through real routes
+        run: |
+          DIGESTOR_FIXTURE_ROOT="$GITHUB_WORKSPACE/digestor-fixture" \
+          DIGESTOR_FIXTURE_PYTHON="$RUNNER_TEMP/rep-venv/bin/python" \
+          REP_ACCEPTANCE_ARTIFACTS="$GITHUB_WORKSPACE/artifacts/rep-recovery" \
+          node scripts/check_rep_recovery.mjs
+      - name: Compile Next.js consumer
+        run: npm --prefix cotiza-web run build
+      - uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02
+        if: always()
+        with:
+          name: rep-recovery-acceptance
+          path: artifacts/rep-recovery
+          retention-days: 3
+          if-no-files-found: error
