@@ -18,6 +18,21 @@ jobs:
           from html.parser import HTMLParser
           import re
           base = 'https://verificacfdi.facturaelectronica.sat.gob.mx/default.aspx'
+          import ssl, subprocess, tempfile
+          host=urlparse(base).netloc
+          chain=subprocess.run(['openssl','s_client','-connect',host+':443','-servername',host,'-showcerts','-verify_return_error','-verify_hostname',host],input='',capture_output=True,text=True,timeout=25)
+          leaf=re.search(r'-----BEGIN CERTIFICATE-----.*?-----END CERTIFICATE-----',chain.stdout,re.S).group()
+          issuerUrl='https://secure.globalsign.com/cacert/gsrsaovsslca2018.crt'
+          with urlopen(issuerUrl,timeout=25) as response: issuer=response.read()
+          issuerPem=issuer.decode() if issuer.startswith(b'-----BEGIN') else ssl.DER_cert_to_PEM_cert(issuer)
+          with tempfile.TemporaryDirectory() as directory:
+              leafpath=directory+'/leaf.pem'; issuerpath=directory+'/issuer.pem'
+              open(leafpath,'w').write(leaf);open(issuerpath,'w').write(issuerPem)
+              verified=subprocess.run(['openssl','verify','-purpose','sslserver','-verify_hostname',host,'-CApath','/etc/ssl/certs','-untrusted',issuerpath,leafpath],capture_output=True,text=True)
+              print('CHAIN_VERIFICATION',verified.returncode,verified.stdout,verified.stderr)
+              if verified.returncode: raise SystemExit(1)
+          ctx=ssl.create_default_context()
+          ctx.load_verify_locations(cadata=issuerPem)
           class Page(HTMLParser):
               def __init__(self):
                   super().__init__(); self.scripts=[]; self.inline=[]; self.active=False
@@ -33,7 +48,7 @@ jobs:
               def handle_data(self,data):
                   if self.active: self.inline.append(data)
           def fetch(url):
-              with urlopen(url,timeout=25) as response:
+              with urlopen(url,timeout=25,context=ctx) as response:
                   print('HTTP',response.status,url)
                   return response.read(500000).decode('utf-8',errors='replace')
           try:
