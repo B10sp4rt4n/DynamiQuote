@@ -12,6 +12,7 @@ afterEach(() => vi.restoreAllMocks());
 
 it("genera el QR con la secuencia SAT para precargar UUID y ambos RFC", async () => {
   const cfdi = parseCfdiXml(INVOICE_BASE64);
+  cfdi.sello = "SELLO-SINTETICO-abcDEF==";
   const before = JSON.stringify(cfdi);
   const render = vi.spyOn(QRCode, "toDataURL");
 
@@ -19,14 +20,14 @@ it("genera el QR con la secuencia SAT para precargar UUID y ambos RFC", async ()
 
   const encoded = String(render.mock.calls[0]?.[0]);
   expect(encoded).toBe(
-    `https://verificacfdi.facturaelectronica.sat.gob.mx/default.aspx?id=${cfdi.timbre.uuid}` +
-    `&re=${cfdi.emisor.rfc}&rr=${cfdi.receptor.rfc}&tt=116.000000&fe=${encodeURIComponent(cfdi.sello.slice(-8))}`,
+    `https://verificacfdi.facturaelectronica.sat.gob.mx/default.aspx?&id=${cfdi.timbre.uuid}` +
+    `&re=${cfdi.emisor.rfc}&rr=${cfdi.receptor.rfc}&tt=116.000000&fe=abcDEF==`,
   );
   expect([...new URL(encoded).searchParams.keys()]).toEqual(["id", "re", "rr", "tt", "fe"]);
   expect(JSON.stringify(cfdi)).toBe(before);
 });
 
-it("conserva caracteres reservados de RFC y sello como valores de consulta", async () => {
+it("codifica el RFC y conserva el sello literal que reconoce el portal SAT", async () => {
   const cfdi = parseCfdiXml(INVOICE_BASE64);
   cfdi.emisor.rfc = "A&B010101AAA";
   cfdi.sello = "SELLO-+A/Bcd==";
@@ -35,10 +36,12 @@ it("conserva caracteres reservados de RFC y sello como valores de consulta", asy
 
   await buildCfdiQrDataUrl(cfdi);
 
-  const params = new URL(String(render.mock.calls[0]?.[0])).searchParams;
+  const encoded = String(render.mock.calls[0]?.[0]);
+  const params = new URL(encoded).searchParams;
   expect([...params.keys()]).toEqual(["id", "re", "rr", "tt", "fe"]);
   expect(params.get("re")).toBe("A&B010101AAA");
-  expect(params.get("fe")).toBe("+A/Bcd==");
+  expect(encoded).toContain("&fe=+A/Bcd==");
+  expect(encoded).not.toMatch(/%3D|%2B|%2F/i);
   expect(params.size).toBe(5);
 });
 
@@ -49,7 +52,7 @@ it("usa el UUID y total cero del REP en su propio enlace SAT", async () => {
   await buildCfdiQrDataUrl(cfdi);
 
   const url = new URL(String(render.mock.calls[0]?.[0]));
-  expect(url.search).toMatch(/^\?id=/);
+  expect(url.search).toMatch(/^\?&id=/);
   expect(url.searchParams.get("id")).toBe(RECEIPT_UUID);
   expect(url.searchParams.get("re")).toBe(cfdi.emisor.rfc);
   expect(url.searchParams.get("rr")).toBe(cfdi.receptor.rfc);
