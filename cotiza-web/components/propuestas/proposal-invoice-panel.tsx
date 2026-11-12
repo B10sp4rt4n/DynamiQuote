@@ -387,6 +387,10 @@ export function ProposalInvoicePanel({ canPrepareInvoice, proposalId, recipientC
         {error ? <p role="alert" className="mt-2 text-sm text-rose-700">{error}</p> : null}
         {invoice?.draftId ? <>
           <p className="mt-2 text-sm text-zinc-600">La prefactura se conserva para consulta. Para preparar o timbrar una factura, la propuesta debe estar marcada como Ganada.</p>
+          <a className="mr-2 mt-3 inline-block rounded-lg border border-zinc-300 bg-white px-3 py-2 text-sm"
+            href={`/api/proposals/${proposalId}/invoice/pdf?download=1`}>
+            Descargar PDF de prefactura
+          </a>
           <button type="button" className="mt-3 rounded-lg border border-zinc-300 px-3 py-2 text-sm"
             onClick={() => setShowPreview(previous => !previous)}>
             {showPreview ? "Ocultar vista previa" : "Ver vista previa"}
@@ -553,6 +557,11 @@ export function ProposalInvoicePanel({ canPrepareInvoice, proposalId, recipientC
             >
               {showPreview ? "Ocultar vista previa" : "Ver vista previa"}
             </button>
+            {!draftDirty && !generating && !stamping ? <a
+              className="rounded-lg border border-zinc-300 bg-white px-3 py-1.5 text-xs font-medium text-zinc-700 transition hover:bg-zinc-50"
+              href={`/api/proposals/${proposalId}/invoice/pdf?download=1`}>
+              Descargar PDF de prefactura
+            </a> : null}
             <button
               className="rounded-lg border border-rose-300 bg-rose-50 px-3 py-1.5 text-xs font-medium text-rose-800 transition hover:bg-rose-100 disabled:opacity-60"
               disabled={stamping || generating || draftDirty || missingFields.length > 0}

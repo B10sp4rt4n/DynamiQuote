@@ -16,7 +16,7 @@ type RouteContext = {
   params: Promise<{ proposalId: string }>;
 };
 
-export async function GET(_: Request, context: RouteContext) {
+export async function GET(request: Request, context: RouteContext) {
   const tenant = await getCurrentTenantContext();
   if (!tenant) {
     return NextResponse.json({ error: "No autorizado" }, { status: 401 });
@@ -77,7 +77,7 @@ export async function GET(_: Request, context: RouteContext) {
     return new NextResponse(new Uint8Array(pdfBuffer), {
       headers: {
         "Cache-Control": "no-store",
-        "Content-Disposition": `inline; filename="prefactura_${proposalId}.pdf"`,
+        "Content-Disposition": `${new URL(request.url).searchParams.get("download") === "1" ? "attachment" : "inline"}; filename="prefactura_${proposalId.replace(/[^a-zA-Z0-9_-]/g, "_")}.pdf"`,
         "Content-Type": "application/pdf",
       },
       status: 200,

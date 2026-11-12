@@ -64,6 +64,7 @@ it("preserves an old draft preview without allowing issuance after removing the 
   fetcher.mockResolvedValue({ ok: true, json: async () => ({ invoice: { status: "draft", draftId: "draft-1" }, fiscalBasis: basis }) });
   await show(null);
   expect(host.textContent).toContain("La prefactura se conserva para consulta");
+  expect(host.querySelector('a[href="/api/proposals/p1/invoice/pdf?download=1"]')?.textContent).toBe("Descargar PDF de prefactura");
   const buttons = [...host.querySelectorAll<HTMLButtonElement>("#facturacion button")];
   expect(buttons.map(button => button.textContent)).toEqual(["Ver vista previa"]);
   await act(async () => buttons[0].click());

@@ -116,6 +116,7 @@ try {
     await page.getByRole('button', { name: 'Regenerar prefactura', exact: true }).waitFor();
     assert.equal(counts.draft, 1);
     await page.getByText('Prefactura preparada. Puedes revisar su vista previa.', { exact: true }).waitFor();
+    assert.equal(await page.getByRole('link', { name: 'Descargar PDF de prefactura', exact: true }).getAttribute('href'), '/api/proposals/synthetic/invoice/pdf?download=1');
     await capture('draft');
     await page.reload();
     await page.getByText('Claves vigentes y confirmadas para esta revisión.', { exact: true }).waitFor();
@@ -124,6 +125,7 @@ try {
     await capture('reopened');
     assert.equal(await page.getByRole('button', { name: 'Timbrar (irreversible)', exact: true }).isEnabled(), true);
     await page.getByLabel('Producto o servicio SAT', { exact: true }).fill('Otra operación');
+    assert.equal(await page.getByRole('link', { name: 'Descargar PDF de prefactura', exact: true }).count(), 0);
     assert.equal(await page.getByRole('button', { name: 'Regenerar prefactura', exact: true }).isEnabled(), false);
     assert.equal(await page.getByRole('button', { name: 'Timbrar (irreversible)', exact: true }).isEnabled(), false);
     await capture('edited');
