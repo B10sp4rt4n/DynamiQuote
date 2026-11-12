@@ -26,3 +26,9 @@ Implementación local en feat/invoice-numbering; sin publicación, despliegue ni
 ## Preparación de liberación
 
 Ensayo del panel real aprobado en Chromium headless 153 a 1360/390 px con datos sintéticos: vistas previa simple/anual, conflicto, guardado y cambio de empresa; cero errores del navegador y cero desbordamientos. La compilación Vercel de la rama 3b1db9f está READY. GitHub Actions sigue en cola; no se declara aprobado.
+
+## PDF de prefactura y folio estimado
+
+En la propuesta, junto a “Ver vista previa”, aparece “Descargar PDF de prefactura” cuando existe una prefactura vigente. Si se edita la captura, se oculta la descarga hasta regenerar; el historial de prefacturas continúa accesible aunque la oportunidad ya no esté ganada. La ruta PDF mantiene permisos por tenant y visibilidad de propuesta, devuelve attachment con ?download=1 y conserva la representación de CFDI timbrado. La vista previa y el PDF incluyen el próximo folio estimado cuando Digestor administra la numeración y aún no hay reserva. El aviso aclara que puede cambiar y se confirma al iniciar el timbrado.
+
+Comprobados 26 casos de flujo/interfaz y API, TypeScript y ESLint. Sin solicitudes de timbrado real.
