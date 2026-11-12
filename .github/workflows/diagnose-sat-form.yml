@@ -8,16 +8,15 @@ jobs:
     runs-on: ubuntu-24.04
     timeout-minutes: 3
     steps:
-      - name: Read public verification page and relevant scripts
+      - name: Compare QR prefix using public CFDI fixture
         shell: bash
         run: |
           python - <<'PY'
           from urllib.request import urlopen
-          from urllib.error import HTTPError, URLError
-          from urllib.parse import urljoin, urlparse
+          from urllib.parse import urlparse
           from html.parser import HTMLParser
           import re
-          base = 'https://verificacfdi.facturaelectronica.sat.gob.mx/default.aspx'
+          base='https://verificacfdi.facturaelectronica.sat.gob.mx/default.aspx'
           import ssl, subprocess, tempfile
           host=urlparse(base).netloc
           chain=subprocess.run(['openssl','s_client','-connect',host+':443','-servername',host,'-showcerts','-verify_return_error','-verify_hostname',host],input='',capture_output=True,text=True,timeout=25)
@@ -33,58 +32,18 @@ jobs:
               if verified.returncode: raise SystemExit(1)
           ctx=ssl.create_default_context()
           ctx.load_verify_locations(cadata=issuerPem)
-          class Page(HTMLParser):
-              def __init__(self):
-                  super().__init__(); self.scripts=[]; self.inline=[]; self.active=False
-              def handle_starttag(self, tag, attrs):
-                  attrs=dict(attrs)
-                  if tag=='script':
-                      self.active=True
-                      if attrs.get('src'): self.scripts.append(attrs['src'])
-                  if tag=='input':
-                      print('INPUT',attrs.get('id',''),attrs.get('name',''),attrs.get('type','text'))
-              def handle_endtag(self,tag):
-                  if tag=='script': self.active=False
-              def handle_data(self,data):
-                  if self.active: self.inline.append(data)
-          def fetch(url):
-              with urlopen(url,timeout=25,context=ctx) as response:
-                  print('HTTP',response.status,url)
-                  return response.read(500000).decode('utf-8',errors='replace')
-          try:
-              html=fetch(base)
-          except (HTTPError,URLError,TimeoutError) as error:
-              print('PAGE_UNAVAILABLE',type(error).__name__,str(error))
-              import subprocess, tempfile
-              host=urlparse(base).netloc
-              probe=subprocess.run(['openssl','s_client','-connect',host+':443','-servername',host,'-showcerts','-verify_return_error','-verify_hostname',host],input='',capture_output=True,text=True,timeout=25)
-              print('TLS_VERIFY',probe.returncode,probe.stderr[-4000:])
-              certs=re.findall(r'-----BEGIN CERTIFICATE-----.*?-----END CERTIFICATE-----',probe.stdout,re.S)
-              with tempfile.TemporaryDirectory() as directory:
-                  for index,cert in enumerate(certs):
-                      certpath=directory+'/'+str(index)+'.pem'
-                      open(certpath,'w').write(cert)
-                      metadata=subprocess.run(['openssl','x509','-in',certpath,'-noout','-subject','-issuer','-ext','authorityInfoAccess'],capture_output=True,text=True,check=True)
-                      print('CERTIFICATE_METADATA',index,metadata.stdout)
-              raise SystemExit(0)
-          page=Page(); page.feed(html)
-          print('SCRIPT_SOURCES',page.scripts)
-          print('INLINE_SCRIPTS_BEGIN')
-          print('\n'.join(page.inline)[:60000])
-          print('INLINE_SCRIPTS_END')
-          for src in page.scripts[:25]:
-              url=urljoin(base,src)
-              if urlparse(url).netloc!=urlparse(base).netloc: continue
-              if re.search(r'jquery|bootstrap|modernizr|WebResource|ScriptResource|angular|respond|popper',src,re.I): continue
-              try:
-                  script=fetch(url)
-              except (HTTPError,URLError,TimeoutError) as error:
-                  print('SCRIPT_UNAVAILABLE',src,type(error).__name__); continue
-              lines=script.splitlines()
-              indexes=set()
-              for i,line in enumerate(lines):
-                  if re.search(r'location|query|string.*id|uuid|rfc|expres|[Pp]aram|decode|onload',line,re.I):
-                      indexes.update(range(max(0,i-2),min(len(lines),i+4)))
-              print('SCRIPT_RELEVANT',src)
-              for i in sorted(indexes)[:150]: print(str(i+1)+': '+lines[i][:3000])
+          class Fields(HTMLParser):
+              def __init__(self): super().__init__(); self.fields={}
+              def handle_starttag(self,tag,attrs):
+                  a=dict(attrs); name=a.get('id','')
+                  if tag=='input' and name in ['ctl00_MainContent_TxtUUID','ctl00_MainContent_TxtRfcEmisor','ctl00_MainContent_TxtRfcReceptor']:
+                      self.fields[name]=a.get('value','')
+          # Public fixture: nodecfdi/cfdi-expresiones tests/unit/extractors/comprobante40.spec.ts
+          query='id=04BF2854-FE7D-4377-9196-71248F060ABB&re=CSM190311AH6&rr=MCI7306249Y1&tt=459.36&fe=5tSZhA=='
+          for label,prefix in [('without_separator','?'),('with_separator','?&')]:
+              with urlopen(base+prefix+query,timeout=25,context=ctx) as response:
+                  html=response.read(500000).decode('utf-8',errors='replace')
+                  parser=Fields();parser.feed(html)
+                  print('PREFIX_RESULT',label,'HTTP',response.status,'FIELDS',parser.fields)
+                  print('RESULT_PANEL',label,'ctl00_MainContent_PnlResultados' in html)
           PY
