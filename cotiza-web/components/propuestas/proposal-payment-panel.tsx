@@ -162,7 +162,8 @@ export function ProposalPaymentPanel({ proposalId, satTrackingEnabled = false, c
             {canIssue && summary.receipt_stamp_enabled && previousIssued && ["not_sent", "rejected"].includes(payment.receipt_status) ? <button type="button" disabled={busy} className="rounded border border-amber-500 px-3 py-2 disabled:opacity-50" onClick={() => void receipt(payment.id, "stamp")}>{summary.environment === 'production' ? 'Emitir complemento fiscal real' : 'Timbrar complemento en pruebas'}</button> : null}
           </div>
           {["processing", "unknown"].includes(payment.receipt_status) ? <p className="mt-2 text-xs text-amber-900">No repitas el timbrado. Consulta el estado y concilia con el proveedor antes de continuar.</p> : null}
-          {canIssue && ['processing', 'unknown'].includes(payment.receipt_status) ? <div className="mt-3 space-y-2">
+          {payment.receipt_status === 'processing' ? <p className="mt-2 text-xs text-zinc-600">El complemento sigue en proceso. Consulta el saldo y estado antes de intentar recuperarlo.</p> : null}
+          {canIssue && payment.receipt_status === 'unknown' ? <div className="mt-3 space-y-2">
             <label className="block text-sm">UUID del complemento confirmado por el proveedor<input className="mt-1 w-full rounded border p-2" value={recoveryUuid[payment.id] ?? ''} onChange={event => setRecoveryUuid(previous => ({ ...previous, [payment.id]: event.target.value }))} /></label>
             <button type="button" disabled={busy || !recoveryUuid[payment.id]} className="rounded border px-3 py-2 disabled:opacity-50" onClick={() => void recover(payment.id)}>Recuperar XML sin volver a timbrar</button>
           </div> : null}
