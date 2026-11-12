@@ -29,7 +29,7 @@ jobs:
           POSTGRES_DB: cotiza_synthetic
         ports: ['5432:5432']
         options: >-
-          --health-cmd 'pg_isready -U fiscal_ci -d cotiza_synthetic'
+          --health-cmd "pg_isready -U fiscal_ci -d cotiza_synthetic"
           --health-interval 5s --health-timeout 5s --health-retries 10
     env:
       DATABASE_URL: postgresql://fiscal_ci:synthetic-ci-only@127.0.0.1:5432/cotiza_synthetic
