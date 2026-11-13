@@ -7,7 +7,7 @@ export default async function WinApprovalsPage() {
   if (!tenant?.userId || tenant.authMode !== "clerk") return <p>Inicia sesión para consultar tus autorizaciones.</p>;
   const actor = { ...tenant, userId: tenant.userId };
   const [cases, notices] = await Promise.all([listWinCases(tenant.id, actor), getApprovalNotices(tenant.id, actor)]);
-  return <section className="space-y-4 rounded-xl border border-zinc-200 bg-white p-5">
+  return <section className="space-y-4 rounded-xl border border-zinc-200 bg-white p-5 text-zinc-900">
     <h1 className="text-2xl font-semibold">Autorizaciones de ganada</h1>
     <p className="text-sm text-zinc-700">{tenant.name} · Aceptaciones que puedes consultar por tu responsabilidad o acceso comercial.</p>
     {tenant.isSuperAdmin || tenant.userRole === "owner" ? <Link className="block text-sm text-blue-800 underline" href="/configuracion/consolidacion">Configurar reglas de esta empresa</Link> : null}
