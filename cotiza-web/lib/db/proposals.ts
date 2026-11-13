@@ -15,6 +15,7 @@ import {
 } from "@/lib/db/proposal-approvals";
 import { prisma } from "@/lib/db/prisma";
 import { hasAnotherBusinessWin } from "@/lib/db/commercial-win-guard";
+import { invalidateWinCase, lockWinPolicy, requiresWinCircuit } from "@/lib/db/won-consolidation";
 import { NOT_DISCARDED_WHERE } from "@/lib/db/proposal-filters";
 import { closeDateInstant, earliestCommercialStart, isValidCloseDate, mexicoCalendarDate } from "@/lib/domain/commercial-close-date";
 import {
@@ -1792,7 +1793,7 @@ export async function getProposalWorkflowByTenant(
   };
 }
 
-export type SetProposalOutcomeResult = "forbidden" | "invalid_status" | "invalid_date" | "conflict" | "business_already_won" | "not_found" | "updated";
+export type SetProposalOutcomeResult = "forbidden" | "invalid_status" | "invalid_date" | "conflict" | "business_already_won" | "consolidation_required" | "not_found" | "updated";
 
 export type ProposalOutcomeDateInput = {
   closedOn?: string;
@@ -1815,6 +1816,7 @@ export async function setProposalOutcomeByTenant(
   dateInput: ProposalOutcomeDateInput = {},
 ): Promise<SetProposalOutcomeResult> {
   return prisma.$transaction(async (tx): Promise<SetProposalOutcomeResult> => {
+    await lockWinPolicy(tx, tenantId);
     // Two proposals (including alternatives on different opportunities) can
     // otherwise both pass a sibling lookup before either commits its win.
     if (outcome === "won") await tx.$executeRaw`SELECT pg_advisory_xact_lock(hashtextextended(${`business-win:${tenantId}`}, 0))`;
@@ -1842,6 +1844,9 @@ export async function setProposalOutcomeByTenant(
     }
     if (outcome === "won" && row.outcome !== "won" && await hasAnotherBusinessWin(tx, tenantId, row)) {
       return "business_already_won";
+    }
+    if (outcome === "won" && row.outcome !== "won" && await requiresWinCircuit(tx, tenantId, proposalId)) {
+      return "consolidation_required";
     }
     const overrideReason = dateInput.closeDateOverrideReason?.trim();
     if (dateInput.closeDateOverrideReason !== undefined) {
@@ -1878,6 +1883,7 @@ export async function setProposalOutcomeByTenant(
       data: { outcome, outcome_at: outcomeAt },
       where: { proposal_id: proposalId },
     });
+    if (outcome !== "won") await invalidateWinCase(tx, tenantId, proposalId, actor.userId ?? "unknown", "outcome_changed");
     await tx.proposal_audit_events.create({
       data: {
         created_at: now,
@@ -1906,6 +1912,7 @@ async function clearCommercialOutcomeForStatus(
 ): Promise<void> {
   if (OUTCOME_DECISION_STATUSES.has(nextStatus)) return;
   const row = await tx.proposals.findUnique({ where: { proposal_id: proposalId } });
+  if (row) await invalidateWinCase(tx, row.tenant_id, proposalId, actorUserId ?? "unknown", "workflow_status");
   if (!row || (row.outcome !== "won" && row.outcome !== "lost")) return;
   await tx.proposals.update({
     data: { outcome: null, outcome_at: null }, where: { proposal_id: proposalId },
@@ -2423,6 +2430,9 @@ export async function updateProposalWorkflowByTenant(
     });
 
     await clearCommercialOutcomeForStatus(tx, proposalId, nextStatus, actor?.userId ?? null);
+    if (hasContentUpdate && nextStatus === "approved") {
+      await invalidateWinCase(tx, tenantId, proposalId, actor?.userId ?? "unknown", "document_changed");
+    }
 
     const termsToPersist = input.termsAndConditions;
     const issuerCompanyToPersist = input.issuerCompany;

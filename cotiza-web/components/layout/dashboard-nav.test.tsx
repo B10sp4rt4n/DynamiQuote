@@ -30,6 +30,6 @@ it("closes after choosing a section while preserving commercial order and the ch
   link.addEventListener("click", event => event.preventDefault());
   await act(async () => link.click());
   expect(toggle.getAttribute("aria-expanded")).toBe("false");
-  expect([...container.querySelectorAll("nav a")].map(a => a.textContent)).toEqual(["Inicio", "Clientes", "Oportunidades", "Cotizaciones", "Propuestas", "KPIs", "Paquetes", "Configuración"]);
+  expect([...container.querySelectorAll("nav a")].map(a => a.textContent)).toEqual(["Inicio", "Clientes", "Oportunidades", "Cotizaciones", "Propuestas", "KPIs", "Paquetes", "Autorizaciones", "Configuración"]);
   expect(container.querySelector("summary")?.textContent).toContain("Actualizamos el orden del menú");
 });

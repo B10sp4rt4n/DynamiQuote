@@ -5,6 +5,7 @@ import { afterEach, beforeEach, expect, it, vi } from "vitest";
 import type { ProposalWorkflowDetail } from "@/lib/db/proposals";
 
 vi.mock("./proposal-outcome-actions", () => ({ ProposalOutcomeActions: () => null }));
+vi.mock("./win-consolidation-panel", () => ({ WinConsolidationPanel: () => null }));
 vi.mock("./proposal-payment-panel", () => ({ ProposalPaymentPanel: () => <p>REP conservado · saldo $0</p> }));
 vi.mock("./proposal-cancellation-panel", () => ({ ProposalCancellationPanel: () => <p>Cancelación confirmada</p> }));
 vi.mock("./proposal-correction-panel", () => ({ ProposalCorrectionPanel: () => <p>Historial de sustituciones</p> }));

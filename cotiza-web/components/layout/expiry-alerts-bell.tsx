@@ -2,6 +2,7 @@
 
 import Link from "next/link";
 import { useEffect, useRef, useState } from "react";
+import type { ApprovalNotice } from "@/lib/db/won-consolidation";
 
 type ExpiringProposalAlert = {
   proposalId: string;
@@ -28,32 +29,46 @@ function formatDaysOverdue(iso: string): string {
   return days === 1 ? "Venció hace 1 día" : `Venció hace ${days} días`;
 }
 
-export function ExpiryAlertsBell() {
+export function ExpiryAlertsBell({ tenantId }: { tenantId?: string }) {
   const [open, setOpen] = useState(false);
   const [alerts, setAlerts] = useState<ExpiringProposalAlert[]>([]);
   const [unlabeled, setUnlabeled] = useState<UnlabeledProposalAlert[]>([]);
   const [loading, setLoading] = useState(false);
   const [loaded, setLoaded] = useState(false);
+  const [approvalNotices, setApprovalNotices] = useState<ApprovalNotice[]>([]);
+  const [approvalError, setApprovalError] = useState<string | null>(null);
   const containerRef = useRef<HTMLDivElement>(null);
 
   useEffect(() => {
     let cancelled = false;
+    let inFlight = false;
+    const controller = new AbortController();
 
     async function loadAlerts() {
+      if (inFlight || cancelled) return;
+      inFlight = true;
       setLoading(true);
       try {
-        const res = await fetch("/api/proposals/expiring-alerts");
+        const res = await fetch("/api/proposals/expiring-alerts", { cache: "no-store", signal: controller.signal,
+          headers: tenantId ? { "X-Tenant-Context": tenantId } : {} });
         const data = (await res.json()) as {
           alerts?: ExpiringProposalAlert[];
           unlabeled?: UnlabeledProposalAlert[];
+          approvalNotices?: ApprovalNotice[];
+          approvalError?: string | null;
+          tenantId?: string;
         };
+        if (!res.ok || (tenantId && data.tenantId !== tenantId)) throw new Error("No se pudo verificar la empresa activa");
         if (!cancelled) {
           setAlerts(data.alerts ?? []);
           setUnlabeled(data.unlabeled ?? []);
+          setApprovalNotices(data.approvalNotices ?? []);
+          setApprovalError(data.approvalError ?? null);
         }
       } catch {
-        // Silencioso: no bloquear la navegacion por un fallo de alertas.
+        if (!cancelled) setApprovalError("No se pudieron actualizar las notificaciones. Intenta de nuevo.");
       } finally {
+        inFlight = false;
         if (!cancelled) {
           setLoading(false);
           setLoaded(true);
@@ -62,10 +77,20 @@ export function ExpiryAlertsBell() {
     }
 
     void loadAlerts();
+    const refresh = () => { if (!document.hidden) void loadAlerts(); };
+    const interval = window.setInterval(refresh, 60_000);
+    window.addEventListener("focus", refresh);
+    window.addEventListener("cotiza:approval-requests-changed", refresh);
+    document.addEventListener("visibilitychange", refresh);
     return () => {
       cancelled = true;
+      controller.abort();
+      window.clearInterval(interval);
+      window.removeEventListener("focus", refresh);
+      window.removeEventListener("cotiza:approval-requests-changed", refresh);
+      document.removeEventListener("visibilitychange", refresh);
     };
-  }, []);
+  }, [tenantId]);
 
   useEffect(() => {
     function handleClickOutside(event: MouseEvent) {
@@ -81,7 +106,8 @@ export function ExpiryAlertsBell() {
   return (
     <div className="relative" ref={containerRef}>
       <button
-        aria-label="Notificaciones de vigencia"
+        aria-label={`Notificaciones${approvalNotices.length ? `: ${approvalNotices.length} solicitudes de aprobación` : ""}`}
+        aria-expanded={open}
         className="relative rounded-full p-2 text-zinc-600 transition hover:bg-zinc-100"
         onClick={() => setOpen((prev) => !prev)}
         type="button"
@@ -93,15 +119,29 @@ export function ExpiryAlertsBell() {
             strokeLinejoin="round"
           />
         </svg>
-        {loaded && alerts.length + unlabeled.length > 0 ? (
+        {loaded && alerts.length + unlabeled.length + approvalNotices.length > 0 ? (
           <span className="absolute -right-0.5 -top-0.5 flex h-4 min-w-4 items-center justify-center rounded-full bg-red-600 px-1 text-[10px] font-semibold text-white">
-            {alerts.length + unlabeled.length}
+            {alerts.length + unlabeled.length + approvalNotices.length}
           </span>
         ) : null}
       </button>
 
       {open ? (
-        <div className="absolute right-0 z-20 mt-2 w-80 rounded-xl border border-zinc-200 bg-white p-3 shadow-lg">
+        <div className="absolute right-0 z-20 mt-2 max-h-[75vh] w-80 max-w-[calc(100vw-2rem)] overflow-y-auto rounded-xl border border-zinc-200 bg-white p-3 shadow-lg">
+          <p className="px-1 text-sm font-semibold text-zinc-900">Solicitudes de aprobación ({approvalNotices.length})</p>
+          {approvalError ? <p role="alert" className="px-1 py-2 text-sm text-rose-800">{approvalError}</p> : null}
+          {!approvalNotices.length && !approvalError ? <p className="px-1 py-2 text-sm text-zinc-500">{loading ? "Consultando…" : "No tienes aprobaciones pendientes."}</p> : null}
+          <ul className="mt-2 space-y-2">{approvalNotices.map(item => <li key={item.key}>
+            <Link className="block min-h-11 break-words rounded-lg border border-blue-200 bg-blue-50 p-3 text-sm text-blue-950" href={item.href} onClick={() => setOpen(false)}>
+              <strong className="block">{item.kind === "internal" ? "Tu autorización interna está pendiente" : "Tu OK para consolidar ganada está pendiente"}</strong>
+              <span className="mt-1 block">{item.proposalNumber} · {item.recipientCompany}</span>
+              <span className="block text-xs">{item.requirements.join(" · ")}</span>
+              <span className="mt-1 block font-medium underline">Revisar solicitud →</span>
+            </Link>
+          </li>)}</ul>
+          <button className="my-2 min-h-11 rounded-lg border border-zinc-300 px-3 py-2 text-sm text-zinc-800 disabled:opacity-50" type="button" disabled={loading}
+            onClick={() => window.dispatchEvent(new Event("cotiza:approval-requests-changed"))}>Actualizar notificaciones</button>
+          <div className="my-2 border-t border-zinc-200" />
           <p className="px-1 text-sm font-semibold text-zinc-900">Propuestas por vencer</p>
           {loading ? (
             <p className="px-1 py-3 text-sm text-zinc-500">Cargando...</p>

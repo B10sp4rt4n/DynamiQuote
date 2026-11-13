@@ -1175,6 +1175,7 @@ export function ProposalShell({
       if (!response.ok || !data.proposal) {
         throw new Error(data.error ?? "No fue posible registrar la decision");
       }
+      window.dispatchEvent(new Event("cotiza:approval-requests-changed"));
 
       setApprovals(data.proposal.approvals ?? []);
       setApprovalGate(data.proposal.approvalGate ?? null);

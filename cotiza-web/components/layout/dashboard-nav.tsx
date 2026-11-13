@@ -15,6 +15,7 @@ const navigation = [
 
 const supportingNavigation = [
   { href: "/paquetes", label: "Paquetes" },
+  { href: "/autorizaciones", label: "Autorizaciones" },
   { href: "/configuracion", label: "Configuración" },
 ];
 

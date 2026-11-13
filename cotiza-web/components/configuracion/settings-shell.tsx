@@ -2276,10 +2276,6 @@ export function SettingsShell({
   const [switchingTenant, setSwitchingTenant] = useState(false);
   const [tenantSwitchMessage, setTenantSwitchMessage] = useState<string | null>(null);
 
-  useEffect(() => {
-    setSelectedTenantSlug(tenantSlug);
-  }, [tenantSlug]);
-
   async function handleTenantAssociation(slug: string) {
     if (!slug || slug === selectedTenantSlug) {
       return;
@@ -2355,6 +2351,7 @@ export function SettingsShell({
       </div>
 
       <div className="mt-4 flex gap-0 overflow-x-auto border-b border-zinc-200 whitespace-nowrap">
+        {canViewTenantConfig ? <a href="/configuracion/consolidacion" className="shrink-0 rounded-lg px-3 py-1.5 text-sm font-medium text-zinc-700 hover:bg-zinc-100">Reglas de ganada</a> : null}
         {canViewTenantConfig ? <a href="/configuracion/facturacion" className="shrink-0 rounded-lg px-3 py-1.5 text-sm font-medium text-zinc-700 hover:bg-zinc-100">Facturación: series y folios</a> : null}
         {canManageUsers ? <button className={`${tabClass("operation")} shrink-0`} onClick={() => setTab("operation")} type="button">
           Operación y canales

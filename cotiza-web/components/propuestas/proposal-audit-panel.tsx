@@ -42,6 +42,10 @@ function describe(item: ProposalAuditTimelineItem): { detail: string | null; tit
     ? ` · Excepción anterior al alta: ${String(d["closeDateOverrideReason"] ?? "motivo reservado")}` : "";
 
   switch (item.type) {
+    case "win_consolidation": {
+      const actions: Record<string, string> = { accept: "Aceptación del cliente registrada", decide: "Validación de consolidación registrada", consolidate: "Ganada consolidada", cancel: "Aceptación retirada", outcome_changed: "Circuito cerrado por cambio comercial", document_changed: "Aceptación retirada por cambio de documento", workflow_status: "Aceptación retirada por cambio de estado" };
+      return { title: actions[String(d["action"])] ?? "Consolidación actualizada", detail: "El expediente conserva los requisitos aplicados, decisiones, evidencia y responsables.", tone: "neutral" };
+    }
     case "proposal_synced_from_quote":
       return { title: "Partidas actualizadas desde cotización", detail: "Se recalculó el margen. La propuesta requiere nueva autorización.", tone: "neutral" };
     case "invoice_preparation_saved":
