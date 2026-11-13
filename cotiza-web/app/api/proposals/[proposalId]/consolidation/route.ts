@@ -3,6 +3,7 @@ import { getCurrentTenantContext } from "@/lib/auth/tenant-context";
 import { actOnWin, getWinView, WinError } from "@/lib/db/won-consolidation";
 import { winActionSchema } from "@/lib/domain/won-consolidation";
 import { enforceRateLimit } from "@/lib/utils/rate-limit";
+import { scheduleApprovalEmails } from "@/lib/email/approval-dispatch";
 type Context = { params: Promise<{ proposalId: string }> };
 function failure(error: unknown) {
   return NextResponse.json({ error: error instanceof WinError ? error.message : "No se pudo consultar o guardar el circuito. Recarga antes de continuar" },
@@ -25,6 +26,9 @@ export async function POST(request: Request, context: Context) {
   const parsed = winActionSchema.safeParse(await request.json().catch(() => null));
   if (!parsed.success) return NextResponse.json({ error: parsed.error.issues[0]?.message ?? "Revisa los datos" }, { status: 422 });
   try {
-    return NextResponse.json(await actOnWin(tenant.id, (await context.params).proposalId, { ...tenant, userId: tenant.userId }, parsed.data), { headers: { "Cache-Control": "no-store" } });
+    const proposalId = (await context.params).proposalId;
+    const view = await actOnWin(tenant.id, proposalId, { ...tenant, userId: tenant.userId }, parsed.data);
+    if (parsed.data.action === "accept" || parsed.data.action === "decide") scheduleApprovalEmails(tenant.id, proposalId);
+    return NextResponse.json(view, { headers: { "Cache-Control": "no-store" } });
   } catch (error) { return failure(error); }
 }

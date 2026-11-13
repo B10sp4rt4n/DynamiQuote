@@ -16,6 +16,7 @@ export const winRuleSchema = z.object({
 export const winPolicySchema = z.object({
   rules: z.array(winRuleSchema).max(20),
   reviewNoticeUserIds: z.array(z.string().min(1).max(200)).max(30).optional(),
+  approvalEmailEnabled: z.boolean().optional(),
 }).strict().superRefine(({ rules }, ctx) => {
   const ids = new Set(rules.map(r => r.id));
   if (ids.size !== rules.length) ctx.addIssue({ code: "custom", message: "Cada requisito necesita una clave única" });

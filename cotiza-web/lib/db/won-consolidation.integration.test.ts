@@ -1,8 +1,12 @@
 import { afterAll, beforeAll, expect, it, describe, vi } from "vitest";
 import { readFileSync } from "node:fs";
 import { Pool } from "pg";
+import { createRequire } from "node:module";
+import { dirname, join } from "node:path";
 import type { WinActor, WinRule } from "@/lib/domain/won-consolidation";
 vi.mock("server-only", () => ({}));
+const email = vi.hoisted(() => ({ send: vi.fn() }));
+vi.mock("@/lib/email/resend", () => ({ resolveResendConfig: async () => ({ from: "Cotiza <avisos@example.test>", client: { emails: { send: email.send } }, error: null }) }));
 const url = process.env.COTIZA_WIN_TEST_DATABASE_URL;
 const suite = url ? describe : describe.skip;
 suite("consolidation with actual PostgreSQL transactions", () => {
@@ -20,10 +24,13 @@ suite("consolidation with actual PostgreSQL transactions", () => {
     pool = new Pool({ connectionString: url! });
     const globals = globalThis as unknown as { pool: Pool; prisma?: typeof db }; globals.pool = pool; delete globals.prisma;
     const { execFileSync } = await import("node:child_process");
-    const schema = execFileSync(process.execPath, ["node_modules/prisma/build/index.js", "migrate", "diff", "--from-empty", "--to-schema", "prisma/schema.prisma", "--script"], { encoding: "utf8" });
+    const cli = join(dirname(createRequire(import.meta.url).resolve("prisma/package.json")), "build/index.js");
+    const schema = execFileSync(process.execPath, [cli, "migrate", "diff", "--from-empty", "--to-schema", "prisma/schema.prisma", "--script"], { encoding: "utf8" });
     await pool.query(schema);
     const sql = readFileSync(new URL("../../prisma/manual/20261113_won_consolidation.sql", import.meta.url), "utf8");
     await pool.query(sql); await pool.query(sql);
+    const mailSql = readFileSync(new URL("../../prisma/manual/20261113_approval_email_outbox.sql", import.meta.url), "utf8");
+    await pool.query(mailSql); await pool.query(mailSql);
     ({ prisma: db } = await import("./prisma")); api = await import("./won-consolidation"); proposals = await import("./proposals"); kpis = await import("./proposal-kpis");
     for (const t of ["a", "b"]) await db.tenant.create({ data: { tenant_id: t, name: t, slug: t, created_at: new Date() } });
     for (const [id, role, tenant] of [["seller", "owner", "a"], ["finance", "admin", "a"], ["legal", "user", "a"], ["other-owner", "owner", "a"], ["intruder", "user", "b"]]) await db.app_users.create({ data: {
@@ -110,5 +117,22 @@ suite("consolidation with actual PostgreSQL transactions", () => {
     await pool.query("UPDATE app_users SET active=false WHERE user_id='finance'");
     await expect(api.getWinView("a", "p", financial)).rejects.toMatchObject({ status: 403 });
     await expect(api.saveWinPolicy("a", seller, { rules: [] }, 2)).rejects.toThrow("cambió");
+  });
+  it("sends one email for a concurrent request and persists an uncertain result without resending", async () => {
+    vi.stubEnv("VERCEL_ENV", "production"); vi.stubEnv("NEXT_PUBLIC_APP_URL", "https://cotiza.example.test");
+    await db.app_users.create({ data: { user_id: "user_notice_owner", alias: "notice-owner", first_name: "Owner", last_name: "Synthetic", email: "owner@example.test", role: "owner", tenant_id: "a", password_hash: "unused", created_at: new Date(), active: true } });
+    await api.saveWinPolicy("a", seller, { rules: [], reviewNoticeUserIds: ["user_notice_owner"], approvalEmailEnabled: true }, 3);
+    email.send.mockResolvedValue({ data: { id: "synthetic-provider-id" }, error: null });
+    const { sendApprovalNotices } = await import("@/lib/email/approval-notice");
+    const results = await Promise.all([sendApprovalNotices("a", "review-needed"), sendApprovalNotices("a", "review-needed")]);
+    expect(results.reduce((n, r) => n + r.sent, 0)).toBe(1); expect(email.send).toHaveBeenCalledTimes(1);
+    expect(email.send.mock.calls[0]![0]).toMatchObject({ to: ["owner@example.test"] });
+    expect(email.send.mock.calls[0]![0].text).toContain("/propuestas?proposalId=review-needed");
+    expect((await pool.query("SELECT state,provider_id FROM approval_email_outbox")).rows).toEqual([{ state: "sent", provider_id: "synthetic-provider-id" }]);
+    await db.proposal_audit_events.create({ data: { event_id: "new-review-cycle", event_hash: "synthetic", tenant_id: "a", proposal_id: "review-needed", event_type: "status_change_requested", payload: JSON.stringify({ ok: true, resultStatus: "in_review" }), created_at: new Date() } });
+    email.send.mockRejectedValue(new Error("Synthetic lost provider response"));
+    expect((await sendApprovalNotices("a", "review-needed")).issues).toBe(1);
+    await sendApprovalNotices("a", "review-needed"); expect(email.send).toHaveBeenCalledTimes(2);
+    expect((await pool.query("SELECT state FROM approval_email_outbox ORDER BY created_at")).rows.map(r => r.state)).toEqual(["sent", "unknown"]);
   });
 });

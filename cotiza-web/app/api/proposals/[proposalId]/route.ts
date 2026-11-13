@@ -1,4 +1,5 @@
 import { proposalQuoteSyncToken } from "@/lib/domain/proposal-quote-sync-token";
+import { scheduleApprovalEmails } from "@/lib/email/approval-dispatch";
 import { NextResponse } from "next/server";
 import { closeDateInstant } from "@/lib/domain/commercial-close-date";
 
@@ -155,6 +156,7 @@ export async function PUT(request: Request, context: RouteContext) {
       });
     }
 
+    if (updated.status === "in_review" && fromStatus !== "in_review" && requestedStatus) scheduleApprovalEmails(tenant.id, proposalId);
     return NextResponse.json({ proposal: updated });
   } catch (error) {
     const message = error instanceof Error ? error.message : "Error interno";

@@ -1,4 +1,5 @@
 import { beforeEach, expect, it, vi } from "vitest";
+vi.mock("@/lib/email/approval-dispatch", () => ({ scheduleApprovalEmails: vi.fn() }));
 const m = vi.hoisted(() => ({ tenant: vi.fn(), act: vi.fn(), view: vi.fn() }));
 vi.mock("@/lib/auth/tenant-context", () => ({ getCurrentTenantContext: m.tenant }));
 vi.mock("@/lib/db/won-consolidation", () => ({ actOnWin: m.act, getWinView: m.view, WinError: class extends Error { status = 409; } }));

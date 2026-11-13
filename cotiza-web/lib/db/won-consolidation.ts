@@ -135,7 +135,7 @@ export async function saveWinPolicy(tenantId: string, inputActor: WinActor, poli
 }
 export type ApprovalNotice = {
   key: string; proposalId: string; proposalNumber: string; recipientCompany: string;
-  kind: "internal" | "consolidation"; requirements: string[]; href: string;
+  kind: "internal" | "consolidation"; requirements: string[]; href: string; requestKey: string;
 };
 // Pending work is the notification source: it survives sign-out and never approves anything.
 // Each authenticated recipient gets only their own actionable requests in the active tenant.
@@ -147,17 +147,20 @@ export async function getApprovalNotices(tenantId: string, inputActor: WinActor)
     const isReviewRecipient = (!policy.reviewNoticeUserIds?.length || policy.reviewNoticeUserIds.includes(actor.userId))
       && (actor.userRole === "owner" || actor.isSuperAdmin);
     if (isReviewRecipient) {
-      const rows = await tx.$queryRaw<{ proposal_id: string; proposal_number: string | null; recipient_company: string | null }[]>`
-        SELECT p.proposal_id,f.proposal_number,f.recipient_company FROM proposals p
+      const rows = await tx.$queryRaw<{ proposal_id: string; proposal_number: string | null; recipient_company: string | null; request_event: string | null }[]>`
+        SELECT p.proposal_id,f.proposal_number,f.recipient_company,e.event_id AS request_event FROM proposals p
         LEFT JOIN LATERAL (SELECT proposal_number,recipient_company FROM formal_proposals f
           WHERE f.tenant_id=p.tenant_id AND f.proposal_id=p.proposal_id ORDER BY created_at DESC,proposal_doc_id LIMIT 1) f ON true
+        LEFT JOIN LATERAL (SELECT event_id FROM proposal_audit_events e WHERE e.tenant_id=p.tenant_id AND e.proposal_id=p.proposal_id
+          AND e.event_type='status_change_requested' AND e.payload LIKE '%"ok":true%' AND e.payload LIKE '%"resultStatus":"in_review"%'
+          ORDER BY e.created_at DESC,e.event_id DESC LIMIT 1) e ON true
         WHERE p.tenant_id=${tenantId} AND p.status='in_review' AND p.outcome IS NULL
           AND NOT EXISTS (SELECT 1 FROM proposal_approvals a WHERE a.tenant_id=p.tenant_id AND a.proposal_id=p.proposal_id
             AND a.decision='approved' AND a.approver_role IN ('owner','superadmin'))
         ORDER BY p.created_at DESC,p.proposal_id LIMIT 100`;
       notices.push(...rows.map(row => ({ key: `internal:${row.proposal_id}`, proposalId: row.proposal_id,
         proposalNumber: row.proposal_number ?? "Propuesta por revisar", recipientCompany: row.recipient_company ?? "Cliente por confirmar",
-        kind: "internal" as const, requirements: ["Autorización interna del owner"], href: `/propuestas?proposalId=${encodeURIComponent(row.proposal_id)}` })));
+        kind: "internal" as const, requestKey: row.request_event ?? `legacy:${row.proposal_id}`, requirements: ["Autorización interna del owner"], href: `/propuestas?proposalId=${encodeURIComponent(row.proposal_id)}` })));
     }
     const cases = await tx.$queryRaw<{ proposal_id: string; snapshot: WinCase; created_by_user_id: string | null; proposal_number: string | null; recipient_company: string | null }[]>`
       SELECT c.proposal_id,c.snapshot,p.created_by_user_id,f.proposal_number,f.recipient_company FROM win_cases c
@@ -174,7 +177,9 @@ export async function getApprovalNotices(tenantId: string, inputActor: WinActor)
       const doc = await document(tx, tenantId, item.proposal_id, actor);
       if (doc.fingerprint !== item.snapshot.fingerprint) continue;
       notices.push({ key: `consolidation:${item.proposal_id}`, proposalId: item.proposal_id, proposalNumber: item.proposal_number ?? "Propuesta aceptada",
-        recipientCompany: item.recipient_company ?? "Cliente por confirmar", kind: "consolidation", requirements: rules.map(r => r.label), href: `/autorizaciones/${encodeURIComponent(item.proposal_id)}` });
+        recipientCompany: item.recipient_company ?? "Cliente por confirmar", kind: "consolidation", requirements: rules.map(r => r.label), href: `/autorizaciones/${encodeURIComponent(item.proposal_id)}`,
+        requestKey: createHash("sha256").update(JSON.stringify({ acceptedAt: item.snapshot.acceptedAt,
+          rules: rules.map(r => ({ id: r.id, dependencies: r.dependsOn.map(id => item.snapshot.decisions[id]?.recordedAt) })) })).digest("hex") });
     }
     return notices;
   }, { isolationLevel: Prisma.TransactionIsolationLevel.RepeatableRead });

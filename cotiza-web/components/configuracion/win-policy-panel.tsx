@@ -13,7 +13,7 @@ export function WinPolicyPanel({ initial, tenantId, tenantName, users }: { initi
   }
   async function save(event: FormEvent) {
     event.preventDefault(); setError(null); setMessage(null);
-    const parsed = winPolicySchema.safeParse({ rules: policy.rules, ...(policy.reviewNoticeUserIds ? { reviewNoticeUserIds: policy.reviewNoticeUserIds } : {}) });
+    const parsed = winPolicySchema.safeParse({ rules: policy.rules, ...(policy.reviewNoticeUserIds ? { reviewNoticeUserIds: policy.reviewNoticeUserIds } : {}), ...(policy.approvalEmailEnabled !== undefined ? { approvalEmailEnabled: policy.approvalEmailEnabled } : {}) });
     if (!parsed.success) { setError(parsed.error.issues[0]?.message ?? "Revisa los requisitos"); return; }
     setSaving(true);
     try {
@@ -29,6 +29,10 @@ export function WinPolicyPanel({ initial, tenantId, tenantName, users }: { initi
     <p className="text-sm">Empresa: <strong>{tenantName}</strong>. Configura los OK mínimos antes de consolidar y continuar hacia compras.</p>
     <p className="text-sm text-zinc-600">Sin requisitos adicionales se usa la regla mínima: aceptación del cliente. Los circuitos abiertos conservan la política aplicada; los cierres anteriores se mantienen.</p>
     <form onSubmit={save} className="space-y-4">
+      <label className="flex min-h-11 items-start gap-2 rounded-lg border border-zinc-300 p-3 text-sm">
+        <input type="checkbox" disabled={disabled} checked={policy.approvalEmailEnabled ?? false} onChange={e => { setPolicy({ ...policy, approvalEmailEnabled: e.target.checked }); setMessage(null); }} />
+        Enviar también correo a los responsables cuando se genere una solicitud de aprobación. Incluye folio, cliente, revisión requerida y enlace seguro a Cotiza. Los avisos internos siguen en la campana.
+      </label>
       {users.some(user => user.role === "owner") ? <fieldset disabled={disabled} className="space-y-2 rounded-xl border border-zinc-300 p-4">
         <legend className="px-2 font-semibold">Avisos de revisión interna</legend>
         <p className="text-sm text-zinc-600">Elige los owners que recibirán los pendientes en la campana de Cotiza. Sin selección se avisa a los owners de la empresa. Las aprobaciones de consolidación llegan a los responsables de cada requisito.</p>

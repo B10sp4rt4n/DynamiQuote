@@ -30,6 +30,11 @@ Los cierres históricos permanecen como están, sin reclasificación ni backfill
 - `reviewNoticeUserIds` permite designar owners específicos para recibir avisos
   de revisión interna; sin selección aplica a los owners de la empresa. Los
   responsables de cada requisito reciben los avisos de consolidación.
+- `approvalEmailEnabled` habilita la copia por correo de nuevas solicitudes.
+  Reutiliza Resend y el remitente verificado existentes, sólo en producción.
+  Una transición a revisión interna o una aceptación/decisión que habilita otro
+  requisito programa el aviso después de confirmar la operación comercial.
+  Consultar la campana no envía correos ni realiza un envío retroactivo.
 - Con requisitos, cada OK queda registrado con actor, rol, hora y evidencia.
   Observar/rechazar bloquea la consolidación sin marcar perdida la operación.
   Cambiar una decisión invalida los OK dependientes, de forma transitiva.
@@ -59,8 +64,8 @@ confirman en la misma transacción. Un error de respuesta obliga a recargar ante
 de otra mutación; no se reenvía automáticamente.
 
 Esta entrega prepara la condición comercial para compras y notifica dentro de
-Cotiza. No genera, envía ni libera requisiciones, órdenes al proveedor, correos,
-pagos o timbrados. Esas
+Cotiza y, cuando está habilitado por empresa, por correo. No genera ni libera
+requisiciones, órdenes al proveedor, pagos o timbrados. Esas
 acciones requieren un flujo posterior que consuma el cierre consolidado.
 Las validaciones de finanzas, existencias o contrato se registran manualmente
 con evidencia; todavía no consultan sistemas externos de inventario o bancos.
@@ -70,6 +75,7 @@ con evidencia; todavía no consultan sistemas externos de inventario o bancos.
 1. Probar `cotiza-web/prisma/manual/20261113_won_consolidation.sql` en una copia
    de la base objetivo. Es aditiva, idempotente y no modifica resultados previos.
 2. Aplicar ese SQL antes del código. No usar `prisma db push` en producción.
+   Aplicar también `20261113_approval_email_outbox.sql` antes de habilitar correo.
 3. Publicar el código y revisar el circuito con registros de prueba.
 4. Cada empresa configura su política; no se impone una regla financiera nueva
    a SynAppsSys ni a los demás tenants.
@@ -86,3 +92,23 @@ huellas, bloqueo de bypass, decisiones simultáneas y cierre único. El recorrid
 `scripts/check_win_consolidation_ui.mjs` usa componentes reales y respuestas HTTP
 sintéticas a 1360/390 px. El workflow `won-consolidation.yml` reproduce los checks
 sin datos reales ni credenciales fiscales.
+
+## Correo y duplicados
+
+La plantilla `approval-notice-v1` identifica empresa, folio, cliente y revisión
+requerida, enlaza a Cotiza y explica que el correo no registra una aprobación.
+No incluye costos ni adjuntos. El destinatario sale de la cuenta activa y la
+asignación vigente, nunca de una dirección enviada por el navegador. Se excluyen
+invitaciones pendientes y direcciones inválidas.
+
+El outbox conserva destinatario, texto exacto, clave de solicitud, intentos y
+referencia del proveedor. La clave combina empresa, propuesta, destinatario y
+ciclo de aprobación. Una actualización atómica permite reclamar cada aviso una
+sola vez y se usa también la idempotencia de Resend. No se vuelve a enviar un
+resultado `unknown` o `sending` sin comprobar el proveedor. Un fallo no revierte
+la solicitud comercial ni elimina la notificación interna. `sent` significa
+aceptado por el proveedor; no prueba lectura ni entrega al buzón.
+
+Las pruebas reales de PostgreSQL incluyen reclamación concurrente y respuesta
+perdida con un proveedor simulado. Ninguna prueba envía correo real. La activación
+de una empresa no despacha de golpe sus solicitudes anteriores.
