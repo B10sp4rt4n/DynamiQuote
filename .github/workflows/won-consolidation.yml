@@ -1,0 +1,75 @@
+name: Won consolidation
+on:
+  push:
+    branches: [feat/won-consolidation]
+  pull_request:
+    branches: [main]
+    paths:
+      - 'cotiza-web/**'
+      - 'scripts/check_win_consolidation_ui.mjs'
+      - '.github/workflows/won-consolidation.yml'
+permissions:
+  contents: read
+concurrency:
+  group: won-consolidation-${{ github.ref }}
+  cancel-in-progress: true
+jobs:
+  verify:
+    runs-on: ubuntu-24.04
+    timeout-minutes: 15
+    services:
+      postgres:
+        image: postgres:18
+        env:
+          POSTGRES_USER: win_test
+          POSTGRES_PASSWORD: synthetic-ci-only
+          POSTGRES_DB: cotiza_win_synthetic
+        ports: ['5432:5432']
+        options: --health-cmd 'pg_isready -U win_test -d cotiza_win_synthetic' --health-interval 5s --health-timeout 5s --health-retries 10
+    env:
+      DATABASE_URL: postgresql://win_test:synthetic-ci-only@127.0.0.1:5432/cotiza_win_synthetic
+      NEXT_TELEMETRY_DISABLED: '1'
+    steps:
+      - uses: actions/checkout@11bd71901bbe5b1630ceea73d27597364c9af683
+        with:
+          persist-credentials: false
+      - uses: actions/setup-node@49933ea5288caeca8642d1e84afbd3f7d6820020
+        with:
+          node-version: '22'
+      - run: npm ci --no-audit --no-fund
+      - run: npm --prefix cotiza-web run db:generate
+      - run: ./cotiza-web/node_modules/.bin/tsc --noEmit -p cotiza-web/tsconfig.json
+      - run: npm --prefix cotiza-web test -- --maxWorkers=2 --exclude validate-quote-lifecycle.e2e.test.ts --reporter=dot
+      - name: Real PostgreSQL decisions, isolation, migration and concurrency
+        run: npm --prefix cotiza-web test -- lib/db/won-consolidation.integration.test.ts --maxWorkers=1
+        env:
+          COTIZA_WIN_TEST_DATABASE_URL: postgresql://win_test:synthetic-ci-only@127.0.0.1:5432/cotiza_win_synthetic
+      - name: Lint consolidation modules
+        working-directory: cotiza-web
+        run: ./node_modules/.bin/eslint lib/domain/won-consolidation.ts lib/db/won-consolidation.ts components/propuestas/win-consolidation*.tsx components/configuracion/win-policy-panel.tsx 'app/api/proposals/[proposalId]/consolidation' app/api/settings/win-policy 'app/(dashboard)/autorizaciones' 'app/(dashboard)/configuracion/consolidacion'
+      - run: npm --prefix cotiza-web run build
+  browser:
+    runs-on: ubuntu-24.04
+    timeout-minutes: 10
+    steps:
+      - uses: actions/checkout@11bd71901bbe5b1630ceea73d27597364c9af683
+        with:
+          persist-credentials: false
+      - uses: actions/setup-node@49933ea5288caeca8642d1e84afbd3f7d6820020
+        with:
+          node-version: '22'
+      - run: npm ci --no-audit --no-fund
+      - run: npm install --prefix "$RUNNER_TEMP/win-ui" --no-save --no-package-lock --no-audit --no-fund esbuild@0.28.2 playwright@1.62.1
+      - run: node "$RUNNER_TEMP/win-ui/node_modules/playwright/cli.js" install --with-deps chromium
+      - name: Real panels on desktop and mobile with synthetic HTTP
+        run: |
+          ESBUILD_MODULE="$RUNNER_TEMP/win-ui/node_modules/esbuild" \
+          PLAYWRIGHT_MODULE="$RUNNER_TEMP/win-ui/node_modules/playwright/index.mjs" \
+          node scripts/check_win_consolidation_ui.mjs
+      - uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02
+        if: always()
+        with:
+          name: win-consolidation-synthetic
+          path: artifacts/win-consolidation
+          retention-days: 3
+          if-no-files-found: warn

@@ -1,6 +1,7 @@
 import { LoomContextPanel } from "@/components/integraciones/loom-context-panel";
 import { loomPilotVisible } from "@/lib/integrations/loom/availability";
 import Link from "next/link";
+import { WinConsolidationSummary } from "@/components/propuestas/win-consolidation-summary";
 import { notFound, redirect } from "next/navigation";
 import { getCurrentTenantContext } from "@/lib/auth/tenant-context";
 import { getBusinessWorkspace } from "@/lib/db/opportunity-workspace";
@@ -77,6 +78,7 @@ export default async function BusinessPage({ params }: { params: Promise<{ oppor
           <strong className="block">{proposal.formal_proposals[0]?.proposal_number ?? "Propuesta sin folio formal"}</strong>
           <span className="mt-1 block text-sm">Estado: {proposalStatusLabel(proposal)} · Resultado: {outcome}</span>
           <span className="block text-sm">Envío: {proposal.formal_proposals[0]?.sent_at ? "Registrado" : "Sin envío registrado"}</span>
+          <WinConsolidationSummary key={proposal.proposal_id} proposalId={proposal.proposal_id} />
           {proposal.outcome === "won" ? <span className="mt-2 block text-sm font-medium text-emerald-800">{proposalBillingLabel(proposal)}</span> : null}
         </Link>;
       })}</div>

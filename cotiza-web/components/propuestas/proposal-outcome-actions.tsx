@@ -13,6 +13,7 @@ const OUTCOME_BADGE_CLASS = {
 };
 
 type ProposalOutcomeActionsProps = {
+  allowRegisterWin?: boolean;
   canOverrideCloseDate?: boolean;
   initialOutcome: ProposalOutcome;
   initialOutcomeAt?: string | null;
@@ -27,7 +28,7 @@ function displayDate(iso: string): string {
   return new Intl.DateTimeFormat("es-MX", { dateStyle: "medium", timeZone: "America/Mexico_City" }).format(new Date(iso));
 }
 
-export function ProposalOutcomeActions({ canOverrideCloseDate = false, initialOutcome, initialOutcomeAt, createdAt, closeDateMinimum, opportunityCreatedAt, proposalId, status }: ProposalOutcomeActionsProps) {
+export function ProposalOutcomeActions({ allowRegisterWin = true, canOverrideCloseDate = false, initialOutcome, initialOutcomeAt, createdAt, closeDateMinimum, opportunityCreatedAt, proposalId, status }: ProposalOutcomeActionsProps) {
   const router = useRouter();
   const [outcome, setOutcome] = useState<ProposalOutcome>(initialOutcome);
   const [outcomeAt, setOutcomeAt] = useState(initialOutcomeAt ?? null);
@@ -97,8 +98,8 @@ export function ProposalOutcomeActions({ canOverrideCloseDate = false, initialOu
 
       <div className="mt-3 flex flex-wrap gap-2">
         {canAssignWonLost ? <>
-          <button className="rounded-lg border border-emerald-300 bg-emerald-50 px-3 py-2 text-sm font-medium text-emerald-800 disabled:opacity-60"
-            disabled={saving || outcome === "won"} onClick={() => openCalendar("won")} type="button">Marcar como ganada</button>
+          {allowRegisterWin ? <button className="rounded-lg border border-emerald-300 bg-emerald-50 px-3 py-2 text-sm font-medium text-emerald-800 disabled:opacity-60"
+            disabled={saving || outcome === "won"} onClick={() => openCalendar("won")} type="button">Marcar como ganada</button> : null}
           <button className="rounded-lg border border-zinc-300 bg-white px-3 py-2 text-sm font-medium text-zinc-700 disabled:opacity-60"
             disabled={saving || outcome === "lost"} onClick={() => openCalendar("lost")} type="button">Marcar como perdida</button>
           {outcome === "won" || outcome === "lost" ? <button

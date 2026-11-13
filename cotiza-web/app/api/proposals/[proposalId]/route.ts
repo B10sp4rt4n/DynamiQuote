@@ -231,6 +231,9 @@ export async function PATCH(request: Request, context: RouteContext) {
   if (result === "business_already_won") {
     return NextResponse.json({ error: "Este negocio ya tiene una propuesta ganada. Si necesitas corregirla, retira primero ese resultado antes de cerrar otra versión o alternativa" }, { status: 409 });
   }
+  if (result === "consolidation_required") {
+    return NextResponse.json({ error: "Registra la aceptación del cliente y completa las autorizaciones de consolidación antes de marcar ganada" }, { status: 409 });
+  }
   if (result === "conflict") {
     return NextResponse.json({ error: "La decisión cambió mientras editabas. Recarga la propuesta antes de guardar" }, { status: 409 });
   }

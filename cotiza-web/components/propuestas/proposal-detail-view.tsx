@@ -2,6 +2,7 @@ import Link from "next/link";
 
 import { ProposalInvoicePanel } from "@/components/propuestas/proposal-invoice-panel";
 import { ProposalOutcomeActions } from "@/components/propuestas/proposal-outcome-actions";
+import { WinConsolidationPanel } from "@/components/propuestas/win-consolidation-panel";
 import type { ProposalDerivationInfo, ProposalWorkflowDetail } from "@/lib/db/proposals";
 import type { ProposalStatus } from "@/lib/validations/proposals";
 
@@ -146,7 +147,8 @@ export function ProposalDetailView({
         </div>
       </div>
 
-      <ProposalOutcomeActions canOverrideCloseDate={canOverrideCloseDate} key={`${proposal.proposalId}:${proposal.outcome}:${proposal.outcomeAt}`} createdAt={proposal.createdAt} closeDateMinimum={proposal.closeDateMinimum} opportunityCreatedAt={proposal.opportunityCreatedAt} initialOutcome={proposal.outcome} initialOutcomeAt={proposal.outcomeAt} proposalId={proposal.proposalId} status={status} />
+      <WinConsolidationPanel key={`win:${proposal.proposalId}:${proposal.outcome}:${proposal.outcomeAt}`} proposalId={proposal.proposalId} />
+      <ProposalOutcomeActions allowRegisterWin={false} canOverrideCloseDate={canOverrideCloseDate} key={`${proposal.proposalId}:${proposal.outcome}:${proposal.outcomeAt}`} createdAt={proposal.createdAt} closeDateMinimum={proposal.closeDateMinimum} opportunityCreatedAt={proposal.opportunityCreatedAt} initialOutcome={proposal.outcome} initialOutcomeAt={proposal.outcomeAt} proposalId={proposal.proposalId} status={status} />
 
       {digestorFiscalEnabled ? (
         <div id="facturacion" className="scroll-mt-24"><ProposalInvoicePanel
