@@ -1033,6 +1033,7 @@ export function QuoteLineEditor({
   }
 
   async function createProposalFromSelectedQuote() {
+    if (loading || saving || versioningNow || creatingProposal || loadedQuoteId !== selectedQuoteId) return;
     if (!selectedQuoteId || !selectedQuote) {
       setMessage("Selecciona una cotizacion valida antes de crear la propuesta");
       return;
@@ -1054,6 +1055,7 @@ export function QuoteLineEditor({
 
     setCreatingProposal(true);
     setMessage(null);
+    let openingProposal = false;
 
     try {
       const response = await fetch("/api/proposals", {
@@ -1092,18 +1094,20 @@ export function QuoteLineEditor({
         // Si el backend regresa un HTML de error, mostramos un mensaje claro.
       }
 
-      if (!response.ok || !data.proposal) {
+      if (!response.ok || typeof data.proposal?.proposalId !== "string" || !data.proposal.proposalId.trim()) {
         throw new Error(data.error ?? "No fue posible generar la propuesta");
       }
 
       const proposalLabel = data.proposal.formal?.proposalNumber ?? data.proposal.proposalId;
       setMessage(`Propuesta ${proposalLabel} creada correctamente. Redirigiendo a Propuestas...`);
-      router.push(`/propuestas?proposalId=${encodeURIComponent(data.proposal.proposalId)}`);
-      router.refresh();
+      // Open a fresh document after the write. Refreshing the quote workspace
+      // alongside a client transition can leave the user on the previous page.
+      window.location.assign(`/propuestas?proposalId=${encodeURIComponent(data.proposal.proposalId)}`);
+      openingProposal = true;
     } catch (error) {
       setMessage(error instanceof Error ? error.message : "Error interno al generar la propuesta");
     } finally {
-      setCreatingProposal(false);
+      if (!openingProposal) setCreatingProposal(false);
     }
   }
 
@@ -1398,7 +1402,7 @@ export function QuoteLineEditor({
           </button>
           <button
             className="rounded-lg border border-sky-300 px-3 py-2 text-sm font-medium text-sky-700 hover:bg-sky-50 disabled:opacity-50"
-            disabled={creatingProposal || !selectedQuoteId || currentStatus === "archived"}
+            disabled={creatingProposal || loading || saving || versioningNow || !selectedQuote || loadedQuoteId !== selectedQuoteId || currentStatus === "archived"}
             onClick={() => {
               void createProposalFromSelectedQuote();
             }}
