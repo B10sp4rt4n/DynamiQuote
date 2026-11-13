@@ -12,6 +12,12 @@ subtotal; conserva las partidas de soporte de costo cero y las descripciones
 que ocupan varias líneas. Falla ante tablas incompletas, otras monedas, SKU
 repetidos, fechas inválidas o descuadres. No realiza OCR. Límite: 3 MB, 10 páginas.
 
+También admite celdas monetarias que separan USD y la cifra en dos renglones.
+Los reúne únicamente dentro de la misma partida y con la misma alineación de
+columna. Rechaza importes ausentes, ambiguos o de otra columna; no deduce el
+costo unitario a partir del total ni toma MSRP como costo. Las conciliaciones
+por partida y subtotal se mantienen después de reconstruir la celda.
+
 El editor existente presenta importes en MXN. Por ello esta entrega requiere un
 tipo de cambio explícito y crea importes en MXN, sin inferir ni consultar una
 cotización cambiaria. Redondea cada costo convertido a centavos y calcula
