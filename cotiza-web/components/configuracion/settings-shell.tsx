@@ -1,6 +1,7 @@
 "use client";
 
 import { useSearchParams } from "next/navigation";
+import Link from "next/link";
 import { Fragment, startTransition, useEffect, useState, type FormEvent } from "react";
 
 import { TenantCapabilitiesPanel } from "./tenant-capabilities-panel";
@@ -11,6 +12,7 @@ import type { AppUserSummary, IssuerProfileSummary } from "@/lib/db/settings";
 import type { ActiveTenantOption, ClosingContactLevel, TenantProfile } from "@/lib/db/tenants";
 
 type SettingsShellProps = {
+  gmailAvailable?: boolean;
   operationMode?: OperationMode;
   mercadoLibreEntitled?: boolean;
   mercadoLibreAvailable?: boolean;
@@ -2239,6 +2241,7 @@ function IssuerProfilesTab({
 const VALID_TABS: Tab[] = ["tenant", "operation", "users", "issuer", "policy"];
 
 export function SettingsShell({
+  gmailAvailable = false,
   operationMode = "consultative",
   mercadoLibreEntitled = false,
   mercadoLibreAvailable = false,
@@ -2321,6 +2324,7 @@ export function SettingsShell({
 
   return (
     <section className="rounded-xl border border-zinc-200 bg-white p-6 shadow-sm">
+      {gmailAvailable ? <Link href="/configuracion/integraciones/gmail" className="mb-4 block rounded-xl border border-blue-300 bg-blue-50 p-4 font-semibold text-blue-950">Gmail · Conectar correo y consultar comunicaciones</Link> : null}
       <div className="flex flex-col gap-2 border-b border-zinc-200 pb-4">
         <p className="text-sm uppercase tracking-[0.18em] text-zinc-500">Tenant activo</p>
         <h1 className="text-2xl font-semibold text-zinc-900">Configuración de {tenantName}</h1>

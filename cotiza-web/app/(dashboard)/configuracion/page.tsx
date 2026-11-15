@@ -1,4 +1,5 @@
 import { SettingsShell } from "@/components/configuracion/settings-shell";
+import { gmailPilotVisible } from "@/lib/integrations/gmail/availability";
 import { mercadoLibreEnabled } from "@/lib/integrations/mercadolibre/availability";
 import { MERCADOLIBRE_CHANNEL } from "@/lib/tenant-capabilities";
 import { getTenantOperationMode } from "@/lib/db/tenant-operation";
@@ -45,6 +46,7 @@ export default async function SettingsPage() {
 
   return (
     <SettingsShell
+      gmailAvailable={gmailPilotVisible(tenant)}
       key={tenant.id}
       operationMode={operationMode}
       mercadoLibreEntitled={mercadoLibreEntitled}

@@ -1,4 +1,6 @@
 import { LoomContextPanel } from "@/components/integraciones/loom-context-panel";
+import { GmailContextPanel } from "@/components/integraciones/gmail-context-panel";
+import { gmailPilotVisible } from "@/lib/integrations/gmail/availability";
 import { loomPilotVisible } from "@/lib/integrations/loom/availability";
 import Link from "next/link";
 import { WinConsolidationSummary } from "@/components/propuestas/win-consolidation-summary";
@@ -62,6 +64,8 @@ export default async function BusinessPage({ params }: { params: Promise<{ oppor
       </div>
     </header>
     {showLoom ? <LoomContextPanel key={tenant.id + ":" + tenant.userId + ":" + opportunity.opportunityId} tenantId={tenant.id} targetId={opportunity.opportunityId} kind="opportunity" /> : null}
+    {gmailPilotVisible(tenant) ? <GmailContextPanel key={`gmail:${tenant.id}:${tenant.userId}:${opportunity.opportunityId}`} tenantId={tenant.id}
+      opportunityId={opportunity.opportunityId} initialQuery={proposals[0]?.formal_proposals[0]?.proposal_number ?? opportunity.clientCompany ?? opportunity.title} /> : null}
     <BusinessFollowUp stage={opportunity.stage} action={followUp} />
     <CommercialFlow current={1} context={context} hideContext summaries={[DISPOSITION_LABELS[opportunity.stage], documents.quotes, documents.proposals]}
       completed={[opportunity.stage === "won", quotes.length > 0, proposals.some(row => row.outcome === "won" && isProposalAuthorized(row))]}
