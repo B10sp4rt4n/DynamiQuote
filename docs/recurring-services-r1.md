@@ -83,7 +83,7 @@ se establece con set_config(...,true) dentro de la transacción, nunca globalmen
 | Suite general aislada | 1,289 aprobadas, 128 omitidas; E2E con BD real excluido |
 | Build Next.js y TypeScript | Aprobados con DATABASE_URL sintética inoperante |
 | ESLint de archivos TypeScript modificados | Aprobado |
-| Chromium escritorio/móvil | Bloqueado localmente; pendiente en CI |
+| Chromium escritorio/móvil | Recorrido automatizado aprobado en CI a 1360 y 390 px |
 
 
 - Migración aplicada dos veces sobre PostgreSQL WASM desechable PGlite 0.5.16: un
@@ -102,8 +102,15 @@ se establece con set_config(...,true) dentro de la transacción, nunca globalmen
   en una base real. DATABASE_URL de pruebas/build apunta a localhost:1 sin servicio.
 - Se incluye recorrido Chromium sintético a 1360 y 390 px en
   scripts/check_recurring_services_ui.mjs. La ejecución local no pudo iniciar Chromium
-  por restricción de sockets; no se declara validación visual aprobada. El workflow
-  recurring-services-r1 ejecuta el recorrido en un runner aislado.
+  por restricción de sockets. El recorrido automatizado sí pasó en
+  [CI, ejecución 43903878502](https://github.com/B10sp4rt4n/DynamiQuote/actions/runs/43903878502),
+  sobre código 0f2f28a78f2feeba63ed94d87059d2adc5b17e8c: cero errores JavaScript,
+  sin desbordamiento horizontal y cinco acciones sintéticas por tamaño. Incluye alta,
+  activación, calendario, resultado incierto, consulta del estado y reanudación.
+  Las 34 pruebas específicas y TypeScript también pasaron en ese runner. Se guardaron
+  diez capturas y results.json como artifact recurring-services-synthetic-ui (7 días).
+  Es un componente real con transporte HTTP simulado; no acredita integración fiscal
+  ni recorrido autenticado contra una base operativa.
 
 Las fechas de licencia y la vigencia de cotización aún NO se capturan en esta pantalla:
 no pueden inferirse de fechas de servicio, preparación ni pago. Tampoco están entregados
