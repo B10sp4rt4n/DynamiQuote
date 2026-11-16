@@ -14,6 +14,12 @@ const codespaceHost =
     : undefined;
 
 const nextConfig: NextConfig = {
+  async headers() {
+    return ["/autorizacion-verificable", "/confirmar-autorizacion/:path*"].map(source => ({ source, headers: [
+      { key: "Referrer-Policy", value: "no-referrer" }, { key: "X-Frame-Options", value: "DENY" },
+      { key: "Cache-Control", value: "no-store, private" },
+    ] }));
+  },
   allowedDevOrigins: ["localhost", "127.0.0.1", codespaceHost].filter(
     (value): value is string => Boolean(value),
   ),
