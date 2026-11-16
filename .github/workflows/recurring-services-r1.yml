@@ -1,0 +1,35 @@
+name: Recurring services R1
+on:
+  pull_request:
+    paths:
+      - 'cotiza-web/**'
+      - 'scripts/check_recurring_services_ui.mjs'
+      - '.github/workflows/recurring-services-r1.yml'
+  workflow_dispatch:
+permissions:
+  contents: read
+jobs:
+  isolated-pilot:
+    runs-on: ubuntu-24.04
+    timeout-minutes: 20
+    env:
+      DATABASE_URL: postgresql://synthetic:synthetic@127.0.0.1:1/unused
+      NEXT_TELEMETRY_DISABLED: '1'
+    steps:
+      - uses: actions/checkout@11bd71901bbe5b1630ceea73d27597364c9af683
+        with:
+          persist-credentials: false
+      - uses: actions/setup-node@49933ea5288caeca8642d1e84afbd3f7d6820020
+        with:
+          node-version: '22'
+      - run: npm ci --no-audit --no-fund
+      - name: Disposable tools only
+        run: |
+          npm install --prefix "$RUNNER_TEMP/recurring-tools" --no-audit --no-fund --save-exact @electric-sql/pglite@0.5.16 playwright@1.65.1 esbuild@0.28.2
+          echo "PGLITE_MODULE=$RUNNER_TEMP/recurring-tools/node_modules/@electric-sql/pglite/dist/index.js" >> "$GITHUB_ENV"
+          echo "PLAYWRIGHT_MODULE=$RUNNER_TEMP/recurring-tools/node_modules/playwright/index.mjs" >> "$GITHUB_ENV"
+          echo "ESBUILD_MODULE=$RUNNER_TEMP/recurring-tools/node_modules/esbuild" >> "$GITHUB_ENV"
+          "$RUNNER_TEMP/recurring-tools/node_modules/.bin/playwright" install --with-deps chromium
+      - run: npm --prefix cotiza-web test -- --run lib/domain/recurring-services.test.ts lib/db/recurring-services.integration.test.ts components/servicios/recurring-services-panel.test.tsx
+      - run: ./cotiza-web/node_modules/.bin/tsc --noEmit -p cotiza-web/tsconfig.json
+      - run: node scripts/check_recurring_services_ui.mjs
