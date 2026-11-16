@@ -1,5 +1,7 @@
 # Servicios recurrentes en Cotiza
-Estado: diseño y contratos de preparación v0.1. No es una capacidad activa.
+Estado: R0 preparada y R1 implementada en rama de revisión; piloto deshabilitado.
+El alcance vigente de R1 y sus límites están en [la entrega R1](recurring-services-r1.md).
+Las secciones de R2–R5 siguen siendo diseño y no funcionalidad disponible.
 Fecha: 16 de noviembre de 2026. Piloto propuesto: tenant SynAppsSys (slug sys).
 Base revisada: main, commit 0c1a58c2e312b5ec3d5ea067348711fc398072aa.
 
@@ -58,7 +60,9 @@ Vistas:
 No mostrar un único semáforo que confunda servicio vigente con factura pagada.
 
 ## Modelo propuesto
-Nombres de tablas y endpoints son de diseño; no se ha entregado SQL ejecutable.
+El modelo siguiente describe el objetivo completo. R1 incorpora SQL manual sólo para
+acuerdos, versiones, periodos planeados, contador y eventos; los vínculos fiscales y
+de evidencia estructurada siguen pendientes.
 
 | Entidad | Función e invariantes |
 |---|---|
@@ -194,11 +198,12 @@ consolidación del acuerdo. No exigir una oportunidad artificial a un contrato l
 Cada entrega es un PR independiente; no modificar ramas paralelas.
 Preparación manual primero: no requiere IA, servicios nuevos ni scheduler contratado.
 
-## Implementación del primer pendiente
-R1 comienza por migración ADITIVA y validación de dominio. Proponer nuevo namespace
-cotiza-web/lib/domain/recurring-services.ts y repositorio
-cotiza-web/lib/db/recurring-services.ts, con UI /servicios-recurrentes y API
-/api/recurring-services, todas aún inexistentes en esta entrega.
+## Implementación de R1
+Implementada en rama de revisión: dominio, repositorio, UI /servicios-recurrentes,
+API /api/recurring-services y migración manual aditiva. No aplicada al entorno real.
+Las tareas internas, el listado de omitidos y la captura de fechas de licencia/cotización
+quedan pendientes; el calendario R1 sólo registra periodos completos planeados.
+Consultar [alcance, comprobaciones y puesta en marcha](recurring-services-r1.md).
 No usar prisma db push en producción. Probar SQL dos veces, FKs/solapamientos,
 transacciones y RLS donde aplique al rol real; verificar rutas además de SQL.
 Orden de liberación: migración en copia -> tests -> aprobación -> migración objetivo
@@ -211,4 +216,5 @@ acuerdos, eventos, facturas y pagos; no rollback destructivo de historia.
 - [Ejemplos sintéticos completos](recurring-services/synthetic-agreements.example.json)
 - [Criterios de aceptación](recurring-services/acceptance.md)
 
-Ninguno de estos archivos habilita rutas, crea clientes ni modifica bases o contratos.
+Los documentos y ejemplos no habilitan el piloto ni cargan clientes. El código R1
+requiere migración explícita y puertas de acceso; no se ha activado en producción.

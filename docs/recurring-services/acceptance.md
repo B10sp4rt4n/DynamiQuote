@@ -1,7 +1,8 @@
 # Aceptación de servicios recurrentes
 
-Estado: escenarios exigidos para implementaciones posteriores; no son resultados de
-pruebas de la aplicación. R0 valida únicamente la forma de los ejemplos y el plan.
+Estado: matriz del objetivo completo. No todos los escenarios están entregados en R1.
+Los resultados comprobados y pendientes se detallan en [la entrega R1](../recurring-services-r1.md).
+R0 validó únicamente la forma de los ejemplos y el plan.
 El JSON Schema es un contrato de preparación, no un API desplegado ni una autorización.
 Los archivos no contienen identificadores o condiciones de clientes reales.
 
@@ -60,16 +61,16 @@ Un esquema válido no confirma aceptación, pago, licencia o cumplimiento fiscal
 Los ejemplos active son exclusivamente sintéticos y no pueden usarse como carga
 productiva. Los cinco expedientes de intake siguen en draft.
 
-## Contrato HTTP previsto
-No hay endpoints implementados. R1 deberá definir:
-- GET /api/recurring-services: lectura paginada y filtrada por tenant actual.
-- POST /api/recurring-services: alta borrador; idempotencia y Origin.
-- PATCH /api/recurring-services/{id}: expectedRevision y snapshot de términos.
-- POST /api/recurring-services/{id}/activate: evidencia, revisión y autorización.
-- POST /api/recurring-services/{id}/periods/prepare: intervalo canónico,
-  expectedRevision y clave idempotente; retorna mismo periodo tras reintento.
+## Contrato HTTP implementado en R1
+- GET /api/recurring-services: 50 acuerdos por página, cursor before y búsqueda de clientes del tenant.
+- GET /api/recurring-services?requestId={uuid}: recuperación idempotente de una alta incierta.
+- GET /api/recurring-services/{id}: estado vigente y últimos 120 periodos.
+- POST /api/recurring-services: unión estricta de acciones create, revise, activate,
+  pause, resume, end y generate. Toda acción salvo create exige expectedRevision.
+Todas las consultas y mutaciones revalidan el operador; las mutaciones exigen Origin
+configurado y X-Tenant-Context. generate sólo registra planeación, nunca preparación fiscal.
 R2/R3 agregarán importación y fiscalidad sin reutilizar ciegamente la ruta propuesta.
-La emisión requiere identificador de sujeto estable, huella y permiso fiscal actuales.
+El JSON Schema R0 documenta el modelo objetivo, más amplio que el runtime R1 Zod.
 
 ## Verificación reproducible de esta preparación
 Desde la raíz, con Python y jsonschema disponibles:
