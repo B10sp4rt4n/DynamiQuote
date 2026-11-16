@@ -1,10 +1,11 @@
 export const THREATDOWN_PDF_IMPORT = "threatdown_pdf_import";
 export const MERCADOLIBRE_CHANNEL = "mercadolibre_channel";
 export const LOOM_CONTEXT = "loom_context_pilot";
-export const TENANT_CAPABILITY_KEYS = [THREATDOWN_PDF_IMPORT, "cpq_guided_preview", "crm_workspace_pilot", "quote_playbook_field", MERCADOLIBRE_CHANNEL, LOOM_CONTEXT] as const;
+export const TENANT_CAPABILITY_KEYS = [THREATDOWN_PDF_IMPORT, "cpq_guided_preview", "crm_workspace_pilot", "quote_playbook_field", MERCADOLIBRE_CHANNEL, LOOM_CONTEXT, "verified_authorization_pilot"] as const;
 export type TenantCapabilityKey = typeof TENANT_CAPABILITY_KEYS[number];
 
 export const TENANT_CAPABILITY_DETAILS: Record<TenantCapabilityKey, { label: string; description: string }> = {
+  verified_authorization_pilot: { label: "Autorización verificable · Premium", description: "Piloto de SynAppsSys con credenciales registradas y memoria Recordia. Requiere habilitación del servidor; opera exclusivamente con ensayos." },
   threatdown_pdf_import: { label: "Importar cotizaciones PDF de ThreatDown", description: "Permite revisar el PDF y crear una nueva versión de cotización. Los permisos de cada usuario siguen aplicando." },
   cpq_guided_preview: { label: "Comparar opciones de cotización", description: "Permite comparar alternativas sin guardar cambios. Los permisos del vendedor siguen aplicando." },
   crm_workspace_pilot: { label: "Experiencia CRM piloto (superadmin)", description: "Reúne pendientes, oportunidades y clientes. Acceso piloto reservado a superadmin; no cambia la operación del equipo." },
