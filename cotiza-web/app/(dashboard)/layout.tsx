@@ -13,6 +13,7 @@ import { DashboardNav } from "@/components/layout/dashboard-nav";
 import { TenantSwitcher } from "@/components/layout/tenant-switcher";
 import { getActiveTenants } from "@/lib/db/tenants";
 import { isDigestorFiscalSandboxTenant } from "@/lib/integrations/digestor-routing";
+import { recordiaPilotVisible } from "@/lib/integrations/recordia/access";
 
 type DashboardLayoutProps = {
   children: React.ReactNode;
@@ -50,9 +51,10 @@ export default async function DashboardLayout({ children }: DashboardLayoutProps
     );
   }
 
-  const [crmWorkspaceEnabled, tenantOptions] = await Promise.all([
+  const [crmWorkspaceEnabled, tenantOptions, recordiaEnabled] = await Promise.all([
     tenant.isSuperAdmin && isTenantCapabilityEnabled(tenant.id, "crm_workspace_pilot"),
     tenant.isSuperAdmin ? getActiveTenants() : [],
+    recordiaPilotVisible(tenant),
   ]);
   const showTenantSwitcher = tenant.isSuperAdmin && tenantOptions.length > 1;
 
@@ -78,7 +80,7 @@ export default async function DashboardLayout({ children }: DashboardLayoutProps
             <TenantSwitcher key={`${tenant.id}:${tenant.userId}`} currentSlug={tenant.slug} currentName={tenant.name} options={tenantOptions} />
           </div> : null}
           <div className="col-span-2 min-w-0">
-            <DashboardNav crmWorkspaceEnabled={crmWorkspaceEnabled} />
+            <DashboardNav crmWorkspaceEnabled={crmWorkspaceEnabled} recordiaEnabled={recordiaEnabled} />
           </div>
         </div>
       </header>

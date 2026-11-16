@@ -1,4 +1,6 @@
 import { LoomContextPanel } from "@/components/integraciones/loom-context-panel";
+import { RecordiaContextPanel } from "@/components/integraciones/recordia-context-panel";
+import { recordiaPilotVisible } from "@/lib/integrations/recordia/access";
 import { GmailContextPanel } from "@/components/integraciones/gmail-context-panel";
 import { gmailPilotVisible } from "@/lib/integrations/gmail/availability";
 import { loomPilotVisible } from "@/lib/integrations/loom/availability";
@@ -33,6 +35,7 @@ export default async function BusinessPage({ params }: { params: Promise<{ oppor
   const { opportunity: opportunity, quotes, proposals, tasks, optionLabels, ownerName } = workspace;
   if (opportunity.opportunityId !== opportunityId) redirect(`/oportunidades/${encodeURIComponent(opportunity.opportunityId)}`);
   const showLoom = await loomPilotVisible(tenant);
+  const showRecordia = await recordiaPilotVisible(tenant);
   const billingEnabled = isDigestorFiscalEnabledForTenant(tenant.id);
   const context = { opportunityId: opportunity.opportunityId, opportunityNumber: opportunity.opportunityNumber, title: opportunity.title, stage: opportunity.stage,
     quoteId: quotes[0]?.quote_id, proposalId: proposals[0]?.proposal_id };
@@ -66,6 +69,7 @@ export default async function BusinessPage({ params }: { params: Promise<{ oppor
     {showLoom ? <LoomContextPanel key={tenant.id + ":" + tenant.userId + ":" + opportunity.opportunityId} tenantId={tenant.id} targetId={opportunity.opportunityId} kind="opportunity" /> : null}
     {gmailPilotVisible(tenant) ? <GmailContextPanel key={`gmail:${tenant.id}:${tenant.userId}:${opportunity.opportunityId}`} tenantId={tenant.id}
       opportunityId={opportunity.opportunityId} initialQuery={proposals[0]?.formal_proposals[0]?.proposal_number ?? opportunity.clientCompany ?? opportunity.title} /> : null}
+    {showRecordia ? <RecordiaContextPanel key={`recordia:${tenant.id}:${tenant.userId}:${opportunity.opportunityId}`} tenantId={tenant.id} opportunityId={opportunity.opportunityId} /> : null}
     <BusinessFollowUp stage={opportunity.stage} action={followUp} />
     <CommercialFlow current={1} context={context} hideContext summaries={[DISPOSITION_LABELS[opportunity.stage], documents.quotes, documents.proposals]}
       completed={[opportunity.stage === "won", quotes.length > 0, proposals.some(row => row.outcome === "won" && isProposalAuthorized(row))]}

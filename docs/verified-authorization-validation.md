@@ -4,7 +4,7 @@ Fecha: 16 de noviembre de 2026. Base de implementación: main 57a7024, posterior
 
 ## Resultado comprobado
 
-- Suite de repositorio: **1,293 pruebas aprobadas**, 108 omitidas por requisitos de otros entornos; 150 archivos de pruebas aprobados y 20 omitidos.
+- Suite de repositorio: **1,321 pruebas aprobadas**, 109 omitidas por requisitos de otros entornos; 152 archivos de pruebas aprobados y 21 omitidos.
 - Se excluyó explícitamente validate-quote-lifecycle.e2e.test.ts: su propio encabezado indica que escribe en una base Neon real. No se ejecutó contra producción.
 - Las pruebas nuevas incluyen identidad Clerk estricta, política de contenido, interfaz DOM y un cluster PostgreSQL 18 temporal con firmas ES256 generadas durante la prueba.
 - El SQL de entrega se aplicó en ese cluster temporal sobre las tablas existentes, incluyendo sus FK, índices y guarda append-only.
@@ -32,3 +32,7 @@ No se ejecutaron migraciones, habilitaciones, altas ni recuperación contra esa 
 5. Confirmar el resultado, conservar un manifiesto externo y decidir posteriormente la conexión de custodia. HotVault permanece sin conexión y los expedientes se identifican como prepared_for_custody.
 
 Las compras del piloto permanecen simuladas. Integrar una compra real exige proteger todas las rutas de ejecución y revisar sus reglas comerciales; no se activa por este módulo ni por habilitar la capacidad premium.
+
+## Actualización del PR #112
+
+Se integró main en 0c1a58c2e312b5ec3d5ea067348711fc398072aa, conservando Recordia MCP y su memoria persistente de los PR #110 y #111. El único conflicto fue el lockfile de dependencias; se regeneró preservando ambas capacidades. La nueva corrida reportó 1,321 pruebas aprobadas y 109 omitidas. La corrida inicial de la implementación aislada había reportado 1,293 aprobadas y 108 omitidas. No se cambiaron datos ni activación del piloto durante la publicación.
