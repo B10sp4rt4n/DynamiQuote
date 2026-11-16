@@ -33,3 +33,10 @@ jobs:
       - run: npm --prefix cotiza-web test -- --run lib/domain/recurring-services.test.ts lib/db/recurring-services.integration.test.ts components/servicios/recurring-services-panel.test.tsx
       - run: ./cotiza-web/node_modules/.bin/tsc --noEmit -p cotiza-web/tsconfig.json
       - run: node scripts/check_recurring_services_ui.mjs
+      - uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02
+        if: always()
+        with:
+          name: recurring-services-synthetic-ui
+          path: artifacts/recurring-services
+          if-no-files-found: ignore
+          retention-days: 7
