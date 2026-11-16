@@ -1,0 +1,193 @@
+{
+  "schema_version": "cotiza.recurring.preparation.v0.1",
+  "simulation_only": true,
+  "effects": {
+    "create_clients": false,
+    "write_database": false,
+    "stamp": false,
+    "send_email": false,
+    "charge": false
+  },
+  "agreements": [
+    {
+      "case_ref": "case-a",
+      "client_ref": null,
+      "tenant_ref": "pilot-sys-to-resolve-server-side",
+      "status": "draft",
+      "terms_revision": 1,
+      "contract": {
+        "kind": null,
+        "starts_on": null,
+        "ends_on": null,
+        "auto_renew": null,
+        "notice_days": null
+      },
+      "billing": {
+        "cadence": null,
+        "basis": null,
+        "anchor_day": null,
+        "anchor_policy": "clamp_to_month_end_preserve_original_anchor",
+        "timezone": null,
+        "effective_from": null,
+        "due_days": null
+      },
+      "currency": null,
+      "lines": [],
+      "evidence_refs": [],
+      "activation_approval_ref": null,
+      "pending_fields": [
+        "resolve_client",
+        "confirm_contract_and_acceptance",
+        "confirm_products_quantities_prices_currency",
+        "confirm_billing_cadence_and_anchor",
+        "confirm_payment_terms",
+        "map_existing_invoices_and_periods",
+        "validate_fiscal_profile"
+      ]
+    },
+    {
+      "case_ref": "case-b",
+      "client_ref": null,
+      "tenant_ref": "pilot-sys-to-resolve-server-side",
+      "status": "draft",
+      "terms_revision": 1,
+      "contract": {
+        "kind": null,
+        "starts_on": null,
+        "ends_on": null,
+        "auto_renew": null,
+        "notice_days": null
+      },
+      "billing": {
+        "cadence": null,
+        "basis": null,
+        "anchor_day": null,
+        "anchor_policy": "clamp_to_month_end_preserve_original_anchor",
+        "timezone": null,
+        "effective_from": null,
+        "due_days": null
+      },
+      "currency": null,
+      "lines": [],
+      "evidence_refs": [],
+      "activation_approval_ref": null,
+      "pending_fields": [
+        "resolve_client",
+        "confirm_contract_and_acceptance",
+        "confirm_products_quantities_prices_currency",
+        "confirm_billing_cadence_and_anchor",
+        "confirm_payment_terms",
+        "map_existing_invoices_and_periods",
+        "validate_fiscal_profile"
+      ]
+    },
+    {
+      "case_ref": "case-c",
+      "client_ref": null,
+      "tenant_ref": "pilot-sys-to-resolve-server-side",
+      "status": "draft",
+      "terms_revision": 1,
+      "contract": {
+        "kind": null,
+        "starts_on": null,
+        "ends_on": null,
+        "auto_renew": null,
+        "notice_days": null
+      },
+      "billing": {
+        "cadence": null,
+        "basis": null,
+        "anchor_day": null,
+        "anchor_policy": "clamp_to_month_end_preserve_original_anchor",
+        "timezone": null,
+        "effective_from": null,
+        "due_days": null
+      },
+      "currency": null,
+      "lines": [],
+      "evidence_refs": [],
+      "activation_approval_ref": null,
+      "pending_fields": [
+        "resolve_client",
+        "confirm_contract_and_acceptance",
+        "confirm_products_quantities_prices_currency",
+        "confirm_billing_cadence_and_anchor",
+        "confirm_payment_terms",
+        "map_existing_invoices_and_periods",
+        "validate_fiscal_profile"
+      ]
+    },
+    {
+      "case_ref": "case-d",
+      "client_ref": null,
+      "tenant_ref": "pilot-sys-to-resolve-server-side",
+      "status": "draft",
+      "terms_revision": 1,
+      "contract": {
+        "kind": null,
+        "starts_on": null,
+        "ends_on": null,
+        "auto_renew": null,
+        "notice_days": null
+      },
+      "billing": {
+        "cadence": null,
+        "basis": null,
+        "anchor_day": null,
+        "anchor_policy": "clamp_to_month_end_preserve_original_anchor",
+        "timezone": null,
+        "effective_from": null,
+        "due_days": null
+      },
+      "currency": null,
+      "lines": [],
+      "evidence_refs": [],
+      "activation_approval_ref": null,
+      "pending_fields": [
+        "resolve_client",
+        "confirm_contract_and_acceptance",
+        "confirm_products_quantities_prices_currency",
+        "confirm_billing_cadence_and_anchor",
+        "confirm_payment_terms",
+        "map_existing_invoices_and_periods",
+        "validate_fiscal_profile"
+      ]
+    },
+    {
+      "case_ref": "case-e",
+      "client_ref": null,
+      "tenant_ref": "pilot-sys-to-resolve-server-side",
+      "status": "draft",
+      "terms_revision": 1,
+      "contract": {
+        "kind": null,
+        "starts_on": null,
+        "ends_on": null,
+        "auto_renew": null,
+        "notice_days": null
+      },
+      "billing": {
+        "cadence": null,
+        "basis": null,
+        "anchor_day": null,
+        "anchor_policy": "clamp_to_month_end_preserve_original_anchor",
+        "timezone": null,
+        "effective_from": null,
+        "due_days": null
+      },
+      "currency": null,
+      "lines": [],
+      "evidence_refs": [],
+      "activation_approval_ref": null,
+      "pending_fields": [
+        "resolve_client",
+        "confirm_contract_and_acceptance",
+        "confirm_products_quantities_prices_currency",
+        "confirm_billing_cadence_and_anchor",
+        "confirm_payment_terms",
+        "map_existing_invoices_and_periods",
+        "validate_fiscal_profile"
+      ]
+    }
+  ]
+}
