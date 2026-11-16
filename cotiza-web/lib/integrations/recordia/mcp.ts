@@ -5,17 +5,20 @@ import { CallToolRequestSchema, ListToolsRequestSchema, McpError, ErrorCode } fr
 import { z } from "zod";
 import { authorizeRecordia, revalidateRecordiaActor } from "./access";
 import { RecordiaError } from "./domain";
-import { readRecordiaDossier } from "./reader";
+import { readRecordiaDossier, verifyRecordiaDossier } from "./reader";
 
 const schemas = {
-  recordia_list_memories: z.object({ limit: z.number().int().min(1).max(100).default(50), offset: z.number().int().min(0).max(1000).default(0) }).strict(),
+  recordia_list_memories: z.object({ limit: z.number().int().min(1).max(100).default(50), offset: z.number().int().min(0).max(1000).default(0),
+    before_event_number: z.string().regex(/^[1-9]\d{0,18}$/).refine(value => BigInt(value) <= BigInt("9223372036854775807")).optional() }).strict(),
   recordia_get_memory: z.object({ memory_id: z.string().min(1).max(300) }).strict(),
   recordia_get_evidence: z.object({ evidence_id: z.string().min(1).max(310) }).strict(),
+  recordia_verify_integrity: z.object({}).strict(),
 };
 const descriptions = {
   recordia_list_memories: "Consulta la memoria comercial registrada en esta oportunidad.",
   recordia_get_memory: "Consulta un registro de esta oportunidad y sus referencias.",
-  recordia_get_evidence: "Consulta procedencia y huella de la proyección, sin certificar el documento original.",
+  recordia_get_evidence: "Consulta el sobre persistente, su huella almacenada y la versión anterior; no certifica archivos externos.",
+  recordia_verify_integrity: "Verifica todas las cadenas de versiones conservadas de las fuentes de este expediente.",
 };
 const noStore = { "Cache-Control": "private, no-store", "Vary": "Cookie, X-Tenant-Context", "X-Content-Type-Options": "nosniff" };
 export async function handleRecordiaMcp(request: Request, opportunityId: string): Promise<Response> {
@@ -39,17 +42,19 @@ export async function handleRecordiaMcp(request: Request, opportunityId: string)
         if (!Object.hasOwn(schemas, name)) throw new RecordiaError("Herramienta no disponible", 404);
         const args = schemas[name].safeParse(params.arguments ?? {});
         if (!args.success) throw new RecordiaError("Argumentos no válidos", 422);
-        const dossier = await readRecordiaDossier(actor, opportunityId);
         let result: unknown;
-        if (name === "recordia_list_memories") {
-          const { limit, offset } = args.data as z.infer<typeof schemas.recordia_list_memories>;
-          result = { items: dossier.projected.slice(offset, offset + limit).map(p => p.memory),
-            next_offset: offset + limit < dossier.projected.length ? offset + limit : null,
-            source_truncated: dossier.source_truncated, captured_at_utc: dossier.captured_at_utc, premium: true };
-        } else if (name === "recordia_get_memory") {
-          result = dossier.projected.find(p => p.memory.id === (args.data as { memory_id: string }).memory_id)?.memory;
+        if (name === "recordia_verify_integrity") {
+          result = await verifyRecordiaDossier(actor,opportunityId);
         } else {
-          result = dossier.projected.find(p => p.evidence.id === (args.data as { evidence_id: string }).evidence_id)?.evidence;
+          const list = args.data as z.infer<typeof schemas.recordia_list_memories>;
+          const memory = (args.data as { memory_id?: string }).memory_id;
+          const evidence = (args.data as { evidence_id?: string }).evidence_id;
+          const dossier = await readRecordiaDossier(actor,opportunityId, name === "recordia_list_memories"
+            ? { limit:list.limit, offset:list.offset, beforeEventNumber:list.before_event_number }
+            : { eventId: memory ?? (evidence?.startsWith("recordia:") ? evidence.slice("recordia:".length) : "invalid") });
+          result = name === "recordia_list_memories" ? { ...dossier, projected:undefined,
+            items:dossier.projected.map(p=>p.memory), premium:true }
+            : name === "recordia_get_memory" ? dossier.projected[0]?.memory : dossier.projected[0]?.evidence;
         }
         if (!result) throw new RecordiaError("Registro no encontrado", 404);
         const text = JSON.stringify(result);

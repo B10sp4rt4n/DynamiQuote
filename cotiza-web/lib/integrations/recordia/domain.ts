@@ -18,9 +18,10 @@ export type RecordiaMemory = {
   decision_id: string | null;
   source_connector: "cotiza";
   recorded_at_utc: string | null;
-  content_kind: "source_projection";
+  content_kind: "persistent_snapshot";
   epistemic_status: "observed_fact" | "recorded_claim" | "decision";
-  integrity_status: "not_verified";
+  integrity_status: "hash_verified";
+  preserved_snapshot?: { canonical_text: string; content_hash: string; verification_scope: "stored_envelope_and_direct_predecessor" };
   source: { kind: string; id: string; href: string | null };
 };
 export type RecordiaEvidence = {
@@ -29,14 +30,20 @@ export type RecordiaEvidence = {
   source_id: string;
   source_kind: string;
   recorded_at_utc: string | null;
-  projection_hash: string;
-  projection_hash_algorithm: "sha256";
-  integrity_status: "not_verified";
+  content_hash: string;
+  hash_algorithm: "sha256";
+  previous_event_id: string | null;
+  previous_hash: string;
+  integrity_status: "hash_verified";
+  verification_scope: "stored_envelope_and_direct_predecessor";
+  canonical_text: string;
 };
 export type RecordiaPage = {
   items: RecordiaMemory[];
   next_offset: number | null;
+  next_cursor?: string | null;
   source_truncated: boolean;
   captured_at_utc: string;
   premium: true;
+  persistent?: true;
 };
