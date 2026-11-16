@@ -19,10 +19,11 @@ const supportingNavigation = [
   { href: "/configuracion", label: "Configuración" },
 ];
 
-export function DashboardNav({ crmWorkspaceEnabled = false }: { crmWorkspaceEnabled?: boolean }) {
+export function DashboardNav({ crmWorkspaceEnabled = false, recordiaEnabled = false }: { crmWorkspaceEnabled?: boolean; recordiaEnabled?: boolean }) {
   const links = [
     ...navigation,
     ...(crmWorkspaceEnabled ? [{ href: "/crm", label: "CRM · Piloto" }] : []),
+    ...(recordiaEnabled ? [{ href: "/recordia", label: "Recordia · Premium" }] : []),
     ...supportingNavigation,
   ];
   const currentPath = usePathname();
