@@ -1,0 +1,91 @@
+{
+  "schema_version": "cotiza.recurring.preparation.v0.1",
+  "simulation_only": true,
+  "effects": {
+    "create_clients": false,
+    "write_database": false,
+    "stamp": false,
+    "send_email": false,
+    "charge": false
+  },
+  "agreements": [
+    {
+      "case_ref": "synthetic-monthly",
+      "client_ref": "synthetic-client-synthetic-monthly",
+      "tenant_ref": "synthetic-sys",
+      "status": "active",
+      "terms_revision": 1,
+      "contract": {
+        "kind": "month_to_month",
+        "starts_on": "2026-01-31",
+        "ends_on": null,
+        "auto_renew": false,
+        "notice_days": 30
+      },
+      "billing": {
+        "cadence": "monthly",
+        "basis": "advance",
+        "anchor_day": 31,
+        "anchor_policy": "clamp_to_month_end_preserve_original_anchor",
+        "timezone": "America/Mexico_City",
+        "effective_from": "2026-01-31",
+        "due_days": 10
+      },
+      "currency": "MXN",
+      "lines": [
+        {
+          "line_id": "synthetic-line",
+          "description": "Servicio sintetico sin relacion con cliente real",
+          "sku": null,
+          "quantity": "2",
+          "unit_price": "99.00",
+          "fiscal_classification_ref": null
+        }
+      ],
+      "evidence_refs": [
+        "synthetic-acceptance-only"
+      ],
+      "activation_approval_ref": "synthetic-approval",
+      "pending_fields": []
+    },
+    {
+      "case_ref": "synthetic-annual-monthly",
+      "client_ref": "synthetic-client-synthetic-annual-monthly",
+      "tenant_ref": "synthetic-sys",
+      "status": "active",
+      "terms_revision": 1,
+      "contract": {
+        "kind": "fixed_term",
+        "starts_on": "2026-01-31",
+        "ends_on": "2027-01-31",
+        "auto_renew": false,
+        "notice_days": 30
+      },
+      "billing": {
+        "cadence": "monthly",
+        "basis": "advance",
+        "anchor_day": 31,
+        "anchor_policy": "clamp_to_month_end_preserve_original_anchor",
+        "timezone": "America/Mexico_City",
+        "effective_from": "2026-01-31",
+        "due_days": 10
+      },
+      "currency": "MXN",
+      "lines": [
+        {
+          "line_id": "synthetic-line",
+          "description": "Servicio sintetico sin relacion con cliente real",
+          "sku": null,
+          "quantity": "2",
+          "unit_price": "99.00",
+          "fiscal_classification_ref": null
+        }
+      ],
+      "evidence_refs": [
+        "synthetic-acceptance-only"
+      ],
+      "activation_approval_ref": "synthetic-approval",
+      "pending_fields": []
+    }
+  ]
+}
