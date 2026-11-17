@@ -17,6 +17,7 @@ export const winPolicySchema = z.object({
   rules: z.array(winRuleSchema).max(20),
   reviewNoticeUserIds: z.array(z.string().min(1).max(200)).max(30).optional(),
   approvalEmailEnabled: z.boolean().optional(),
+  procurementDraftsEnabled: z.boolean().optional(),
 }).strict().superRefine(({ rules }, ctx) => {
   const ids = new Set(rules.map(r => r.id));
   if (ids.size !== rules.length) ctx.addIssue({ code: "custom", message: "Cada requisito necesita una clave única" });
@@ -43,6 +44,7 @@ export type WinCase = {
   revision: number; policyRevision: number; rules: WinRule[]; fingerprint: string;
   acceptedOn: string; acceptedAt: string; acceptedBy: string; acceptanceEvidence: string;
   decisions: Record<string, WinDecision>; consolidatedAt: string | null; cancelledAt: string | null;
+  procurementDraftsEnabled?: boolean;
 };
 export type WinPolicyVersion = WinPolicy & { revision: number };
 export type WinView = {

@@ -48,7 +48,7 @@ jobs:
           COTIZA_WIN_TEST_DATABASE_URL: postgresql://win_test:synthetic-ci-only@127.0.0.1:5432/cotiza_win_synthetic
       - name: Lint consolidation modules
         working-directory: cotiza-web
-        run: ./node_modules/.bin/eslint lib/domain/won-consolidation.ts lib/db/won-consolidation.ts lib/email/approval-notice.ts lib/email/approval-dispatch.ts components/layout/expiry-alerts-bell.tsx components/propuestas/win-consolidation*.tsx components/configuracion/win-policy-panel.tsx 'app/api/proposals/[proposalId]/consolidation' app/api/settings/win-policy 'app/(dashboard)/autorizaciones' 'app/(dashboard)/configuracion/consolidacion'
+        run: ./node_modules/.bin/eslint lib/domain/won-consolidation.ts lib/domain/procurement-draft.ts lib/db/won-consolidation.ts lib/db/procurement-store.ts components/compras/*.tsx 'app/api/proposals/[proposalId]/procurement' 'app/(dashboard)/compras' lib/email/approval-notice.ts lib/email/approval-dispatch.ts components/layout/expiry-alerts-bell.tsx components/propuestas/win-consolidation*.tsx components/configuracion/win-policy-panel.tsx 'app/api/proposals/[proposalId]/consolidation' app/api/settings/win-policy 'app/(dashboard)/autorizaciones' 'app/(dashboard)/configuracion/consolidacion'
       - run: npm --prefix cotiza-web run build
   browser:
     runs-on: ubuntu-24.04

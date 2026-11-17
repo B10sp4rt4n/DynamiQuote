@@ -1,8 +1,10 @@
 "use client";
 import { useState, type FormEvent } from "react";
+import { useRouter } from "next/navigation";
 import { winPolicySchema, type WinPolicyVersion, type WinRule } from "@/lib/domain/won-consolidation";
 type User = { userId: string; name: string; role?: string };
 export function WinPolicyPanel({ initial, tenantId, tenantName, users }: { initial: WinPolicyVersion; tenantId: string; tenantName: string; users: User[] }) {
+  const router = useRouter();
   const [policy, setPolicy] = useState(initial), [saving, setSaving] = useState(false), [blocked, setBlocked] = useState(false);
   const [message, setMessage] = useState<string | null>(null), [error, setError] = useState<string | null>(null);
   const disabled = saving || blocked;
@@ -13,14 +15,14 @@ export function WinPolicyPanel({ initial, tenantId, tenantName, users }: { initi
   }
   async function save(event: FormEvent) {
     event.preventDefault(); setError(null); setMessage(null);
-    const parsed = winPolicySchema.safeParse({ rules: policy.rules, ...(policy.reviewNoticeUserIds ? { reviewNoticeUserIds: policy.reviewNoticeUserIds } : {}), ...(policy.approvalEmailEnabled !== undefined ? { approvalEmailEnabled: policy.approvalEmailEnabled } : {}) });
+    const parsed = winPolicySchema.safeParse({ rules: policy.rules, ...(policy.reviewNoticeUserIds ? { reviewNoticeUserIds: policy.reviewNoticeUserIds } : {}), ...(policy.approvalEmailEnabled !== undefined ? { approvalEmailEnabled: policy.approvalEmailEnabled } : {}), ...(policy.procurementDraftsEnabled !== undefined ? { procurementDraftsEnabled: policy.procurementDraftsEnabled } : {}) });
     if (!parsed.success) { setError(parsed.error.issues[0]?.message ?? "Revisa los requisitos"); return; }
     setSaving(true);
     try {
       const response = await fetch("/api/settings/win-policy", { method: "PUT", headers: { "Content-Type": "application/json", "X-Tenant-Context": tenantId }, body: JSON.stringify({ policy: parsed.data, expectedRevision: policy.revision }) });
       const body = await response.json();
       if (!response.ok) throw new Error(body.error ?? "No se pudo guardar");
-      setPolicy(body.policy); setMessage("Política guardada. Se aplicará a las nuevas aceptaciones de esta empresa.");
+      setPolicy(body.policy); setMessage("Política guardada. Se aplicará a las nuevas aceptaciones de esta empresa."); router.refresh();
     } catch (err) { setError(err instanceof Error ? err.message : "Guardado sin confirmar"); setBlocked(true); }
     finally { setSaving(false); }
   }
@@ -29,6 +31,10 @@ export function WinPolicyPanel({ initial, tenantId, tenantName, users }: { initi
     <p className="text-sm">Empresa: <strong>{tenantName}</strong>. Configura los OK mínimos antes de consolidar y continuar hacia compras.</p>
     <p className="text-sm text-zinc-600">Sin requisitos adicionales se usa la regla mínima: aceptación del cliente. Los circuitos abiertos conservan la política aplicada; los cierres anteriores se mantienen.</p>
     <form onSubmit={save} className="space-y-4">
+      <label className="flex min-h-11 items-start gap-2 rounded-lg border border-zinc-300 p-3 text-sm">
+        <input type="checkbox" disabled={disabled} checked={policy.procurementDraftsEnabled ?? false} onChange={e => { setPolicy({ ...policy, procurementDraftsEnabled: e.target.checked }); setMessage(null); }} />
+        Preparar una requisición interna en borrador al consolidar una nueva ganada. Conserva las partidas, moneda, condiciones y OK de la versión aprobada; requiere revisar después la compra y sus proveedores. Para consolidar se exigirán moneda, descripción, cantidades y costos completos.
+      </label>
       <label className="flex min-h-11 items-start gap-2 rounded-lg border border-zinc-300 p-3 text-sm">
         <input type="checkbox" disabled={disabled} checked={policy.approvalEmailEnabled ?? false} onChange={e => { setPolicy({ ...policy, approvalEmailEnabled: e.target.checked }); setMessage(null); }} />
         Enviar también correo a los responsables cuando se genere una solicitud de aprobación. Incluye folio, cliente, revisión requerida y enlace seguro a Cotiza. Los avisos internos siguen en la campana.

@@ -33,3 +33,8 @@ it("closes after choosing a section while preserving commercial order and the ch
   expect([...container.querySelectorAll("nav a")].map(a => a.textContent)).toEqual(["Inicio", "Clientes", "Oportunidades", "Cotizaciones", "Propuestas", "KPIs", "Paquetes", "Autorizaciones", "Configuración"]);
   expect(container.querySelector("summary")?.textContent).toContain("Actualizamos el orden del menú");
 });
+it("shows Compras only for an enabled company",async()=>{
+  expect(container.querySelector('nav a[href="/compras"]')).toBeNull();
+  await act(async()=>root.render(<DashboardNav procurementEnabled/>));
+  expect(container.querySelector('nav a[href="/compras"]')?.textContent).toBe("Compras");
+});
