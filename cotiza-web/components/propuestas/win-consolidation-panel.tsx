@@ -85,7 +85,9 @@ export function WinConsolidationPanel({ proposalId, tenantId }: { proposalId: st
       </li>)}</ul> : null}
       {view.canConsolidate ? <button type="button" disabled={disabled} onClick={() => void submit({ action: "consolidate", expectedRevision: view.case!.revision })}
         className="min-h-11 rounded-lg bg-emerald-800 px-4 py-2 font-semibold text-white disabled:opacity-50">Consolidar ganada</button> : null}
-      {view.state === "consolidated" ? <p className="text-sm text-emerald-950">Requisitos completos. Lista para preparar la requisición a compras. La requisición y la orden al proveedor corresponden al siguiente paso.</p> : null}
+      {view.state === "consolidated" ? <div className="space-y-2 text-sm text-emerald-950"><p>Requisitos completos. Ganada consolidada.</p>
+        {view.policy.procurementDraftsEnabled?<Link href={`/compras/propuestas/${encodeURIComponent(proposalId)}`} className="inline-block min-h-11 rounded-lg border border-emerald-400 bg-white px-4 py-3 font-medium underline">Ver requisición en Compras</Link>
+          :<p>La preparación de requisiciones está desactivada para esta empresa.</p>}</div> : null}
       {view.canCancel ? <button type="button" disabled={disabled} onClick={() => void submit({ action: "cancel", expectedRevision: view.case!.revision })}
         className="min-h-11 rounded-lg border border-zinc-400 bg-white px-3 py-2 text-sm text-zinc-800 disabled:opacity-50">Retirar aceptación para corregir</button> : null}
       <Link href="/autorizaciones" className="block text-sm font-medium text-blue-800 underline">Ver autorizaciones de la empresa</Link>

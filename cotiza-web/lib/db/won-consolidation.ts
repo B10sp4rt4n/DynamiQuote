@@ -5,6 +5,8 @@ import { prisma } from "./prisma";
 import { hasAnotherBusinessWin } from "./commercial-win-guard";
 import { applicableRules, isSatisfied, mayApprove, winPolicySchema, type WinAction, type WinActor, type WinCase, type WinPolicyVersion, type WinView } from "@/lib/domain/won-consolidation";
 import { closeDateInstant, earliestCommercialStart, isValidCloseDate, mexicoCalendarDate } from "@/lib/domain/commercial-close-date";
+import { procurementEligibility, validateProcurementBasis, type ProcurementAction, type ProcurementBasis, type ProcurementView } from "@/lib/domain/procurement-draft";
+import { invalidateProcurementInTransaction, prepareProcurementInTransaction, procurementClosureKey, procurementTablesReady, readProcurementDrafts, updateProcurementInTransaction } from "./procurement-store";
 
 type Tx = Prisma.TransactionClient;
 export class WinError extends Error {
@@ -38,12 +40,13 @@ export async function invalidateWinCase(tx: Tx, tenantId: string, proposalId: st
   if (!current || current.cancelledAt) return;
   if (reason === "document_changed" && current.consolidatedAt) throw new WinError("Retira primero el resultado ganado antes de cambiar el documento consolidado");
   await saveCase(tx, tenantId, proposalId, { ...current, revision: current.revision + 1, cancelledAt: new Date().toISOString() }, actorId, reason);
+  await invalidateProcurementInTransaction(tx, tenantId, proposalId, actorId, reason);
 }
 // Direct outcome PATCH cannot bypass either the current policy or a pinned open circuit.
 export async function requiresWinCircuit(tx: Tx, tenantId: string, proposalId: string) {
   const policy = await readWinPolicy(tx, tenantId);
   const current = await readCase(tx, tenantId, proposalId);
-  return policy.rules.length > 0 || Boolean(current && !current.cancelledAt);
+  return policy.procurementDraftsEnabled === true || policy.rules.length > 0 || Boolean(current && !current.cancelledAt);
 }
 async function liveActor(tx: Tx, tenantId: string, actor: WinActor): Promise<WinActor> {
   const user = await tx.app_users.findFirst({ where: { user_id: actor.userId, active: true }, select: { tenant_id: true, role: true } });
@@ -69,7 +72,7 @@ async function document(tx: Tx, tenantId: string, proposalId: string, actor: Win
   ]);
   const fingerprint = createHash("sha256").update(JSON.stringify({ status: proposal.status, origin: proposal.origin, opportunity: proposal.opportunity_id,
     owner: proposal.created_by_user_id, items, formal, total: integrated?.total_price ?? null })).digest("hex");
-  return { proposal, fingerprint, amount: integrated?.total_price === null || integrated?.total_price === undefined ? null : Number(integrated.total_price), currency: formal[0]?.currency ?? null };
+  return { proposal, fingerprint, items, formal, amount: integrated?.total_price === null || integrated?.total_price === undefined ? null : Number(integrated.total_price), currency: formal[0]?.currency ?? null };
 }
 export async function listWinCases(tenantId: string, inputActor: WinActor) {
   return prisma.$transaction(async tx => {
@@ -120,6 +123,7 @@ export async function saveWinPolicy(tenantId: string, inputActor: WinActor, poli
     await lockWinPolicy(tx, tenantId);
     const actor = await liveActor(tx, tenantId, inputActor);
     if (!canManage(actor)) throw new WinError("Sólo owner o superadmin puede configurar las reglas", 403);
+    if (parsed.procurementDraftsEnabled && !await procurementTablesReady(tx)) throw new WinError("Compras requiere completar su publicación antes de habilitar la generación de requisiciones", 503);
     const previous = await readWinPolicy(tx, tenantId);
     if (expectedRevision !== previous.revision) throw new WinError("La política cambió. Recarga antes de guardar");
     const ids = [...new Set(parsed.rules.flatMap(r => r.approverUserIds))];
@@ -209,7 +213,7 @@ export async function actOnWin(tenantId: string, proposalId: string, inputActor:
       try { rules = applicableRules(policy, doc.amount ?? 0, doc.currency); } catch (e) { throw new WinError((e as Error).message, 422); }
       current = { revision: (current?.revision ?? 0) + 1, policyRevision: policy.revision, rules, fingerprint: doc.fingerprint,
         acceptedOn: input.acceptedOn, acceptedAt: now.toISOString(), acceptedBy: actor.userId, acceptanceEvidence: input.evidence,
-        decisions: {}, consolidatedAt: null, cancelledAt: null };
+        decisions: {}, consolidatedAt: null, cancelledAt: null, procurementDraftsEnabled: policy.procurementDraftsEnabled === true };
     } else {
       if (!current) throw new WinError("Registra primero la aceptación");
       if (input.action === "cancel") {
@@ -247,7 +251,94 @@ export async function actOnWin(tenantId: string, proposalId: string, inputActor:
       doc.proposal.outcome = "won";
     }
     await saveCase(tx, tenantId, proposalId, current, actor.userId, input.action);
+    if (current.consolidatedAt && !current.cancelledAt && current.procurementDraftsEnabled && policy.procurementDraftsEnabled) {
+      await prepareProcurementInTransaction(tx,await procurementBasis(tx,tenantId,current,doc),actor.userId);
+    }
     view = project(tenantId, proposalId, policy, current, doc, actor);
     return withPeople(tx, tenantId, view);
   });
+}
+
+async function procurementBasis(tx: Tx, tenantId: string, current: WinCase, doc: Awaited<ReturnType<typeof document>>): Promise<ProcurementBasis> {
+  const reason = procurementEligibility(current,doc.proposal.outcome,doc.proposal.status,doc.fingerprint);
+  if (reason) throw new WinError(reason);
+  const formal = doc.formal[0];
+  const number = formal ? await tx.formal_proposals.findUnique({ where:{proposal_doc_id:formal.proposal_doc_id},select:{proposal_number:true} }) : null;
+  try {
+    return validateProcurementBasis({ schemaVersion:1,tenantId,proposalId:doc.proposal.proposal_id,
+      proposalNumber:number?.proposal_number,formalDocId:formal?.proposal_doc_id,quoteId:formal?.quote_id??null,
+      opportunityId:doc.proposal.opportunity_id,customer:formal?.recipient_company,subject:formal?.subject??"",
+      currency:doc.currency,terms:formal?.terms_and_conditions??"",fingerprint:doc.fingerprint,
+      winRevision:current.revision,policyRevision:current.policyRevision,acceptedAt:current.acceptedAt,consolidatedAt:current.consolidatedAt,
+      acceptedBy:current.acceptedBy,acceptanceEvidence:current.acceptanceEvidence,
+      approvals:current.rules.map(rule=>({ruleId:rule.id,label:rule.label,...current.decisions[rule.id]})),
+      items:doc.items.map(item=>({itemId:item.item_id,itemNumber:item.item_number,sku:item.sku,description:item.description,
+        quantity:Number(item.quantity),costUnit:item.cost_unit===null?null:Number(item.cost_unit),
+        subtotalCost:item.subtotal_cost===null?null:Number(item.subtotal_cost),componentType:item.component_type,origin:item.origin})),
+    });
+  } catch(error) { throw new WinError(error instanceof Error?error.message:"Revisa las partidas antes de preparar Compras",422); }
+}
+async function procurementAccess(tx: Tx,tenantId:string,proposalId:string,inputActor:WinActor) {
+  const actor = await liveActor(tx,tenantId,inputActor);
+  const doc = await document(tx,tenantId,proposalId,actor);
+  // A named approval assignment alone does not grant access to commercial costs.
+  if (!canSeeAll(actor) && doc.proposal.created_by_user_id!==actor.userId) throw new WinError("Propuesta no encontrada",404);
+  const [policy,current] = await Promise.all([readWinPolicy(tx,tenantId),readCase(tx,tenantId,proposalId)]);
+  return {actor,doc,policy,current};
+}
+async function procurementProjection(tx:Tx,tenantId:string,source:Awaited<ReturnType<typeof procurementAccess>>):Promise<ProcurementView> {
+  const {doc,current,policy} = source, proposalId=doc.proposal.proposal_id;
+  const enabled=policy.procurementDraftsEnabled===true;
+  let reason=enabled?procurementEligibility(current,doc.proposal.outcome,doc.proposal.status,doc.fingerprint):"La generación de requisiciones está desactivada para esta empresa.";
+  if (!reason && current) { try { await procurementBasis(tx,tenantId,current,doc); } catch(error) { reason=(error as Error).message; } }
+  const key=current?.consolidatedAt?procurementClosureKey({tenantId,proposalId,acceptedAt:current.acceptedAt,consolidatedAt:current.consolidatedAt}):null;
+  const drafts=enabled?(await readProcurementDrafts(tx,tenantId,proposalId)).map(draft=>{
+    const fresh=!procurementEligibility(current,doc.proposal.outcome,doc.proposal.status,doc.fingerprint)
+      && key===draft.closureKey && draft.basis.fingerprint===doc.fingerprint && draft.basis.winRevision===current?.revision;
+    return {...draft,current:fresh&&draft.state==="draft",state:!fresh?"review_required" as const:draft.state,
+      reason:!fresh?"El cierre o su documento cambiaron; esta requisición conserva la versión anterior.":draft.reason};
+  }):[];
+  return {tenantId,proposalId,enabled,canPrepare:enabled&&!reason&&!drafts.some(d=>d.closureKey===key),reason,
+    winRevision:current?.revision??null,fingerprint:current?.fingerprint??null,drafts};
+}
+export function getProcurementView(tenantId:string,proposalId:string,actor:WinActor) {
+  return prisma.$transaction(async tx=>procurementProjection(tx,tenantId,await procurementAccess(tx,tenantId,proposalId,actor)),
+    {isolationLevel:Prisma.TransactionIsolationLevel.RepeatableRead});
+}
+export function actOnProcurement(tenantId:string,proposalId:string,inputActor:WinActor,input:ProcurementAction) {
+  return prisma.$transaction(async tx=>{
+    await lockWinPolicy(tx,tenantId);
+    await tx.$queryRaw`SELECT pg_advisory_xact_lock(hashtextextended(${`business-win:${tenantId}`},0))::text`;
+    await tx.$queryRaw`SELECT proposal_id FROM proposals WHERE tenant_id=${tenantId} AND proposal_id=${proposalId} FOR UPDATE`;
+    const source=await procurementAccess(tx,tenantId,proposalId,inputActor);
+    if (!source.policy.procurementDraftsEnabled) throw new WinError("Compras no está habilitado para esta empresa",403);
+    if (!source.current) throw new WinError("Registra primero el cierre con sus validaciones");
+    const basis=await procurementBasis(tx,tenantId,source.current,source.doc);
+    if (input.action==="prepare") {
+      if(input.expectedWinRevision!==basis.winRevision||input.expectedFingerprint!==basis.fingerprint) throw new WinError("El cierre cambió. Recarga antes de preparar la requisición");
+      await prepareProcurementInTransaction(tx,basis,source.actor.userId);
+    } else {
+      const drafts=await readProcurementDrafts(tx,tenantId,proposalId),draft=drafts.find(d=>d.id===input.draftId);
+      if(!draft) throw new WinError("Requisición no encontrada",404);
+      if(draft.state!=="draft"||draft.basis.winRevision!==basis.winRevision||draft.basis.fingerprint!==basis.fingerprint||draft.closureKey!==procurementClosureKey(basis)) throw new WinError("Esta requisición requiere revisión del cierre");
+      if(draft.revision!==input.expectedRevision) throw new WinError("La requisición cambió. Recarga antes de guardar");
+      if(!await updateProcurementInTransaction(tx,draft,source.actor.userId,input.notes,input.neededOn)) throw new WinError("La requisición cambió. Recarga antes de guardar");
+    }
+    return procurementProjection(tx,tenantId,source);
+  });
+}
+export function listProcurementDrafts(tenantId:string,inputActor:WinActor,offset=0) {
+  return prisma.$transaction(async tx=>{
+    const actor=await liveActor(tx,tenantId,inputActor),policy=await readWinPolicy(tx,tenantId);
+    if(!policy.procurementDraftsEnabled) return {enabled:false,items:[],hasMore:false};
+    await tx.$queryRaw`SELECT set_config('app.tenant_id',${tenantId},true)`;
+    const all=canSeeAll(actor);
+    const rows=await tx.$queryRaw<Array<{draft_id:string;proposal_id:string;folio:string;state:string;basis:ProcurementBasis;created_at:Date}>>`
+      SELECT d.draft_id,d.proposal_id,d.folio,d.state,d.basis,d.created_at FROM procurement_drafts d
+      JOIN proposals p ON p.tenant_id=d.tenant_id AND p.proposal_id=d.proposal_id
+      WHERE d.tenant_id=${tenantId} AND (${all} OR p.created_by_user_id=${actor.userId})
+      ORDER BY d.created_at DESC,d.draft_id DESC LIMIT 21 OFFSET ${Math.max(0,Math.min(offset,100000))}`;
+    return {enabled:true,hasMore:rows.length>20,items:rows.slice(0,20).map(row=>({id:row.draft_id,proposalId:row.proposal_id,
+      folio:row.folio,state:row.state,customer:row.basis.customer,proposalNumber:row.basis.proposalNumber,createdAt:row.created_at.toISOString()}))};
+  },{isolationLevel:Prisma.TransactionIsolationLevel.RepeatableRead});
 }

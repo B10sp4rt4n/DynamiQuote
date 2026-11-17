@@ -63,10 +63,10 @@ política o circuito abierto exige consolidación. Los cambios y su auditoría s
 confirman en la misma transacción. Un error de respuesta obliga a recargar antes
 de otra mutación; no se reenvía automáticamente.
 
-Esta entrega prepara la condición comercial para compras y notifica dentro de
-Cotiza y, cuando está habilitado por empresa, por correo. No genera ni libera
-requisiciones, órdenes al proveedor, pagos o timbrados. Esas
-acciones requieren un flujo posterior que consuma el cierre consolidado.
+La consolidación notifica dentro de Cotiza y, cuando está habilitado por empresa,
+por correo. La opción de Compras descrita a continuación prepara una requisición
+interna en borrador; la liberación de órdenes al proveedor, pagos y timbrados
+requiere un flujo posterior.
 Las validaciones de finanzas, existencias o contrato se registran manualmente
 con evidencia; todavía no consultan sistemas externos de inventario o bancos.
 
@@ -112,3 +112,56 @@ aceptado por el proveedor; no prueba lectura ni entrega al buzón.
 Las pruebas reales de PostgreSQL incluyen reclamación concurrente y respuesta
 perdida con un proveedor simulado. Ninguna prueba envía correo real. La activación
 de una empresa no despacha de golpe sus solicitudes anteriores.
+
+
+## Requisiciones internas en borrador
+
+`procurementDraftsEnabled` es opcional y está apagado por defecto. Owner o
+superadmin lo habilita por empresa en Configuración → Reglas de ganada. Requiere
+aplicar antes `cotiza-web/prisma/manual/20261117_procurement_drafts.sql`, después
+de las migraciones de consolidación. Es aditiva, idempotente y no importa cierres
+anteriores. No ejecutar `prisma db push`. Publicar código con el indicador apagado
+no crea requisiciones ni cambia políticas existentes.
+
+Cuando está habilitado al aceptar y al consolidar, la misma transacción del cierre
+prepara el borrador después de todos los OK aplicables. Si faltan moneda explícita,
+descripción, cantidades positivas o costos conciliados, se rechaza toda la
+transacción y se muestra qué revisar. No se registra una ganada parcial. Los
+circuitos aceptados antes de habilitarlo no generan borradores automáticamente;
+una vez consolidados pueden prepararse explícitamente desde la vista de Compras.
+Una etiqueta histórica de ganada sin circuito validado no es elegible.
+
+El menú Compras aparece al habilitar la opción. El cierre consolidado enlaza a
+`/compras/propuestas/{proposalId}`; `/compras` lista hasta 20 borradores por página.
+Owner/admin/superadmin ven los de su empresa y el vendedor ve los propios. Ser
+responsable de un requisito no concede acceso a costos de otras propuestas. Se
+comprueban identidad y rol activos en cada operación. Apagar la opción oculta el
+acceso a Compras y detiene nuevas preparaciones; conserva el historial.
+
+Cada ciclo de cierre tiene una sola requisición. Los reintentos conservan su folio;
+un retiro y nueva aceptación crean otro ciclo, conservando el anterior para revisión.
+`REQ-AAAA-NNNN` usa el año de preparación en Ciudad de México y un consecutivo por
+empresa y año. La base conserva la huella exacta aprobada, propuesta/cotización,
+cliente, moneda, condiciones, partidas/costos y evidencia de aceptación y OK. Las
+únicas ediciones son observaciones y fecha requerida, con revisión optimista.
+Retirar el resultado marca el borrador como `review_required` en la misma
+transacción; la consulta detallada también detecta cambios directos en el documento.
+No se reescribe ni se reactiva silenciosamente su origen.
+
+`GET/POST /api/proposals/{proposalId}/procurement` requieren sesión Clerk; POST
+verifica origen, empresa capturada y revisiones. `prepare` incluye
+`expectedWinRevision` y `expectedFingerprint`; `update` incluye `draftId`,
+`expectedRevision`, `notes` y `neededOn` (fecha ISO o null). No admite acciones de
+envío o liberación. El JSON descargable usa `schemaVersion: 1`,
+`documentKind: "purchase_requisition_draft"`, `executionAllowed: false` y el borrador,
+incluyendo su estado y el indicador `current`. Es un documento interno para
+revisión; no representa una orden autorizada al proveedor.
+
+La base impide sobrescribir el origen, borrar borradores o modificar sus eventos.
+Los eventos `prepared`, `updated` y `review_required` se guardan en la misma
+transacción. RLS y claves compuestas aíslan las tres tablas por empresa; el dueño
+de la base conserva sus facultades administrativas. No se presenta este registro
+como archivo WORM o certificación externa. No agrega servicios ni dependencias
+productivas. Las pruebas PostgreSQL comprueban la migración doble, concurrencia,
+folios por empresa, rollback, roles, RLS e inmutabilidad. El recorrido de navegador
+incluye preparación, revisión, cambios y respuesta perdida a 1360 y 390 px.

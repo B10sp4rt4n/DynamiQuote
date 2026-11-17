@@ -31,6 +31,8 @@ suite("consolidation with actual PostgreSQL transactions", () => {
     await pool.query(sql); await pool.query(sql);
     const mailSql = readFileSync(new URL("../../prisma/manual/20261113_approval_email_outbox.sql", import.meta.url), "utf8");
     await pool.query(mailSql); await pool.query(mailSql);
+    const procurementSql=readFileSync(new URL("../../prisma/manual/20261117_procurement_drafts.sql",import.meta.url),"utf8");
+    await pool.query(procurementSql); await pool.query(procurementSql);
     ({ prisma: db } = await import("./prisma")); api = await import("./won-consolidation"); proposals = await import("./proposals"); kpis = await import("./proposal-kpis");
     for (const t of ["a", "b"]) await db.tenant.create({ data: { tenant_id: t, name: t, slug: t, created_at: new Date() } });
     for (const [id, role, tenant] of [["seller", "owner", "a"], ["finance", "admin", "a"], ["legal", "user", "a"], ["other-owner", "owner", "a"], ["intruder", "user", "b"]]) await db.app_users.create({ data: {
@@ -134,5 +136,106 @@ suite("consolidation with actual PostgreSQL transactions", () => {
     expect((await sendApprovalNotices("a", "review-needed")).issues).toBe(1);
     await sendApprovalNotices("a", "review-needed"); expect(email.send).toHaveBeenCalledTimes(2);
     expect((await pool.query("SELECT state FROM approval_email_outbox ORDER BY created_at")).rows.map(r => r.state)).toEqual(["sent", "unknown"]);
+  });
+  async function purchasingProposal(id:string,tenant="a",creator="seller",currency:string|null="USD") {
+    await db.proposals.create({data:{proposal_id:id,tenant_id:tenant,status:"approved",created_by:creator,created_by_user_id:creator,created_at:new Date("2026-01-01")}});
+    await db.proposal_items.create({data:{item_id:`item-${id}`,proposal_id:id,tenant_id:tenant,item_number:1,sku:"SYNTHETIC",description:"Licencia de prueba",
+      quantity:2,cost_unit:10,price_unit:20,subtotal_cost:20,subtotal_price:40,status:"active",component_type:"product",origin:"vendor",created_at:new Date()}});
+    await db.formal_proposals.create({data:{proposal_doc_id:`formal-${id}`,proposal_id:id,tenant_id:tenant,proposal_number:`PROP-${id}`,
+      issued_date:new Date("2026-01-01"),issuer_company:"Empresa de prueba",recipient_company:"Cliente de prueba",currency,created_at:new Date()}});
+    await db.proposal_integrated_node.create({data:{proposal_id:id,tenant_id:tenant,total_price:40,total_cost:20,status:"active",updated_at:new Date()}});
+  }
+  it("keeps procurement off by default and does not copy a previous close when enabled",async()=>{
+    await purchasingProposal("purchase-manual");
+    const closed=await api.actOnWin("a","purchase-manual",seller,{action:"accept",expectedRevision:0,expectedPolicyRevision:4,acceptedOn:"2026-10-01",evidence:"Aceptación de prueba"});
+    expect(closed.state).toBe("consolidated");
+    expect((await pool.query("SELECT count(*) FROM procurement_drafts")).rows[0].count).toBe("0");
+    expect((await api.getProcurementView("a","purchase-manual",seller)).enabled).toBe(false);
+    await expect(api.actOnProcurement("a","purchase-manual",seller,{action:"prepare",expectedWinRevision:1,expectedFingerprint:closed.case!.fingerprint})).rejects.toMatchObject({status:403});
+    await api.saveWinPolicy("a",seller,{rules:[],procurementDraftsEnabled:true},4);
+    expect((await pool.query("SELECT count(*) FROM procurement_drafts")).rows[0].count).toBe("0");
+    expect((await api.getProcurementView("a","legacy",seller)).canPrepare).toBe(false);
+  });
+  it("prepares once under concurrent retries, preserves source and versions preparation notes",async()=>{
+    const view=await api.getProcurementView("a","purchase-manual",seller);
+    const input={action:"prepare" as const,expectedWinRevision:view.winRevision!,expectedFingerprint:view.fingerprint!};
+    const results=await Promise.all([api.actOnProcurement("a","purchase-manual",seller,input),api.actOnProcurement("a","purchase-manual",seller,input)]);
+    expect(new Set(results.map(result=>result.drafts[0].id)).size).toBe(1);
+    const draft=results[0].drafts[0];expect(draft.folio).toMatch(/^REQ-\d{4}-0001$/);
+    expect(draft.basis).toMatchObject({currency:"USD",proposalId:"purchase-manual",winRevision:1,items:[{quantity:2,costUnit:10,subtotalCost:20}]});
+    expect(draft.current).toBe(true);
+    const updated=await api.actOnProcurement("a","purchase-manual",seller,{action:"update",draftId:draft.id,expectedRevision:1,notes:"Entrega de prueba",neededOn:"2026-12-10"});
+    expect(updated.drafts[0]).toMatchObject({revision:2,notes:"Entrega de prueba",neededOn:"2026-12-10",sourceHash:draft.sourceHash});
+    expect(updated.drafts[0].basis).toEqual(draft.basis);
+    await expect(api.actOnProcurement("a","purchase-manual",seller,{action:"update",draftId:draft.id,expectedRevision:1,notes:"Anterior",neededOn:null})).rejects.toThrow("cambió");
+    expect((await pool.query("SELECT event_type FROM procurement_draft_events WHERE draft_id=$1 ORDER BY revision",[draft.id])).rows.map(r=>r.event_type)).toEqual(["prepared","updated"]);
+  });
+  it("automatically creates only after all pinned OKs and blocks the previous outcome shortcut",async()=>{
+    await db.app_users.update({where:{user_id:"finance"},data:{active:true}});
+    await api.saveWinPolicy("a",seller,{rules:[rule],procurementDraftsEnabled:true},5);
+    await purchasingProposal("purchase-auto");
+    expect(await proposals.setProposalOutcomeByTenant("a","purchase-auto","won",seller,true)).toBe("consolidation_required");
+    const accepted=await api.actOnWin("a","purchase-auto",seller,{action:"accept",expectedRevision:0,expectedPolicyRevision:6,acceptedOn:"2026-10-01",evidence:"Aceptación de prueba"});
+    expect((await api.getProcurementView("a","purchase-auto",seller)).drafts).toHaveLength(0);
+    await expect(api.actOnProcurement("a","purchase-auto",seller,{action:"prepare",expectedWinRevision:1,expectedFingerprint:accepted.case!.fingerprint})).rejects.toThrow("consolidación");
+    await api.actOnWin("a","purchase-auto",financial,{action:"decide",expectedRevision:1,ruleId:"finance",decision:"approved",evidence:"Anticipo de prueba"});
+    expect((await api.getProcurementView("a","purchase-auto",seller)).drafts).toHaveLength(0);
+    await api.actOnWin("a","purchase-auto",seller,{action:"consolidate",expectedRevision:2});
+    const prepared=await api.getProcurementView("a","purchase-auto",seller);
+    expect(prepared.drafts).toHaveLength(1);expect(prepared.drafts[0].basis.approvals[0]).toMatchObject({ruleId:"finance",actorId:"finance",decision:"approved"});
+    expect(prepared.drafts[0].folio).toMatch(/0002$/);
+  });
+  it("detects direct document changes and retains the old draft when the close is withdrawn",async()=>{
+    const old=(await api.getProcurementView("a","purchase-manual",seller)).drafts[0];
+    await db.formal_proposals.update({where:{proposal_doc_id:"formal-purchase-manual"},data:{currency:"MXN"}});
+    const stale=await api.getProcurementView("a","purchase-manual",seller);expect(stale.drafts[0]).toMatchObject({current:false,state:"review_required"});
+    expect(stale.drafts[0].basis.currency).toBe("USD");
+    await expect(api.actOnProcurement("a","purchase-manual",seller,{action:"update",draftId:old.id,expectedRevision:2,notes:"No guardar",neededOn:null})).rejects.toThrow("cambió");
+    await db.formal_proposals.update({where:{proposal_doc_id:"formal-purchase-manual"},data:{currency:"USD"}});
+    expect(await proposals.setProposalOutcomeByTenant("a","purchase-manual",null,seller,true)).toBe("updated");
+    const changed=(await api.getProcurementView("a","purchase-manual",seller)).drafts[0];
+    expect(changed.state).toBe("review_required");expect(changed.basis).toEqual(old.basis);
+    expect((await pool.query("SELECT state FROM procurement_drafts WHERE draft_id=$1",[old.id])).rows[0].state).toBe("review_required");
+  });
+  it("isolates tenant and seller access, revalidates roles, and keeps source/history immutable in SQL",async()=>{
+    const outsider:WinActor={userId:"intruder",userRole:"owner",isSuperAdmin:false};
+    await expect(api.getProcurementView("a","purchase-auto",outsider)).rejects.toMatchObject({status:403});
+    await expect(api.getProcurementView("b","purchase-auto",{...outsider,userRole:"user"})).rejects.toMatchObject({status:404});
+    await expect(api.getProcurementView("a","purchase-auto",legal)).rejects.toMatchObject({status:404});
+    await expect(api.getProcurementView("a","purchase-auto",{...legal,isSuperAdmin:true,userRole:"superadmin"})).rejects.toMatchObject({status:404});
+    const draft=(await api.getProcurementView("a","purchase-auto",seller)).drafts[0];
+    await expect(pool.query("UPDATE procurement_drafts SET basis='{}',revision=revision+1 WHERE draft_id=$1",[draft.id])).rejects.toMatchObject({code:"23514"});
+    await expect(pool.query("DELETE FROM procurement_drafts WHERE draft_id=$1",[draft.id])).rejects.toMatchObject({code:"23514"});
+    await expect(pool.query("UPDATE procurement_draft_events SET actor_id='changed' WHERE draft_id=$1",[draft.id])).rejects.toMatchObject({code:"23514"});
+    await expect(pool.query("INSERT INTO procurement_drafts(draft_id,tenant_id,proposal_id,closure_key,source_hash,folio,basis,created_by,updated_by) VALUES('foreign-draft','b','purchase-auto',$1,$2,'REQ-FOREIGN','{}','intruder','intruder')",["c".repeat(64),"a".repeat(64)])).rejects.toMatchObject({code:"23503"});
+    expect((await api.listProcurementDrafts("a",legal)).items).toHaveLength(0);
+    expect((await api.listProcurementDrafts("a",seller)).items).toHaveLength(2);
+  });
+  it("rolls back the win when enabled preparation has an incomplete source and preserves other tenants",async()=>{
+    await api.saveWinPolicy("a",seller,{rules:[],procurementDraftsEnabled:true},6);
+    await purchasingProposal("purchase-incomplete","a","seller",null);
+    await expect(api.actOnWin("a","purchase-incomplete",seller,{action:"accept",expectedRevision:0,expectedPolicyRevision:7,acceptedOn:"2026-10-01",evidence:"Aceptación de prueba"})).rejects.toMatchObject({status:422});
+    expect((await db.proposals.findUniqueOrThrow({where:{proposal_id:"purchase-incomplete"}})).outcome).toBeNull();
+    expect((await api.getWinView("a","purchase-incomplete",seller)).case).toBeNull();
+    expect((await api.listProcurementDrafts("b",{userId:"intruder",userRole:"user",isSuperAdmin:false})).enabled).toBe(false);
+  });
+  it("numbers each tenant independently and enforces SQL row isolation for a restricted reader",async()=>{
+    await db.app_users.create({data:{user_id:"buyer-b",alias:"buyer-b",first_name:"Buyer",last_name:"Synthetic",role:"owner",tenant_id:"b",password_hash:"unused",active:true,created_at:new Date()}});
+    const buyer:WinActor={userId:"buyer-b",userRole:"owner",isSuperAdmin:false};
+    await api.saveWinPolicy("b",buyer,{rules:[],procurementDraftsEnabled:true},0);
+    await purchasingProposal("purchase-b","b","buyer-b");
+    await api.actOnWin("b","purchase-b",buyer,{action:"accept",expectedRevision:0,expectedPolicyRevision:1,acceptedOn:"2026-10-01",evidence:"Aceptación de prueba"});
+    const only=(await api.getProcurementView("b","purchase-b",buyer)).drafts[0];expect(only.folio).toMatch(/0001$/);
+    expect((await api.listProcurementDrafts("b",buyer)).items).toHaveLength(1);
+    await pool.query("CREATE ROLE procurement_reader NOLOGIN");
+    await pool.query("GRANT SELECT ON procurement_drafts,procurement_draft_events,procurement_draft_counters TO procurement_reader");
+    const client=await pool.connect();
+    try{
+      await client.query("BEGIN");await client.query("SET LOCAL ROLE procurement_reader");
+      await client.query("SELECT set_config('app.tenant_id','b',true)");
+      expect((await client.query("SELECT count(*) FROM procurement_drafts")).rows[0].count).toBe("1");
+      expect((await client.query("SELECT count(*) FROM procurement_drafts WHERE tenant_id='a'")).rows[0].count).toBe("0");
+      expect((await client.query("SELECT count(*) FROM procurement_draft_events WHERE tenant_id='a'")).rows[0].count).toBe("0");
+    }finally{await client.query("ROLLBACK");client.release();}
   });
 });
