@@ -136,3 +136,10 @@ npx tsc --noEmit
 
 El workflow instala herramientas de pruebas temporalmente, sin dependencias nuevas de
 producción. El recorrido UI intercepta todo /api/ y rechaza cualquier origen externo.
+
+## Extensión compatible de Suscripciones-AUP
+
+El [rescate de Suscripciones-AUP](recurring-services-aup-rescue.md) documenta el encaje
+de identidad, versiones, evidencia y avisos. Añade revisión de vigencia contractual en
+las vistas actuales sin migración ni habilitación productiva; no añade cobertura de
+fabricante, custodia de PDF, fiscalidad o avisos por correo.

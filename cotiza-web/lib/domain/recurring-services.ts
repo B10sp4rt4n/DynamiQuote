@@ -40,9 +40,15 @@ export const recurringTermsSchema = z.object({
 export type RecurringTerms = z.infer<typeof recurringTermsSchema>;
 export type RecurringStatus = "draft" | "active" | "paused" | "ended";
 export type RecurringPeriod = { start: string; end: string; prepareOn: string; dueOn: string; termsRevision: number; state: string };
+export type RecurringRenewalReview = {
+  state: "draft" | "ended" | "incomplete" | "open_ended" | "scheduled" | "expired" | "t30" | "t60" | "notice_due" | "current";
+  asOf: string; timezone: string; endsOn: string | null; lastCoveredOn: string | null;
+  daysToEnd: number | null; noticeOn: string | null; noticeDue: boolean; autoRenew: boolean | null;
+};
 export type RecurringView = {
   id: string; number: string; revision: number; status: RecurringStatus;
   terms: RecurringTerms; missing: string[]; periods: RecurringPeriod[];
+  renewalReview: RecurringRenewalReview;
   createdAt: string; updatedAt: string;
 };
 export type RecurringWorkspace = { agreements: RecurringView[]; clients: { id: string; name: string }[]; hasMore: boolean; clientsTruncated: boolean };
@@ -85,10 +91,41 @@ export function isBoundary(t: RecurringTerms, value: string): boolean {
   const months = (Number(value.slice(0,4))-Number(t.startsOn.slice(0,4)))*12 + Number(value.slice(5,7))-Number(t.startsOn.slice(5,7));
   return months % step(t.cadence) === 0 && boundary(t, months/step(t.cadence)) === value;
 }
-export function todayInZone(zone:string):string {
-  const parts=new Intl.DateTimeFormat('en-CA',{timeZone:zone,year:'numeric',month:'2-digit',day:'2-digit'}).formatToParts(new Date());
+export function todayInZone(zone:string, at:Date = new Date()):string {
+  const parts=new Intl.DateTimeFormat('en-CA',{timeZone:zone,year:'numeric',month:'2-digit',day:'2-digit'}).formatToParts(at);
   const part=(type:string)=>parts.find(p=>p.type===type)!.value;
   return `${part('year')}-${part('month')}-${part('day')}`;
+}
+
+/** Read-only contract review. End is exclusive; billing dates and supplier coverage are independent. */
+export function reviewRecurringRenewal(
+  terms: RecurringTerms, status: RecurringStatus, at: Date = new Date(),
+): RecurringRenewalReview {
+  const asOf = todayInZone(terms.timezone, at);
+  const review: RecurringRenewalReview = {
+    state: "incomplete", asOf, timezone: terms.timezone, endsOn: terms.endsOn,
+    lastCoveredOn: null, daysToEnd: null, noticeOn: null, noticeDue: false, autoRenew: terms.autoRenew,
+  };
+  if (status === "draft" || status === "ended") return { ...review, state: status };
+  if (!terms.startsOn || !validDate(terms.startsOn)) return review;
+  if (!terms.endsOn) {
+    return { ...review, state: terms.contractKind === "month_to_month" ? "open_ended" : "incomplete" };
+  }
+  if (!validDate(terms.endsOn) || terms.endsOn <= terms.startsOn) return review;
+  // Subtract civil dates in UTC only after resolving today's date in the agreement's zone.
+  // This counts calendar days across DST rather than treating a local day as 24 hours.
+  const shift = (value: string, days: number) =>
+    new Date(Date.parse(`${value}T00:00:00Z`) + days * 86_400_000).toISOString().slice(0, 10);
+  review.lastCoveredOn = shift(terms.endsOn, -1);
+  review.daysToEnd = (Date.parse(`${terms.endsOn}T00:00:00Z`) - Date.parse(`${asOf}T00:00:00Z`)) / 86_400_000;
+  if (terms.noticeDays !== null) review.noticeOn = shift(terms.endsOn, -terms.noticeDays);
+  review.noticeDue = review.noticeOn !== null && asOf >= review.noticeOn;
+  review.state = review.daysToEnd <= 0 ? "expired"
+    : asOf < terms.startsOn ? "scheduled"
+    : review.daysToEnd <= 30 ? "t30"
+    : review.daysToEnd <= 60 ? "t60"
+    : review.noticeDue ? "notice_due" : "current";
+  return review;
 }
 function plusDays(date: string, count: number) {
   const d = new Date(`${date}T00:00:00Z`); d.setUTCDate(d.getUTCDate()+count);
