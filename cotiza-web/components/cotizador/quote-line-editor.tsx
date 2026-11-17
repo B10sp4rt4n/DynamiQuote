@@ -1040,9 +1040,7 @@ export function QuoteLineEditor({
     }
 
     let quoteIdForProposal = selectedQuoteId;
-    const hasUnsavedRevenueChanges = Math.abs((selectedQuote.totalRevenue ?? 0) - totals.totalRevenue) > 0.01;
-
-    if (hasUnsavedRevenueChanges) {
+    if (hasUnsavedTemplateChanges) {
       setMessage("Guardando cambios antes de generar la propuesta...");
       const savedQuoteId = await saveLines();
 
@@ -1519,7 +1517,7 @@ export function QuoteLineEditor({
           onSelectedQuoteChange?.(data.quote.quoteId);
           savedLinesRef.current = JSON.stringify(data.lines.map(normalizeLineQuantity));
           setLines(data.lines.map(normalizeLineQuantity));
-          setMessage(`PDF ThreatDown importado en MXN: borrador v${data.quote.version}. La versión anterior se conserva.`);
+          setMessage(`Partidas ThreatDown importadas: borrador v${data.quote.version}. Captura costos y define márgenes o precios en Cotiza.`);
         }} /> : null}
 
       {showPackagePicker && (
@@ -1742,7 +1740,7 @@ export function QuoteLineEditor({
       )}
 
       <p className="mt-5 text-xs text-zinc-600 sm:hidden">Desliza la tabla de partidas hacia los lados para ver todos los campos.</p>
-      <fieldset aria-label="Partidas de cotización" tabIndex={0} disabled={currentStatus === "archived"} className="mt-2 min-w-0 max-w-full overflow-x-auto rounded-xl border border-zinc-200 sm:mt-6">
+      <fieldset aria-label="Partidas de cotización" tabIndex={0} disabled={currentStatus === "archived" || loading || saving || versioningNow || creatingProposal} className="mt-2 min-w-0 max-w-full overflow-x-auto rounded-xl border border-zinc-200 sm:mt-6">
         <table className="min-w-full divide-y divide-zinc-200 text-sm">
           <thead className="bg-zinc-50 text-left text-zinc-600">
             <tr>

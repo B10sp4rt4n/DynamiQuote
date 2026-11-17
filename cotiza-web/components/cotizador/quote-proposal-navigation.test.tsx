@@ -80,3 +80,65 @@ it("does not create a proposal while its quote lines are still loading", async (
   await act(async () => resolve({ ok: true, json: async () => ({ lines: [line] }) }));
   expect(button("Crear propuesta").disabled).toBe(false);
 });
+
+async function editInput(input: HTMLInputElement, value: string) {
+  await act(async () => {
+    Object.getOwnPropertyDescriptor(HTMLInputElement.prototype, "value")!.set!.call(input, value);
+    input.dispatchEvent(new Event("input", { bubbles: true }));
+  });
+}
+
+it.each([true, false])("saves cost edits before creating a proposal even when revenue stays the same (save succeeds: %s)", async succeeds => {
+  await render();
+  const fallback = m.fetch.getMockImplementation()!;
+  m.fetch.mockImplementation(async (url: string, init?: RequestInit) => {
+    if (url.endsWith("/lines") && init?.method === "PUT") {
+      const { lines } = JSON.parse(init.body as string);
+      return succeeds
+        ? { ok: true, json: async () => ({ lines, quote: { ...quote, avgMargin: 30 }, versionCreated: false }) }
+        : { ok: false, json: async () => ({ error: "No se guardaron los cambios" }) };
+    }
+    return fallback(url, init);
+  });
+  const row = container.querySelector('fieldset[aria-label="Partidas de cotización"] tbody tr')!;
+  const cost = row.querySelectorAll<HTMLInputElement>("input")[3];
+  expect(cost.value).toBe("80");
+  await editInput(cost, "70");
+  await click("Crear propuesta");
+  const writes = m.fetch.mock.calls.filter(([, init]) => ["POST", "PUT"].includes(init?.method));
+  expect(writes[0][1].method).toBe("PUT");
+  expect(JSON.parse(writes[0][1].body).lines[0]).toMatchObject({ costUnit: 70, priceUnit: 100, marginPct: 30 });
+  expect(writes).toHaveLength(succeeds ? 2 : 1);
+  if (succeeds) expect(m.navigate).toHaveBeenCalledExactlyOnceWith("/propuestas?proposalId=synthetic-proposal");
+  else {
+    expect(m.navigate).not.toHaveBeenCalled();
+    expect(container.textContent).toContain("No se guardaron los cambios");
+  }
+});
+
+it("keeps a changed margin after a PDF import with free support and generates from the saved quote", async () => {
+  await render();
+  m.imported = { quote: { ...quote, totalRevenue: 100 }, lines: [line,
+    { ...line, lineId: "support", sku: "MPSNC12S01", description: "Support", costUnit: 0, priceUnit: 0, marginPct: 0, classification1: "service" }],
+    versionCreated: false, totals: { totalCost: 80, totalRevenue: 100, grossProfit: 20, avgMargin: 20 } };
+  await click("Importar PDF ThreatDown"); await click("Completar importación sintética");
+  const fallback = m.fetch.getMockImplementation()!;
+  m.fetch.mockImplementation(async (url: string, init?: RequestInit) => {
+    if (url.endsWith("/lines") && init?.method === "PUT") {
+      const { lines } = JSON.parse(init.body as string);
+      const { resolveBidirectionalPricing } = await import("@/lib/domain/pricing-engine");
+      const saved = lines.map((l: typeof line) => ({ ...l, ...resolveBidirectionalPricing({ costUnit: l.costUnit, priceUnit: l.priceUnit }) }));
+      m.imported = { ...m.imported!, lines: saved, quote: { ...quote, totalRevenue: saved[0].priceUnit, avgMargin: 35 } };
+      return { ok: true, json: async () => m.imported };
+    }
+    return fallback(url, init);
+  });
+  const margin = container.querySelector<HTMLInputElement>('tbody tr input[type="number"]')!;
+  await editInput(margin, "35");
+  await click("Crear propuesta");
+  const save = m.fetch.mock.calls.find(([, init]) => init?.method === "PUT")!;
+  expect(JSON.parse(save[1].body).lines[0]).toMatchObject({ marginPct: 35, priceUnit: 123.08 });
+  expect(m.imported.lines[0].marginPct).toBe(35);
+  expect(m.imported.lines[1].priceUnit).toBe(0);
+  expect(m.navigate).toHaveBeenCalledExactlyOnceWith("/propuestas?proposalId=synthetic-proposal");
+});
