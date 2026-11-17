@@ -2,6 +2,7 @@
 import Link from "next/link";
 import { useCallback, useEffect, useRef, useState } from "react";
 import { boundary, type RecurringAction, type RecurringTerms, type RecurringView, type RecurringWorkspace } from "@/lib/domain/recurring-services";
+import { RecurringRenewalNotice } from "./recurring-renewal-notice";
 
 const button="min-h-11 rounded-lg border border-zinc-400 px-4 py-2 text-sm font-semibold disabled:opacity-50";
 const input="mt-1 min-h-11 w-full rounded-lg border border-zinc-400 bg-white px-3 py-2 text-zinc-950 disabled:bg-zinc-100";
@@ -69,13 +70,15 @@ export function RecurringServicesPanel({tenantId,initialWorkspace}:{tenantId:str
     {notice?<p role="status" className="rounded-lg border border-emerald-300 bg-emerald-50 p-3">{notice}</p>:null}
     {uncertain?<button disabled={busy} className={button} onClick={()=>void recover()}>Consultar resultado antes de continuar</button>:null}
     <section aria-label="Cartera" className="rounded-xl border border-zinc-300 bg-white p-4">
-      <div className="flex flex-wrap justify-between gap-3"><h2 className="text-xl font-semibold">Acuerdos registrados</h2><button className={button} disabled={busy||uncertain} onClick={()=>{select({id:'',number:'',revision:0,status:'draft',terms:emptyTerms(),missing:[],periods:[],createdAt:'',updatedAt:''});setSelected(null);}}>Nuevo acuerdo</button></div>
-      <ul className="mt-3 grid gap-3 sm:grid-cols-2">{workspace?.agreements.map(a=><li key={a.id} className="min-w-0 rounded-lg border border-zinc-300 p-3"><p className="font-semibold break-words">{a.number} · {a.terms.title}</p><p className="text-sm">{status[a.status]} · {a.terms.currency??'Moneda pendiente'} · {a.missing.length} datos por completar</p><button className={`${button} mt-2`} disabled={busy||uncertain} onClick={()=>select(a)}>Abrir acuerdo</button></li>)}</ul>
+      <div className="flex flex-wrap justify-between gap-3"><h2 className="text-xl font-semibold">Acuerdos registrados</h2><button className={button} disabled={busy||uncertain} onClick={()=>{setSelected(null);setTerms(emptyTerms());setError(null);setNotice(null);setEvidence('');setFrom('');requestId.current=null;}}>Nuevo acuerdo</button></div>
+      <p className="mt-2 text-sm text-zinc-700">Avisos sobre la vigencia del contrato y su preaviso. Revisa por separado la cobertura de licencias, la facturación y los pagos.</p>
+      <ul className="mt-3 grid gap-3 sm:grid-cols-2">{workspace?.agreements.map(a=><li key={a.id} className="min-w-0 rounded-lg border border-zinc-300 p-3"><p className="font-semibold break-words">{a.number} · {a.terms.title}</p><p className="text-sm">{status[a.status]} · {a.terms.currency??'Moneda pendiente'} · {a.missing.length} datos por completar</p><RecurringRenewalNotice review={a.renewalReview}/><button className={`${button} mt-2`} disabled={busy||uncertain} onClick={()=>select(a)}>Abrir acuerdo</button></li>)}</ul>
       {workspace?.agreements.length===0?<p className="mt-3">Aún no hay acuerdos. Puedes comenzar con un borrador y completar sus condiciones.</p>:null}
       {workspace?.hasMore?<button className={`${button} mt-3`} disabled={busy} onClick={()=>void load(clientSearch,workspace.agreements.at(-1)?.number)}>Ver más acuerdos</button>:null}
     </section>
     <section className="rounded-xl border border-zinc-300 bg-white p-4">
       <h2 className="text-xl font-semibold">{selected?`${selected.number} · ${status[selected.status]}`:'Alta de acuerdo'}</h2>
+      {selected?<><RecurringRenewalNotice review={selected.renewalReview}/>{selected.terms.clientId?<Link className="mt-2 inline-flex min-h-11 items-center text-sm text-blue-800 underline" href={`/clientes/${encodeURIComponent(selected.terms.clientId)}`}>Ver ficha del cliente</Link>:null}</>:null}
       <p className="mt-1 text-sm text-zinc-700">Guardar conserva una revisión. Activar requiere condiciones completas y aceptación documentada.</p>
       <form onSubmit={e=>{e.preventDefault();save();}} className="mt-4 space-y-4">
         <fieldset disabled={locked} className="grid gap-4 sm:grid-cols-2">

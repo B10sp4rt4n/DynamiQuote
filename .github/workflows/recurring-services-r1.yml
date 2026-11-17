@@ -30,7 +30,7 @@ jobs:
           echo "PLAYWRIGHT_MODULE=$RUNNER_TEMP/recurring-tools/node_modules/playwright/index.mjs" >> "$GITHUB_ENV"
           echo "ESBUILD_MODULE=$RUNNER_TEMP/recurring-tools/node_modules/esbuild" >> "$GITHUB_ENV"
           "$RUNNER_TEMP/recurring-tools/node_modules/.bin/playwright" install --with-deps chromium
-      - run: npm --prefix cotiza-web test -- --run lib/domain/recurring-services.test.ts lib/db/recurring-services.integration.test.ts components/servicios/recurring-services-panel.test.tsx
+      - run: npm --prefix cotiza-web test -- --run lib/domain/recurring-services.test.ts lib/domain/recurring-renewals.test.ts lib/db/recurring-services.integration.test.ts components/servicios/recurring-services-panel.test.tsx
       - run: ./cotiza-web/node_modules/.bin/tsc --noEmit -p cotiza-web/tsconfig.json
       - run: node scripts/check_recurring_services_ui.mjs
       - uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02

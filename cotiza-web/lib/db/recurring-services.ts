@@ -4,7 +4,7 @@ import type { Prisma } from "@prisma/client";
 import { prisma } from "@/lib/db/prisma";
 import { RECURRING_CAPABILITY, RECURRING_TENANT_ID, RECURRING_TENANT_SLUG,
   RecurringError, assertActivatable, isBoundary, missingTerms, planPeriods,
-  recurringActionSchema, todayInZone, type RecurringAction, type RecurringStatus,
+  recurringActionSchema, reviewRecurringRenewal, todayInZone, type RecurringAction, type RecurringStatus,
   type RecurringTerms, type RecurringView, type RecurringWorkspace } from "@/lib/domain/recurring-services";
 
 export type RecurringActor = { tenantId: string; actorId: string };
@@ -49,6 +49,7 @@ async function view(tx: Tx, tenantId: string, row: Row, supplied?:PeriodRow[]): 
     SELECT coverage_start,coverage_end,prepare_on,due_on,terms_revision,state FROM recurring_periods
     WHERE tenant_id=${tenantId} AND agreement_id=${row.agreement_id}::uuid ORDER BY coverage_start DESC LIMIT 120`;
   return {id:row.agreement_id,number:row.agreement_number,revision:row.revision,status:row.status,
+    renewalReview:reviewRecurringRenewal(row.terms,row.status),
     terms:row.terms,missing:missingTerms(row.terms),createdAt:row.created_at.toISOString(),updatedAt:row.updated_at.toISOString(),
     periods:periods.reverse().map(p=>({start:dateString(p.coverage_start),end:dateString(p.coverage_end),prepareOn:dateString(p.prepare_on),dueOn:dateString(p.due_on),termsRevision:p.terms_revision,state:p.state}))};
 }
