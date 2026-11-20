@@ -32,11 +32,13 @@ describe("proposal-list-state", () => {
     expect(normalizeProposalSort("weird")).toBe("date_desc");
   });
 
-  it("resuelve proposalId solo si existe y si no usa el primero", () => {
+  it("respeta la identidad solicitada sin sustituirla por otra propuesta", () => {
     const items = [{ proposalId: "p-2" }, { proposalId: "p-3" }];
 
     expect(resolveSelectedProposalId(items, "p-3")).toBe("p-3");
-    expect(resolveSelectedProposalId(items, "missing")).toBe("p-2");
+    expect(resolveSelectedProposalId(items, "missing")).toBeNull();
+    expect(resolveSelectedProposalId(items, "")).toBeNull();
     expect(resolveSelectedProposalId([], "missing")).toBeNull();
+    expect(resolveSelectedProposalId(items, null)).toBe("p-2");
   });
 });

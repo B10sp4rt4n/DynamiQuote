@@ -1179,6 +1179,22 @@ export async function getProposalSummariesByTenant(
   return mapProposalSummaryRows(rows, marginPolicy);
 }
 
+// La propuesta solicitada puede estar fuera de la página o los filtros de
+// la lista. Se busca por su identidad con el mismo alcance de visibilidad.
+export async function getProposalSummaryByTenant(
+  tenantId: string,
+  proposalId: string,
+  viewerUserId: string | null,
+  canSeeAll: boolean,
+): Promise<ProposalSummary | null> {
+  const rows = await fetchProposalSummaryRows({
+    ...buildProposalScopeWhere(tenantId, viewerUserId, canSeeAll),
+    proposal_id: proposalId,
+  }, 1);
+  const marginPolicy = rows.length > 0 ? await getMarginPolicyByTenant(tenantId) : null;
+  return mapProposalSummaryRows(rows, marginPolicy)[0] ?? null;
+}
+
 export type ClientProposalHistoryItem = {
   createdAt: string;
   outcome: "won" | "lost" | "discarded" | null;
