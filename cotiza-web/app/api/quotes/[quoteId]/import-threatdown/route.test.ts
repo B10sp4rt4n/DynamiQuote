@@ -20,7 +20,7 @@ function request(fields: Record<string, string> = {}, filename = "quote.pdf") {
   Object.entries(fields).forEach(([k,v]) => body.set(k,v));
   return new Request("http://localhost/api/quotes/quote-v2/import-threatdown", { method: "POST", body });
 }
-const apply = { action: "apply", operationId, expectedHash: hash, exchangeRate: "20", marginPct: "20", confirmed: "yes" };
+const apply = { action: "apply", operationId, expectedHash: hash, confirmed: "yes" };
 describe("ThreatDown PDF route", () => {
   beforeEach(() => {
     vi.clearAllMocks(); m.tenant.mockResolvedValue({ id: "tenant-1", userId: "u1", userRole: "seller", isSuperAdmin: false });
@@ -49,14 +49,16 @@ describe("ThreatDown PDF route", () => {
   it("previews source fields and the actual file hash without writing", async () => {
     const r = await POST(request(),ctx); expect(r.status).toBe(200); expect(await r.json()).toEqual({ source, fileHash: hash }); expect(m.write).not.toHaveBeenCalled();
   });
-  it("rereads PDF and prices from trusted extraction, with original USD provenance and server actor", async () => {
-    const r = await POST(request({ ...apply, tenantId:"other", lines:'[{"costUnit":0}]' }),ctx); expect(r.status).toBe(200);
+  it("imports trusted product fields without costs, prices, exchange rates or margins", async () => {
+    const r = await POST(request({ ...apply, tenantId:"other", lines:'[{"costUnit":123}]', exchangeRate:"20", marginPct:"35" }),ctx);
+    expect(r.status).toBe(200);
     const value = m.write.mock.calls[0][0];
-    expect(value).toMatchObject({ tenantId:"tenant-1", quoteId:"quote-v2", operationId, mode:"replace", lines:[{ quantity:2,costUnit:200,priceUnit:250 }],
-      source:{ kind:"threatdown-pdf",id:"Q-123",revision:hash,commercial:{ currency:"USD",targetCurrency:"MXN",exchangeRate:20,marginPct:20,reviewedBy:"u1",lines:[{ costUnit:10 }] } } });
-    expect(value.source.commercial).not.toHaveProperty("licenseTo");
+    expect(value).toMatchObject({ tenantId:"tenant-1", quoteId:"quote-v2", operationId, mode:"replace",
+      lines:[{ sku:"TDADV", description:"ThreatDown Advanced", quantity:2, costUnit:0, priceUnit:0, marginPct:0 }],
+      source:{ kind:"threatdown-pdf",id:"Q-123",revision:hash,importMode:"items-only",reviewedBy:"u1" } });
+    expect(value.source).not.toHaveProperty("commercial");
   });
-  it.each([{confirmed:"no"},{confirmed:""},{exchangeRate:""},{exchangeRate:"0"},{marginPct:"100"},{marginPct:""},{operationId:"bad"}])("rejects unreviewed or invalid pricing %s", async (bad) => {
+  it.each([{confirmed:"no"},{confirmed:""},{operationId:"bad"}])("rejects unconfirmed or invalid operations %s", async (bad) => {
     expect((await POST(request({...apply,...bad}),ctx)).status).toBe(422); expect(m.write).not.toHaveBeenCalled();
   });
   it("rejects a changed file before extraction and write", async () => {

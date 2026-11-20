@@ -79,15 +79,10 @@ export function parseThreatDownQuote(text: string): ThreatDownQuote {
   return quote.data;
 }
 
-export function priceThreatDownQuote(quote: ThreatDownQuote, exchangeRate: number, marginPct: number) {
-  validateThreatDownTotals(quote);
-  if (!Number.isFinite(exchangeRate) || exchangeRate <= 0 || exchangeRate > 1000 ||
-      !Number.isFinite(marginPct) || marginPct < 0 || marginPct >= 100) {
-    throw new QuoteInputError("Indica un tipo de cambio positivo y un margen entre 0 y menos de 100%.");
-  }
-  return normalizeQuoteInput(quote.lines.map((l) => {
-    const costUnit = roundQuoteMoney(l.costUnit * exchangeRate);
-    return { sku: l.sku, description: l.description, quantity: l.quantity, costUnit,
-      priceUnit: roundQuoteMoney(costUnit / (1 - marginPct / 100)), lineType: l.sku.startsWith("MPSNC") ? "service" : "product" };
-  }));
+// The PDF supplies product data only. Commercial values belong to the editor.
+export function threatDownItemInput(quote: ThreatDownQuote) {
+  return normalizeQuoteInput(quote.lines.map(({ sku, description, quantity }) => ({
+    sku, description, quantity, costUnit: 0, priceUnit: 0,
+    lineType: sku.startsWith("MPSNC") ? "service" : "product",
+  })));
 }
