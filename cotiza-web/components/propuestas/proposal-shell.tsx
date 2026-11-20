@@ -3,10 +3,10 @@
 import { CommercialFlow } from "@/components/commercial/commercial-flow";
 import { DocumentCommercialFlow } from "@/components/commercial/document-commercial-flow";
 import Link from "next/link";
-import { useEffect, useMemo, useRef, useState, type MouseEvent } from "react";
+import { useCallback, useEffect, useMemo, useRef, useState, type MouseEvent } from "react";
 import { usePathname, useRouter, useSearchParams } from "next/navigation";
 
-import type { ProposalListCounts, ProposalListFilters, ProposalSummary } from "@/lib/db/proposals";
+import type { ProposalListCounts, ProposalListFilters, ProposalSummary, ProposalWorkflowDetail } from "@/lib/db/proposals";
 import {
   normalizeBlockedMarginFilter,
   normalizeProposalOutcomeFilter,
@@ -62,6 +62,7 @@ type ProposalShellProps = {
   initialOutcomeFilter: ProposalOutcomeFilter;
   initialStatusFilter: ProposalStatusFilter;
   proposals: ProposalSummary[];
+  requestedProposal?: ProposalSummary | null;
   tenantName: string;
 };
 
@@ -218,6 +219,7 @@ export function ProposalShell({
   initialOutcomeFilter,
   initialStatusFilter,
   proposals,
+  requestedProposal = null,
   tenantName,
 }: ProposalShellProps) {
   const router = useRouter();
@@ -233,17 +235,22 @@ export function ProposalShell({
       "",
     ),
   );
-  const [selectedProposalId, setSelectedProposalId] = useState<string | null>(() => {
-    const fromQuery = typeof window !== "undefined"
-      ? new URLSearchParams(window.location.search).get("proposalId")
-      : null;
-    return resolveSelectedProposalId(proposals, fromQuery);
-  });
-  const [issuerCompany, setIssuerCompany] = useState<string>(proposals[0]?.formal?.issuerCompany ?? "");
-  const [issuerEmail, setIssuerEmail] = useState<string>(proposals[0]?.formal?.issuerEmail ?? "");
-  const [issuerPhone, setIssuerPhone] = useState<string>(proposals[0]?.formal?.issuerPhone ?? "");
-  const [currency, setCurrency] = useState<string>(proposals[0]?.formal?.currency ?? "");
-  const [validUntil, setValidUntil] = useState<string>((proposals[0]?.formal?.validUntil ?? "").slice(0, 10));
+  const [detailSummary, setDetailSummary] = useState<ProposalSummary | null>(null);
+  // La URL es la fuente de la selección, tanto en SSR como al navegar
+  // entre propuestas. La ficha solicitada no forma parte de la paginación.
+  const selectedProposalId = resolveSelectedProposalId(
+    [...items, ...(requestedProposal ? [requestedProposal] : []), ...(detailSummary ? [detailSummary] : [])],
+    searchParams.get("proposalId"),
+  );
+  const initialProposal = requestedProposal?.proposalId === selectedProposalId
+    ? requestedProposal : proposals.find(item => item.proposalId === selectedProposalId);
+  const detailRequestRef = useRef(0);
+  const [loadedProposalId, setLoadedProposalId] = useState<string | null>(null);
+  const [issuerCompany, setIssuerCompany] = useState<string>(initialProposal?.formal?.issuerCompany ?? "");
+  const [issuerEmail, setIssuerEmail] = useState<string>(initialProposal?.formal?.issuerEmail ?? "");
+  const [issuerPhone, setIssuerPhone] = useState<string>(initialProposal?.formal?.issuerPhone ?? "");
+  const [currency, setCurrency] = useState<string>(initialProposal?.formal?.currency ?? "");
+  const [validUntil, setValidUntil] = useState<string>((initialProposal?.formal?.validUntil ?? "").slice(0, 10));
   // Switch de moneda al momento de emitir (no un gate que bloquee la
   // propuesta): si ya se eligio moneda, las acciones de imprimir/enviar
   // corren directo; si no, se pregunta aqui mismo antes de continuar.
@@ -253,26 +260,26 @@ export function ProposalShell({
   const pendingIssuanceActionRef = useRef<(() => void) | null>(null);
   const [salesOwner, setSalesOwner] = useState<string>("");
   const [recipientCompany, setRecipientCompany] = useState<string>(
-    proposals[0]?.formal?.recipientCompany ?? "",
+    initialProposal?.formal?.recipientCompany ?? "",
   );
   const [recipientContactName, setRecipientContactName] = useState<string>(
-    proposals[0]?.formal?.recipientContactName ?? "",
+    initialProposal?.formal?.recipientContactName ?? "",
   );
-  const [recipientEmail, setRecipientEmail] = useState<string>(proposals[0]?.formal?.recipientEmail ?? "");
+  const [recipientEmail, setRecipientEmail] = useState<string>(initialProposal?.formal?.recipientEmail ?? "");
   const [recipientContactTitle, setRecipientContactTitle] = useState<string>(
-    proposals[0]?.formal?.recipientContactTitle ?? "",
+    initialProposal?.formal?.recipientContactTitle ?? "",
   );
-  const [subject, setSubject] = useState<string>(proposals[0]?.formal?.subject ?? "");
-  const [customIntro, setCustomIntro] = useState<string>(proposals[0]?.formal?.customIntro ?? "");
-  const [objective, setObjective] = useState<string>(proposals[0]?.formal?.objective ?? "");
+  const [subject, setSubject] = useState<string>(initialProposal?.formal?.subject ?? "");
+  const [customIntro, setCustomIntro] = useState<string>(initialProposal?.formal?.customIntro ?? "");
+  const [objective, setObjective] = useState<string>(initialProposal?.formal?.objective ?? "");
   const [descriptionEnabled, setDescriptionEnabled] = useState<boolean>(
-    Boolean(proposals[0]?.formal?.customIntro || proposals[0]?.formal?.objective),
+    Boolean(initialProposal?.formal?.customIntro || initialProposal?.formal?.objective),
   );
   const [sendToContact, setSendToContact] = useState(false);
   const [selectedSentAt, setSelectedSentAt] = useState<string | null>(null);
   const [selectedOutcome, setSelectedOutcome] = useState<string | null>(null);
   const [selectedStatus, setSelectedStatus] = useState<ProposalStatus>(
-    proposals[0]?.status ?? "draft",
+    initialProposal?.status ?? "draft",
   );
   const [selectedIssuanceStatus, setSelectedIssuanceStatus] = useState<ProposalIssuanceStatus>(
     "normal",
@@ -287,7 +294,7 @@ export function ProposalShell({
   );
   const [executeOverrideMessage, setExecuteOverrideMessage] = useState<string | null>(null);
   const [termsAndConditions, setTermsAndConditions] = useState<string>(
-    proposals[0]?.formal?.termsAndConditions ?? "",
+    initialProposal?.formal?.termsAndConditions ?? "",
   );
   const [proposalItems, setProposalItems] = useState<
     Array<{
@@ -315,7 +322,8 @@ export function ProposalShell({
       status: string;
     }>
   >([]);
-  const [loadingDetail, setLoadingDetail] = useState(false);
+  const [loadingDetail, setLoadingDetail] = useState(true);
+  const detailReady = Boolean(selectedProposalId && loadedProposalId === selectedProposalId && !loadingDetail);
   const [quoteSyncToken, setQuoteSyncToken] = useState<string | null>(null);
   const [syncMessage, setSyncMessage] = useState<string | null>(null);
   const [saveStatus, setSaveStatus] = useState<"idle" | "saving" | "success" | "error">("idle");
@@ -372,8 +380,10 @@ export function ProposalShell({
   }, [items, sortBy]);
 
   const selectedProposal = useMemo(
-    () => items.find((item) => item.proposalId === selectedProposalId) ?? null,
-    [items, selectedProposalId],
+    () => (detailSummary?.proposalId === selectedProposalId ? detailSummary : null)
+      ?? items.find((item) => item.proposalId === selectedProposalId)
+      ?? (requestedProposal?.proposalId === selectedProposalId ? requestedProposal : null),
+    [detailSummary, items, requestedProposal, selectedProposalId],
   );
   // Partidas y empresa receptora requieren reabrir primero. El asunto
   // permite escribir directamente y reabre al guardar su cambio.
@@ -469,72 +479,15 @@ export function ProposalShell({
     router.replace(nextQuery.length > 0 ? `${pathname}?${nextQuery}` : pathname, { scroll: false });
   }, [pathname, router, searchParams, sortBy]);
 
-  useEffect(() => {
-    const currentProposalParam = searchParams.get("proposalId");
-
-    if (currentProposalParam === selectedProposalId) {
-      return;
-    }
-
-    const nextParams = new URLSearchParams(searchParams.toString());
-
-    if (selectedProposalId) {
-      nextParams.set("proposalId", selectedProposalId);
-    } else {
-      nextParams.delete("proposalId");
-    }
-
-    const nextQuery = nextParams.toString();
-    router.replace(nextQuery.length > 0 ? `${pathname}?${nextQuery}` : pathname, { scroll: false });
-  }, [selectedProposalId, pathname, router, searchParams]);
-
-  useEffect(() => {
-    if (!selectedProposalId) {
-      return;
-    }
-
-    // eslint-disable-next-line react-hooks/immutability
-    void loadProposalDetail(selectedProposalId);
-  }, [selectedProposalId]);
-
-  useEffect(() => {
-    if (filteredItems.length === 0) {
-      return;
-    }
-
-    const selectedIsVisible = filteredItems.some((item) => item.proposalId === selectedProposalId);
-
-    if (!selectedIsVisible) {
-      // eslint-disable-next-line react-hooks/set-state-in-effect
-      setSelectedProposalId(filteredItems[0].proposalId);
-    }
-  }, [filteredItems, selectedProposalId]);
+  const updateProposalSummaries = useCallback((update: (current: ProposalSummary[]) => ProposalSummary[]) => {
+    setItems(update);
+    setDetailSummary(current => current ? update([current])[0] ?? current : current);
+  }, []);
 
   function handleSelectProposal(proposalId: string) {
-    const found = items.find((item) => item.proposalId === proposalId);
-
-    setSelectedProposalId(proposalId);
-    setSendToContact(false);
-    setIssuerCompany(found?.formal?.issuerCompany ?? "");
-    setIssuerEmail(found?.formal?.issuerEmail ?? "");
-    setIssuerPhone(found?.formal?.issuerPhone ?? "");
-    setCurrency(found?.formal?.currency ?? "");
-    setValidUntil((found?.formal?.validUntil ?? "").slice(0, 10));
-    setRecipientCompany(found?.formal?.recipientCompany ?? "");
-    setRecipientContactName(found?.formal?.recipientContactName ?? "");
-    setRecipientEmail(found?.formal?.recipientEmail ?? "");
-    setRecipientContactTitle(found?.formal?.recipientContactTitle ?? "");
-    setSubject(found?.formal?.subject ?? "");
-    setCustomIntro(found?.formal?.customIntro ?? "");
-    setObjective(found?.formal?.objective ?? "");
-    setDescriptionEnabled(Boolean(found?.formal?.customIntro || found?.formal?.objective));
-    setSelectedStatus(found?.status ?? "draft");
-    setTermsAndConditions(found?.formal?.termsAndConditions ?? "");
-    setSaveStatus("idle");
-    setErrorMessage(null);
-    setApprovalReason("");
-    setEmailStatus("idle");
-    setEmailMessage(null);
+    const nextParams = new URLSearchParams(searchParams.toString());
+    nextParams.set("proposalId", proposalId);
+    router.replace(`${pathname}?${nextParams.toString()}`, { scroll: false });
   }
 
   function setListUrlParam(key: string, value: string | null) {
@@ -665,63 +618,44 @@ export function ProposalShell({
     } catch (error) { setErrorMessage(error instanceof Error ? error.message : "No se pudo actualizar"); setSaveStatus("error"); }
   }
 
-  async function loadProposalDetail(proposalId: string) {
+  const loadProposalDetail = useCallback(async (proposalId: string) => {
+    const request = ++detailRequestRef.current;
+    setLoadedProposalId(null);
+    setSendToContact(false);
+    setSaveStatus("idle");
+    setApprovalReason("");
+    setEmailStatus("idle");
+    setEmailMessage(null);
+    setImportFile(null);
+    setImportStatus("idle");
+    setImportMessage(null);
+    setCurrencyPromptOpen(false);
+    pendingIssuanceActionRef.current = null;
     setQuoteSyncToken(null);
     setSyncMessage(null);
     setLoadingDetail(true);
     setErrorMessage(null);
 
     try {
-      const response = await fetch(`/api/proposals/${proposalId}`, { method: "GET" });
+      const response = await fetch(`/api/proposals/${encodeURIComponent(proposalId)}`, { method: "GET", cache: "no-store" });
       const data = (await response.json()) as {
         quoteSyncToken?: string;
         error?: string;
-        proposal?: {
-          outcome?: "won" | "lost" | "discarded" | null;
-          formal: {
-            sentAt?: string | null;
-            currency: string | null;
-            customIntro: string | null;
-            issuerCompany: string;
-            issuerContactName: string;
-            issuerEmail: string;
-            issuerPhone: string;
-            objective: string | null;
-            recipientCompany: string;
-            recipientContactName: string;
-            recipientContactTitle: string;
-            recipientEmail: string;
-            subject: string;
-            termsAndConditions: string;
-            validUntil: string | null;
-          } | null;
-          items: Array<{
-            componentType: string;
-            costUnit: number;
-            description: string;
-            itemNumber: number;
-            origin: string;
-            priceUnit: number;
-            quantity: number;
-            sku: string;
-            status: string;
-          }>;
-          marginEvaluation?: ProposalLiberationEvaluation | null;
-          approvalGate: ProposalApprovalGateView;
-          approvals: ProposalApprovalRecordView[];
-          hasOpenMarginOverrideWindow: boolean;
-          isPendingOverrideTarget: boolean;
-          issuanceStatus: ProposalIssuanceStatus;
-          salesOwner: string;
-          proposalId: string;
-          status: ProposalStatus;
-        };
+        proposal?: ProposalWorkflowDetail;
       };
+
+      if (request !== detailRequestRef.current) return false;
 
       if (!response.ok || !data.proposal) {
         throw new Error(data.error ?? "No fue posible cargar la propuesta");
       }
 
+      if (data.proposal.proposalId !== proposalId) {
+        throw new Error("La respuesta no corresponde a la propuesta seleccionada. Vuelve a abrirla antes de continuar.");
+      }
+
+      setLoadedProposalId(proposalId);
+      setDetailSummary(data.proposal);
       setQuoteSyncToken(data.quoteSyncToken ?? null);
       setIssuerCompany(data.proposal.formal?.issuerCompany ?? "");
       setIssuerEmail(data.proposal.formal?.issuerEmail ?? "");
@@ -759,7 +693,7 @@ export function ProposalShell({
         })),
       );
 
-      setItems((current) =>
+      updateProposalSummaries((current) =>
         current.map((item) =>
           item.proposalId === data.proposal?.proposalId
             ? {
@@ -795,12 +729,20 @@ export function ProposalShell({
       );
       return true;
     } catch (error) {
+      if (request !== detailRequestRef.current) return false;
+      setSaveStatus("error");
       setErrorMessage(error instanceof Error ? error.message : "Error interno");
       return false;
     } finally {
-      setLoadingDetail(false);
+      if (request === detailRequestRef.current) setLoadingDetail(false);
     }
-  }
+  }, [updateProposalSummaries]);
+
+  useEffect(() => {
+    if (!selectedProposalId) return;
+    void loadProposalDetail(selectedProposalId);
+    return () => { detailRequestRef.current += 1; };
+  }, [loadProposalDetail, selectedProposalId]);
 
   function updateProposalItem(
     index: number,
@@ -869,7 +811,7 @@ export function ProposalShell({
   // Acepta un statusOverride opcional para cambiar el estado en el mismo request (usado por handleSendToApproval).
   // Después de un guardado exitoso sincroniza selectedStatus con el estado real devuelto por la API.
   async function handleSave(statusOverride?: ProposalStatus): Promise<boolean> {
-    if (!selectedProposal) {
+    if (!selectedProposal || !detailReady) {
       return false;
     }
 
@@ -890,6 +832,7 @@ export function ProposalShell({
       return false;
     }
 
+    const request = detailRequestRef.current;
     setSaveStatus("saving");
     setErrorMessage(null);
 
@@ -1054,11 +997,16 @@ export function ProposalShell({
         };
       };
 
+      if (request !== detailRequestRef.current) return false;
       if (!response.ok || !data.proposal) {
         throw new Error(data.error ?? "No fue posible guardar la propuesta");
       }
 
-      setItems((current) =>
+      if (data.proposal.proposalId !== selectedProposal.proposalId) {
+        throw new Error("La respuesta no corresponde a la propuesta seleccionada.");
+      }
+
+      updateProposalSummaries((current) =>
         current.map((item) =>
           item.proposalId === data.proposal?.proposalId
             ? {
@@ -1129,6 +1077,7 @@ export function ProposalShell({
       setSaveStatus("success");
       return true;
     } catch (error) {
+      if (request !== detailRequestRef.current) return false;
       setSaveStatus("error");
       setErrorMessage(error instanceof Error ? error.message : "Error interno");
       return false;
@@ -1197,7 +1146,7 @@ export function ProposalShell({
         setEmailStatus("idle");
         setEmailMessage(null);
       }
-      setItems((current) =>
+      updateProposalSummaries((current) =>
         current.map((item) =>
           item.proposalId === data.proposal?.proposalId
             ? {
@@ -1274,7 +1223,7 @@ export function ProposalShell({
       }
 
       setCurrency(nextCurrency);
-      setItems((current) =>
+      updateProposalSummaries((current) =>
         current.map((item) =>
           item.proposalId === selectedProposal.proposalId
             ? { ...item, formal: item.formal ? { ...item.formal, currency: nextCurrency } : item.formal }
@@ -1351,7 +1300,7 @@ export function ProposalShell({
 
       // Dispatch updates delivery metadata, never the authorization state.
       setSelectedSentAt(data?.sentAt ?? null);
-      setItems(current => current.map(item => item.proposalId === selectedProposal.proposalId && item.formal
+      updateProposalSummaries(current => current.map(item => item.proposalId === selectedProposal.proposalId && item.formal
         ? { ...item, formal: { ...item.formal, sentAt: data?.sentAt ?? null } } : item));
       setEmailStatus("success");
       setEmailMessage(data?.warning ?? (sendToContact ? "Proveedor aceptó el envío al cliente, con copia al owner y al emisor. La propuesta conserva su autorización." : "Envío del PDF al vendedor registrado. La propuesta conserva su autorización."));
@@ -1371,7 +1320,7 @@ export function ProposalShell({
     setSelectedStatus(proposal.status);
     setSelectedHasOpenMarginOverrideWindow(proposal.hasOpenMarginOverrideWindow);
     setSelectedIsPendingOverrideTarget(proposal.isPendingOverrideTarget);
-    setItems((current) =>
+    updateProposalSummaries((current) =>
       current.map((item) =>
         item.proposalId === proposalId
           ? { ...item, marginEvaluation: proposal.marginEvaluation, status: proposal.status }
@@ -1676,8 +1625,15 @@ export function ProposalShell({
         </div>
 
         <article className="rounded-xl border border-zinc-200 bg-zinc-50 p-4">
+          {selectedProposal && !detailReady && !loadingDetail ? (
+            <button className="mb-3 rounded-lg border border-zinc-300 bg-white px-3 py-2 text-sm text-zinc-800"
+              type="button" onClick={() => void loadProposalDetail(selectedProposal.proposalId)}>
+              Reintentar carga de la propuesta
+            </button>
+          ) : null}
           {selectedProposal ? (
-            <div className="space-y-4">
+            <fieldset className="min-w-0 space-y-4" disabled={!detailReady || saveStatus === "saving"}>
+              {loadingDetail ? <p role="status" className="text-sm text-zinc-600">Cargando la propuesta seleccionada...</p> : null}
               <div>
                 <p className="text-xs uppercase tracking-[0.18em] text-zinc-500">Propuesta activa</p>
                 <h2 className="mt-1 text-lg font-semibold text-zinc-900">
@@ -1944,7 +1900,7 @@ export function ProposalShell({
               <input
                 aria-describedby={!canEditContent ? "proposal-subject-help" : undefined}
                 className="w-full rounded-lg border border-zinc-300 bg-white px-3 py-2 text-sm text-zinc-800 disabled:cursor-not-allowed disabled:bg-zinc-100 disabled:text-zinc-500"
-                disabled={loadingDetail || saveStatus === "saving"}
+                disabled={!detailReady || saveStatus === "saving"}
                 id="proposal-subject"
                 maxLength={300}
                 onChange={(event) => setSubject(event.target.value)}
@@ -2071,7 +2027,7 @@ export function ProposalShell({
                 <div className="flex flex-wrap items-center gap-2">
                   <button
                     className="rounded-lg bg-zinc-900 px-4 py-2 text-sm font-medium text-white transition hover:bg-zinc-700 disabled:cursor-not-allowed disabled:bg-zinc-400"
-                    disabled={saveStatus === "saving" || loadingDetail}
+                    disabled={saveStatus === "saving" || !detailReady}
                     onClick={() => { void handleSave(); }}
                     type="button"
                   >
@@ -2080,7 +2036,7 @@ export function ProposalShell({
                   {!canEditContent ? (
                     <button
                       className="rounded-lg border border-amber-300 bg-amber-50 px-4 py-2 text-sm font-medium text-amber-800 transition hover:bg-amber-100 disabled:cursor-not-allowed disabled:opacity-60"
-                      disabled={saveStatus === "saving" || loadingDetail}
+                      disabled={saveStatus === "saving" || !detailReady}
                       onClick={() => { void handleSave("draft"); }}
                       title="El contenido (partidas, empresa receptora, asunto) solo se edita en borrador."
                       type="button"
@@ -2089,14 +2045,14 @@ export function ProposalShell({
                     </button>
                   ) : null}
                   <button type="button" className="rounded-lg border border-blue-300 bg-blue-50 px-4 py-2 text-sm font-medium text-blue-900 disabled:opacity-50"
-                    disabled={!canEditContent || !quoteSyncToken || saveStatus === "saving" || loadingDetail}
+                    disabled={!canEditContent || !quoteSyncToken || saveStatus === "saving" || !detailReady}
                     title={canEditContent ? "Toma las partidas guardadas de la cotización original de esta propuesta" : "Primero reabre la propuesta a borrador"}
                     onClick={() => void syncFromQuote()}>Actualizar desde cotización</button>
                   <span className="text-xs text-zinc-500">Guardar conserva las partidas actuales. Actualizar desde cotización importa sus cambios y recalcula el margen.</span>
                   {syncMessage ? <p role="status" className="text-sm text-emerald-800">{syncMessage}</p> : null}
                   <button
                     className="rounded-lg border border-zinc-300 bg-white px-4 py-2 text-sm font-medium text-zinc-700 transition hover:bg-zinc-100 disabled:cursor-not-allowed disabled:opacity-60"
-                    disabled={loadingDetail || issuanceGate.kind === "blocked"}
+                    disabled={!detailReady || issuanceGate.kind === "blocked"}
                     onClick={() => {
                       ensureCurrencyThenRun(() => {
                         window.open(`/api/proposals/${selectedProposal.proposalId}/pdf`, "_blank");
@@ -2261,7 +2217,7 @@ export function ProposalShell({
                         ? "bg-emerald-700 hover:bg-emerald-600"
                         : "bg-amber-700 hover:bg-amber-600"
                     }`}
-                    disabled={saveStatus === "saving" || loadingDetail}
+                    disabled={saveStatus === "saving" || !detailReady}
                     onClick={handleSendToApproval}
                     type="button"
                   >
@@ -2450,9 +2406,11 @@ export function ProposalShell({
                 </div>
               </div>
 
-            </div>
+            </fieldset>
           ) : (
-            <p className="text-sm text-zinc-600">No hay propuestas disponibles para este tenant.</p>
+            <p className="text-sm text-zinc-600">{searchParams.get("proposalId")
+              ? "La propuesta seleccionada no está disponible para tu sesión."
+              : "No hay propuestas disponibles para este tenant."}</p>
           )}
         </article>
       </div>

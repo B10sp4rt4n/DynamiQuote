@@ -49,8 +49,8 @@ export function resolveSelectedProposalId<T extends { proposalId: string }>(
   items: T[],
   proposalId: string | null | undefined,
 ): string | null {
-  if (proposalId && items.some((item) => item.proposalId === proposalId)) {
-    return proposalId;
+  if (proposalId != null) {
+    return items.some((item) => item.proposalId === proposalId) ? proposalId : null;
   }
 
   return items[0]?.proposalId ?? null;
