@@ -375,9 +375,8 @@ export function ProposalShell({
     () => items.find((item) => item.proposalId === selectedProposalId) ?? null,
     [items, selectedProposalId],
   );
-  // Contenido material (partidas, empresa receptora, asunto) solo se edita
-  // en draft -- fuera de ahi hay que reabrir explicitamente primero. Los
-  // campos "seguros" (terminos, datos de contacto) no dependen de esto.
+  // Partidas y empresa receptora requieren reabrir primero. El asunto
+  // permite escribir directamente y reabre al guardar su cambio.
   const canEditContent = selectedStatus === "draft";
   const marginAllowsFinalAuthorization = selectedProposal?.marginEvaluation?.canAuthorizeFinal ?? true;
   const issuanceGate = useMemo(
@@ -874,8 +873,11 @@ export function ProposalShell({
       return false;
     }
 
-    // Usar el override si se proporciona; de lo contrario usar el estado seleccionado en el dropdown.
-    const statusToSend = statusOverride ?? selectedStatus;
+    // El asunto se corrige directamente, pero su cambio material reabre el
+    // documento para que la autorización corresponda al contenido guardado.
+    const reopensForSubject = selectedProposal.status !== "draft" &&
+      subject.trim() !== (selectedProposal.formal?.subject ?? "");
+    const statusToSend = reopensForSubject ? "draft" : statusOverride ?? selectedStatus;
 
     // El guard de margen solo aplica al aprobar desde borrador o revisión.
     // Las decisiones comerciales no omiten los controles de autorización.
@@ -893,8 +895,15 @@ export function ProposalShell({
 
     const currentFormal = selectedProposal.formal;
     const normalizedItems = proposalItems.map((item, index) => ({
-      ...item,
+      componentType: item.componentType,
+      costUnit: item.costUnit,
+      description: item.description,
       itemNumber: index + 1,
+      origin: item.origin,
+      priceUnit: item.priceUnit,
+      quantity: item.quantity,
+      sku: item.sku,
+      status: item.status,
     }));
     const baselineItems = baselineProposalItems.map((item, index) => ({
       componentType: item.componentType,
@@ -1107,6 +1116,7 @@ export function ProposalShell({
       // Sincronizar el dropdown con el estado real confirmado por la API
       // (la API puede ajustar el estado si el workflow lo requiere).
       setSelectedStatus(data.proposal.status);
+      setSubject(data.proposal.formal?.subject ?? subject);
       setSelectedOutcome(data.proposal.outcome ?? null);
       setSelectedSentAt(null);
       setSelectedIssuanceStatus(data.proposal.issuanceStatus ?? "normal");
@@ -1932,13 +1942,21 @@ export function ProposalShell({
                 Asunto
               </label>
               <input
+                aria-describedby={!canEditContent ? "proposal-subject-help" : undefined}
                 className="w-full rounded-lg border border-zinc-300 bg-white px-3 py-2 text-sm text-zinc-800 disabled:cursor-not-allowed disabled:bg-zinc-100 disabled:text-zinc-500"
-                disabled={!canEditContent}
+                disabled={loadingDetail || saveStatus === "saving"}
                 id="proposal-subject"
+                maxLength={300}
                 onChange={(event) => setSubject(event.target.value)}
                 placeholder="Asunto de la propuesta"
                 value={subject}
               />
+              {!canEditContent ? (
+                <p id="proposal-subject-help" className="text-sm text-amber-800">
+                  Al cambiar el asunto y guardar, la propuesta vuelve a borrador y requiere nueva autorización.
+                  Se reinician las aprobaciones y cualquier cierre comercial.
+                </p>
+              ) : null}
 
               <div className="rounded-lg border border-zinc-200 bg-white p-3">
                 <div className="mb-2 flex items-center justify-between gap-2">
