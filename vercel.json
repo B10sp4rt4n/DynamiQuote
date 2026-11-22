@@ -1,7 +1,7 @@
 {
   "buildCommand": "cd cotiza-web && npm run build",
   "devCommand": "cd cotiza-web && npm run dev",
-  "installCommand": "cd cotiza-web && npm install",
+  "installCommand": "cd cotiza-web && npm install --prefer-offline --no-fund",
   "outputDirectory": "cotiza-web/.next",
   "framework": "nextjs"
 }
