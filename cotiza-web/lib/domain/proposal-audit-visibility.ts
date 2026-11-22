@@ -10,6 +10,7 @@ const OPERATIONAL_FIELDS: Record<string, readonly string[]> = {
   outcome_changed: ["fromOutcome", "toOutcome", "trigger", "selectedCloseDate", "outcomeAt"],
   status_change_requested: ["fromStatus", "requestedStatus", "resultStatus", "ok"],
   document_issued: ["status", "watermark", "forced", "via"],
+  document_downloaded: ["status", "watermark", "forced", "via"],
   document_blocked: ["via"],
   approval_decision: ["approverRole", "decision"],
   proposal_force_issue_consumed: ["consumedVia"],

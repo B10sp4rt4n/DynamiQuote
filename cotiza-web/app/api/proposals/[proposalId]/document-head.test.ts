@@ -42,7 +42,9 @@ describe.each([["PDF", pdf], ["Excel", xlsx]] as const)("%s metadata vs download
     vi.resetAllMocks();
     mocks.tenant.mockResolvedValue({ id: "tenant-1", name: "Empresa", userId: "user-1" });
     const proposal = {
-      proposalId: "proposal-1", status: "approved", formal: { proposalNumber: "PROP-1" },
+      proposalId: "proposal-1", status: "approved", formal: {
+        proposalNumber: "PROP-1", proposalDocId: "document-1", updatedAt: "2026-11-21T12:00:00.000Z",
+      },
       issuanceStatus: "authorized", marginEvaluation: { canAuthorizeFinal: true }, items: [],
     };
     mocks.proposal.mockResolvedValue(proposal);
@@ -66,9 +68,13 @@ describe.each([["PDF", pdf], ["Excel", xlsx]] as const)("%s metadata vs download
     const download = await route.GET(request("GET"), context());
     expect(download.status).toBe(200);
     expect(mocks.consume).toHaveBeenCalledTimes(1);
+    const event = _format === "PDF" ? {
+      eventType: "document_downloaded",
+      payload: expect.objectContaining({ via: "pdf", httpMethod: "GET", documentId: "document-1",
+        documentUpdatedAt: "2026-11-21T12:00:00.000Z", proposalNumber: "PROP-1" }),
+    } : { eventType: "document_issued", payload: expect.objectContaining({ via: "xlsx", httpMethod: "GET" }) };
     expect(mocks.audit).toHaveBeenCalledExactlyOnceWith(expect.objectContaining({
-      tenantId: "tenant-1", proposalId: "proposal-1", eventType: "document_issued",
-      payload: expect.objectContaining({ httpMethod: "GET" }),
+      tenantId: "tenant-1", proposalId: "proposal-1", ...event,
     }));
   });
 

@@ -6,6 +6,7 @@ import { prisma } from "@/lib/db/prisma";
 import { resolveBusiness } from "@/lib/db/opportunity-workspace";
 import { revalidateRecordiaActor } from "./access";
 import { RECORDIA_PILOT_TENANT_ID, RecordiaError, type RecordiaActor, type RecordiaEvidence, type RecordiaMemory } from "./domain";
+import { describeRecordiaEvent } from "./timeline";
 
 export type MemoryRow = {
   event_id: string; event_number: string; source_table: string; source_id: string; source_version: number;
@@ -14,6 +15,8 @@ export type MemoryRow = {
   before_data: Record<string, unknown> | null; after_data: Record<string, unknown> | null;
   previous_event_id: string | null; previous_hash: string; parent_hash: string | null;
   content_hash: string; canonical_text: string;
+  proposal_folio?: string | null;
+  archived_document_revision?: string | null;
 };
 const labels: Record<string, string> = { opportunities: "Oportunidad", quotes: "Cotización", proposals: "Propuesta", interaction_logs: "Nota comercial",
   proposal_audit_events: "Evento de propuesta", proposal_approvals: "Aprobación", quote_lines: "Partida de cotización",
@@ -39,6 +42,7 @@ export function projectPersistentMemory(opportunityId: string, row: MemoryRow, i
     || !(row.case_ids.includes(opportunityId)||row.associated_case_ids?.includes(opportunityId))) throw new RecordiaError("Referencia de memoria inconsistente", 503);
   const image = row.after_data ?? row.before_data ?? {};
   const note = typeof image.note === "string" ? image.note : null;
+  const timeline = describeRecordiaEvent(row, image);
   const memory: RecordiaMemory = {
     id: row.event_id, aup_id: opportunityId, memory_type: "context_snapshot", title: `${labels[row.source_table] ?? "Registro"} · ${actions[row.event_type] ?? row.event_type}`,
     description: note?.slice(0, 4000) ?? null,
@@ -52,6 +56,7 @@ export function projectPersistentMemory(opportunityId: string, row: MemoryRow, i
     source_connector: "cotiza", recorded_at_utc: row.recorded_at_utc, content_kind: "persistent_snapshot",
     epistemic_status: row.source_table === "interaction_logs" ? "recorded_claim" : row.source_table === "proposal_approvals" ? "decision" : "observed_fact",
     integrity_status: "hash_verified", source: { kind: row.source_table, id: row.source_id, href: null },
+    ...(timeline ? { timeline } : {}),
     ...(includeSnapshot ? { preserved_snapshot: { canonical_text: row.canonical_text, content_hash: row.content_hash,
       verification_scope: "stored_envelope_and_direct_predecessor" as const } } : {}),
   };
@@ -80,16 +85,30 @@ export async function readRecordiaDossier(actor: RecordiaActor, opportunityId: s
       SELECT source_table,source_id,array_agg(DISTINCT c.case_id) AS associated_case_ids
       FROM recordia_memory_events CROSS JOIN LATERAL unnest(case_ids) c(case_id)
       WHERE tenant_id=${actor.tenantId} AND c.case_id IN (${Prisma.join(ids)}) GROUP BY source_table,source_id
-    ) SELECT e.*, related.associated_case_ids, e.event_id::text AS event_id, e.event_number::text AS event_number,
+    ), page AS (
+      SELECT e.*, related.associated_case_ids FROM recordia_memory_events e JOIN related USING(source_table,source_id)
+      WHERE e.tenant_id=${actor.tenantId}
+        AND (${options.eventId ?? null}::uuid IS NULL OR e.event_id=${options.eventId ?? null}::uuid)
+        AND (${options.beforeEventNumber ?? null}::bigint IS NULL OR e.event_number<${options.beforeEventNumber ?? null}::bigint)
+      ORDER BY e.event_number DESC LIMIT ${options.eventId ? 1 : limit + 1} OFFSET ${options.offset ?? 0}
+    ) SELECT e.*, e.event_id::text AS event_id, e.event_number::text AS event_number,
       e.previous_event_id::text AS previous_event_id,
-      e.canonical_text::jsonb->>'recorded_at_utc' AS recorded_at_utc, parent.content_hash AS parent_hash
-    FROM recordia_memory_events e JOIN related USING(source_table,source_id) LEFT JOIN recordia_memory_events parent
+      e.canonical_text::jsonb->>'recorded_at_utc' AS recorded_at_utc, parent.content_hash AS parent_hash,
+      document.folio AS proposal_folio, document.revision AS archived_document_revision
+    FROM page e LEFT JOIN recordia_memory_events parent
       ON parent.event_id=e.previous_event_id AND parent.tenant_id=e.tenant_id
       AND parent.source_table=e.source_table AND parent.source_id=e.source_id AND parent.source_version=e.source_version-1
-    WHERE e.tenant_id=${actor.tenantId}
-      AND (${options.eventId ?? null}::uuid IS NULL OR e.event_id=${options.eventId ?? null}::uuid)
-      AND (${options.beforeEventNumber ?? null}::bigint IS NULL OR e.event_number<${options.beforeEventNumber ?? null}::bigint)
-    ORDER BY e.event_number DESC LIMIT ${options.eventId ? 1 : limit + 1} OFFSET ${options.offset ?? 0}`);
+    LEFT JOIN LATERAL (
+      SELECT archive.after_data->>'proposal_number' AS folio,
+        CASE WHEN archive.after_data IS NOT NULL THEN archive.event_id::text END AS revision
+      FROM recordia_memory_events archive
+      WHERE e.source_table IN ('proposal_audit_events','proposal_approvals')
+        AND archive.tenant_id=e.tenant_id AND archive.source_table='formal_proposals'
+        AND COALESCE(archive.after_data,archive.before_data)->>'proposal_id'=COALESCE(e.after_data,e.before_data)->>'proposal_id'
+        AND archive.event_number<e.event_number
+      ORDER BY archive.event_number DESC LIMIT 1
+    ) document ON true
+    ORDER BY e.event_number DESC`);
   if (!rows.length && (options.eventId || !options.offset && !options.beforeEventNumber)) {
     throw new RecordiaError("Expediente o registro no encontrado", 404);
   }
