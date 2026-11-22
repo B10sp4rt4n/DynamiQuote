@@ -13,6 +13,8 @@ import { isDigestorFiscalEnabledForTenant } from "@/lib/integrations/digestor-fi
 import { CommercialFlow } from "@/components/commercial/commercial-flow";
 import { BusinessFollowUp } from "@/components/commercial/business-follow-up";
 import { QuoteOpportunityPanel } from "@/components/cotizador/quote-opportunity-panel";
+import { QuoteNameEditor } from "@/components/cotizador/quote-name-editor";
+import { normalizeQuoteName, quoteNameLabel } from "@/lib/domain/quote-name";
 import { OpportunityReview } from "@/components/pipeline/opportunity-review";
 import { OpportunityAmount } from "@/components/pipeline/opportunity-amount";
 import { DISPOSITION_LABELS } from "@/lib/domain/opportunity-disposition";
@@ -92,8 +94,8 @@ export default async function BusinessPage({ params }: { params: Promise<{ oppor
       <div className="mt-4 grid gap-3 sm:grid-cols-2">{proposals.map(proposal => {
         const formal = proposal.formal_proposals[0];
         const sourceQuote = quotes.find(quote => quote.quote_id === (formal?.quote_id ?? proposal.origin));
-        const quoteName = sourceQuote?.proposal_name?.trim();
-        const subject = formal?.subject?.trim();
+        const quoteName = normalizeQuoteName(sourceQuote?.proposal_name);
+        const subject = normalizeQuoteName(formal?.subject);
         const option = sourceQuote ? optionLabels[sourceQuote.quote_id] : null;
         const prices = proposal.proposal_items.map(item => item.subtotal_price === null ? NaN : Number(item.subtotal_price));
         const amount = prices.length && prices.every(Number.isFinite) ? prices.reduce((sum, price) => sum + price, 0) : null;
@@ -117,13 +119,17 @@ export default async function BusinessPage({ params }: { params: Promise<{ oppor
     <section className="scroll-mt-24 rounded-xl border border-zinc-200 bg-white p-5" id="cotizaciones">
       <h2 className="text-xl font-semibold">Cotizaciones y revisiones ({quotes.length})</h2>
       <p className="mt-1 text-sm text-zinc-600">Las alternativas pertenecen al mismo negocio y conservan sus revisiones.</p>
-      <div className="mt-4 grid gap-3 sm:grid-cols-2">{quotes.map(quote => <Link key={quote.quote_id} className="min-h-11 min-w-0 rounded-lg border border-zinc-300 p-4 hover:border-blue-600" href={`/cotizaciones?quoteId=${encodeURIComponent(quote.quote_id)}`}>
+      <p className="mt-1 text-sm text-zinc-600">El nombre se captura al crear la cotización. Puedes asignarlo o editarlo aquí mientras esta revisión esté en borrador.</p>
+      <div className="mt-4 grid gap-3 sm:grid-cols-2">{quotes.map(quote => <article key={quote.quote_id} className="min-w-0 rounded-lg border border-zinc-300 p-4" aria-label={`${quote.quote_group_id ?? "Cotización"} · Revisión ${quote.version ?? 1}`}>
+        <Link className="block min-h-11 rounded focus-visible:outline-2 focus-visible:outline-blue-700" href={`/cotizaciones?quoteId=${encodeURIComponent(quote.quote_id)}`}>
         <span className="block text-sm font-semibold text-blue-800">{optionLabels[quote.quote_id] ? `Opción ${optionLabels[quote.quote_id]!.ordinal} · ${optionLabels[quote.quote_id]!.label}` : ""}</span>
-        <strong className="block break-words">{quote.proposal_name || "Cotización"}</strong>
+        <strong className="block break-words">{quoteNameLabel(quote.proposal_name)}</strong>
         <span className="text-sm">{quote.quote_group_id ?? "Sin folio"} · Revisión {quote.version ?? 1} · {quote.status ?? "Sin estado"}</span>
         <span className="mt-3 block text-sm text-zinc-600">Monto cotizado (antes de IVA)</span>
         <span className="block break-words text-lg font-semibold tabular-nums">{quotedAmount(quote.total_revenue === null ? null : Number(quote.total_revenue), "MXN")}</span>
-      </Link>)}</div>
+        </Link>
+        {quote.status === "draft" ? <QuoteNameEditor key={`${quote.quote_id}:${quote.proposal_name}`} quoteId={quote.quote_id} initialName={quote.proposal_name} /> : null}
+      </article>)}</div>
       {!quotes.length ? <p className="mt-3 text-zinc-600">Sin cotizaciones vinculadas en esta vista.</p> : null}
     </section>
     <section className="rounded-xl border border-zinc-200 bg-white p-5" id="pendientes">

@@ -6,6 +6,8 @@ import Link from "next/link";
 import { Cell, Pie, PieChart, ResponsiveContainer, Tooltip } from "recharts";
 
 import type { QuoteGroupSummary } from "@/lib/db/quotes";
+import { QuoteNameEditor } from "./quote-name-editor";
+import { normalizeQuoteName, quoteNameLabel } from "@/lib/domain/quote-name";
 import { resolveBidirectionalPricing } from "@/lib/domain/pricing-engine";
 import { TemplatePickerModal } from "@/components/cotizador/template-picker-modal";
 import { SaveTemplateButton } from "@/components/cotizador/save-template-button";
@@ -33,6 +35,7 @@ type QuoteLineEditorProps = {
   forcedSelectedQuoteId?: string | null;
   onSelectedQuoteChange?: (quoteId: string, quote?: QuoteGroupSummary) => void;
   onQuoteVersionSaved?: (quote: QuoteVersionSaved) => void;
+  onQuoteNameSaved?: (quoteId: string, name: string) => void;
   quotes: QuoteGroupSummary[];
 };
 
@@ -453,6 +456,7 @@ export function QuoteLineEditor({
   forcedSelectedQuoteId,
   onSelectedQuoteChange,
   onQuoteVersionSaved,
+  onQuoteNameSaved,
   quotes,
 }: QuoteLineEditorProps) {
   const router = useRouter();
@@ -475,6 +479,8 @@ export function QuoteLineEditor({
   const [saving, setSaving] = useState(false);
   const [versioningNow, setVersioningNow] = useState(false);
   const [creatingProposal, setCreatingProposal] = useState(false);
+  const [savingName, setSavingName] = useState(false);
+  const [quoteNames, setQuoteNames] = useState<Record<string, string>>({});
   const [message, setMessage] = useState<string | null>(null);
   const [showPackagePicker, setShowPackagePicker] = useState(false);
   const [showThreatDownImport, setShowThreatDownImport] = useState(false);
@@ -486,8 +492,11 @@ export function QuoteLineEditor({
   });
 
   const selectedQuote = useMemo(
-    () => quotes.find((quote) => quote.quoteId === selectedQuoteId) ?? null,
-    [quotes, selectedQuoteId],
+    () => {
+      const quote = quotes.find((item) => item.quoteId === selectedQuoteId);
+      return quote ? { ...quote, proposalName: quoteNames[quote.quoteId] ?? quote.proposalName } : null;
+    },
+    [quotes, selectedQuoteId, quoteNames],
   );
 
   useEffect(() => {
@@ -586,7 +595,7 @@ export function QuoteLineEditor({
   }
 
   async function handleQuoteChange(nextQuoteId: string) {
-    if (nextQuoteId === selectedQuoteId || saving || versioningNow || creatingProposal || takingAction) return;
+    if (nextQuoteId === selectedQuoteId || saving || versioningNow || creatingProposal || takingAction || savingName) return;
     setShowArchive(false); setArchiveReason("");
     const version = versionGroupId === selectedQuote?.quoteGroupId
       ? versions.find((item) => item.quoteId === nextQuoteId) : undefined;
@@ -887,7 +896,7 @@ export function QuoteLineEditor({
   }
 
   async function saveLines(forceNewVersion = false): Promise<string | null> {
-    if (!selectedQuoteId || lines.length === 0) {
+    if (!selectedQuoteId || lines.length === 0 || savingName) {
       return null;
     }
 
@@ -1033,7 +1042,7 @@ export function QuoteLineEditor({
   }
 
   async function createProposalFromSelectedQuote() {
-    if (loading || saving || versioningNow || creatingProposal || loadedQuoteId !== selectedQuoteId) return;
+    if (loading || saving || versioningNow || creatingProposal || savingName || loadedQuoteId !== selectedQuoteId) return;
     if (!selectedQuoteId || !selectedQuote) {
       setMessage("Selecciona una cotizacion valida antes de crear la propuesta");
       return;
@@ -1062,7 +1071,7 @@ export function QuoteLineEditor({
         body: JSON.stringify({
           quoteId: quoteIdForProposal,
           recipientCompany: selectedQuote.clientName,
-          subject: selectedQuote.proposalName,
+          subject: normalizeQuoteName(selectedQuote.proposalName) || undefined,
         }),
         headers: {
           "Content-Type": "application/json",
@@ -1184,7 +1193,7 @@ export function QuoteLineEditor({
   const [showArchive, setShowArchive] = useState(false);
 
   async function handleQuoteAction(action: "send" | "close" | "reject" | "archive" | "restore", reason?: string) {
-    if (!selectedQuoteId || hasUnsavedTemplateChanges) return;
+    if (!selectedQuoteId || hasUnsavedTemplateChanges || savingName) return;
 
     setTakingAction(true);
     setActionMessage(null);
@@ -1343,6 +1352,7 @@ export function QuoteLineEditor({
           <select
             className="w-full min-w-0 max-w-full rounded-lg border border-zinc-300 bg-white px-3 py-2 text-sm text-zinc-900 md:min-w-[320px] md:flex-1 lg:min-w-[520px]"
             id="quote-selector"
+            disabled={savingName}
             onChange={(event) => {
               void handleQuoteChange(event.target.value);
             }}
@@ -1350,7 +1360,7 @@ export function QuoteLineEditor({
           >
             {quotes.filter(quote => quote.quoteId === selectedQuoteId || quote.status !== "archived").map((quote) => (
               <option key={quote.quoteId} value={quote.quoteId}>
-                {quote.quoteGroupId} · {versions.find(v=>v.quoteId===quote.quoteId)?.commercialOption ? `Opción ${versions.find(v=>v.quoteId===quote.quoteId)!.commercialOption!.ordinal}` : `v${quote.version}`} · {STATUS_LABELS[versions.find(v => v.quoteId === quote.quoteId)?.status ?? quote.status] ?? quote.status} — {quote.clientName}
+                {quote.quoteGroupId} · {versions.find(v=>v.quoteId===quote.quoteId)?.commercialOption ? `Opción ${versions.find(v=>v.quoteId===quote.quoteId)!.commercialOption!.ordinal}` : `v${quote.version}`} · {quoteNameLabel(quoteNames[quote.quoteId] ?? quote.proposalName)} · {STATUS_LABELS[versions.find(v => v.quoteId === quote.quoteId)?.status ?? quote.status] ?? quote.status} — {quote.clientName}
               </option>
             ))}
           </select>
@@ -1366,7 +1376,7 @@ export function QuoteLineEditor({
           </button>
           <button
             className="rounded-lg bg-zinc-900 px-3 py-2 text-sm font-semibold text-white hover:bg-zinc-700 disabled:opacity-60"
-            disabled={saving || versioningNow || loading || lines.length === 0 || currentVersion?.emptyPlaceholder === true || currentStatus === "archived"}
+            disabled={saving || savingName || versioningNow || loading || lines.length === 0 || currentVersion?.emptyPlaceholder === true || currentStatus === "archived"}
             onClick={() => {
               void saveLines();
             }}
@@ -1376,7 +1386,7 @@ export function QuoteLineEditor({
           </button>
           <button
             className="rounded-lg border border-indigo-300 bg-indigo-50 px-3 py-2 text-sm font-semibold text-indigo-800 hover:bg-indigo-100 disabled:opacity-50"
-            disabled={saving || versioningNow || loading || lines.length === 0 || currentVersion?.emptyPlaceholder === true || currentStatus === "archived"}
+            disabled={saving || savingName || versioningNow || loading || lines.length === 0 || currentVersion?.emptyPlaceholder === true || currentStatus === "archived"}
             onClick={() => {
               const confirmed = window.confirm(
                 "Se creara una nueva version en borrador con el estado actual. \n\n¿Deseas continuar?",
@@ -1402,7 +1412,7 @@ export function QuoteLineEditor({
           </button>
           <button
             className="rounded-lg border border-sky-300 px-3 py-2 text-sm font-medium text-sky-700 hover:bg-sky-50 disabled:opacity-50"
-            disabled={creatingProposal || loading || saving || versioningNow || !selectedQuote || loadedQuoteId !== selectedQuoteId || currentStatus === "archived"}
+            disabled={creatingProposal || savingName || loading || saving || versioningNow || !selectedQuote || loadedQuoteId !== selectedQuoteId || currentStatus === "archived"}
             onClick={() => {
               void createProposalFromSelectedQuote();
             }}
@@ -1441,6 +1451,13 @@ export function QuoteLineEditor({
             <StatusBadge status={currentStatus} />
           </div>
         )}
+        {selectedQuote ? <div className="rounded-lg border border-zinc-200 p-3">
+          <p className="text-sm text-zinc-600">Nombre de la cotización · {selectedQuote.quoteGroupId} · Revisión {currentVersion?.version ?? selectedQuote.version}</p>
+          <h3 className="mt-1 break-words text-lg font-semibold">{quoteNameLabel(selectedQuote.proposalName)}</h3>
+          {currentStatus === "draft" ? <QuoteNameEditor key={selectedQuoteId} quoteId={selectedQuoteId} initialName={selectedQuote.proposalName}
+            disabled={loading || saving || savingName || versioningNow || creatingProposal || takingAction} onSavingChange={setSavingName}
+            onSaved={(id, name) => { setQuoteNames(current => ({ ...current, [id]: name })); onQuoteNameSaved?.(id, name); }} /> : null}
+        </div> : null}
         <div className="flex flex-wrap items-center gap-3 border-t border-zinc-100 pt-3">
           <StatusBadge status={currentStatus} />
           {currentStatus === "draft" && (

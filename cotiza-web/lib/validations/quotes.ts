@@ -1,4 +1,9 @@
 import { z } from "zod";
+import { normalizeQuoteName } from "@/lib/domain/quote-name";
+
+export const updateQuoteNameSchema = z.object({
+  proposalName: z.string().trim().min(1).max(200).refine(value => Boolean(normalizeQuoteName(value))),
+});
 
 export const createQuoteSchema = z.object({
   clientId: z.string().trim().max(100).optional().nullable(),

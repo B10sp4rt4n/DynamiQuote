@@ -1,4 +1,5 @@
 import "server-only";
+import { quoteNameLabel } from "@/lib/domain/quote-name";
 import { createHash, randomUUID } from "crypto";
 import { Prisma } from "@prisma/client";
 import { prisma } from "@/lib/db/prisma";
@@ -102,7 +103,7 @@ export async function createDraftFromQuoteInput(input: {
     lines: lines ?? [], replayed: result.replayed, versionCreated: result.versionCreated,
     quote: { quoteId: q.quote_id, quoteGroupId: q.quote_group_id ?? q.quote_id, version: q.version ?? 1,
       versionCount, status: q.status ?? "draft", createdAt: q.createdAt!.toISOString(),
-      clientName: q.client_name ?? "Sin cliente", proposalName: q.proposal_name ?? "Sin propuesta",
+      clientName: q.client_name ?? "Sin cliente", proposalName: quoteNameLabel(q.proposal_name),
       playbookName: q.playbook_name, totalRevenue: Number(q.total_revenue), avgMargin: Number(q.avg_margin) },
     totals: { totalCost: Number(q.total_cost), totalRevenue: Number(q.total_revenue),
       grossProfit: Number(q.gross_profit), avgMargin: Number(q.avg_margin) },

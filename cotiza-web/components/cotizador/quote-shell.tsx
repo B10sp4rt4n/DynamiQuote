@@ -713,14 +713,18 @@ export function QuoteShell({
               </ul>
             ) : null}
           </div>
+          <label className="grid gap-1 text-sm font-medium text-zinc-900">Nombre de la cotización
           <input
             className="rounded-lg border border-zinc-300 bg-white px-3 py-2 text-sm text-zinc-900"
             onChange={(event) => setProposalName(event.target.value)}
-            aria-label="Nombre de propuesta"
+            aria-label="Nombre de la cotización"
             disabled={createState === "saving"}
-            placeholder="Nombre de propuesta"
+            placeholder="Ej. Renovación ThreatDown 2027 · 2 años"
+            maxLength={200}
             value={proposalName}
           />
+          <span className="text-sm font-normal text-zinc-600">Aparece en esta oportunidad y será el asunto inicial al crear su propuesta.</span>
+          </label>
           {playbookFieldEnabled ? <label className="grid gap-1 text-sm font-medium text-zinc-900">Guía comercial (opcional)
             <input
               className="rounded-lg border border-zinc-300 bg-white px-3 py-2 text-sm text-zinc-900"
@@ -816,7 +820,7 @@ export function QuoteShell({
                 <thead className="bg-zinc-50 text-left text-zinc-600">
                   <tr>
                     <th className="px-4 py-3 font-medium">Cliente</th>
-                    <th className="px-4 py-3 font-medium">Propuesta</th>
+                    <th className="px-4 py-3 font-medium">Nombre de la cotización</th>
                     <th className="px-4 py-3 font-medium">Folio</th>
                     <th className="px-4 py-3 font-medium">Estado</th>
                     <th className="px-4 py-3 font-medium">Versiones</th>
@@ -896,6 +900,10 @@ export function QuoteShell({
           guidedQuotingEnabled={guidedQuotingEnabled}
           onSelectedQuoteChange={handleSelectedQuoteChange}
           onQuoteVersionSaved={handleQuoteVersionSaved}
+          onQuoteNameSaved={(id, name) => {
+            setQuoteItems(current => current.map(quote => quote.quoteId === id ? { ...quote, proposalName: name } : quote));
+            setSelectedVersion(current => current?.quoteId === id ? { ...current, proposalName: name } : current);
+          }}
           quotes={editorQuotes}
         />
       ) : null}
