@@ -18,8 +18,13 @@ it("reads invoice evidence and currency within the same tenant and seller scope"
   await getBusinessWorkspace("tenant-a", "opp-a", { userId: "seller-a", canSeeAll: false });
   expect(m.proposals).toHaveBeenCalledWith(expect.objectContaining({
     where: expect.objectContaining({ tenant_id: "tenant-a", AND: [{ OR: [{ created_by_user_id: "seller-a" }, { created_by_user_id: null }] }] }),
-    select: expect.objectContaining({ invoice_status: true, invoice_uuid: true, invoice_draft_id: true, invoice_stamped_at: true,
-      formal_proposals: expect.objectContaining({ where: { tenant_id: "tenant-a" }, select: expect.objectContaining({ currency: true }) }) }),
+    select: expect.objectContaining({ origin: true, invoice_status: true, invoice_uuid: true, invoice_draft_id: true, invoice_stamped_at: true,
+      proposal_items: { where: { tenant_id: "tenant-a" }, select: { subtotal_price: true } },
+      formal_proposals: expect.objectContaining({ where: { tenant_id: "tenant-a" }, select: expect.objectContaining({ currency: true, subject: true, quote_id: true }) }) }),
+  }));
+  expect(m.quotes).toHaveBeenCalledWith(expect.objectContaining({
+    where: { tenantId: "tenant-a", opportunity_id: { in: ["opp-a"] }, created_by_user_id: "seller-a" },
+    select: expect.objectContaining({ proposal_name: true, total_revenue: true, version: true }),
   }));
 });
 it("returns the actual business result with the document navigation context", async () => {
