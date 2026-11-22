@@ -11,7 +11,7 @@ function formatDueDate(iso: string): string {
   );
 }
 
-export function PendingTasksPanel({ tasks: initialTasks }: { tasks: PendingTask[] }) {
+export function PendingTasksPanel({ tasks: initialTasks, onCompleted }: { tasks: PendingTask[]; onCompleted?: (taskId: string) => void }) {
   const [completedIds, setCompletedIds] = useState<string[]>([]);
   const tasks = initialTasks.filter(task => !completedIds.includes(task.taskId));
   const [completingId, setCompletingId] = useState<string | null>(null);
@@ -30,6 +30,7 @@ export function PendingTasksPanel({ tasks: initialTasks }: { tasks: PendingTask[
       }
 
       setCompletedIds((prev) => [...prev, taskId]);
+      onCompleted?.(taskId);
     } catch (err) {
       setError(err instanceof Error ? err.message : "Error desconocido");
     } finally {
