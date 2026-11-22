@@ -25,6 +25,15 @@ function closeDate(value: string | null) {
   return new Intl.DateTimeFormat("es-MX", { timeZone: "America/Mexico_City", day: "2-digit", month: "short", year: "numeric" }).format(new Date(value));
 }
 
+function quotedAmount(value: number | null, currency: string | null) {
+  if (value === null || !Number.isFinite(value)) return "Monto por confirmar";
+  const code = currency?.trim().toUpperCase();
+  if (!code || !/^[A-Z]{3}$/.test(code)) {
+    return `${new Intl.NumberFormat("es-MX", { minimumFractionDigits: 2, maximumFractionDigits: 2 }).format(value)} · Moneda por confirmar`;
+  }
+  return `${new Intl.NumberFormat("es-MX", { style: "currency", currency: code, currencyDisplay: "narrowSymbol", minimumFractionDigits: 2, maximumFractionDigits: 2 }).format(value)} ${code}`;
+}
+
 export default async function BusinessPage({ params }: { params: Promise<{ opportunityId: string }> }) {
   const tenant = await getCurrentTenantContext();
   if (!tenant?.userId) notFound();
@@ -81,9 +90,22 @@ export default async function BusinessPage({ params }: { params: Promise<{ oppor
     <section className="scroll-mt-24 rounded-xl border border-zinc-200 bg-white p-5" id="propuestas">
       <h2 className="text-xl font-semibold">Propuestas vinculadas ({proposals.length})</h2>
       <div className="mt-4 grid gap-3 sm:grid-cols-2">{proposals.map(proposal => {
+        const formal = proposal.formal_proposals[0];
+        const sourceQuote = quotes.find(quote => quote.quote_id === (formal?.quote_id ?? proposal.origin));
+        const quoteName = sourceQuote?.proposal_name?.trim();
+        const subject = formal?.subject?.trim();
+        const option = sourceQuote ? optionLabels[sourceQuote.quote_id] : null;
+        const prices = proposal.proposal_items.map(item => item.subtotal_price === null ? NaN : Number(item.subtotal_price));
+        const amount = prices.length && prices.every(Number.isFinite) ? prices.reduce((sum, price) => sum + price, 0) : null;
         const outcome = proposal.outcome === "won" ? "Ganada" : proposal.outcome === "lost" ? "Perdida" : proposal.outcome === "discarded" ? "Descartada" : "Sin desenlace registrado";
-        return <Link key={proposal.proposal_id} className="min-h-11 rounded-lg border border-zinc-300 p-4 hover:border-blue-600" href={`/propuestas/${encodeURIComponent(proposal.proposal_id)}`}>
-          <strong className="block">{proposal.formal_proposals[0]?.proposal_number ?? "Propuesta sin folio formal"}</strong>
+        return <Link key={proposal.proposal_id} className="min-h-11 min-w-0 rounded-lg border border-zinc-300 p-4 hover:border-blue-600" href={`/propuestas/${encodeURIComponent(proposal.proposal_id)}`}>
+          {option ? <span className="block break-words text-sm font-semibold text-blue-800">Opción {option.ordinal} · {option.label}</span> : null}
+          <h3 className="break-words text-lg font-semibold">{quoteName || subject || "Propuesta sin nombre"}</h3>
+          <strong className="mt-1 block break-words text-sm text-zinc-600">{formal?.proposal_number ?? "Propuesta sin folio formal"}</strong>
+          {quoteName && subject && quoteName !== subject ? <span className="mt-1 block break-words text-sm">Asunto: {subject}</span> : null}
+          {sourceQuote ? <span className="mt-1 block break-words text-sm text-zinc-600">Cotización {sourceQuote.quote_group_id ?? "sin folio"} · Revisión {sourceQuote.version ?? 1}</span> : null}
+          <span className="mt-3 block text-sm text-zinc-600">Monto cotizado (antes de IVA)</span>
+          <span className="block break-words text-lg font-semibold tabular-nums">{quotedAmount(amount, formal?.currency ?? null)}</span>
           <span className="mt-1 block text-sm">Estado: {proposalStatusLabel(proposal)} · Resultado: {outcome}</span>
           <span className="block text-sm">Envío: {proposal.formal_proposals[0]?.sent_at ? "Registrado" : "Sin envío registrado"}</span>
           <WinConsolidationSummary key={proposal.proposal_id} proposalId={proposal.proposal_id} />
@@ -95,10 +117,12 @@ export default async function BusinessPage({ params }: { params: Promise<{ oppor
     <section className="scroll-mt-24 rounded-xl border border-zinc-200 bg-white p-5" id="cotizaciones">
       <h2 className="text-xl font-semibold">Cotizaciones y revisiones ({quotes.length})</h2>
       <p className="mt-1 text-sm text-zinc-600">Las alternativas pertenecen al mismo negocio y conservan sus revisiones.</p>
-      <div className="mt-4 grid gap-3 sm:grid-cols-2">{quotes.map(quote => <Link key={quote.quote_id} className="min-h-11 rounded-lg border border-zinc-300 p-4 hover:border-blue-600" href={`/cotizaciones?quoteId=${encodeURIComponent(quote.quote_id)}`}>
+      <div className="mt-4 grid gap-3 sm:grid-cols-2">{quotes.map(quote => <Link key={quote.quote_id} className="min-h-11 min-w-0 rounded-lg border border-zinc-300 p-4 hover:border-blue-600" href={`/cotizaciones?quoteId=${encodeURIComponent(quote.quote_id)}`}>
         <span className="block text-sm font-semibold text-blue-800">{optionLabels[quote.quote_id] ? `Opción ${optionLabels[quote.quote_id]!.ordinal} · ${optionLabels[quote.quote_id]!.label}` : ""}</span>
         <strong className="block break-words">{quote.proposal_name || "Cotización"}</strong>
         <span className="text-sm">{quote.quote_group_id ?? "Sin folio"} · Revisión {quote.version ?? 1} · {quote.status ?? "Sin estado"}</span>
+        <span className="mt-3 block text-sm text-zinc-600">Monto cotizado (antes de IVA)</span>
+        <span className="block break-words text-lg font-semibold tabular-nums">{quotedAmount(quote.total_revenue === null ? null : Number(quote.total_revenue), "MXN")}</span>
       </Link>)}</div>
       {!quotes.length ? <p className="mt-3 text-zinc-600">Sin cotizaciones vinculadas en esta vista.</p> : null}
     </section>

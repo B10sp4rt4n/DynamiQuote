@@ -15,11 +15,12 @@ const opportunity = { opportunityId: "opp-a", opportunityNumber: "OPP-0066", tit
   stage: "won", clientId: "client-a", clientCompany: "Cliente de prueba", ownerUserId: "seller-a",
   amount: 7900, closedAt: "2026-10-20T06:00:00Z", createdAt: "2026-09-01T06:00:00Z", canChangeDisposition: false };
 const workspace = () => ({ opportunity, quotes: [
-  { quote_id: "quote-v2", quote_group_id: "COT-1", status: "draft", version: 2, proposal_name: "Renovación" },
-  { quote_id: "quote-v1", quote_group_id: "COT-1", status: "draft", version: 1, proposal_name: "Renovación" },
-], proposals: [{ proposal_id: "proposal-a", status: "approved", outcome: "won", invoice_status: null as string | null,
+  { quote_id: "quote-v2", quote_group_id: "COT-1", status: "draft", version: 2, proposal_name: "Renovación ampliada", total_revenue: "10000.00" },
+  { quote_id: "quote-v1", quote_group_id: "COT-1", status: "draft", version: 1, proposal_name: "Renovación original", total_revenue: "7900.00" },
+], proposals: [{ proposal_id: "proposal-a", origin: "quote-v2", status: "approved", outcome: "won", invoice_status: null as string | null,
   invoice_uuid: null as string | null, invoice_draft_id: null, invoice_stamped_at: null,
-  formal_proposals: [{ proposal_number: "PROP-1", status: "approved", sent_at: null, currency: "USD" }] }],
+  proposal_items: [{ subtotal_price: "5000.00" as string | null }, { subtotal_price: "2900.00" as string | null }],
+  formal_proposals: [{ proposal_number: "PROP-1", quote_id: "quote-v1" as string | null, subject: "Protección anual" as string | null, status: "approved", sent_at: null, currency: "USD" as string | null }] }],
 tasks: [], optionLabels: {}, ownerName: "Responsable de prueba" });
 beforeEach(() => {
   vi.clearAllMocks(); m.tenant.mockResolvedValue({ id: "tenant-a", userId: "seller-a", userRole: "user", isSuperAdmin: false });
@@ -56,8 +57,54 @@ it("does not show a dossier when the viewer has no authorized workspace", async 
 });
 it("does not present an unconverted mixed-currency sum as the amount of a won business", async () => {
   const data = workspace();
-  data.proposals.push({ ...data.proposals[0]!, proposal_id: "proposal-b", formal_proposals: [{ proposal_number: "PROP-2", status: "approved", sent_at: null, currency: "MXN" }] });
+  data.proposals.push({ ...data.proposals[0]!, proposal_id: "proposal-b", proposal_items: [], formal_proposals: [{ ...data.proposals[0]!.formal_proposals[0]!, proposal_number: "PROP-2", currency: "MXN" }] });
   m.workspace.mockResolvedValue(data); const html = await render();
   expect(html).toContain("Importes en varias monedas");
-  expect(html).not.toContain("7,900");
+  expect(html.match(/<header[\s\S]*?<\/header>/)?.[0]).not.toContain("7,900");
+});
+
+it("identifies each proposal by its exact quote revision and its own amount rather than the newest quote", async () => {
+  const html = await render();
+  const proposalCard = html.split('id="propuestas"')[1]?.match(/<a[^>]*href="\/propuestas\/proposal-a"[^>]*>([\s\S]*?)<\/a>/)?.[1];
+  expect(proposalCard).toContain("Renovación original");
+  expect(proposalCard).toContain("PROP-1");
+  expect(proposalCard).toContain("Asunto: Protección anual");
+  expect(proposalCard).toContain("Cotización COT-1 · Revisión 1");
+  expect(proposalCard).toContain("$7,900.00 USD");
+  expect(proposalCard).toContain("antes de IVA");
+  expect(proposalCard).not.toContain("Renovación ampliada");
+  expect(proposalCard).not.toContain("10,000");
+  expect(html).toContain("$10,000.00 MXN");
+});
+
+it("uses the historical origin only when no formal quote link exists and preserves a genuine zero", async () => {
+  const data = workspace();
+  data.proposals[0]!.formal_proposals[0]!.quote_id = null;
+  data.proposals[0]!.proposal_items = [{ subtotal_price: "0" }];
+  m.workspace.mockResolvedValue(data);
+  const html = await render();
+  const proposalCard = html.split('id="propuestas"')[1]?.match(/<a[^>]*href="\/propuestas\/proposal-a"[^>]*>([\s\S]*?)<\/a>/)?.[1];
+  expect(proposalCard).toContain("Renovación ampliada");
+  expect(proposalCard).toContain("Cotización COT-1 · Revisión 2");
+  expect(proposalCard).toContain("$0.00 USD");
+});
+
+it("keeps missing names, prices and currencies explicit without borrowing another document's data", async () => {
+  const data = workspace();
+  const proposal = data.proposals[0]!;
+  proposal.formal_proposals[0] = { ...proposal.formal_proposals[0]!, quote_id: "unavailable-quote", subject: null, currency: null };
+  proposal.proposal_items[1]!.subtotal_price = null;
+  m.workspace.mockResolvedValue(data);
+  let html = await render();
+  let proposalCard = html.split('id="propuestas"')[1]?.match(/<a[^>]*href="\/propuestas\/proposal-a"[^>]*>([\s\S]*?)<\/a>/)?.[1];
+  expect(proposalCard).toContain("Propuesta sin nombre");
+  expect(proposalCard).toContain("Monto por confirmar");
+  expect(proposalCard).not.toMatch(/Renovación|\$|USD|MXN/);
+  proposal.formal_proposals[0]!.subject = "Asunto de propuesta histórica";
+  proposal.proposal_items[1]!.subtotal_price = "2900";
+  html = await render();
+  proposalCard = html.split('id="propuestas"')[1]?.match(/<a[^>]*href="\/propuestas\/proposal-a"[^>]*>([\s\S]*?)<\/a>/)?.[1];
+  expect(proposalCard).toContain("Asunto de propuesta histórica");
+  expect(proposalCard).toContain("7,900.00 · Moneda por confirmar");
+  expect(proposalCard).not.toMatch(/\$|USD|MXN/);
 });
