@@ -72,7 +72,7 @@ describe("deferred opportunity intake from quotation", () => {
     await click('Nueva cotización');
     expect(context().hidden).toBe(true);
     await input(container.querySelector('[aria-label="Cliente de la cotización"]')!, 'New customer');
-    await input(container.querySelector('[aria-label="Nombre de propuesta"]')!, 'New service');
+    await input(container.querySelector('[aria-label="Nombre de la cotización"]')!, 'New service');
     await click('Volver a cotización seleccionada');expect(context().hidden).toBe(false);
     await click('Nueva cotización');
     expect((container.querySelector('[aria-label="Cliente de la cotización"]') as HTMLInputElement).value).toBe('New customer');

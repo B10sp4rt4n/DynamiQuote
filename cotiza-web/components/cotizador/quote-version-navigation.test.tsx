@@ -88,6 +88,30 @@ afterEach(async () => {
 });
 
 describe("quote version navigation through the real shell and editor", () => {
+  it("assigns a name to the exact historical draft and uses it when generating its proposal", async () => {
+    const fallback = m.fetch.getMockImplementation()!;
+    m.fetch.mockImplementation(async (url: string, init?: RequestInit) => {
+      if (url.endsWith("/name")) return { ok: true, json: async () => ({ quote: { quoteId: "COT-0066-v2", proposalName: "Renovación 2 años" } }) };
+      if (url === "/api/proposals") return { ok: false, json: async () => ({ error: "Fin de prueba sintética" }) };
+      return fallback(url, init);
+    });
+    await render(); await view(2);
+    await act(async () => [...container.querySelectorAll("button")].find(button => button.textContent === "Editar nombre")!.click());
+    const input = container.querySelector<HTMLInputElement>('input[placeholder="Ej. Renovación ThreatDown 2027 · 2 años"]:not([aria-label])')!;
+    expect(input).not.toBeNull();
+    await act(async () => {
+      Object.getOwnPropertyDescriptor(HTMLInputElement.prototype, "value")!.set!.call(input, "Renovación 2 años");
+      input.dispatchEvent(new Event("input", { bubbles: true }));
+    });
+    await act(async () => [...container.querySelectorAll("button")].find(button => button.textContent === "Guardar nombre")!.click());
+    await settle();
+    expect(m.fetch).toHaveBeenCalledWith("/api/quotes/COT-0066-v2/name", expect.objectContaining({ method: "PATCH", body: JSON.stringify({ proposalName: "Renovación 2 años" }) }));
+    expect(container.querySelector('[aria-label="Partidas de la cotización seleccionada"]')!.textContent).toContain("Renovación 2 años");
+    await view(3); await view(2);
+    await act(async () => [...container.querySelectorAll("button")].find(button => button.textContent === "Crear propuesta")!.click());
+    const post = m.fetch.mock.calls.find(([url]) => url === "/api/proposals");
+    expect(JSON.parse(post![1].body)).toMatchObject({ quoteId: "COT-0066-v2", subject: "Renovación 2 años" });
+  });
   it("opens the editor from the explicit saved quotation action, focuses it and enables saving", async () => {
     m.search = "panel=open";
     await render();
@@ -172,7 +196,7 @@ describe("quote version navigation through the real shell and editor", () => {
     expect(m.fetch).toHaveBeenCalledWith("/api/quotes/COT-0066-v2/lines", expect.objectContaining({ method: "PUT" }));
     const options = [...container.querySelectorAll<HTMLSelectElement>("#quote-selector option")].map((option) => option.textContent);
     expect(options.filter((text) => text?.startsWith("COT-0066"))).toEqual([
-      "COT-0066 · v4 · Borrador — Cliente de prueba", "COT-0066 · v2 · Borrador — Cliente de prueba",
+      "COT-0066 · v4 · Escenario de prueba · Borrador — Cliente de prueba", "COT-0066 · v2 · Escenario de prueba · Borrador — Cliente de prueba",
     ]);
     expect(historyRow(2).textContent).toContain("(actual)");
   });

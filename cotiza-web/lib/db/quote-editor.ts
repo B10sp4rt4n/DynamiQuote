@@ -1,4 +1,5 @@
 import "server-only";
+import { quoteNameLabel } from "@/lib/domain/quote-name";
 
 import { randomUUID } from "crypto";
 import { Prisma } from "@prisma/client";
@@ -446,7 +447,7 @@ export async function updateQuoteLinesByTenant(
       clientName: quote.client_name ?? "Sin cliente",
       createdAt: createdAt.toISOString(),
       playbookName: quote.playbook_name ?? null,
-      proposalName: quote.proposal_name ?? "Sin propuesta",
+      proposalName: quoteNameLabel(quote.proposal_name),
       quoteGroupId,
       quoteId: resultQuoteId,
       status: "draft",

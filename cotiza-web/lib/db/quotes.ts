@@ -4,6 +4,7 @@ import { randomUUID } from "crypto";
 import { Prisma } from "@prisma/client";
 
 import { prisma } from "@/lib/db/prisma";
+import { normalizeQuoteName, quoteNameLabel } from "@/lib/domain/quote-name";
 import { createOpportunityForTenant, getOpportunityPipelineByTenant } from "@/lib/db/opportunities";
 import { createDraftFromQuoteInput } from "@/lib/db/quote-input";
 
@@ -115,7 +116,7 @@ export async function getQuoteVersionSummaryByTenant(
     clientName: quote.client_name ?? "Sin cliente",
     createdAt: dateToIso(quote.createdAt),
     playbookName: quote.playbook_name,
-    proposalName: quote.proposal_name ?? "Sin propuesta",
+    proposalName: quoteNameLabel(quote.proposal_name),
     quoteGroupId: quote.quote_group_id,
     quoteId: quote.quote_id,
     status: quote.status ?? "draft",
@@ -259,7 +260,7 @@ export async function createQuoteForTenant(
       const originalIntake = originalOpportunity?.intake_metadata as Record<string, unknown> | null;
       if ((input.opportunityMode === "new" && originalIntake?.sourceQuoteId !== quoteId)
         || prior.client_id !== (input.clientId ?? null) || prior.client_name !== input.clientName
-        || prior.proposal_name !== (input.proposalName?.trim() || "Sin propuesta")
+        || normalizeQuoteName(prior.proposal_name) !== normalizeQuoteName(input.proposalName)
         || prior.playbook_name !== (input.playbookName?.trim() || "General")
         || prior.quoted_by !== (input.quotedBy?.trim() || null)
         || (input.opportunityMode === "existing" && prior.opportunity_id !== input.opportunityId)) {
@@ -267,7 +268,7 @@ export async function createQuoteForTenant(
       }
       const versionCount = await tx.quote.count({ where: { tenantId, quote_group_id: prior.quote_group_id } });
       return { avgMargin: decimalToNumber(prior.avg_margin), clientName: prior.client_name!, createdAt: dateToIso(prior.createdAt),
-        playbookName: prior.playbook_name, proposalName: prior.proposal_name!, quoteGroupId: prior.quote_group_id!,
+        playbookName: prior.playbook_name, proposalName: quoteNameLabel(prior.proposal_name), quoteGroupId: prior.quote_group_id!,
         quoteId: prior.quote_id, status: prior.status ?? "draft", totalRevenue: decimalToNumber(prior.total_revenue),
         version: prior.version ?? 1, versionCount };
     }
@@ -299,7 +300,7 @@ export async function createQuoteForTenant(
     await tx.quote.create({ data: {
       avg_margin: 0, client_id: input.clientId ?? null, client_name: input.clientName,
       createdAt: now, created_by_user_id: createdByUserId, gross_profit: 0, opportunity_id: opportunityId,
-      playbook_name: input.playbookName?.trim() || "General", proposal_name: input.proposalName?.trim() || "Sin propuesta",
+      playbook_name: input.playbookName?.trim() || "General", proposal_name: normalizeQuoteName(input.proposalName) || null,
       quote_group_id: quoteGroupId, quote_id: quoteId, quoted_by: input.quotedBy?.trim() || null,
       status: "draft", tenantId, total_cost: 0, total_revenue: 0, version: 1,
     } });
@@ -309,7 +310,7 @@ export async function createQuoteForTenant(
       quote_id: quoteId, service_origin: null, sku: null,
     } });
     return { avgMargin: 0, clientName: input.clientName, createdAt: now.toISOString(),
-      playbookName: input.playbookName?.trim() || "General", proposalName: input.proposalName?.trim() || "Sin propuesta",
+      playbookName: input.playbookName?.trim() || "General", proposalName: quoteNameLabel(input.proposalName),
       quoteGroupId, quoteId, status: "draft", totalRevenue: 0, version: 1, versionCount: 1 };
   });
 }
@@ -374,7 +375,7 @@ export async function getQuoteGroupsSummaryByTenant(
       clientName: row.client_name ?? "Sin cliente",
       createdAt: dateToIso(row.created_at),
       playbookName: row.playbook_name,
-      proposalName: row.proposal_name ?? "Sin propuesta",
+      proposalName: quoteNameLabel(row.proposal_name),
       quoteGroupId: row.quote_group_id ?? row.quote_id,
       quoteId: row.quote_id,
       status: row.status ?? "draft",
@@ -443,7 +444,7 @@ export async function getQuoteGroupsByClientForTenant(
       clientName: row.client_name ?? "Sin cliente",
       createdAt: dateToIso(row.created_at),
       playbookName: row.playbook_name,
-      proposalName: row.proposal_name ?? "Sin propuesta",
+      proposalName: quoteNameLabel(row.proposal_name),
       quoteGroupId: row.quote_group_id ?? row.quote_id,
       quoteId: row.quote_id,
       status: row.status ?? "draft",
@@ -501,7 +502,7 @@ export async function getQuoteDashboardSnapshotByTenant(
         avgMargin: decimalToNumber(row.avg_margin),
         clientName: row.client_name ?? "Sin cliente",
         createdAt: dateToIso(row.created_at),
-        proposalName: row.proposal_name ?? "Sin propuesta",
+        proposalName: quoteNameLabel(row.proposal_name),
         quoteGroupId: row.quote_group_id ?? row.quote_id,
         quoteId: row.quote_id,
         quotedBy: row.quoted_by ?? "Sin asignar",

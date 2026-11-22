@@ -1,4 +1,5 @@
 import "server-only";
+import { normalizeQuoteName } from "@/lib/domain/quote-name";
 
 import { randomUUID } from "crypto";
 import { Prisma } from "@prisma/client";
@@ -898,7 +899,7 @@ export async function createProposalFromQuoteByTenant(
     issuerCompanyFromProfile ||
     "Cotiza";
   const recipientCompany = input.recipientCompany?.trim() || quote.client_name || "Sin cliente";
-  const subject = input.subject?.trim() || quote.proposal_name || "Propuesta Comercial";
+  const subject = normalizeQuoteName(input.subject) || normalizeQuoteName(quote.proposal_name) || "Propuesta Comercial";
 
   await prisma.$transaction(async (tx) => {
     await tx.$executeRaw`SELECT pg_advisory_xact_lock(hashtextextended(${`quote-group:${tenantId}:${quote.quote_group_id ?? quote.quote_id}`}, 0))`;

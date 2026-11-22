@@ -108,3 +108,15 @@ it("keeps missing names, prices and currencies explicit without borrowing anothe
   expect(proposalCard).toContain("7,900.00 · Moneda por confirmar");
   expect(proposalCard).not.toMatch(/\$|USD|MXN/);
 });
+
+it("identifies an unnamed draft as a quotation and exposes its naming action outside the document link", async () => {
+  const data = workspace(); data.quotes[0]!.proposal_name = "Sin propuesta";
+  m.workspace.mockResolvedValue(data);
+  const html = await render();
+  const quoteCard = html.match(/<article[\s\S]*?<\/article>/)?.[0];
+  expect(quoteCard).toContain("Cotización sin nombre");
+  expect(quoteCard).toContain("Asignar nombre");
+  expect(quoteCard).not.toContain("Sin propuesta");
+  expect(quoteCard?.indexOf("</a>")).toBeLessThan(quoteCard!.indexOf("<button"));
+  expect(html).toContain("El nombre se captura al crear la cotización");
+});
