@@ -1,3 +1,4 @@
+import { mexicoCalendarDate } from "@/lib/domain/commercial-close-date";
 import { notFound } from "next/navigation";
 import { CrmWorkspace } from "@/components/crm/crm-workspace";
 import { getCurrentTenantContext } from "@/lib/auth/tenant-context";
@@ -22,6 +23,7 @@ export default async function CrmPage() {
   ]);
   const vendors = users.filter(user => user.active).map(user => ({ userId: user.userId,
     label: `${user.firstName} ${user.lastName}`.trim() || user.alias || "Vendedor" }));
-  return <CrmWorkspace tenantName={tenant.name} viewerUserId={tenant.userId} clients={clients} opportunities={opportunities} tasks={tasks}
+  const asOf = new Date().toISOString();
+  return <CrmWorkspace today={mexicoCalendarDate(asOf)} asOf={asOf} tenantName={tenant.name} viewerUserId={tenant.userId} clients={clients} opportunities={opportunities} tasks={tasks}
     clientLogos={logos.map(({ companyName, logoId, logoName }) => ({ companyName, logoId, logoName }))} vendors={vendors} />;
 }
