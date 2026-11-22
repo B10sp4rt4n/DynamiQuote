@@ -8,7 +8,7 @@ import { getProposalApprovalsByTenant } from "@/lib/db/proposal-approvals";
 // Auditoria de solicitudes y emision de documentos de una propuesta. Reusa
 // proposal_audit_events (sin DDL nuevo): la tabla no tiene columna de actor,
 // asi que quien lo hizo va dentro del payload (actorUserId).
-export type ProposalAuditEventType = "document_blocked" | "document_issued" | "status_change_requested";
+export type ProposalAuditEventType = "document_blocked" | "document_downloaded" | "document_issued" | "status_change_requested";
 
 // Nunca lanza: la auditoria es un registro de lo que ya paso, no puede
 // romper la accion del usuario (bajar un PDF, pedir aprobacion) si falla.

@@ -6,6 +6,12 @@ export class RecordiaError extends Error {
   constructor(message: string, public status = 503) { super(message); }
 }
 export type RecordiaActor = { tenantId: string; actorId: string };
+export type RecordiaTimelineEntry = {
+  title: string;
+  folio?: string;
+  detail?: string;
+  pdf?: { revision: string; archived: boolean };
+};
 export type RecordiaMemory = {
   id: string;
   aup_id: string;
@@ -21,6 +27,7 @@ export type RecordiaMemory = {
   content_kind: "persistent_snapshot";
   epistemic_status: "observed_fact" | "recorded_claim" | "decision";
   integrity_status: "hash_verified";
+  timeline?: RecordiaTimelineEntry;
   preserved_snapshot?: { canonical_text: string; content_hash: string; verification_scope: "stored_envelope_and_direct_predecessor" };
   source: { kind: string; id: string; href: string | null };
 };

@@ -82,6 +82,7 @@ function describe(item: ProposalAuditTimelineItem): { detail: string | null; tit
         tone: "ok",
       };
     }
+    case "document_downloaded":
     case "document_issued": {
       const notes = [
         `estatus ${statusLabel(d["status"])}`,

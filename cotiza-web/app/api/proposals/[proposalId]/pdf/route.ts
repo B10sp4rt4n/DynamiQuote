@@ -138,8 +138,11 @@ export async function GET(request: Request, context: RouteContext) {
 
   await recordProposalAuditEvent({
     actorUserId: tenant.userId,
-    eventType: "document_issued",
+    eventType: "document_downloaded",
     payload: {
+      documentId: proposal.formal?.proposalDocId ?? null,
+      documentUpdatedAt: proposal.formal?.updatedAt ?? null,
+      proposalNumber: proposal.formal?.proposalNumber ?? null,
       forced: issuanceGate.forced,
       httpMethod: request.method,
       status: proposal.status,
