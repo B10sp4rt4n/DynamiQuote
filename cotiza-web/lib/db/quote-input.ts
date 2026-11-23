@@ -4,6 +4,7 @@ import { createHash, randomUUID } from "crypto";
 import { Prisma } from "@prisma/client";
 import { prisma } from "@/lib/db/prisma";
 import { getEditableQuoteLinesByTenant } from "@/lib/db/quote-editor";
+import { linkCommercialEvidence, requireCommercialEvidence, storeCommercialEvidence, type EvidenceDocument } from "@/lib/db/commercial-evidence";
 import { isOptionPlaceholder } from "@/lib/domain/commercial-options";
 import { normalizeQuoteInput, QuoteInputError, type QuoteInputLine, type QuoteInputSource } from "@/lib/domain/quote-input";
 
@@ -14,9 +15,11 @@ export function quoteInputHash(value: unknown): string {
 export async function createDraftFromQuoteInput(input: {
   tenantId: string; quoteId: string; operationId: string;
   mode: "append" | "replace"; lines: QuoteInputLine[]; source: QuoteInputSource;
+  evidence?: EvidenceDocument & { userId: string };
 }) {
   const incoming = normalizeQuoteInput(input.lines);
-  const inputHash = quoteInputHash({ quoteId: input.quoteId, mode: input.mode, source: input.source, lines: incoming.lines });
+  const inputHash = quoteInputHash({ quoteId: input.quoteId, mode: input.mode, source: input.source, lines: incoming.lines,
+    ...(input.evidence ? { saveCommercialEvidence: true } : {}) });
   const result = await prisma.$transaction(async (tx) => {
     // Serialize retries by tenant/key, including requests on different source quotes.
     await tx.$executeRaw`SELECT pg_advisory_xact_lock(hashtextextended(${`quote-input:${input.tenantId}:${input.operationId}`}, 0))`;
@@ -38,6 +41,7 @@ export async function createDraftFromQuoteInput(input: {
     if (!base) return null;
     if (base.status === "archived") throw new QuoteInputError("Reactiva el borrador antes de importar",409);
     if (isOptionPlaceholder(base.input_metadata,base.quote_id)) throw new QuoteInputError("Este registro inicial vacío es histórico. Abre una opción comercial para trabajar.",409);
+    if (input.evidence) await requireCommercialEvidence(tx, input.tenantId);
     const latest = await tx.quote.findFirst({
       where: { tenantId: input.tenantId, OR: [{ quote_group_id: groupId }, { quote_id: groupId }] },
       orderBy: { version: "desc" }, select: { version: true },
@@ -93,6 +97,10 @@ export async function createDraftFromQuoteInput(input: {
       description_corrections: i < existing.length ? existing[i].description_corrections : null,
       created_at: new Date(now.getTime() + i),
     })) });
+    if (input.evidence) {
+      const evidenceId = await storeCommercialEvidence(tx, input.tenantId, input.evidence.userId, input.evidence);
+      await linkCommercialEvidence(tx, input.tenantId, input.evidence.userId, evidenceId, [quote.quote_id]);
+    }
     return { quote, replayed: false, versionCreated: !initialFill };
   });
   if (!result) return null;

@@ -12,6 +12,7 @@ import { resolveBidirectionalPricing } from "@/lib/domain/pricing-engine";
 import { TemplatePickerModal } from "@/components/cotizador/template-picker-modal";
 import { SaveTemplateButton } from "@/components/cotizador/save-template-button";
 import { ThreatDownImportModal } from "@/components/cotizador/threatdown-import-modal";
+import { QuoteEvidencePanel } from "@/components/commercial/commercial-evidence-panel";
 import type {
   EditableQuoteLineResponse,
   QuoteLinesGetResponse,
@@ -32,6 +33,7 @@ export type QuoteVersionSaved = QuoteVersionResponse;
 type QuoteLineEditorProps = {
   guidedQuotingEnabled?: boolean;
   threatDownImportEnabled?: boolean;
+  commercialEvidenceEnabled?: boolean;
   forcedSelectedQuoteId?: string | null;
   onSelectedQuoteChange?: (quoteId: string, quote?: QuoteGroupSummary) => void;
   onQuoteVersionSaved?: (quote: QuoteVersionSaved) => void;
@@ -453,6 +455,7 @@ function StatusBadge({ status }: { status: string }) {
 export function QuoteLineEditor({
   guidedQuotingEnabled = false,
   threatDownImportEnabled = false,
+  commercialEvidenceEnabled = false,
   forcedSelectedQuoteId,
   onSelectedQuoteChange,
   onQuoteVersionSaved,
@@ -484,6 +487,7 @@ export function QuoteLineEditor({
   const [message, setMessage] = useState<string | null>(null);
   const [showPackagePicker, setShowPackagePicker] = useState(false);
   const [showThreatDownImport, setShowThreatDownImport] = useState(false);
+  const [evidenceRefresh, setEvidenceRefresh] = useState(0);
   const [compareLineCounts, setCompareLineCounts] = useState<CompareLineCounts>({
     addedCount: 0,
     modifiedCount: 0,
@@ -1049,9 +1053,7 @@ export function QuoteLineEditor({
     }
 
     let quoteIdForProposal = selectedQuoteId;
-    const hasUnsavedRevenueChanges = Math.abs((selectedQuote.totalRevenue ?? 0) - totals.totalRevenue) > 0.01;
-
-    if (hasUnsavedRevenueChanges) {
+    if (hasUnsavedTemplateChanges) {
       setMessage("Guardando cambios antes de generar la propuesta...");
       const savedQuoteId = await saveLines();
 
@@ -1451,6 +1453,7 @@ export function QuoteLineEditor({
             <StatusBadge status={currentStatus} />
           </div>
         )}
+        {commercialEvidenceEnabled && selectedQuote ? <QuoteEvidencePanel key={`${selectedQuoteId}:${evidenceRefresh}`} quoteId={selectedQuoteId} /> : null}
         {selectedQuote ? <div className="rounded-lg border border-zinc-200 p-3">
           <p className="text-sm text-zinc-600">Nombre de la cotización · {selectedQuote.quoteGroupId} · Revisión {currentVersion?.version ?? selectedQuote.version}</p>
           <h3 className="mt-1 break-words text-lg font-semibold">{quoteNameLabel(selectedQuote.proposalName)}</h3>
@@ -1527,16 +1530,18 @@ export function QuoteLineEditor({
 
       {threatDownImportEnabled && showThreatDownImport && selectedQuote ? <ThreatDownImportModal key={selectedQuoteId}
         quoteId={selectedQuoteId} clientName={selectedQuote.clientName}
+        commercialEvidenceEnabled={commercialEvidenceEnabled}
         hasUnsavedChanges={hasUnsavedTemplateChanges}
         onClose={() => setShowThreatDownImport(false)}
         onImported={(data: QuoteLinesPutResponse) => {
           setShowThreatDownImport(false);
+          if (commercialEvidenceEnabled) setEvidenceRefresh(value => value + 1);
           onQuoteVersionSaved?.(data.quote);
           setSelectedQuoteId(data.quote.quoteId);
           onSelectedQuoteChange?.(data.quote.quoteId);
           savedLinesRef.current = JSON.stringify(data.lines.map(normalizeLineQuantity));
           setLines(data.lines.map(normalizeLineQuantity));
-          setMessage(`PDF ThreatDown importado en MXN: borrador v${data.quote.version}. La versión anterior se conserva.`);
+          setMessage(`Partidas ThreatDown importadas: borrador v${data.quote.version}. Captura costos y define márgenes o precios en Cotiza.`);
         }} /> : null}
 
       {showPackagePicker && (
@@ -1759,7 +1764,7 @@ export function QuoteLineEditor({
       )}
 
       <p className="mt-5 text-xs text-zinc-600 sm:hidden">Desliza la tabla de partidas hacia los lados para ver todos los campos.</p>
-      <fieldset aria-label="Partidas de cotización" tabIndex={0} disabled={currentStatus === "archived"} className="mt-2 min-w-0 max-w-full overflow-x-auto rounded-xl border border-zinc-200 sm:mt-6">
+      <fieldset aria-label="Partidas de cotización" tabIndex={0} disabled={currentStatus === "archived" || loading || saving || versioningNow || creatingProposal} className="mt-2 min-w-0 max-w-full overflow-x-auto rounded-xl border border-zinc-200 sm:mt-6">
         <table className="min-w-full divide-y divide-zinc-200 text-sm">
           <thead className="bg-zinc-50 text-left text-zinc-600">
             <tr>

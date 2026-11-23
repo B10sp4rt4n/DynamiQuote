@@ -124,3 +124,20 @@ Ver `docs/tenant-capabilities.md` para permisos, alcance y validación.
 sin modificar históricos. Aplicar antes del código del alta desde cotizaciones;
 los lectores Prisma ya esperan la columna. Ver `docs/quote-opportunity-intake.md`
 en la raíz para pruebas, orden de publicación y reversión compatible.
+
+## Evidencia comercial
+
+Aplicar `20261123_commercial_evidence.sql` después de
+`20261022_tenant_capabilities.sql` y antes del despliegue. Es aditiva y registra
+la habilitación inicial exclusivamente para SynAppsSys. Los cambios posteriores
+se gestionan en Configuración → Tenant y sobreviven a una nueva ejecución.
+
+Cada empresa guarda una copia por SHA-256. Los vínculos conservan el ID de la
+revisión exacta y el usuario que hizo la asociación. El PDF se descarga con los
+permisos de cotización de la sesión. La importación con la casilla marcada
+guarda la revisión y su evidencia en la misma transacción.
+
+Para validar el SQL y el almacenamiento, ejecutar
+`lib/db/commercial-evidence.integration.test.ts` con
+`COTIZA_EVIDENCE_TEST_DATABASE_URL` apuntando a una base local vacía llamada
+`cotiza_evidence_test`.

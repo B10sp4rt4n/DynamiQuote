@@ -24,6 +24,7 @@ type QuoteShellProps = {
   playbookFieldEnabled?: boolean;
   guidedQuotingEnabled?: boolean;
   threatDownImportEnabled?: boolean;
+  commercialEvidenceEnabled?: boolean;
   items: QuoteGroupSummary[];
   requestedQuote?: QuoteGroupSummary | null;
   tenantName: string;
@@ -77,6 +78,7 @@ export function QuoteShell({
   playbookFieldEnabled = false,
   guidedQuotingEnabled = false,
   threatDownImportEnabled = false,
+  commercialEvidenceEnabled = false,
   items,
   requestedQuote = null,
   tenantName,
@@ -896,6 +898,7 @@ export function QuoteShell({
         <QuoteLineEditor
         key={editorReload}
           threatDownImportEnabled={threatDownImportEnabled}
+          commercialEvidenceEnabled={commercialEvidenceEnabled}
           forcedSelectedQuoteId={activeQuoteId}
           guidedQuotingEnabled={guidedQuotingEnabled}
           onSelectedQuoteChange={handleSelectedQuoteChange}

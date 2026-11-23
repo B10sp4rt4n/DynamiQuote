@@ -1,5 +1,5 @@
 import { describe, expect, it } from "vitest";
-import { parseThreatDownQuote, priceThreatDownQuote } from "./threatdown-quote";
+import { parseThreatDownQuote, threatDownItemInput } from "./threatdown-quote";
 
 export const vendorText = `ThreatDown Limited
 Quotation - Preliminary
@@ -25,16 +25,14 @@ describe("ThreatDown quote adapter", () => {
     expect(q.lines.map((l) => l.costUnit)).toEqual([10.25, 2.10, 0]);
     expect(q.lines.map((l) => l.quantity)).toEqual([5, 245, 1]);
   });
-  it("requires explicit conversion and calculates sale margin on revenue rather than markup", () => {
+  it("imports only product data and leaves all commercial values to Cotiza", () => {
     const q = parseThreatDownQuote(vendorText);
-    const priced = priceThreatDownQuote(q, 20, 20);
-    expect(priced.lines[0]).toMatchObject({ costUnit: 205, priceUnit: 256.25 });
-    expect(priced.lines[2]).toMatchObject({ costUnit: 0, priceUnit: 0, lineType: "service" });
-    expect(priced.totals.totalCost).toBe(11315);
-    expect(priced.totals.avgMargin).toBe(20);
-  });
-  it.each([[0,20],[-1,20],[NaN,20],[20,100],[20,-1],[20,Infinity]])("rejects invalid exchange/margin %s %s", (fx,m) => {
-    expect(() => priceThreatDownQuote(parseThreatDownQuote(vendorText),fx,m)).toThrow();
+    const items = threatDownItemInput(q);
+    expect(items.lines.map(({ sku, description, quantity }) => ({ sku, description, quantity })))
+      .toEqual(q.lines.map(({ sku, description, quantity }) => ({ sku, description, quantity })));
+    expect(items.lines.every(l => l.costUnit === 0 && l.priceUnit === 0 && l.marginPct === 0)).toBe(true);
+    expect(items.lines[2].lineType).toBe("service");
+    expect(items.totals).toEqual({ totalCost: 0, totalRevenue: 0, grossProfit: 0, avgMargin: 0 });
   });
   it.each([
     vendorText.replace("Subtotal USD 565.75", "Subtotal USD 566.75"),

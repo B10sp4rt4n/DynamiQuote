@@ -101,3 +101,11 @@ describe("resolveBidirectionalPricing – errores", () => {
     expect(() => resolveBidirectionalPricing({ costUnit: 100 })).toThrow();
   });
 });
+
+// Regression: ThreatDown's free support used to abort every edit in the quote.
+it("saves free support alongside a revised margin without dividing by zero", () => {
+  const revised = resolveBidirectionalPricing({ costUnit: 80, marginPct: 35 });
+  expect(resolveBidirectionalPricing({ costUnit: 80, priceUnit: revised.priceUnit }).marginPct).toBeCloseTo(35, 1);
+  expect(resolveBidirectionalPricing({ costUnit: 0, priceUnit: 0 }))
+    .toEqual({ costUnit: 0, priceUnit: 0, marginPct: 0 });
+});

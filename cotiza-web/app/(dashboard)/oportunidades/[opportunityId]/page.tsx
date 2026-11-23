@@ -12,6 +12,10 @@ import { getBusinessWorkspace } from "@/lib/db/opportunity-workspace";
 import { isDigestorFiscalEnabledForTenant } from "@/lib/integrations/digestor-fiscal";
 import { CommercialFlow } from "@/components/commercial/commercial-flow";
 import { BusinessFollowUp } from "@/components/commercial/business-follow-up";
+import { OpportunityEvidencePanel } from "@/components/commercial/commercial-evidence-panel";
+import { listCommercialEvidence } from "@/lib/db/commercial-evidence";
+import { isTenantCapabilityEnabled } from "@/lib/db/tenant-capabilities";
+import { COMMERCIAL_EVIDENCE } from "@/lib/tenant-capabilities";
 import { QuoteOpportunityPanel } from "@/components/cotizador/quote-opportunity-panel";
 import { QuoteNameEditor } from "@/components/cotizador/quote-name-editor";
 import { normalizeQuoteName, quoteNameLabel } from "@/lib/domain/quote-name";
@@ -50,8 +54,10 @@ export default async function BusinessPage({ params, searchParams }: {
   if (!workspace) notFound();
   const { opportunity, quotes, proposals, tasks, optionLabels, ownerName, relationship } = workspace;
   if (opportunity.opportunityId !== opportunityId) redirect(`/oportunidades/${encodeURIComponent(opportunity.opportunityId)}`);
-  const showLoom = await loomPilotVisible(tenant);
-  const showRecordia = await recordiaPilotVisible(tenant);
+  const [showLoom, showRecordia, showEvidence] = await Promise.all([
+    loomPilotVisible(tenant), recordiaPilotVisible(tenant), isTenantCapabilityEnabled(tenant.id, COMMERCIAL_EVIDENCE),
+  ]);
+  const evidence = showEvidence ? await listCommercialEvidence(tenant.id, quotes.map(quote => quote.quote_id)) : [];
   const billingEnabled = isDigestorFiscalEnabledForTenant(tenant.id);
   const preferred = proposals.find(row => row.proposal_id === relationship?.preferredProposalId && isLiveProposal(row.outcome, row.formal_proposals[0]?.status ?? row.status));
   const orderedProposals = preferred ? [preferred, ...proposals.filter(row => row !== preferred)] : proposals;
@@ -181,6 +187,14 @@ export default async function BusinessPage({ params, searchParams }: {
       </article>)}</div>
       {!quotes.length ? <p className="mt-3 text-zinc-600">Sin cotizaciones vinculadas en esta vista.</p> : null}
     </section>
+    {showEvidence ? <OpportunityEvidencePanel key={`${tenant.id}:${tenant.userId}:${opportunityId}`} tenantId={tenant.id}
+      opportunityId={opportunityId} links={evidence} quotes={quotes.map(quote => {
+        const option = optionLabels[quote.quote_id];
+        return { id: quote.quote_id, label: [
+          option ? `Opción ${option.ordinal} · ${option.label}` : quoteNameLabel(quote.proposal_name),
+          quote.quote_group_id, `Revisión ${quote.version ?? 1}`,
+        ].filter(Boolean).join(" · ") };
+      })} /> : null}
     <section className="rounded-xl border border-zinc-200 bg-white p-5" id="pendientes">
       <h2 className="text-xl font-semibold">Tareas abiertas ({tasks.length})</h2>
       {tasks.length ? <ul className="mt-3 space-y-3">{tasks.map(task => <li key={task.task_id} className="rounded-lg border border-zinc-200 p-3"><p className="whitespace-pre-wrap break-words">{task.description}</p><p className="mt-1 text-sm text-zinc-600">Fecha: {task.due_date.toISOString().slice(0, 10)}</p></li>)}</ul> : <p className="mt-3 text-zinc-600">Sin tareas abiertas vinculadas a esta oportunidad.</p>}

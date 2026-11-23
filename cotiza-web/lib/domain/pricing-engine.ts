@@ -33,6 +33,8 @@ export function calculatePriceFromMargin(costUnit: number, marginPct: number): n
 }
 
 export function calculateMarginFromPrice(costUnit: number, priceUnit: number): number {
+  // Free support and newly imported items have no sale on which to calculate a margin.
+  if (costUnit === 0 && priceUnit === 0) return 0;
   if (priceUnit <= 0) {
     throw new Error("El precio debe ser mayor a 0");
   }
