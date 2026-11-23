@@ -23,11 +23,11 @@ export type PipelineVendor = {
   userId: string;
 };
 
-type StageSummary = { amount: number; count: number };
+type StageSummary = { totals: Map<string, number>; count: number };
 type PipelineSummary = Record<OpportunityStage, StageSummary>;
 
-function formatCurrency(value: number): string {
-  return new Intl.NumberFormat("es-MX", { style: "currency", currency: "MXN" }).format(value);
+function formatCurrency(value: number, currency: string): string {
+  return new Intl.NumberFormat("es-MX", { style: "currency", currency, currencyDisplay: "code" }).format(value);
 }
 
 // El roster de vendedores (getAppUsersByTenant) solo trae usuarios ACTUALES
@@ -59,16 +59,21 @@ function buildEffectiveVendors(opportunities: OpportunityWithStage[], vendors: P
 
 function computeSummary(opportunities: OpportunityWithStage[]): PipelineSummary {
   const summary: PipelineSummary = {
-    paused: { amount: 0, count: 0 },
-    no_decision: { amount: 0, count: 0 },
-    lost: { amount: 0, count: 0 },
-    open: { amount: 0, count: 0 },
-    won: { amount: 0, count: 0 },
+    paused: { totals: new Map(), count: 0 },
+    no_decision: { totals: new Map(), count: 0 },
+    lost: { totals: new Map(), count: 0 },
+    open: { totals: new Map(), count: 0 },
+    won: { totals: new Map(), count: 0 },
   };
 
   for (const opp of opportunities) {
-    summary[opp.stage].count += 1;
-    summary[opp.stage].amount += opp.amount;
+    const stage = summary[opp.stage];
+    stage.count += 1;
+    const amounts = opp.proposalRelationship?.amounts
+      ?? [{ currency: opp.commercialOptions?.amountCurrency === undefined ? "MXN" : opp.commercialOptions.amountCurrency, value: opp.amount }];
+    for (const { currency, value } of amounts) {
+      if (currency !== null && value !== 0) stage.totals.set(currency, (stage.totals.get(currency) ?? 0) + value);
+    }
   }
 
   return summary;
@@ -80,13 +85,13 @@ function computeSummary(opportunities: OpportunityWithStage[]): PipelineSummary 
 // Salvador, 2026-09-18.
 function StatTile({
   accentClassName,
-  amount,
+  totals,
   count,
   label,
   onSelect,
 }: {
   accentClassName: string;
-  amount: number;
+  totals: Map<string, number>;
   count: number;
   label: string;
   onSelect: () => void;
@@ -99,7 +104,10 @@ function StatTile({
     >
       <p className="text-xs font-medium text-zinc-600">{label}</p>
       <p className="mt-1 text-2xl font-semibold text-zinc-900">{count}</p>
-      <p className="mt-0.5 text-sm text-zinc-600">{formatCurrency(amount)}</p>
+      <div className="mt-0.5 text-sm text-zinc-600">
+        {totals.size ? [...totals].sort().map(([currency, value]) => <p key={currency}>{formatCurrency(value, currency)}</p>)
+          : <p>{formatCurrency(0, "MXN")}</p>}
+      </div>
     </button>
   );
 }
@@ -109,8 +117,8 @@ function StatTile({
 // documentado por el skill dataviz para "una proporcion contra un limite";
 // se usa un Meter en su lugar, con la paleta de estado fija y ambos extremos
 // etiquetados directamente (el color nunca es la unica señal).
-function ClosingRateMeter({ summary }: { summary: PipelineSummary }) {
-  const decidedTotal = summary.won.amount + summary.lost.amount;
+function ClosingRateMeter({ currency, won, lost }: { currency: string; won: number; lost: number }) {
+  const decidedTotal = won + lost;
 
   if (decidedTotal <= 0) {
     return (
@@ -121,12 +129,12 @@ function ClosingRateMeter({ summary }: { summary: PipelineSummary }) {
     );
   }
 
-  const wonPct = (summary.won.amount / decidedTotal) * 100;
+  const wonPct = (won / decidedTotal) * 100;
 
   return (
     <div className="rounded-xl border border-zinc-200 bg-white p-4">
       <div className="flex items-center justify-between">
-        <p className="text-sm font-semibold text-zinc-900">Tasa de cierre por monto</p>
+        <p className="text-sm font-semibold text-zinc-900">Tasa de cierre por monto · {currency}</p>
         <p className="text-sm font-semibold text-zinc-900">{wonPct.toFixed(0)}% ganado</p>
       </div>
       <div
@@ -141,11 +149,11 @@ function ClosingRateMeter({ summary }: { summary: PipelineSummary }) {
       <div className="mt-2 flex flex-wrap items-center justify-between gap-x-4 gap-y-1 text-xs text-zinc-600">
         <span className="flex items-center gap-1.5">
           <span className="inline-block h-2.5 w-2.5 rounded-sm" style={{ backgroundColor: STATUS_GOOD }} />
-          Ganado: {formatCurrency(summary.won.amount)} ({summary.won.count})
+          Ganado: {formatCurrency(won, currency)}
         </span>
         <span className="flex items-center gap-1.5">
           <span className="inline-block h-2.5 w-2.5 rounded-sm" style={{ backgroundColor: STATUS_CRITICAL }} />
-          Perdido: {formatCurrency(summary.lost.amount)} ({summary.lost.count})
+          Perdido: {formatCurrency(lost, currency)}
         </span>
       </div>
     </div>
@@ -272,6 +280,7 @@ export function PipelineDashboard({
   }, [opportunities, selectedVendorIds, showVendorFilter]);
 
   const summary = useMemo(() => computeSummary(filteredOpportunities), [filteredOpportunities]);
+  const closingCurrencies = [...new Set([...summary.won.totals.keys(), ...summary.lost.totals.keys()])].sort();
   const openAges = filteredOpportunities.filter((opp) => opp.stage === "open" && opp.lifetimeDays !== null);
   const wonCycles = filteredOpportunities.filter((opp) => opp.stage === "won" && opp.lifetimeDays !== null);
   const undatedWins = filteredOpportunities.filter((opp) => opp.stage === "won" && opp.closedAt === null);
@@ -298,28 +307,30 @@ export function PipelineDashboard({
       <div className="grid gap-4 sm:grid-cols-3">
         <StatTile
           accentClassName="border-blue-200 bg-blue-50"
-          amount={summary.open.amount}
+          totals={summary.open.totals}
           count={summary.open.count}
           label="Abiertas"
           onSelect={() => goToStage("open")}
         />
         <StatTile
           accentClassName="border-emerald-200 bg-emerald-50"
-          amount={summary.won.amount}
+          totals={summary.won.totals}
           count={summary.won.count}
           label="Ganadas"
           onSelect={() => goToStage("won")}
         />
         <StatTile
           accentClassName="border-rose-200 bg-rose-50"
-          amount={summary.lost.amount}
+          totals={summary.lost.totals}
           count={summary.lost.count}
           label="Perdidas"
           onSelect={() => goToStage("lost")}
         />
       </div>
 
-      <ClosingRateMeter summary={summary} />
+      {closingCurrencies.length ? closingCurrencies.map(currency => <ClosingRateMeter key={currency} currency={currency}
+        won={summary.won.totals.get(currency) ?? 0} lost={summary.lost.totals.get(currency) ?? 0} />)
+        : <ClosingRateMeter currency="MXN" won={0} lost={0} />}
       <div className="grid gap-4 sm:grid-cols-2">
         <div className="rounded-xl border border-zinc-200 bg-white p-4">
           <p className="text-sm font-semibold text-zinc-900">Antigüedad promedio de abiertas</p>

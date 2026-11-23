@@ -19,7 +19,7 @@ it("reads invoice evidence and currency within the same tenant and seller scope"
   expect(m.proposals).toHaveBeenCalledWith(expect.objectContaining({
     where: expect.objectContaining({ tenant_id: "tenant-a", AND: [{ OR: [{ created_by_user_id: "seller-a" }, { created_by_user_id: null }] }] }),
     select: expect.objectContaining({ origin: true, invoice_status: true, invoice_uuid: true, invoice_draft_id: true, invoice_stamped_at: true,
-      proposal_items: { where: { tenant_id: "tenant-a" }, select: { subtotal_price: true } },
+      proposal_items: { where: { tenant_id: "tenant-a", status: { not: "deleted" } }, select: { subtotal_price: true } },
       formal_proposals: expect.objectContaining({ where: { tenant_id: "tenant-a" }, select: expect.objectContaining({ currency: true, subject: true, quote_id: true }) }) }),
   }));
   expect(m.quotes).toHaveBeenCalledWith(expect.objectContaining({

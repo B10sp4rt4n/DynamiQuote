@@ -17,6 +17,8 @@ import { QuoteNameEditor } from "@/components/cotizador/quote-name-editor";
 import { normalizeQuoteName, quoteNameLabel } from "@/lib/domain/quote-name";
 import { OpportunityReview } from "@/components/pipeline/opportunity-review";
 import { OpportunityAmount } from "@/components/pipeline/opportunity-amount";
+import { ProposalRelationshipEditor } from "@/components/commercial/proposal-relationship-editor";
+import { isLiveProposal } from "@/lib/domain/proposal-relationship";
 import { DISPOSITION_LABELS } from "@/lib/domain/opportunity-disposition";
 import { businessAmountCurrency, businessDocumentSummary, getBusinessFollowUp, proposalStatusLabel, proposalBillingLabel, businessBillingSection, isProposalAuthorized } from "@/lib/domain/business-follow-up";
 
@@ -46,17 +48,24 @@ export default async function BusinessPage({ params, searchParams }: {
   const canSeeAll = tenant.isSuperAdmin || ["owner", "admin"].includes(tenant.userRole);
   const workspace = await getBusinessWorkspace(tenant.id, opportunityId, { userId: tenant.userId, canSeeAll });
   if (!workspace) notFound();
-  const { opportunity: opportunity, quotes, proposals, tasks, optionLabels, ownerName } = workspace;
+  const { opportunity, quotes, proposals, tasks, optionLabels, ownerName, relationship } = workspace;
   if (opportunity.opportunityId !== opportunityId) redirect(`/oportunidades/${encodeURIComponent(opportunity.opportunityId)}`);
   const showLoom = await loomPilotVisible(tenant);
   const showRecordia = await recordiaPilotVisible(tenant);
   const billingEnabled = isDigestorFiscalEnabledForTenant(tenant.id);
+  const preferred = proposals.find(row => row.proposal_id === relationship?.preferredProposalId && isLiveProposal(row.outcome, row.formal_proposals[0]?.status ?? row.status));
+  const orderedProposals = preferred ? [preferred, ...proposals.filter(row => row !== preferred)] : proposals;
   const context = { opportunityId: opportunity.opportunityId, opportunityNumber: opportunity.opportunityNumber, title: opportunity.title, stage: opportunity.stage,
-    quoteId: quotes[0]?.quote_id, proposalId: proposals[0]?.proposal_id };
+    quoteId: preferred?.formal_proposals[0]?.quote_id ?? preferred?.origin ?? quotes[0]?.quote_id, proposalId: orderedProposals[0]?.proposal_id };
   const documents = businessDocumentSummary(quotes, proposals);
   const currency = businessAmountCurrency(proposals, opportunity.stage);
-  const followUp = getBusinessFollowUp({ opportunityId, stage: opportunity.stage, clientId: opportunity.clientId, quotes, proposals,
-    billingEnabled, alternativesNeedReview: opportunity.commercialOptions?.reviewRequired });
+  const followUp = getBusinessFollowUp({ opportunityId, stage: opportunity.stage, clientId: opportunity.clientId, quotes, proposals: orderedProposals,
+    billingEnabled, alternativesNeedReview: opportunity.commercialOptions?.reviewRequired || opportunity.proposalRelationship?.decisionConflict,
+    complementaryWins: relationship?.mode === "complements" });
+  const editableProposals = proposals.filter(row => row.opportunity_id === opportunityId && isLiveProposal(row.outcome, row.formal_proposals[0]?.status ?? row.status));
+  const canClassify = !opportunity.commercialOptions && opportunity.stage === "open" && (canSeeAll || opportunity.ownerUserId === tenant.userId)
+    && !proposals.some(row => row.outcome === "won" || row.outcome === "lost" || row.invoice_uuid || row.invoice_status || row.invoice_stamped_at || row.invoice_draft_id)
+    && (editableProposals.length >= 2 || Boolean(opportunity.proposalRelationship));
   const closed = ["won", "lost", "no_decision"].includes(opportunity.stage);
   const badge = opportunity.stage === "won" ? "bg-emerald-100 text-emerald-900" : opportunity.stage === "lost" ? "bg-rose-100 text-rose-900" : opportunity.stage === "paused" ? "bg-amber-100 text-amber-900" : "bg-zinc-100 text-zinc-800";
   const query = await searchParams ?? {};
@@ -94,25 +103,30 @@ export default async function BusinessPage({ params, searchParams }: {
         </div>
         <div className="min-w-0 rounded-lg bg-zinc-50 p-3 lg:max-w-sm">
           <p className="text-xs text-zinc-600">{opportunity.stage === "won" ? "Importe del cierre" : "Importe del negocio"}</p>
-          <div className="mt-1 break-words text-lg font-semibold">{opportunity.amountUnestimated ? "Por estimar" : <OpportunityAmount opportunityId={opportunity.opportunityId} amount={opportunity.amount} options={opportunity.commercialOptions} stage={opportunity.stage} canChoose={canSeeAll || opportunity.ownerUserId === tenant.userId} currency={currency.currency} showCurrency unknownCurrencyLabel={currency.label} multipleCurrencies={currency.mixed} />}</div>
+          <div className="mt-1 break-words text-lg font-semibold">{opportunity.amountUnestimated ? "Por estimar" : <OpportunityAmount opportunityId={opportunity.opportunityId} amount={opportunity.amount} options={opportunity.commercialOptions} relationship={opportunity.proposalRelationship} stage={opportunity.stage} canChoose={canSeeAll || opportunity.ownerUserId === tenant.userId} currency={currency.currency} showCurrency unknownCurrencyLabel={currency.label} multipleCurrencies={currency.mixed} />}</div>
           <OpportunityReview opportunity={opportunity} canManage={canSeeAll || opportunity.ownerUserId === tenant.userId} currency={currency.currency} showCurrency unknownCurrencyLabel={currency.label} multipleCurrencies={currency.mixed} />
         </div>
       </div>
     </header>
     {showLoom ? <LoomContextPanel key={tenant.id + ":" + tenant.userId + ":" + opportunity.opportunityId} tenantId={tenant.id} targetId={opportunity.opportunityId} kind="opportunity" /> : null}
     {gmailPilotVisible(tenant) ? <GmailContextPanel key={`gmail:${tenant.id}:${tenant.userId}:${opportunity.opportunityId}`} tenantId={tenant.id}
-      opportunityId={opportunity.opportunityId} initialQuery={proposals[0]?.formal_proposals[0]?.proposal_number ?? opportunity.clientCompany ?? opportunity.title} /> : null}
+      opportunityId={opportunity.opportunityId} initialQuery={orderedProposals[0]?.formal_proposals[0]?.proposal_number ?? opportunity.clientCompany ?? opportunity.title} /> : null}
     {showRecordia ? <RecordiaContextPanel key={`recordia:${tenant.id}:${tenant.userId}:${opportunity.opportunityId}`} tenantId={tenant.id} opportunityId={opportunity.opportunityId} /> : null}
     <BusinessFollowUp stage={opportunity.stage} action={followUp} />
     <CommercialFlow current={1} context={context} hideContext summaries={[DISPOSITION_LABELS[opportunity.stage], documents.quotes, documents.proposals]}
       completed={[opportunity.stage === "won", quotes.length > 0, proposals.some(row => row.outcome === "won" && isProposalAuthorized(row))]}
-      billing={businessBillingSection(proposals, billingEnabled, opportunityId, opportunity.commercialOptions?.reviewRequired)} />
+      billing={businessBillingSection(proposals, billingEnabled, opportunityId, opportunity.commercialOptions?.reviewRequired || opportunity.proposalRelationship?.decisionConflict, relationship?.mode === "complements")} />
     <details id="datos-oportunidad" open={opportunity.stage === "open" && opportunity.intakePending} className="scroll-mt-24 rounded-xl border border-zinc-200 bg-white p-4">
       <summary className="min-h-11 cursor-pointer py-2 font-semibold">Datos comerciales{opportunity.intakePending ? " · datos por completar" : ""}</summary>
       <QuoteOpportunityPanel opportunityId={opportunity.opportunityId} />
     </details>
     <section className="scroll-mt-24 rounded-xl border border-zinc-200 bg-white p-5" id="propuestas">
       <h2 className="text-xl font-semibold">Propuestas vinculadas ({proposals.length})</h2>
+      {canClassify ? <ProposalRelationshipEditor key={`${opportunityId}:${relationship?.revision ?? 0}`} opportunityId={opportunityId} revision={relationship?.revision ?? 0}
+        initialMode={relationship?.mode ?? "unclassified"} initialPreferred={preferred?.proposal_id ?? null}
+        proposals={editableProposals.map(row => ({
+          id: row.proposal_id, label: [row.formal_proposals[0]?.proposal_number ?? "Sin folio", row.formal_proposals[0]?.subject].filter(Boolean).join(" · "),
+        }))} /> : null}
       <nav aria-label="Filtrar propuestas vinculadas" className="mt-3 flex flex-wrap gap-2">
         {proposalFilters.map(filter => <Link key={filter.value} href={proposalFilterHref(filter.value)}
           aria-current={proposalFilter === filter.value ? "true" : undefined}
@@ -127,11 +141,17 @@ export default async function BusinessPage({ params, searchParams }: {
         const quoteName = normalizeQuoteName(sourceQuote?.proposal_name);
         const subject = normalizeQuoteName(formal?.subject);
         const option = sourceQuote ? optionLabels[sourceQuote.quote_id] : null;
+        const classified = relationship?.proposalIds.includes(proposal.proposal_id);
+        const proposalLabel = !relationship || relationship.mode === "unclassified" ? null
+          : !classified ? (editableProposals.includes(proposal) ? "Por clasificar" : null)
+          : relationship.mode === "revision" ? (proposal.proposal_id === relationship.preferredProposalId ? "Revisión vigente" : "Revisión anterior")
+          : relationship.mode === "complements" ? "Complemento" : (proposal.proposal_id === relationship.preferredProposalId ? "Alternativa preferida" : "Alternativa");
         const prices = proposal.proposal_items.map(item => item.subtotal_price === null ? NaN : Number(item.subtotal_price));
         const amount = prices.length && prices.every(Number.isFinite) ? prices.reduce((sum, price) => sum + price, 0) : null;
         const outcome = proposal.outcome === "won" ? "Ganada" : proposal.outcome === "lost" ? "Perdida" : proposal.outcome === "discarded" ? "Descartada" : "Sin desenlace registrado";
         return <Link key={proposal.proposal_id} className={`min-h-11 min-w-0 rounded-lg border p-4 transition-colors focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-blue-700 ${proposal.outcome === "discarded" ? "border-zinc-400 bg-zinc-200 hover:border-zinc-500 hover:bg-zinc-300" : "border-zinc-300 bg-white hover:border-blue-600"}`} href={`/propuestas/${encodeURIComponent(proposal.proposal_id)}`}>
           {option ? <span className="block break-words text-sm font-semibold text-blue-800">Opción {option.ordinal} · {option.label}</span> : null}
+          {proposalLabel ? <span className="block break-words text-sm font-semibold text-blue-800">{proposalLabel}</span> : null}
           <h3 className="break-words text-lg font-semibold">{quoteName || subject || "Propuesta sin nombre"}</h3>
           <strong className="mt-1 block break-words text-sm text-zinc-600">{formal?.proposal_number ?? "Propuesta sin folio formal"}</strong>
           {quoteName && subject && quoteName !== subject ? <span className="mt-1 block break-words text-sm">Asunto: {subject}</span> : null}
@@ -148,7 +168,6 @@ export default async function BusinessPage({ params, searchParams }: {
     </section>
     <section className="scroll-mt-24 rounded-xl border border-zinc-200 bg-white p-5" id="cotizaciones">
       <h2 className="text-xl font-semibold">Cotizaciones y revisiones ({quotes.length})</h2>
-      <p className="mt-1 text-sm text-zinc-600">Las alternativas pertenecen al mismo negocio y conservan sus revisiones.</p>
       <p className="mt-1 text-sm text-zinc-600">El nombre se captura al crear la cotización. Puedes asignarlo o editarlo aquí mientras esta revisión esté en borrador.</p>
       <div className="mt-4 grid gap-3 sm:grid-cols-2">{quotes.map(quote => <article key={quote.quote_id} className="min-w-0 rounded-lg border border-zinc-300 p-4" aria-label={`${quote.quote_group_id ?? "Cotización"} · Revisión ${quote.version ?? 1}`}>
         <Link className="block min-h-11 rounded focus-visible:outline-2 focus-visible:outline-blue-700" href={`/cotizaciones?quoteId=${encodeURIComponent(quote.quote_id)}`}>

@@ -1,6 +1,7 @@
 import "server-only";
 import { Prisma } from "@prisma/client";
 import { optionSetSchema } from "@/lib/domain/commercial-options";
+import { readProposalRelationship } from "@/lib/domain/proposal-relationship";
 
 // Called inside the decision transaction, after the tenant's win lock.
 // Membership only prevents a second win; it never grants document access.
@@ -38,10 +39,21 @@ export async function hasAnotherBusinessWin(
     ] }, select: { quote_id: true },
   });
   if (!members.size && !relatedQuotes.length) return false;
+  const classification = proposal.opportunity_id && members.size === 1 ? await tx.opportunities.findFirst({
+    where: { tenant_id: tenantId, opportunity_id: proposal.opportunity_id },
+    select: { intake_metadata: true },
+  }) : null;
+  const relationship = readProposalRelationship(classification?.intake_metadata);
+  const complements = relationship?.mode === "complements" && relationship.proposalIds.includes(proposal.proposal_id)
+    ? relationship.proposalIds : [];
   return Boolean(await tx.proposals.findFirst({
     where: { tenant_id: tenantId, proposal_id: { not: proposal.proposal_id }, outcome: "won", OR: [
       ...(members.size ? [{ opportunity_id: { in: [...members] } }] : []),
       ...(relatedQuotes.length ? [{ origin: { in: relatedQuotes.map(q => q.quote_id) } }] : []),
-    ] }, select: { proposal_id: true },
+    ], ...(complements.length ? { AND: [{ OR: [
+      { opportunity_id: null },
+      { opportunity_id: { not: proposal.opportunity_id } },
+      { proposal_id: { notIn: complements } },
+    ] }] } : {}) }, select: { proposal_id: true },
   }));
 }
