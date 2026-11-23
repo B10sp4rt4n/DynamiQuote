@@ -2,6 +2,9 @@ import { beforeEach, describe, expect, it, vi } from "vitest";
 const mock = vi.hoisted(() => ({ $queryRaw: vi.fn() }));
 vi.mock("server-only", () => ({}));
 vi.mock("@/lib/db/prisma", () => ({ prisma: mock }));
+vi.mock("@/lib/db/commercial-options", () => ({
+  getCommercialReportingExclusions: async () => ({ offerIds: [], decisionIds: [] }),
+}));
 import { getProposalKpiSummaryByTenant, getProposalMarginTimelineByTenant } from "./proposal-kpis";
 
 describe("won revenue queries", () => {

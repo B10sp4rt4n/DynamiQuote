@@ -1,13 +1,14 @@
 import "server-only";
 import { randomUUID, createHash } from "crypto";
 import { Prisma } from "@prisma/client";
+import { cache } from "react";
 import { prisma } from "@/lib/db/prisma";
 import { optionSetSchema, labelOptionQuote, summarizeOptions, type CommercialOptionSet, type OptionQuote, type CommercialOptionsSummary } from "@/lib/domain/commercial-options";
 
 type Source = { rootId: string; metadata: Prisma.JsonValue; set: CommercialOptionSet; quotes: OptionQuote[] };
-export async function getCommercialOptionSets(tenantId: string, opportunityIds: string[]): Promise<Source[]> {
-  if (!opportunityIds.length) return [];
-  const roots = await prisma.quote.findMany({ where: { tenantId, opportunity_id: { in: opportunityIds }, input_metadata: { path: ["commercialOptionsSet"], not: Prisma.AnyNull } }, select: { quote_id: true, input_metadata: true } });
+export async function getCommercialOptionSets(tenantId: string, opportunityIds?: string[]): Promise<Source[]> {
+  if (opportunityIds?.length === 0) return [];
+  const roots = await prisma.quote.findMany({ where: { tenantId, ...(opportunityIds ? { opportunity_id: { in: opportunityIds } } : {}), input_metadata: { path: ["commercialOptionsSet"], not: Prisma.AnyNull } }, select: { quote_id: true, input_metadata: true } });
   const result: Source[] = [];
   for (const root of roots) {
     const metadata = root.input_metadata;
@@ -15,7 +16,7 @@ export async function getCommercialOptionSets(tenantId: string, opportunityIds: 
     if (!parsed.success) throw new Error("Configuración de opciones inválida; requiere revisión");
     const set = parsed.data;
     // Never use membership to widen the authorized opportunity set.
-    if (!set.memberOpportunityIds.every(id => opportunityIds.includes(id))) continue;
+    if (opportunityIds && !set.memberOpportunityIds.every(id => opportunityIds.includes(id))) continue;
     const records = await prisma.quote.findMany({ where: { tenantId, opportunity_id: { in: set.memberOpportunityIds } }, select: { quote_id: true, parent_quote_id: true, opportunity_id: true, client_id: true, total_revenue: true, createdAt: true } });
     const quotes = records.map(q => ({ quoteId:q.quote_id,parentQuoteId:q.parent_quote_id,opportunityId:q.opportunity_id,clientId:q.client_id,revenue:Number(q.total_revenue ?? 0),createdAt:q.createdAt?.toISOString() ?? "" }));
     const bases = set.options.flatMap(o => o.quoteIds.map(id => quotes.find(q => q.quoteId === id)));
@@ -24,6 +25,79 @@ export async function getCommercialOptionSets(tenantId: string, opportunityIds: 
   }
   return result;
 }
+
+async function getOptionProposals(tenantId: string, set: CommercialOptionSet, quotes: OptionQuote[]) {
+  const optionByQuote = new Map<string, string>();
+  for (const quote of quotes) {
+    const option = labelOptionQuote(set, quote.quoteId, quotes);
+    if (option) optionByQuote.set(quote.quoteId, option.optionId);
+  }
+
+  const quoteIds = [...optionByQuote.keys()];
+  const proposals = await prisma.proposals.findMany({
+    where: {
+      tenant_id: tenantId,
+      AND: [{ OR: [{ opportunity_id: { in: set.memberOpportunityIds } }, { opportunity_id: null }] }],
+      OR: [
+        { origin: { in: quoteIds } },
+        { formal_proposals: { some: { tenant_id: tenantId, quote_id: { in: quoteIds } } } },
+      ],
+    },
+    orderBy: [{ created_at: "desc" }, { proposal_id: "desc" }],
+    select: {
+      proposal_id: true, origin: true, outcome: true, outcome_at: true,
+      formal_proposals: {
+        where: { tenant_id: tenantId, quote_id: { in: quoteIds } },
+        orderBy: [{ created_at: "desc" }, { proposal_doc_id: "desc" }],
+        take: 1,
+        select: { quote_id: true },
+      },
+    },
+  });
+  const candidates = proposals.flatMap(proposal => {
+    const quoteId = optionByQuote.has(proposal.origin ?? "") ? proposal.origin : proposal.formal_proposals?.[0]?.quote_id;
+    const optionId = quoteId ? optionByQuote.get(quoteId) : undefined;
+    return quoteId && optionId ? [{ ...proposal, quoteId, optionId }] : [];
+  });
+  return { quoteIds, candidates };
+}
+
+function areOptionsLost(set: CommercialOptionSet, proposals: { outcome: string | null; optionId: string }[]) {
+  return proposals.every(proposal => proposal.outcome !== null)
+    && set.options.every(option => proposals.some(proposal => proposal.optionId === option.id && proposal.outcome === "lost"));
+}
+
+// Settle each group tenant-wide first. Financial queries apply their own row
+// visibility to the result, so a hidden winner cannot promote another option.
+export const getCommercialReportingExclusions = cache(async (tenantId: string) => {
+  const excludedQuotes = new Set<string>();
+  const excludedOffers = new Set<string>();
+  const excludedDecisions = new Set<string>();
+
+  for (const { set, quotes } of await getCommercialOptionSets(tenantId)) {
+    const { quoteIds, candidates } = await getOptionProposals(tenantId, set, quotes);
+    const winners = candidates.filter(proposal => proposal.outcome === "won");
+    const selected = candidates.filter(proposal => proposal.optionId === set.selectedOptionId);
+    const closedLost = areOptionsLost(set, candidates);
+    const decision = winners.length === 1 ? winners[0] : winners.length === 0 && closedLost
+      ? selected.find(proposal => proposal.outcome === "lost") : undefined;
+    const offer = decision ?? (winners.length === 0 ? selected.find(proposal => proposal.outcome === null) : undefined);
+    const selectedQuoteId = winners.length
+      ? decision?.quoteId
+      : summarizeOptions(set, quotes).options.find(option => option.id === set.selectedOptionId)?.quoteId;
+
+    for (const quoteId of [...quoteIds, ...set.placeholderQuoteIds]) {
+      if (quoteId !== selectedQuoteId) excludedQuotes.add(quoteId);
+    }
+    for (const proposal of candidates) {
+      if (proposal.proposal_id !== offer?.proposal_id) excludedOffers.add(proposal.proposal_id);
+      if (proposal.proposal_id !== decision?.proposal_id) excludedDecisions.add(proposal.proposal_id);
+    }
+  }
+
+  return { quoteIds: [...excludedQuotes], offerIds: [...excludedOffers], decisionIds: [...excludedDecisions] };
+});
+
 export async function getCommercialOpportunityOverrides(tenantId: string, opportunityIds: string[]) {
   const sources = await getCommercialOptionSets(tenantId,opportunityIds);
   const aliases = new Set<string>();
@@ -31,17 +105,16 @@ export async function getCommercialOpportunityOverrides(tenantId: string, opport
   for (const source of sources) {
     const { set, quotes } = source;
     const summary = summarizeOptions(set,quotes);
-    const proposals = await prisma.proposals.findMany({ where:{tenant_id:tenantId,opportunity_id:{in:set.memberOpportunityIds}},select:{proposal_id:true,origin:true,outcome:true,outcome_at:true,created_at:true} });
-    const winners = proposals.filter(p => p.outcome === "won" && p.origin && labelOptionQuote(set,p.origin,quotes));
-    const winnerIds = new Set(winners.map(p => labelOptionQuote(set,p.origin!,quotes)!.optionId));
+    const { candidates } = await getOptionProposals(tenantId, set, quotes);
+    const winners = candidates.filter(proposal => proposal.outcome === "won");
     let amount = summary.options.find(o => o.id === summary.selectedOptionId)?.amount ?? 0;
     let stage: "open"|"won"|"lost" = "open", closedAt:string|null = null;
-    if (winnerIds.size > 1) { summary.reviewRequired=true; stage="won"; amount=0; }
-    else if (winners.length) {
-      const winner = winners.sort((a,b)=>b.created_at.getTime()-a.created_at.getTime())[0];
+    if (winners.length > 1) { summary.reviewRequired=true; stage="won"; amount=0; }
+    else if (winners.length === 1) {
+      const winner = winners[0];
       const items = await prisma.proposal_items.aggregate({where:{tenant_id:tenantId,proposal_id:winner.proposal_id,status:{not:"deleted"}},_sum:{subtotal_price:true}});
       amount = Number(items._sum.subtotal_price ?? 0); stage="won"; closedAt=winner.outcome_at?.toISOString() ?? null;
-    } else if (set.options.every(option => proposals.some(p => p.outcome === "lost" && p.origin && labelOptionQuote(set,p.origin,quotes)?.optionId === option.id)) && !proposals.some(p => p.outcome === null)) {
+    } else if (areOptionsLost(set, candidates)) {
       stage="lost";
     }
     for (const id of set.memberOpportunityIds) if(id!==set.canonicalOpportunityId) aliases.add(id);
