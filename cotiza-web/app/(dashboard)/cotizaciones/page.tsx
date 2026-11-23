@@ -1,6 +1,7 @@
 import { getOpportunityPipelineByTenant } from "@/lib/db/opportunities";
 import { QuoteShell } from "@/components/cotizador/quote-shell";
 import { isTenantCapabilityEnabled, THREATDOWN_PDF_IMPORT } from "@/lib/db/tenant-capabilities";
+import { COMMERCIAL_EVIDENCE } from "@/lib/tenant-capabilities";
 import { getCurrentTenantContext } from "@/lib/auth/tenant-context";
 import { getQuoteGroupsSummaryByTenant, getQuoteVersionSummaryByTenant } from "@/lib/db/quotes";
 
@@ -22,12 +23,13 @@ export default async function QuotesPage({ searchParams }: {
   const canSeeAll = tenant.isSuperAdmin || tenant.userRole === "owner" || tenant.userRole === "admin";
   const query = await searchParams;
   const quoteId = typeof query.quoteId === "string" ? query.quoteId : null;
-  const [items, threatDownImportEnabled, requestedQuote, guidedQuotingEnabled, playbookFieldEnabled] = await Promise.all([
+  const [items, threatDownImportEnabled, requestedQuote, guidedQuotingEnabled, playbookFieldEnabled, commercialEvidenceEnabled] = await Promise.all([
     getQuoteGroupsSummaryByTenant(tenant.id, 12, tenant.userId, canSeeAll),
     isTenantCapabilityEnabled(tenant.id, THREATDOWN_PDF_IMPORT),
     quoteId ? getQuoteVersionSummaryByTenant(tenant.id, quoteId, tenant.userId, canSeeAll) : null,
     isTenantCapabilityEnabled(tenant.id, "cpq_guided_preview"),
     isTenantCapabilityEnabled(tenant.id, "quote_playbook_field"),
+    tenant.userId ? isTenantCapabilityEnabled(tenant.id, COMMERCIAL_EVIDENCE) : false,
   ]);
   const requestedOpportunityId = typeof query.opportunityId === "string" ? query.opportunityId : null;
   const available = requestedOpportunityId ? await getOpportunityPipelineByTenant(tenant.id, tenant.userId, canSeeAll) : [];
@@ -42,6 +44,7 @@ export default async function QuotesPage({ searchParams }: {
       playbookFieldEnabled={playbookFieldEnabled}
       guidedQuotingEnabled={guidedQuotingEnabled}
       threatDownImportEnabled={threatDownImportEnabled}
+      commercialEvidenceEnabled={commercialEvidenceEnabled}
       items={items}
       requestedQuote={requestedQuote}
       tenantName={tenant.name}

@@ -20,6 +20,7 @@ type SettingsShellProps = {
   crmWorkspaceEnabled?: boolean;
   guidedQuotingEnabled?: boolean;
   threatDownImportEnabled?: boolean;
+  commercialEvidenceEnabled?: boolean;
   canSwitchTenant?: boolean;
   canViewTenantConfig?: boolean;
   canManageAllTenants?: boolean;
@@ -2249,6 +2250,7 @@ export function SettingsShell({
   guidedQuotingEnabled = false,
   crmWorkspaceEnabled = false,
   threatDownImportEnabled = false,
+  commercialEvidenceEnabled = false,
   canSwitchTenant = false,
   users,
   issuerProfiles,
@@ -2394,6 +2396,8 @@ export function SettingsShell({
             {canManageAllTenants ? <CreateTenantForm /> : null}
             {canManageAllTenants ? <TenantCapabilitiesPanel key={tenantId} tenantId={tenantId} tenantName={tenantName}
               initialEnabled={threatDownImportEnabled} /> : null}
+            {canManageAllTenants ? <TenantCapabilitiesPanel key={`${tenantId}-evidence`} tenantId={tenantId} tenantName={tenantName}
+              initialEnabled={commercialEvidenceEnabled} capabilityKey="commercial_evidence" /> : null}
             {canManageAllTenants ? <TenantCapabilitiesPanel key={`${tenantId}-cpq`} tenantId={tenantId} tenantName={tenantName} initialEnabled={guidedQuotingEnabled} capabilityKey="cpq_guided_preview" /> : null}
             {canManageAllTenants ? <TenantCapabilitiesPanel key={`${tenantId}-crm`} tenantId={tenantId} tenantName={tenantName} initialEnabled={crmWorkspaceEnabled} capabilityKey="crm_workspace_pilot" /> : null}
             {canManageAllTenants ? <TenantCapabilitiesPanel key={`${tenantId}-playbook`} tenantId={tenantId} tenantName={tenantName} initialEnabled={playbookFieldEnabled} capabilityKey="quote_playbook_field" /> : null}

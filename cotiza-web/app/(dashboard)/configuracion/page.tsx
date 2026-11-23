@@ -1,7 +1,7 @@
 import { SettingsShell } from "@/components/configuracion/settings-shell";
 import { gmailPilotVisible } from "@/lib/integrations/gmail/availability";
 import { mercadoLibreEnabled } from "@/lib/integrations/mercadolibre/availability";
-import { MERCADOLIBRE_CHANNEL } from "@/lib/tenant-capabilities";
+import { COMMERCIAL_EVIDENCE, MERCADOLIBRE_CHANNEL } from "@/lib/tenant-capabilities";
 import { getTenantOperationMode } from "@/lib/db/tenant-operation";
 import { isTenantCapabilityEnabled, THREATDOWN_PDF_IMPORT } from "@/lib/db/tenant-capabilities";
 import { getCurrentTenantContext } from "@/lib/auth/tenant-context";
@@ -25,7 +25,7 @@ export default async function SettingsPage() {
   const canSwitchTenant = tenant.isSuperAdmin;
   const canManageUsers = tenant.isSuperAdmin || tenant.userRole === "owner" || tenant.userRole === "admin";
 
-  const [users, issuerProfiles, marginPolicy, tenantOptions, tenantProfile, threatDownImportEnabled, guidedQuotingEnabled, crmWorkspaceEnabled, playbookFieldEnabled, operationMode, mercadoLibreEntitled, mercadoLibreAvailable] = await Promise.all([
+  const [users, issuerProfiles, marginPolicy, tenantOptions, tenantProfile, threatDownImportEnabled, guidedQuotingEnabled, crmWorkspaceEnabled, playbookFieldEnabled, operationMode, mercadoLibreEntitled, mercadoLibreAvailable, commercialEvidenceEnabled] = await Promise.all([
     canManageUsers
       ? tenant.isSuperAdmin
         ? getAppUsersForSuperAdmin()
@@ -42,6 +42,7 @@ export default async function SettingsPage() {
     canManageUsers ? getTenantOperationMode(tenant.id) : Promise.resolve("consultative" as const),
     canManageUsers ? isTenantCapabilityEnabled(tenant.id, MERCADOLIBRE_CHANNEL) : Promise.resolve(false),
     canManageUsers && tenant.authMode === "clerk" ? mercadoLibreEnabled(tenant.id) : Promise.resolve(false),
+    canSwitchTenant ? isTenantCapabilityEnabled(tenant.id, COMMERCIAL_EVIDENCE) : false,
   ]);
 
   return (
@@ -52,6 +53,7 @@ export default async function SettingsPage() {
       mercadoLibreEntitled={mercadoLibreEntitled}
       mercadoLibreAvailable={mercadoLibreAvailable}
       threatDownImportEnabled={threatDownImportEnabled}
+      commercialEvidenceEnabled={commercialEvidenceEnabled}
       playbookFieldEnabled={playbookFieldEnabled}
       guidedQuotingEnabled={guidedQuotingEnabled}
       crmWorkspaceEnabled={crmWorkspaceEnabled}

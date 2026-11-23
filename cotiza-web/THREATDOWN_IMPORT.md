@@ -1,53 +1,43 @@
-# Importación de cotizaciones ThreatDown
+# Importación de partidas ThreatDown
 
-Desde el editor, «Importar PDF ThreatDown» permite leer una cotización digital,
-revisar cliente destinatario, SKU, cantidades, costo neto USD y suscripción,
-indicar un tipo de cambio MXN/USD y margen sobre venta, y confirmar un borrador.
-No necesita IA, credenciales de correo ni servicios adicionales.
+«Importar PDF ThreatDown» toma únicamente SKU, cantidades y descripciones.
+El usuario revisa las partidas y confirma el reemplazo en un borrador.
+Costo, precio y margen comienzan en cero: los define después en el editor
+normal de Cotiza. La importación no solicita tipo de cambio ni margen y no
+arrastra precios o reglas comerciales desde el PDF.
 
-La primera versión acepta el formato de ThreatDown Limited con Purchase Summary
-y precios en USD. La lectura reconstruye filas por coordenadas PDF y toma
-exclusivamente Net Unit Price y Net Total Amount. Reconcilia extensiones y
-subtotal; conserva las partidas de soporte de costo cero y las descripciones
-que ocupan varias líneas. Falla ante tablas incompletas, otras monedas, SKU
-repetidos, fechas inválidas o descuadres. No realiza OCR. Límite: 3 MB, 10 páginas.
+Se conserva la detección de soporte como servicio. Sus partidas gratuitas
+(costo y precio cero) pueden guardarse junto con productos con precio y margen,
+sin impedir la edición de la cotización.
 
-También admite celdas monetarias que separan USD y la cifra en dos renglones.
-Los reúne únicamente dentro de la misma partida y con la misma alineación de
-columna. Rechaza importes ausentes, ambiguos o de otra columna; no deduce el
-costo unitario a partir del total ni toma MSRP como costo. Las conciliaciones
-por partida y subtotal se mantienen después de reconstruir la celda.
-
-El editor existente presenta importes en MXN. Por ello esta entrega requiere un
-tipo de cambio explícito y crea importes en MXN, sin inferir ni consultar una
-cotización cambiaria. Redondea cada costo convertido a centavos y calcula
-venta = costo / (1 - margen / 100). No multiplica otra vez por el plazo: el
-costo recibido corresponde al importe unitario de la suscripción del PDF.
-
-La confirmación exige revisar la correspondencia del cliente, cantidades,
-vigencia, plazo y precios. No vincula clientes automáticamente por nombre,
-no modifica una propuesta ni crea aprobaciones o envíos. Crea una nueva versión
-del grupo con las partidas del PDF y conserva la versión y oportunidad anteriores.
-La versión resultante puede guardarse como plantilla con el botón existente.
+El lector admite cotizaciones digitales de ThreatDown Limited con Purchase
+Summary en USD. Reconstruye filas y celdas monetarias partidas por coordenadas,
+valida que la extracción esté completa y concilia las cifras del documento como
+control de lectura. Esas cifras no se transfieren a las partidas de Cotiza.
+Conserva descripciones de varios renglones. Rechaza tablas incompletas, SKU
+repetidos, fechas inválidas o descuadres. No hace OCR. Límites: 3 MB y 10 páginas.
+No necesita IA ni servicios adicionales.
 
 POST /api/quotes/:quoteId/import-threatdown admite multipart con file y action.
-preview no escribe. apply vuelve a leer el PDF original, exige expectedHash,
-operationId UUID, exchangeRate, marginPct y confirmed=yes. No confía en partidas
-enviadas por el navegador. Autentica tenant, verifica visibilidad del vendedor,
-limita frecuencia y usa el escritor transaccional común para reintentos.
+preview no escribe. apply vuelve a leer el original y exige expectedHash,
+operationId UUID y confirmed=yes. Ignora precios, tipo de cambio, margen y
+partidas enviados por el navegador; usa exclusivamente la extracción del servidor.
+Autentica tenant, verifica visibilidad del vendedor, capacidad habilitada por
+empresa y límite de frecuencia. El escritor transaccional común permite reintentos
+sin duplicar partidas. Llena v1 si es un borrador inicial vacío; en los demás
+casos crea una versión y conserva la anterior y la oportunidad.
 
-input_metadata.source conserva el número de cotización, SHA-256 del archivo,
-los costos y cantidades originales en USD, fechas, plazo, carácter preliminar,
-tipo de cambio, margen y usuario que revisó. No almacena los contactos,
-direcciones del PDF ni sus bytes. El original debe conservarse por el usuario;
-el hash permite contrastarlo. Una revisión nueva con el mismo número de
-cotización se distingue por el hash del archivo.
+input_metadata.source conserva número de cotización del fabricante, SHA-256,
+importMode=items-only y usuario que revisó. No guarda costos del fabricante,
+margen, tipo de cambio, contactos ni bytes del PDF en esta operación.
+Los originales y metadatos de importaciones anteriores se conservan.
 
-No requiere migración adicional a la base publicada para plantillas. Requiere
-Node 22 o posterior por unpdf 1.9.1; producción usa Node 24. No cambia el flujo
-Excel ni la moneda de propuestas anteriores. La creación normal de propuestas
-conserva su revisión comercial y selección de moneda existentes.
+Antes de generar una propuesta, el editor guarda cualquier cambio pendiente
+en las partidas, aunque no altere el total de venta. Esto incluye costos,
+descripciones, cantidades, clasificaciones y márgenes. Una falla de guardado
+mantiene al usuario en el editor y evita crear la propuesta con datos anteriores.
 
-Validación: contrato, ruta y lectura con PDF reales de Selanusa Q-795488 y
-DISTMAR Q-760396, guardados fuera del repositorio. La suite de PDF reales es
-optativa con THREATDOWN_PDF_TEST_DIR; no contiene los documentos privados.
+No requiere migración. Node >=22; producción usa Node 24. Las suites incluyen
+contrato, permisos, idempotencia, soporte gratuito y navegación a propuestas.
+Las pruebas opcionales con PDF reales usan THREATDOWN_PDF_TEST_DIR; los
+archivos privados no se incluyen en el repositorio.

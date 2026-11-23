@@ -5,18 +5,18 @@ import { getCurrentTenantContext } from "@/lib/auth/tenant-context";
 import { isTenantCapabilityEnabled, THREATDOWN_PDF_IMPORT } from "@/lib/db/tenant-capabilities";
 import { isQuoteVisibleToViewer } from "@/lib/db/quotes";
 import { createDraftFromQuoteInput } from "@/lib/db/quote-input";
+import { COMMERCIAL_EVIDENCE } from "@/lib/tenant-capabilities";
 import { readThreatDownPdf } from "@/lib/import/threatdown-pdf";
-import { priceThreatDownQuote } from "@/lib/domain/threatdown-quote";
+import { threatDownItemInput } from "@/lib/domain/threatdown-quote";
 import { QuoteInputError } from "@/lib/domain/quote-input";
 import { enforceRateLimit, getRequestIdentity } from "@/lib/utils/rate-limit";
 
 export const runtime = "nodejs";
 export const maxDuration = 30;
-const amount = z.string().trim().min(1).transform(Number).pipe(z.number().finite());
 const applySchema = z.object({
   operationId: z.string().uuid(), expectedHash: z.string().regex(/^[a-f0-9]{64}$/),
-  exchangeRate: amount.pipe(z.number().positive().max(1000)),
-  marginPct: amount.pipe(z.number().min(0).lt(100)), confirmed: z.literal("yes"),
+  confirmed: z.literal("yes"),
+  saveCommercialEvidence: z.literal("yes").optional(),
 });
 
 export async function POST(request: Request, { params }: { params: Promise<{ quoteId: string }> }) {
@@ -48,20 +48,23 @@ export async function POST(request: Request, { params }: { params: Promise<{ quo
     const bytes = new Uint8Array(await file.arrayBuffer());
     const fileHash = createHash("sha256").update(bytes).digest("hex");
     const parsed = action === "apply" ? applySchema.safeParse(Object.fromEntries(form)) : null;
-    if (parsed && !parsed.success) throw new QuoteInputError("Revisa el margen, tipo de cambio y confirmación.");
+    if (parsed && !parsed.success) throw new QuoteInputError("Revisa la confirmación de las partidas y vuelve a intentarlo.");
     if (parsed?.success && parsed.data.expectedHash !== fileHash) throw new QuoteInputError("El archivo cambió. Vuelve a revisar la vista previa.", 409);
+    const evidenceActor = parsed?.success && parsed.data.saveCommercialEvidence ? tenant.userId : null;
+    if (parsed?.success && parsed.data.saveCommercialEvidence
+      && (!evidenceActor || !await isTenantCapabilityEnabled(tenant.id, COMMERCIAL_EVIDENCE))) {
+      throw new QuoteInputError("Evidencia comercial desactivada para esta empresa. Puedes importar las partidas sin adjuntar el PDF.", 403);
+    }
     const source = await readThreatDownPdf(bytes);
     if (!parsed?.success) return NextResponse.json({ source, fileHash });
-    const { exchangeRate, marginPct, operationId } = parsed.data;
-    const priced = priceThreatDownQuote(source, exchangeRate, marginPct);
+    const { operationId } = parsed.data;
+    const items = threatDownItemInput(source);
     const result = await createDraftFromQuoteInput({ tenantId: tenant.id, quoteId, operationId,
-      mode: "replace", lines: priced.lines,
+      mode: "replace", lines: items.lines,
       source: { kind: "threatdown-pdf", id: source.quoteNumber, revision: fileHash,
-        commercial: { currency: "USD", targetCurrency: "MXN", exchangeRate, marginPct,
-          expiresOn: source.expiresOn, startsOn: source.startsOn, endsOn: source.endsOn,
-          termMonths: source.termMonths, preliminary: source.preliminary, netTotal: source.netTotal,
-          reviewedBy: tenant.userId,
-          lines: source.lines.map(({ sku, quantity, costUnit, netTotal }) => ({ sku, quantity, costUnit, netTotal })) } },
+        importMode: "items-only", reviewedBy: tenant.userId },
+      ...(evidenceActor ? { evidence: { userId: evidenceActor, bytes, filename: file.name,
+        supplier: "ThreatDown", reference: source.quoteNumber, expiresOn: source.expiresOn } } : {}),
     });
     if (!result) return NextResponse.json({ error: "Cotización no encontrada" }, { status: 404 });
     return NextResponse.json(result);

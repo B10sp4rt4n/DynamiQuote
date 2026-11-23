@@ -1,8 +1,10 @@
 import { beforeEach, expect, it, vi } from "vitest";
 import { renderToStaticMarkup } from "react-dom/server";
-const m = vi.hoisted(() => ({ tenant: vi.fn(), workspace: vi.fn(), billing: vi.fn() }));
+const m = vi.hoisted(() => ({ tenant: vi.fn(), workspace: vi.fn(), billing: vi.fn(), capability: vi.fn(), evidence: vi.fn() }));
 vi.mock("@/lib/auth/tenant-context", () => ({ getCurrentTenantContext: m.tenant }));
 vi.mock("@/lib/db/opportunity-workspace", () => ({ getBusinessWorkspace: m.workspace }));
+vi.mock("@/lib/db/tenant-capabilities", () => ({ isTenantCapabilityEnabled: m.capability }));
+vi.mock("@/lib/db/commercial-evidence", () => ({ listCommercialEvidence: m.evidence }));
 vi.mock("@/lib/integrations/digestor-fiscal", () => ({ isDigestorFiscalEnabledForTenant: m.billing }));
 vi.mock("next/link", () => ({ default: ({ children, ...props }: React.ComponentProps<"a">) => <a {...props}>{children}</a> }));
 vi.mock("next/navigation", () => ({ notFound: () => { throw Error("not-found"); }, redirect: (url: string) => { throw Error(`redirect:${url}`); }, useRouter: () => ({ refresh: vi.fn() }) }));
@@ -25,8 +27,22 @@ tasks: [], optionLabels: {}, ownerName: "Responsable de prueba" });
 beforeEach(() => {
   vi.clearAllMocks(); m.tenant.mockResolvedValue({ id: "tenant-a", userId: "seller-a", userRole: "user", isSuperAdmin: false });
   m.workspace.mockResolvedValue(workspace()); m.billing.mockReturnValue(true);
+  m.capability.mockResolvedValue(false);
 });
 const render = async () => renderToStaticMarkup(await BusinessPage({ params: Promise.resolve({ opportunityId: "opp-a" }) }));
+
+it("hides evidence for disabled tenants and shows one document with its exact linked revisions when enabled", async () => {
+  expect(await render()).not.toContain("Evidencia comercial");
+  expect(m.evidence).not.toHaveBeenCalled();
+  m.capability.mockResolvedValue(true);
+  const evidence = { evidenceId: "ev-a", filename: "Q-123.pdf", supplier: "ThreatDown", reference: "Q-123", expiresOn: "2026-12-01" };
+  m.evidence.mockResolvedValue([{ ...evidence, quoteId: "quote-v1" }, { ...evidence, quoteId: "quote-v2" }]);
+  const html = await render();
+  expect(m.evidence).toHaveBeenCalledWith("tenant-a", ["quote-v2", "quote-v1"]);
+  expect(html).toContain("Evidencia comercial");
+  expect(html.match(/Q-123\.pdf/g)).toHaveLength(1);
+  expect(html).toContain("Renovación original · COT-1 · Revisión 1 · Renovación ampliada · COT-1 · Revisión 2");
+});
 
 it("replaces the contradictory won/pending wizard with real documents, date, currency and fiscal follow-up", async () => {
   const html = await render();
