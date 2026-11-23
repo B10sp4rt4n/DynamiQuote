@@ -36,7 +36,10 @@ function quotedAmount(value: number | null, currency: string | null) {
   return `${new Intl.NumberFormat("es-MX", { style: "currency", currency: code, currencyDisplay: "narrowSymbol", minimumFractionDigits: 2, maximumFractionDigits: 2 }).format(value)} ${code}`;
 }
 
-export default async function BusinessPage({ params }: { params: Promise<{ opportunityId: string }> }) {
+export default async function BusinessPage({ params, searchParams }: {
+  params: Promise<{ opportunityId: string }>;
+  searchParams?: Promise<Record<string, string | string[] | undefined>>;
+}) {
   const tenant = await getCurrentTenantContext();
   if (!tenant?.userId) notFound();
   const { opportunityId } = await params;
@@ -56,6 +59,25 @@ export default async function BusinessPage({ params }: { params: Promise<{ oppor
     billingEnabled, alternativesNeedReview: opportunity.commercialOptions?.reviewRequired });
   const closed = ["won", "lost", "no_decision"].includes(opportunity.stage);
   const badge = opportunity.stage === "won" ? "bg-emerald-100 text-emerald-900" : opportunity.stage === "lost" ? "bg-rose-100 text-rose-900" : opportunity.stage === "paused" ? "bg-amber-100 text-amber-900" : "bg-zinc-100 text-zinc-800";
+  const query = await searchParams ?? {};
+  const requestedFilter = Array.isArray(query.propuestas) ? query.propuestas[0] : query.propuestas;
+  const proposalFilter = requestedFilter === "descartadas" || requestedFilter === "todas" ? requestedFilter : "validas";
+  const discardedCount = proposals.filter(proposal => proposal.outcome === "discarded").length;
+  const visibleProposals = proposals.filter(proposal => proposalFilter === "todas" ||
+    (proposalFilter === "descartadas" ? proposal.outcome === "discarded" : proposal.outcome !== "discarded"));
+  const proposalFilters = [
+    { value: "validas", label: "Válidas", count: proposals.length - discardedCount },
+    { value: "descartadas", label: "Descartadas", count: discardedCount },
+    { value: "todas", label: "Todas", count: proposals.length },
+  ];
+  function proposalFilterHref(value: string) {
+    const nextQuery = new URLSearchParams();
+    for (const [key, values] of Object.entries(query)) {
+      for (const value of Array.isArray(values) ? values : values === undefined ? [] : [values]) nextQuery.append(key, value);
+    }
+    nextQuery.set("propuestas", value);
+    return `/oportunidades/${encodeURIComponent(opportunityId)}?${nextQuery.toString()}#propuestas`;
+  }
 
   return <div className="space-y-4 text-zinc-900">
     <Link className="inline-flex min-h-11 items-center text-sm text-blue-800 underline" href="/pipeline">← Todas las oportunidades</Link>
@@ -91,7 +113,15 @@ export default async function BusinessPage({ params }: { params: Promise<{ oppor
     </details>
     <section className="scroll-mt-24 rounded-xl border border-zinc-200 bg-white p-5" id="propuestas">
       <h2 className="text-xl font-semibold">Propuestas vinculadas ({proposals.length})</h2>
-      <div className="mt-4 grid gap-3 sm:grid-cols-2">{proposals.map(proposal => {
+      <nav aria-label="Filtrar propuestas vinculadas" className="mt-3 flex flex-wrap gap-2">
+        {proposalFilters.map(filter => <Link key={filter.value} href={proposalFilterHref(filter.value)}
+          aria-current={proposalFilter === filter.value ? "true" : undefined}
+          className={`inline-flex min-h-11 items-center rounded-lg border px-3 py-2 text-sm font-medium focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-blue-700 ${proposalFilter === filter.value ? "border-blue-700 bg-blue-700 text-white" : "border-zinc-300 bg-white text-zinc-700 hover:bg-zinc-100"}`}>
+          {filter.label} ({filter.count})
+        </Link>)}
+      </nav>
+      <p className="mt-2 text-sm text-zinc-600">Mostrando {visibleProposals.length} de {proposals.length}. Válidas = no descartadas.</p>
+      <div className="mt-4 grid gap-3 sm:grid-cols-2">{visibleProposals.map(proposal => {
         const formal = proposal.formal_proposals[0];
         const sourceQuote = quotes.find(quote => quote.quote_id === (formal?.quote_id ?? proposal.origin));
         const quoteName = normalizeQuoteName(sourceQuote?.proposal_name);
@@ -114,7 +144,7 @@ export default async function BusinessPage({ params }: { params: Promise<{ oppor
           {proposal.outcome === "won" ? <span className="mt-2 block text-sm font-medium text-emerald-800">{proposalBillingLabel(proposal)}</span> : null}
         </Link>;
       })}</div>
-      {!proposals.length ? <p className="mt-3 text-zinc-600">Sin propuestas vinculadas en esta vista.</p> : null}
+      {!visibleProposals.length ? <p className="mt-3 text-zinc-600">{!proposals.length ? "Sin propuestas vinculadas en esta vista." : proposalFilter === "descartadas" ? "No hay propuestas descartadas." : "No hay propuestas válidas. Selecciona Descartadas o Todas para consultar las propuestas vinculadas."}</p> : null}
     </section>
     <section className="scroll-mt-24 rounded-xl border border-zinc-200 bg-white p-5" id="cotizaciones">
       <h2 className="text-xl font-semibold">Cotizaciones y revisiones ({quotes.length})</h2>
