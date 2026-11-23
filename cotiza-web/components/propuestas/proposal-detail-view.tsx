@@ -64,7 +64,8 @@ export function ProposalDetailView({
   const currency = formal?.currency ?? null;
   const totalPrice = items.reduce((sum, item) => sum + item.subtotalPrice, 0);
   const totalCost = items.reduce((sum, item) => sum + item.subtotalCost, 0);
-  const marginPct = totalPrice > 0 ? ((totalPrice - totalCost) / totalPrice) * 100 : 0;
+  const grossProfit = totalPrice - totalCost;
+  const marginPct = totalPrice > 0 ? (grossProfit / totalPrice) * 100 : 0;
 
   return (
     <section className="space-y-5 rounded-xl border border-zinc-200 bg-white p-6 shadow-sm">
@@ -130,20 +131,21 @@ export function ProposalDetailView({
 
       <div className="grid gap-4 sm:grid-cols-2 lg:grid-cols-4">
         <div className="rounded-lg border border-zinc-200 p-3">
-          <p className="text-xs uppercase tracking-[0.12em] text-zinc-500">Monto propuesto</p>
+          <p className="text-xs uppercase tracking-[0.12em] text-zinc-500">Venta propuesta</p>
           <p className="mt-1 text-lg font-semibold text-zinc-900">{formatCurrency(totalPrice, currency)}</p>
         </div>
         <div className="rounded-lg border border-zinc-200 p-3">
           <p className="text-xs uppercase tracking-[0.12em] text-zinc-500">Costo total</p>
           <p className="mt-1 text-lg font-semibold text-zinc-900">{formatCurrency(totalCost, currency)}</p>
         </div>
-        <div className="rounded-lg border border-zinc-200 p-3">
-          <p className="text-xs uppercase tracking-[0.12em] text-zinc-500">Margen</p>
-          <p className="mt-1 text-lg font-semibold text-zinc-900">{marginPct.toFixed(1)}%</p>
+        <div className={`rounded-lg border p-3 ${grossProfit < 0 ? "border-rose-200 bg-rose-50" : "border-emerald-200 bg-emerald-50"}`}>
+          <p className={`text-xs uppercase tracking-[0.12em] ${grossProfit < 0 ? "text-rose-700" : "text-emerald-700"}`}>Utilidad bruta estimada</p>
+          <p className={`mt-1 text-lg font-semibold ${grossProfit < 0 ? "text-rose-900" : "text-emerald-900"}`}>{formatCurrency(grossProfit, currency)}</p>
+          <p className={`mt-1 text-xs ${grossProfit < 0 ? "text-rose-700" : "text-emerald-700"}`}>Venta menos costo. Antes de gastos de operación.</p>
         </div>
         <div className="rounded-lg border border-zinc-200 p-3">
-          <p className="text-xs uppercase tracking-[0.12em] text-zinc-500">Partidas</p>
-          <p className="mt-1 text-lg font-semibold text-zinc-900">{items.length}</p>
+          <p className="text-xs uppercase tracking-[0.12em] text-zinc-500">Margen sobre venta</p>
+          <p className="mt-1 text-lg font-semibold text-zinc-900">{marginPct.toFixed(1)}%</p>
         </div>
       </div>
 
@@ -208,6 +210,9 @@ export function ProposalDetailView({
 
       <div className="overflow-x-auto rounded-lg border border-zinc-200">
         <table className="min-w-full divide-y divide-zinc-200 text-sm">
+          <caption className="border-b border-zinc-200 bg-zinc-50 px-4 py-3 text-left font-semibold text-zinc-900">
+            Partidas ({items.length})
+          </caption>
           <thead className="bg-zinc-50 text-left text-zinc-600">
             <tr>
               <th className="px-4 py-3 font-medium">#</th>
