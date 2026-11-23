@@ -1,7 +1,7 @@
 import {beforeEach,expect,it,vi} from "vitest";
 vi.mock("server-only",()=>({}));
-const m=vi.hoisted(()=>({quote:vi.fn(),props:vi.fn(),sum:vi.fn(),transaction:vi.fn()}));
-vi.mock("@/lib/db/prisma",()=>({prisma:{quote:{findMany:m.quote},proposals:{findMany:m.props},proposal_items:{aggregate:m.sum},$transaction:m.transaction}}));
+const m=vi.hoisted(()=>({quote:vi.fn(),props:vi.fn(),sum:vi.fn(),groupBy:vi.fn(),transaction:vi.fn()}));
+vi.mock("@/lib/db/prisma",()=>({prisma:{quote:{findMany:m.quote},proposals:{findMany:m.props},proposal_items:{aggregate:m.sum,groupBy:m.groupBy},$transaction:m.transaction}}));
 import {getCommercialOpportunityOverrides,getCommercialOptionSets,selectCommercialOption} from "./commercial-options";
 const config={version:1,id:"set1",canonicalOpportunityId:"opp1",memberOpportunityIds:["opp1","opp2"],selectedOptionId:null as string|null,placeholderQuoteIds:["empty"],configuredBy:"test",configuredAt:"2026-10-26",options:[{id:"a",ordinal:1,label:"100",quoteIds:["q100","copy"]},{id:"b",ordinal:2,label:"250",quoteIds:["q250"]},{id:"c",ordinal:3,label:"500",quoteIds:["q500"]}]};
 const rows=[{quote_id:"q100",parent_quote_id:null,opportunity_id:"opp1",client_id:"client",total_revenue:302600,createdAt:new Date("2026-10-26")},{quote_id:"q250",parent_quote_id:"q100",opportunity_id:"opp1",client_id:"client",total_revenue:356100,createdAt:new Date("2026-10-26")},{quote_id:"q500",parent_quote_id:"q250",opportunity_id:"opp1",client_id:"client",total_revenue:438600,createdAt:new Date("2026-10-26")},{quote_id:"copy",parent_quote_id:null,opportunity_id:"opp2",client_id:"client",total_revenue:302600,createdAt:new Date("2026-10-25")}];
@@ -9,6 +9,35 @@ beforeEach(()=>{vi.clearAllMocks();config.selectedOptionId=null;m.quote.mockImpl
 it("returns a single open opportunity with a range and no additive amount",async()=>{const result=await getCommercialOpportunityOverrides("tenant",["opp1","opp2"]);expect([...result.aliases]).toEqual(["opp2"]);expect(result.overrides.get("opp1")).toMatchObject({amount:0,stage:"open",summary:{minimum:302600,maximum:438600,optionCount:3}});expect(m.quote.mock.calls.every(([args])=>args.where.tenantId==="tenant")).toBe(true);});
 it("does not widen authorization to a missing member opportunity",async()=>{expect(await getCommercialOptionSets("tenant",["opp1"])).toEqual([]);expect(m.quote).toHaveBeenCalledOnce();});
 it("uses only an explicit selected alternative for the open amount",async()=>{config.selectedOptionId="b";const result=await getCommercialOpportunityOverrides("tenant",["opp1","opp2"]);expect(result.overrides.get("opp1")!.amount).toBe(356100);});
+it("uses one current formal proposal per alternative, with its amount and currency", async () => {
+  const proposal = (proposal_id: string, quote_id: string, outcome: string | null = null, created_by_user_id: string | null = null) => ({
+    proposal_id, origin: null, outcome, created_by_user_id, formal_proposals: [{ quote_id, currency: " usd " }],
+  });
+  m.props.mockResolvedValue([
+    proposal("discarded", "q500", "discarded"),
+    proposal("restricted", "q250", null, "other-seller"),
+    proposal("current", "q250"),
+    proposal("older", "q250"),
+    proposal("base", "q100"),
+  ]);
+  m.groupBy.mockResolvedValue([
+    { proposal_id: "current", _sum: { subtotal_price: 6947.7 } },
+    { proposal_id: "base", _sum: { subtotal_price: 4553.14 } },
+  ]);
+  const read = () => getCommercialOpportunityOverrides("tenant", ["opp1", "opp2"], "seller");
+  expect((await read()).overrides.get("opp1")).toMatchObject({
+    amount: 0, stage: "open", summary: { minimum: 4553.14, maximum: 6947.7, optionCount: 2 },
+  });
+  expect(m.groupBy).toHaveBeenCalledWith({
+    by: ["proposal_id"],
+    where: { tenant_id: "tenant", status: { not: "deleted" }, proposal_id: { in: ["current", "base"] } },
+    _sum: { subtotal_price: true },
+  });
+  config.selectedOptionId = "b";
+  expect((await read()).overrides.get("opp1")).toMatchObject({ amount: 6947.7, summary: { amountCurrency: "USD" } });
+  config.selectedOptionId = "c";
+  expect((await read()).overrides.get("opp1")).toMatchObject({ amount: 0, summary: { selectedOptionId: null } });
+});
 it("uses the accepted proposal amount instead of adding other options or quote duplicates",async()=>{m.props.mockResolvedValue([{proposal_id:"p100",origin:"copy",outcome:"won",outcome_at:new Date("2026-10-26"),created_at:new Date()}]);m.sum.mockResolvedValue({_sum:{subtotal_price:302600}});const result=await getCommercialOpportunityOverrides("tenant",["opp1","opp2"]);expect(result.overrides.get("opp1")).toMatchObject({amount:302600,stage:"won"});expect(m.sum).toHaveBeenCalledWith({where:{tenant_id:"tenant",proposal_id:"p100",status:{not:"deleted"}},_sum:{subtotal_price:true}});});
 it("refuses partial or cross-account option membership",async()=>{m.quote.mockImplementation(async(args)=>args.where.input_metadata?[{quote_id:"empty",input_metadata:{commercialOptionsSet:config}}]:rows.map(r=>r.quote_id==="copy"?{...r,client_id:"other"}:r));await expect(getCommercialOptionSets("tenant",["opp1","opp2"])).rejects.toThrow("distinta cuenta");});
 it("denies a foreign opportunity or owner before changing metadata",async()=>{const update=vi.fn();m.transaction.mockImplementation(fn=>fn({$executeRaw:vi.fn(),opportunities:{findFirst:async()=>({owner_user_id:"other"})},quote:{updateMany:update}}));expect(await selectCommercialOption("tenant","foreign","a",{userId:"seller",isSuperAdmin:false,userRole:"user"})).toBe(false);expect(update).not.toHaveBeenCalled();});

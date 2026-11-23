@@ -94,7 +94,7 @@ export default async function BusinessPage({ params, searchParams }: {
         </div>
         <div className="min-w-0 rounded-lg bg-zinc-50 p-3 lg:max-w-sm">
           <p className="text-xs text-zinc-600">{opportunity.stage === "won" ? "Importe del cierre" : "Importe del negocio"}</p>
-          <div className="mt-1 break-words text-lg font-semibold">{opportunity.amountUnestimated ? "Por estimar" : <OpportunityAmount opportunityId={opportunity.opportunityId} amount={opportunity.amount} options={opportunity.commercialOptions} stage={opportunity.stage} currency={currency.currency} showCurrency unknownCurrencyLabel={currency.label} multipleCurrencies={currency.mixed} />}</div>
+          <div className="mt-1 break-words text-lg font-semibold">{opportunity.amountUnestimated ? "Por estimar" : <OpportunityAmount opportunityId={opportunity.opportunityId} amount={opportunity.amount} options={opportunity.commercialOptions} stage={opportunity.stage} canChoose={canSeeAll || opportunity.ownerUserId === tenant.userId} currency={currency.currency} showCurrency unknownCurrencyLabel={currency.label} multipleCurrencies={currency.mixed} />}</div>
           <OpportunityReview opportunity={opportunity} canManage={canSeeAll || opportunity.ownerUserId === tenant.userId} currency={currency.currency} showCurrency unknownCurrencyLabel={currency.label} multipleCurrencies={currency.mixed} />
         </div>
       </div>

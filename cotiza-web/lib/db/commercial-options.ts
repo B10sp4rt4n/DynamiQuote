@@ -45,19 +45,22 @@ async function getOptionProposals(tenantId: string, set: CommercialOptionSet, qu
     },
     orderBy: [{ created_at: "desc" }, { proposal_id: "desc" }],
     select: {
-      proposal_id: true, origin: true, outcome: true, outcome_at: true,
+      proposal_id: true, origin: true, outcome: true, outcome_at: true, created_by_user_id: true,
       formal_proposals: {
-        where: { tenant_id: tenantId, quote_id: { in: quoteIds } },
+        where: { tenant_id: tenantId },
         orderBy: [{ created_at: "desc" }, { proposal_doc_id: "desc" }],
         take: 1,
-        select: { quote_id: true },
+        select: { quote_id: true, currency: true },
       },
     },
   });
   const candidates = proposals.flatMap(proposal => {
-    const quoteId = optionByQuote.has(proposal.origin ?? "") ? proposal.origin : proposal.formal_proposals?.[0]?.quote_id;
+    const formal = proposal.formal_proposals?.[0];
+    const quoteId = formal?.quote_id ?? proposal.origin;
     const optionId = quoteId ? optionByQuote.get(quoteId) : undefined;
-    return quoteId && optionId ? [{ ...proposal, quoteId, optionId }] : [];
+    const code = formal?.currency?.trim().toUpperCase();
+    const currency = formal ? (code && /^[A-Z]{3}$/.test(code) ? code : null) : undefined;
+    return quoteId && optionId ? [{ ...proposal, quoteId, optionId, currency }] : [];
   });
   return { quoteIds, candidates };
 }
@@ -98,7 +101,7 @@ export const getCommercialReportingExclusions = cache(async (tenantId: string) =
   return { quoteIds: [...excludedQuotes], offerIds: [...excludedOffers], decisionIds: [...excludedDecisions] };
 });
 
-export async function getCommercialOpportunityOverrides(tenantId: string, opportunityIds: string[]) {
+export async function getCommercialOpportunityOverrides(tenantId: string, opportunityIds: string[], proposalViewerUserId?: string | null) {
   const sources = await getCommercialOptionSets(tenantId,opportunityIds);
   const aliases = new Set<string>();
   const overrides = new Map<string,{ summary: CommercialOptionsSummary; memberOpportunityIds: string[]; amount: number; stage: "open"|"won"|"lost"; closedAt:string|null }>();
@@ -107,15 +110,49 @@ export async function getCommercialOpportunityOverrides(tenantId: string, opport
     const summary = summarizeOptions(set,quotes);
     const { candidates } = await getOptionProposals(tenantId, set, quotes);
     const winners = candidates.filter(proposal => proposal.outcome === "won");
-    let amount = summary.options.find(o => o.id === summary.selectedOptionId)?.amount ?? 0;
+    const visible = candidates.filter(proposal => proposalViewerUserId === undefined || proposal.created_by_user_id == null || proposal.created_by_user_id === proposalViewerUserId);
+    let amount = 0;
     let stage: "open"|"won"|"lost" = "open", closedAt:string|null = null;
     if (winners.length > 1) { summary.reviewRequired=true; stage="won"; amount=0; }
     else if (winners.length === 1) {
       const winner = winners[0];
       const items = await prisma.proposal_items.aggregate({where:{tenant_id:tenantId,proposal_id:winner.proposal_id,status:{not:"deleted"}},_sum:{subtotal_price:true}});
       amount = Number(items._sum.subtotal_price ?? 0); stage="won"; closedAt=winner.outcome_at?.toISOString() ?? null;
+      if (visible.includes(winner)) summary.amountCurrency = winner.currency;
     } else if (areOptionsLost(set, candidates)) {
       stage="lost";
+      amount = summary.options.find(option => option.id === summary.selectedOptionId)?.amount ?? 0;
+    } else {
+      const activeByOption = new Map<string, (typeof candidates)[number]>();
+      for (const candidate of visible) {
+        if (candidate.outcome === null && !activeByOption.has(candidate.optionId)) activeByOption.set(candidate.optionId, candidate);
+      }
+      const proposalIds = [...activeByOption.values()].filter(candidate => candidate.currency !== undefined).map(candidate => candidate.proposal_id);
+      const totals = proposalIds.length ? await prisma.proposal_items.groupBy({
+        by: ["proposal_id"],
+        where: { tenant_id: tenantId, proposal_id: { in: proposalIds }, status: { not: "deleted" } },
+        _sum: { subtotal_price: true },
+      }) : [];
+      const totalsById = new Map(totals.map(row => [row.proposal_id, row._sum.subtotal_price]));
+      summary.options = summary.options.flatMap(option => {
+        const proposal = activeByOption.get(option.id);
+        if (!proposal && visible.some(candidate => candidate.quoteId === option.quoteId && candidate.outcome !== null)) return [];
+        if (!proposal || proposal.currency === undefined) return [option];
+        const subtotal = totalsById.get(proposal.proposal_id);
+        if (subtotal == null) return [option];
+        return [{ ...option, amount: Number(subtotal), quoteId: proposal.quoteId, currency: proposal.currency }];
+      });
+      summary.optionCount = summary.options.length;
+      if (summary.optionCount) {
+        summary.minimum = Math.min(...summary.options.map(option => option.amount));
+        summary.maximum = Math.max(...summary.options.map(option => option.amount));
+      } else {
+        summary.reviewRequired = true;
+      }
+      const selected = summary.options.find(option => option.id === summary.selectedOptionId);
+      summary.selectedOptionId = selected?.id ?? null;
+      summary.amountCurrency = selected?.currency;
+      amount = selected?.amount ?? 0;
     }
     for (const id of set.memberOpportunityIds) if(id!==set.canonicalOpportunityId) aliases.add(id);
     overrides.set(set.canonicalOpportunityId,{summary,memberOpportunityIds:set.memberOpportunityIds,amount,stage,closedAt});
