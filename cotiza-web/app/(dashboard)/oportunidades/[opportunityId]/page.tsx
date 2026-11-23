@@ -100,7 +100,7 @@ export default async function BusinessPage({ params }: { params: Promise<{ oppor
         const prices = proposal.proposal_items.map(item => item.subtotal_price === null ? NaN : Number(item.subtotal_price));
         const amount = prices.length && prices.every(Number.isFinite) ? prices.reduce((sum, price) => sum + price, 0) : null;
         const outcome = proposal.outcome === "won" ? "Ganada" : proposal.outcome === "lost" ? "Perdida" : proposal.outcome === "discarded" ? "Descartada" : "Sin desenlace registrado";
-        return <Link key={proposal.proposal_id} className="min-h-11 min-w-0 rounded-lg border border-zinc-300 p-4 hover:border-blue-600" href={`/propuestas/${encodeURIComponent(proposal.proposal_id)}`}>
+        return <Link key={proposal.proposal_id} className={`min-h-11 min-w-0 rounded-lg border p-4 transition-colors focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-blue-700 ${proposal.outcome === "discarded" ? "border-zinc-400 bg-zinc-200 hover:border-zinc-500 hover:bg-zinc-300" : "border-zinc-300 bg-white hover:border-blue-600"}`} href={`/propuestas/${encodeURIComponent(proposal.proposal_id)}`}>
           {option ? <span className="block break-words text-sm font-semibold text-blue-800">Opción {option.ordinal} · {option.label}</span> : null}
           <h3 className="break-words text-lg font-semibold">{quoteName || subject || "Propuesta sin nombre"}</h3>
           <strong className="mt-1 block break-words text-sm text-zinc-600">{formal?.proposal_number ?? "Propuesta sin folio formal"}</strong>
