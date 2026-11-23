@@ -413,6 +413,9 @@ export function ProposalKpisShell({
       <p className="mt-2 text-xs text-zinc-500">
         Pendientes de acción (borrador, enviada o en revisión): {summary.pendingActionCount}
       </p>
+      <p className="mt-1 text-xs text-zinc-500">
+        Los importes de un negocio con alternativas incluyen la opción ganada o la opción preferida. Las alternativas pendientes de elegir se consultan en el pipeline.
+      </p>
 
       {summary.legacyCreationOutcomeCount > 0 ? (
         <section className="mt-6 rounded-xl border border-blue-200 bg-blue-50 p-4" aria-label="Histórico por fecha de creación">

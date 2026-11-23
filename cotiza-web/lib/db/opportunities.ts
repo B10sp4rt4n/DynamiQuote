@@ -225,6 +225,7 @@ async function attachDerivedStage(
     owner_user_id: string | null;
     title: string;
   }>,
+  proposalViewerUserId?: string | null,
 ): Promise<OpportunityWithStage[]> {
   if (opportunities.length === 0) {
     return [];
@@ -232,7 +233,7 @@ async function attachDerivedStage(
 
   const opportunityIds = opportunities.map((o) => o.opportunity_id);
   const financials = await getOpportunityFinancialsByIds(tenantId, opportunityIds);
-  const commercial = await getCommercialOpportunityOverrides(tenantId,opportunityIds);
+  const commercial = await getCommercialOpportunityOverrides(tenantId, opportunityIds, proposalViewerUserId);
 
   const clientIds = [...new Set(opportunities.map((o) => o.client_id).filter((id): id is string => Boolean(id)))];
   const clients =
@@ -262,7 +263,7 @@ async function attachDerivedStage(
       const startedAt = option ? opportunities.filter(member=>option.memberOpportunityIds.includes(member.opportunity_id)).reduce((earliest,member)=>member.created_at < earliest ? member.created_at : earliest,o.created_at) : o.created_at;
       return {
         amount,
-        amountUnestimated: !fin && (o.intake_metadata as Record<string, unknown> | null)?.kind === "opportunity-origin",
+        amountUnestimated: !option && !fin && (o.intake_metadata as Record<string, unknown> | null)?.kind === "opportunity-origin",
         ...(disposition ? { disposition } : {}),
         canChangeDisposition: derived === "open",
         ...intakeSummary(o.intake_metadata),
@@ -288,13 +289,14 @@ async function attachDerivedStage(
 export async function getOpportunitiesByClientForTenant(
   tenantId: string,
   clientId: string,
+  proposalViewerUserId?: string | null,
 ): Promise<OpportunityWithStage[]> {
   const opportunities = await prisma.opportunities.findMany({
     orderBy: { created_at: "desc" },
     where: { client_id: clientId, tenant_id: tenantId },
   });
 
-  return attachDerivedStage(tenantId, opportunities);
+  return attachDerivedStage(tenantId, opportunities, proposalViewerUserId);
 }
 
 // Todas las oportunidades del tenant con su stage derivado -- para la
@@ -313,6 +315,6 @@ export async function getOpportunityPipelineByTenant(
     },
   });
 
-  return attachDerivedStage(tenantId, opportunities);
+  return attachDerivedStage(tenantId, opportunities, canSeeAll ? undefined : viewerUserId);
 }
 

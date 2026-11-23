@@ -4,6 +4,7 @@ import { randomUUID } from "crypto";
 import { Prisma } from "@prisma/client";
 
 import { prisma } from "@/lib/db/prisma";
+import { getCommercialReportingExclusions } from "@/lib/db/commercial-options";
 import { normalizeQuoteName, quoteNameLabel } from "@/lib/domain/quote-name";
 import { createOpportunityForTenant, getOpportunityPipelineByTenant } from "@/lib/db/opportunities";
 import { createDraftFromQuoteInput } from "@/lib/db/quote-input";
@@ -463,21 +464,16 @@ export async function getQuoteDashboardSnapshotByTenant(
     ? Prisma.empty
     : Prisma.sql`AND (created_by_user_id = ${viewerUserId} OR created_by_user_id IS NULL)`;
 
+  const { quoteIds } = await getCommercialReportingExclusions(tenantId);
+  const commercialFilter = quoteIds.length
+    ? Prisma.sql`FILTER (WHERE quote_id NOT IN (${Prisma.join(quoteIds)}))`
+    : Prisma.empty;
   const [aggregate, recentRows] = await Promise.all([
-    prisma.quote.aggregate({
-      _count: {
-        quote_id: true,
-      },
-      _sum: {
-        total_revenue: true,
-      },
-      where: {
-        tenantId,
-        ...(canSeeAll
-          ? {}
-          : { OR: [{ created_by_user_id: viewerUserId }, { created_by_user_id: null }] }),
-      },
-    }),
+    prisma.$queryRaw<{ quote_count: bigint; total_revenue: Prisma.Decimal | null }[]>(Prisma.sql`
+      SELECT COUNT(quote_id) AS quote_count, SUM(total_revenue) ${commercialFilter} AS total_revenue
+      FROM quotes
+      WHERE tenant_id = ${tenantId} ${scopeFilter}
+    `),
     prisma.$queryRaw<RecentQuoteRow[]>(Prisma.sql`
       SELECT q.quote_id, q.quote_group_id, q.version, q.created_at, q.status,
              q.total_revenue, q.avg_margin, q.client_name, q.proposal_name, q.quoted_by
@@ -495,7 +491,7 @@ export async function getQuoteDashboardSnapshotByTenant(
   ]);
 
   return {
-    activeQuoteCount: aggregate._count.quote_id,
+    activeQuoteCount: Number(aggregate[0]?.quote_count ?? 0),
     recentQuotes: recentRows
       .filter((row) => row.quote_group_id)
       .map((row) => ({
@@ -510,7 +506,7 @@ export async function getQuoteDashboardSnapshotByTenant(
         totalRevenue: decimalToNumber(row.total_revenue),
         version: row.version ?? 1,
       })),
-    totalRevenue: decimalToNumber(aggregate._sum.total_revenue) ?? 0,
+    totalRevenue: decimalToNumber(aggregate[0]?.total_revenue ?? null) ?? 0,
   };
 }
 

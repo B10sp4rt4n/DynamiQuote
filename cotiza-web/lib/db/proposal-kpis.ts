@@ -2,7 +2,16 @@ import "server-only";
 
 import { Prisma } from "@prisma/client";
 
+import { getCommercialReportingExclusions } from "@/lib/db/commercial-options";
 import { prisma } from "@/lib/db/prisma";
+
+function includedProposals(excludedIds: string[]) {
+  return excludedIds.length ? Prisma.sql`p.proposal_id NOT IN (${Prisma.join(excludedIds)})` : Prisma.sql`TRUE`;
+}
+
+function includedOffers(excludedIds: string[]) {
+  return Prisma.sql`p.outcome IS DISTINCT FROM 'discarded' AND ${includedProposals(excludedIds)}`;
+}
 
 // One-time, auditable cohort authorized on 2026-10-21. Only those existing
 // decisions use creation as a reporting reference. A recorded close always wins.
@@ -120,6 +129,7 @@ export async function getProposalAmountTimelineByTenant(
   canSeeAll = true,
   months = 6,
 ): Promise<ProposalAmountTimelinePoint[]> {
+  const { offerIds } = await getCommercialReportingExclusions(tenantId);
   const scopeFilter = canSeeAll
     ? Prisma.empty
     : Prisma.sql`AND (p.created_by_user_id = ${viewerUserId} OR p.created_by_user_id IS NULL)`;
@@ -136,7 +146,8 @@ export async function getProposalAmountTimelineByTenant(
       SUM(COALESCE(pi.subtotal_price, 0)) AS proposed_amount,
       SUM(CASE WHEN p.status = 'approved' THEN COALESCE(pi.subtotal_price, 0) ELSE 0 END) AS approved_amount
     FROM proposals p
-    LEFT JOIN proposal_items pi ON pi.proposal_id = p.proposal_id AND pi.status != 'deleted'
+    LEFT JOIN proposal_items pi ON pi.proposal_id = p.proposal_id AND pi.tenant_id = p.tenant_id
+      AND pi.status != 'deleted' AND ${includedOffers(offerIds)}
     WHERE p.tenant_id = ${tenantId}
       AND p.created_at >= ${monthsAgo(months)}
       ${scopeFilter}
@@ -184,6 +195,8 @@ export async function getProposalKpiSummaryByTenant(
   viewerUserId: string | null = null,
   canSeeAll = true,
 ): Promise<ProposalKpiSummary> {
+  const { offerIds, decisionIds } = await getCommercialReportingExclusions(tenantId);
+  const includeDecision = includedProposals(decisionIds);
   const scopeFilter = canSeeAll
     ? Prisma.empty
     : Prisma.sql`AND (p.created_by_user_id = ${viewerUserId} OR p.created_by_user_id IS NULL)`;
@@ -213,11 +226,11 @@ export async function getProposalKpiSummaryByTenant(
     }>
   >(Prisma.sql`
     SELECT
-      COUNT(DISTINCT p.proposal_id) FILTER (WHERE p.outcome IN ('won', 'lost') AND p.outcome_at IS NULL AND ${hasLegacyCreationReference}) AS legacy_creation_outcome_count,
+      COUNT(DISTINCT p.proposal_id) FILTER (WHERE p.outcome IN ('won', 'lost') AND ${includeDecision} AND p.outcome_at IS NULL AND ${hasLegacyCreationReference}) AS legacy_creation_outcome_count,
       SUM(CASE WHEN p.outcome = 'won' AND p.outcome_at IS NULL AND ${hasLegacyCreationReference} THEN COALESCE(pi.subtotal_price, 0) ELSE 0 END) AS legacy_creation_won_amount,
-      COUNT(DISTINCT p.proposal_id) FILTER (WHERE p.outcome IN ('won', 'lost') AND ${reportingDate} IS NULL) AS undated_outcome_count,
-      COUNT(DISTINCT p.proposal_id) FILTER (WHERE p.outcome = 'won' AND ${reportingDate} IS NULL) AS undated_won_count,
-      COUNT(DISTINCT p.proposal_id) FILTER (WHERE p.outcome = 'lost' AND ${reportingDate} IS NULL) AS undated_lost_count,
+      COUNT(DISTINCT p.proposal_id) FILTER (WHERE p.outcome IN ('won', 'lost') AND ${includeDecision} AND ${reportingDate} IS NULL) AS undated_outcome_count,
+      COUNT(DISTINCT p.proposal_id) FILTER (WHERE p.outcome = 'won' AND ${includeDecision} AND ${reportingDate} IS NULL) AS undated_won_count,
+      COUNT(DISTINCT p.proposal_id) FILTER (WHERE p.outcome = 'lost' AND ${includeDecision} AND ${reportingDate} IS NULL) AS undated_lost_count,
       SUM(CASE WHEN p.outcome = 'won' AND ${reportingDate} IS NULL THEN COALESCE(pi.subtotal_price, 0) ELSE 0 END) AS undated_won_amount,
       SUM(CASE WHEN p.outcome = 'won' AND ${reportingDate} IS NULL THEN COALESCE(pi.subtotal_cost, 0) ELSE 0 END) AS undated_won_cost,
       SUM(CASE WHEN p.outcome = 'lost' AND ${reportingDate} IS NULL THEN COALESCE(pi.subtotal_price, 0) ELSE 0 END) AS undated_lost_amount,
@@ -234,7 +247,8 @@ export async function getProposalKpiSummaryByTenant(
       SUM(CASE WHEN p.outcome = 'won' THEN COALESCE(pi.subtotal_cost, 0) ELSE 0 END) AS won_cost,
       SUM(COALESCE(pi.subtotal_cost, 0)) AS total_cost
     FROM proposals p
-    LEFT JOIN proposal_items pi ON pi.proposal_id = p.proposal_id AND pi.status != 'deleted'
+    LEFT JOIN proposal_items pi ON pi.proposal_id = p.proposal_id AND pi.tenant_id = p.tenant_id
+      AND pi.status != 'deleted' AND ${includedOffers(offerIds)}
     WHERE p.tenant_id = ${tenantId}
       ${scopeFilter}
   `);
@@ -292,6 +306,7 @@ export type SalesRepRankingRow = {
 // a agosto 2026): atribuirlas a alguien seria un dato inventado, no
 // recuperado. Ver CLAUDE.md "Deuda de datos conocida".
 export async function getSalesRepRankingByTenant(tenantId: string): Promise<SalesRepRankingRow[]> {
+  const { offerIds } = await getCommercialReportingExclusions(tenantId);
   const rows = await prisma.$queryRaw<
     Array<{
       alias: string | null;
@@ -314,7 +329,8 @@ export async function getSalesRepRankingByTenant(tenantId: string): Promise<Sale
       SUM(COALESCE(pi.subtotal_price, 0)) AS proposed_amount,
       SUM(CASE WHEN p.status = 'approved' THEN COALESCE(pi.subtotal_price, 0) ELSE 0 END) AS approved_amount
     FROM proposals p
-    LEFT JOIN proposal_items pi ON pi.proposal_id = p.proposal_id AND pi.status != 'deleted'
+    LEFT JOIN proposal_items pi ON pi.proposal_id = p.proposal_id AND pi.tenant_id = p.tenant_id
+      AND pi.status != 'deleted' AND ${includedOffers(offerIds)}
     LEFT JOIN app_users au ON au.user_id = p.created_by_user_id
     WHERE p.tenant_id = ${tenantId}
       AND p.created_by_user_id IS NOT NULL
@@ -361,6 +377,7 @@ export async function getProposalMarginTimelineByTenant(
   canSeeAll = true,
   months = 6,
 ): Promise<ProposalMarginTimelinePoint[]> {
+  const { offerIds, decisionIds } = await getCommercialReportingExclusions(tenantId);
   const scopeFilter = canSeeAll
     ? Prisma.empty
     : Prisma.sql`AND (p.created_by_user_id = ${viewerUserId} OR p.created_by_user_id IS NULL)`;
@@ -377,11 +394,13 @@ export async function getProposalMarginTimelineByTenant(
     }>
   >(Prisma.sql`
     WITH scoped AS (
-      SELECT p.proposal_id, p.created_at, ${reportingDate} AS reporting_at, p.outcome, p.status,
+      SELECT p.proposal_id, p.created_at, ${reportingDate} AS reporting_at, p.status,
+        CASE WHEN ${includedProposals(decisionIds)} THEN p.outcome END AS outcome,
         SUM(COALESCE(pi.subtotal_price, 0)) AS amount,
         SUM(COALESCE(pi.subtotal_cost, 0)) AS cost
       FROM proposals p
-      LEFT JOIN proposal_items pi ON pi.proposal_id = p.proposal_id AND pi.status != 'deleted'
+      LEFT JOIN proposal_items pi ON pi.proposal_id = p.proposal_id AND pi.tenant_id = p.tenant_id
+        AND pi.status != 'deleted' AND ${includedOffers(offerIds)}
       WHERE p.tenant_id = ${tenantId} ${scopeFilter}
       GROUP BY p.proposal_id
     ), activity AS (
@@ -448,6 +467,7 @@ export async function getProposalOutcomeTimelineByTenant(
   canSeeAll = true,
   months = 6,
 ): Promise<ProposalOutcomeTimelinePoint[]> {
+  const { decisionIds } = await getCommercialReportingExclusions(tenantId);
   const scopeFilter = canSeeAll
     ? Prisma.empty
     : Prisma.sql`AND (p.created_by_user_id = ${viewerUserId} OR p.created_by_user_id IS NULL)`;
@@ -462,10 +482,12 @@ export async function getProposalOutcomeTimelineByTenant(
     }>
   >(Prisma.sql`
     WITH scoped AS (
-      SELECT p.proposal_id, p.created_at, ${reportingDate} AS reporting_at, p.outcome,
+      SELECT p.proposal_id, p.created_at, ${reportingDate} AS reporting_at,
+        CASE WHEN ${includedProposals(decisionIds)} THEN p.outcome END AS outcome,
         SUM(COALESCE(pi.subtotal_price, 0)) AS amount
       FROM proposals p
-      LEFT JOIN proposal_items pi ON pi.proposal_id = p.proposal_id AND pi.status != 'deleted'
+      LEFT JOIN proposal_items pi ON pi.proposal_id = p.proposal_id AND pi.tenant_id = p.tenant_id
+        AND pi.status != 'deleted'
       WHERE p.tenant_id = ${tenantId} ${scopeFilter}
       GROUP BY p.proposal_id
     ), decisions AS (

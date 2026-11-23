@@ -24,8 +24,9 @@ export function labelOptionQuote(set: CommercialOptionSet, quoteId: string, quot
 }
 export type CommercialOptionsSummary = {
   reviewRequired?: boolean;
+  amountCurrency?: string | null;
   setId: string; optionCount: number; selectedOptionId: string | null; minimum: number; maximum: number;
-  options: { id: string; label: string; amount: number; quoteId: string }[];
+  options: { id: string; label: string; amount: number; quoteId: string; currency?: string | null }[];
 };
 export function summarizeOptions(set: CommercialOptionSet, quotes: OptionQuote[]): CommercialOptionsSummary {
   const options = set.options.map(option => {

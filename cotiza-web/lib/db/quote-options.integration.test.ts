@@ -17,8 +17,22 @@ suite("first-fill and commercial options with disposable local PostgreSQL",()=>{
    await db.quote.update({where:{quote_id:b.quoteId},data:{total_revenue:302600}});
    const set={version:1,id:randomUUID(),canonicalOpportunityId:canonical,memberOpportunityIds:[canonical,member],selectedOptionId:null,placeholderQuoteIds:[rootId],configuredBy:"test",configuredAt:new Date().toISOString(),options:[{id:"100",ordinal:1,label:"100",quoteIds:[ids[0],b.quoteId]},{id:"250",ordinal:2,label:"250",quoteIds:[ids[1]]},{id:"500",ordinal:3,label:"500",quoteIds:[ids[2]]}]};await db.quote.update({where:{quote_id:rootId},data:{input_metadata:{commercialOptionsSet:set}}});
    const pids=[randomUUID(),randomUUID(),randomUUID()];for(let i=0;i<3;i++){await db.proposals.create({data:{proposal_id:pids[i],tenant_id:tenantId,origin:i?ids[i]:b.quoteId,opportunity_id:i?canonical:member,status:"approved",created_by:"synthetic",created_at:new Date()}});await db.proposal_items.create({data:{item_id:randomUUID(),tenant_id:tenantId,proposal_id:pids[i],item_number:1,quantity:1,cost_unit:1,price_unit:[302600,356100,438600][i],subtotal_cost:1,subtotal_price:[302600,356100,438600][i],status:"active",created_at:new Date()}});}
+   const kpis = await import("./proposal-kpis");
+   const { getQuoteDashboardSnapshotByTenant } = await import("./quotes");
+   const proposalTotals = () => kpis.getProposalKpiSummaryByTenant(tenantId);
+   const quoteTotal = async () => (await getQuoteDashboardSnapshotByTenant(tenantId)).totalRevenue;
+   const baseline = (await db.quote.aggregate({
+     where: { tenantId, opportunity_id: { notIn: [canonical, member] } },
+     _sum: { total_revenue: true },
+   }))._sum.total_revenue;
+   expect(await quoteTotal()).toBe(Number(baseline ?? 0));
+   expect(await proposalTotals()).toMatchObject({ totalCount: 3, proposedAmount: 0, approvedAmount: 0, wonAmount: 0 });
    let result=await opportunities.getOpportunityPipelineByTenant(tenantId);expect(result.filter(o=>o.opportunityId===member)).toHaveLength(0);expect(result.find(o=>o.opportunityId===canonical)).toMatchObject({amount:0,commercialOptions:{minimum:302600,maximum:438600,optionCount:3}});
-   const actor={userId:"synthetic",isSuperAdmin:true,userRole:"admin"};expect(await options.selectCommercialOption(tenantId,canonical,"250",actor)).toBe(true);result=await opportunities.getOpportunityPipelineByTenant(tenantId);expect(result.find(o=>o.opportunityId===canonical)!.amount).toBe(356100);expect(await db.proposal_audit_events.count({where:{tenant_id:tenantId,event_type:"commercial_option_selected"}})).toBe(3);await options.selectCommercialOption(tenantId,canonical,null,actor);
+   const actor={userId:"synthetic",isSuperAdmin:true,userRole:"admin"};expect(await options.selectCommercialOption(tenantId,canonical,"250",actor)).toBe(true);result=await opportunities.getOpportunityPipelineByTenant(tenantId);expect(result.find(o=>o.opportunityId===canonical)!.amount).toBe(356100);expect(await db.proposal_audit_events.count({where:{tenant_id:tenantId,event_type:"commercial_option_selected"}})).toBe(3);
+   expect(await quoteTotal()).toBe(Number(baseline ?? 0) + 356100);
+   expect(await proposalTotals()).toMatchObject({ totalCount: 3, proposedAmount: 356100, approvedAmount: 356100, wonAmount: 0 });
+   expect(await kpis.getProposalMarginTimelineByTenant(tenantId)).toContainEqual(expect.objectContaining({ proposedAmount: 356100, approvedProfit: 356099, wonProfit: 0 }));
+   await options.selectCommercialOption(tenantId,canonical,null,actor);
    await expect(writer.createDraftFromQuoteInput({tenantId,quoteId:rootId,operationId:randomUUID(),mode:"replace",source:{kind:"excel"},lines:lines()})).rejects.toThrow("histórico");
    const history=await editor.getQuoteVersionsByTenant(tenantId,ids[0]);expect(history!.versions.filter(v=>v.commercialOption).map(v=>v.commercialOption!.ordinal).sort()).toEqual([1,2,3]);expect(history!.versions.find(v=>v.quoteId===rootId)!.emptyPlaceholder).toBe(true);
    const {setOpportunityDisposition}=await import("./opportunity-disposition");
@@ -28,5 +42,27 @@ suite("first-fill and commercial options with disposable local PostgreSQL",()=>{
    expect(await db.proposals.count({where:{tenant_id:tenantId,outcome:null,status:"approved"}})).toBe(3);
    expect(await setOpportunityDisposition(tenantId,canonical,{userId:"synthetic",canSeeAll:true},{state:"open",reason:"Cliente retoma evaluación",revision:1})).toBe("updated");
    await db.proposals.update({where:{proposal_id:pids[0]},data:{outcome:"won",outcome_at:new Date()}});result=await opportunities.getOpportunityPipelineByTenant(tenantId);expect(result.find(o=>o.opportunityId===canonical)).toMatchObject({stage:"won",amount:302600});expect(await db.proposals.count({where:{tenant_id:tenantId,status:"approved"}})).toBe(3);
+   await options.selectCommercialOption(tenantId, canonical, "250", actor);
+   expect(await quoteTotal()).toBe(Number(baseline ?? 0) + 302600);
+   expect(await proposalTotals()).toMatchObject({ proposedAmount: 302600, approvedAmount: 302600, wonAmount: 302600, wonProfit: 302599 });
+   expect(await kpis.getProposalOutcomeTimelineByTenant(tenantId)).toContainEqual(expect.objectContaining({ wonCount: 1, wonAmount: 302600 }));
+   await db.proposals.update({ where: { proposal_id: pids[0] }, data: { created_by_user_id: "winning-seller" } });
+   expect(await kpis.getProposalKpiSummaryByTenant(tenantId, "another-seller", false)).toMatchObject({ proposedAmount: 0, wonAmount: 0 });
+
+   // An unrelated sale for the same customer stays additive.
+   const independent = await newQuote("Independent sale");
+   const independentProposal = await db.proposals.create({
+     data: { proposal_id: randomUUID(), tenant_id: tenantId, opportunity_id: (await db.quote.findUniqueOrThrow({ where: { quote_id: independent.quoteId } })).opportunity_id,
+       origin: independent.quoteId, created_at: new Date(), status: "approved", created_by: "synthetic", outcome: "won", outcome_at: new Date() },
+   });
+   await db.proposal_items.create({
+     data: { item_id: randomUUID(), tenant_id: tenantId, proposal_id: independentProposal.proposal_id, item_number: 1,
+       quantity: 1, cost_unit: 100, price_unit: 500, subtotal_cost: 100, subtotal_price: 500, status: "active", created_at: new Date() },
+   });
+   expect(await proposalTotals()).toMatchObject({ proposedAmount: 303100, wonAmount: 303100, wonProfit: 302999 });
+
+   await db.proposals.update({ where: { proposal_id: pids[1] }, data: { outcome: "won", outcome_at: new Date() } });
+   expect(await proposalTotals()).toMatchObject({ proposedAmount: 500, wonAmount: 500, wonProfit: 400 });
+   expect(await kpis.getProposalOutcomeTimelineByTenant(tenantId)).toContainEqual(expect.objectContaining({ wonCount: 1, wonAmount: 500 }));
  },30000);
 });
