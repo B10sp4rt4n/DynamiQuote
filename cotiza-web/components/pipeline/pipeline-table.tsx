@@ -168,7 +168,7 @@ export function PipelineTable({
                       <span className="text-zinc-400">Sin cliente</span>
                     )}
                   </td>
-                  <td className="px-4 py-2.5 text-zinc-700">{opp.amountUnestimated ? <span>Por estimar</span> : <OpportunityAmount amount={opp.amount} options={opp.commercialOptions} opportunityId={opp.opportunityId} canChoose={canChooseOptions} stage={opp.stage} />}</td>
+                  <td className="px-4 py-2.5 text-zinc-700">{opp.amountUnestimated ? <span>Por estimar</span> : <OpportunityAmount amount={opp.amount} options={opp.commercialOptions} relationship={opp.proposalRelationship} opportunityId={opp.opportunityId} canChoose={canChooseOptions} stage={opp.stage} />}</td>
                   <td className="whitespace-nowrap px-4 py-2.5 text-zinc-500">{formatDate(opp.createdAt, "America/Mexico_City")}</td>
                   <td className="whitespace-nowrap px-4 py-2.5 text-zinc-500">
                     {opp.stage === "paused" ? "En pausa" : opp.stage === "open" ? "Pendiente" : opp.closedAt ? formatDate(opp.closedAt, "America/Mexico_City") : "Sin fecha registrada"}

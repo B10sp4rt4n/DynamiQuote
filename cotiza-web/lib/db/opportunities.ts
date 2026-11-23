@@ -5,7 +5,9 @@ import { Prisma } from "@prisma/client";
 
 import { prisma } from "@/lib/db/prisma";
 import { getCommercialOpportunityOverrides } from "@/lib/db/commercial-options";
+import { getProposalRelationshipProjections } from "@/lib/db/proposal-relationships";
 import type { CommercialOptionsSummary } from "@/lib/domain/commercial-options";
+import { readProposalRelationship, type ProposalRelationshipSummary } from "@/lib/domain/proposal-relationship";
 import { readDisposition, type OpportunityDisposition } from "@/lib/domain/opportunity-disposition";
 import { intakeSummary } from "@/lib/domain/opportunity-intake-summary";
 import { opportunityLifetimeDays } from "@/lib/domain/opportunity-lifetime";
@@ -92,6 +94,7 @@ export type OpportunityWithStage = {
   disposition?: OpportunityDisposition;
   canChangeDisposition?: boolean;
   commercialOptions?: CommercialOptionsSummary;
+  proposalRelationship?: ProposalRelationshipSummary;
   intakePending?: boolean;
   intakeQuoteId?: string;
   amount: number;
@@ -234,6 +237,11 @@ async function attachDerivedStage(
   const opportunityIds = opportunities.map((o) => o.opportunity_id);
   const financials = await getOpportunityFinancialsByIds(tenantId, opportunityIds);
   const commercial = await getCommercialOpportunityOverrides(tenantId, opportunityIds, proposalViewerUserId);
+  const classified = await getProposalRelationshipProjections(tenantId, opportunities.flatMap(row => {
+    const relationship = readProposalRelationship(row.intake_metadata);
+    return relationship && relationship.mode !== "unclassified" && !commercial.overrides.has(row.opportunity_id) && !commercial.aliases.has(row.opportunity_id)
+      ? [{ opportunityId: row.opportunity_id, relationship }] : [];
+  }), proposalViewerUserId);
 
   const clientIds = [...new Set(opportunities.map((o) => o.client_id).filter((id): id is string => Boolean(id)))];
   const clients =
@@ -251,23 +259,27 @@ async function attachDerivedStage(
     .map((o) => {
       const fin = financials.get(o.opportunity_id);
       const option = commercial.overrides.get(o.opportunity_id);
+      const classification = classified.get(o.opportunity_id);
       const disposition = readDisposition(o.intake_metadata);
-      const derived = option?.stage ?? (fin?.hasWon ? "won" : fin?.hasLost ? "lost" : "open");
+      const derived = option?.stage ?? classification?.stage ?? (fin?.hasWon ? "won" : fin?.hasLost ? "lost" : "open");
       const stage: OpportunityStage = derived !== "open" ? derived : disposition?.state ?? "open";
-      const amount = option ? option.amount : fin ? (stage === "won" ? fin.wonAmount : derived === "lost" ? fin.lostAmount : fin.openAmount) : 0;
+      const classifiedAmounts = classification?.summary.amounts;
+      const amount = option ? option.amount : classifiedAmounts ? (classifiedAmounts.length === 1 ? classifiedAmounts[0].value : 0)
+        : fin ? (stage === "won" ? fin.wonAmount : derived === "lost" ? fin.lostAmount : fin.openAmount) : 0;
       // Same source as stage: first currently winning decision, otherwise
       // first losing one. An undated historical decision makes it unknown.
-      const closedAt = derived !== "open" ? (option ? option.closedAt : derived === "won" ? fin?.wonAt ?? null : fin?.lostAt ?? null)
+      const closedAt = derived !== "open" ? (option ? option.closedAt : classification ? classification.closedAt : derived === "won" ? fin?.wonAt ?? null : fin?.lostAt ?? null)
         : stage === "no_decision" || stage === "lost" ? disposition?.changedAt ?? null : null;
 
       const startedAt = option ? opportunities.filter(member=>option.memberOpportunityIds.includes(member.opportunity_id)).reduce((earliest,member)=>member.created_at < earliest ? member.created_at : earliest,o.created_at) : o.created_at;
       return {
         amount,
-        amountUnestimated: !option && !fin && (o.intake_metadata as Record<string, unknown> | null)?.kind === "opportunity-origin",
+        amountUnestimated: !option && !classification && !fin && (o.intake_metadata as Record<string, unknown> | null)?.kind === "opportunity-origin",
         ...(disposition ? { disposition } : {}),
-        canChangeDisposition: derived === "open",
+        canChangeDisposition: derived === "open" && (!classification || !fin?.hasLost),
         ...intakeSummary(o.intake_metadata),
         ...(option ? { commercialOptions: option.summary } : {}),
+        ...(classification ? { proposalRelationship: classification.summary } : {}),
         clientCompany: o.client_id ? (clientCompanyById.get(o.client_id) ?? null) : null,
         clientId: o.client_id,
         createdAt: startedAt.toISOString(),

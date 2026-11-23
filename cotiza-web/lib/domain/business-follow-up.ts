@@ -34,11 +34,12 @@ export function proposalBillingLabel(proposal: WorkspaceProposal): string {
   return "Sin CFDI registrado";
 }
 
-export function businessBillingSection(proposals: readonly WorkspaceProposal[], enabled: boolean, opportunityId: string, needsReview = false) {
+export function businessBillingSection(proposals: readonly WorkspaceProposal[], enabled: boolean, opportunityId: string, needsReview = false, complementaryWins = false) {
   const fallback = `/oportunidades/${encodeURIComponent(opportunityId)}#propuestas`;
   if (!enabled) return { href: fallback, label: "No habilitada para esta empresa" };
   const winning = proposals.filter(row => row.outcome === "won");
-  if (needsReview || winning.length > 1) return { href: fallback, label: "Revisar propuestas ganadas" };
+  if (needsReview) return { href: fallback, label: "Revisar propuestas ganadas" };
+  if (winning.length > 1) return { href: fallback, label: complementaryWins ? "Facturación por propuesta ganada" : "Revisar propuestas ganadas" };
   const proposal = winning[0];
   if (!proposal) return { href: fallback, label: "Sin propuesta ganada vinculada" };
   const state = proposalBillingLabel(proposal);
@@ -68,7 +69,7 @@ export function businessAmountCurrency(proposals: readonly WorkspaceProposal[], 
 export function getBusinessFollowUp(input: {
   opportunityId: string; stage: BusinessStage; clientId: string | null;
   quotes: readonly WorkspaceQuote[]; proposals: readonly WorkspaceProposal[];
-  billingEnabled: boolean; alternativesNeedReview?: boolean;
+  billingEnabled: boolean; alternativesNeedReview?: boolean; complementaryWins?: boolean;
 }): BusinessAction {
   const { opportunityId, stage, quotes, proposals } = input;
   const base = `/oportunidades/${encodeURIComponent(opportunityId)}`;
@@ -79,7 +80,7 @@ export function getBusinessFollowUp(input: {
     if (!winning.length) return { label: "Revisar documentos del cierre", href: `${base}#${quotes.length ? "cotizaciones" : "propuestas"}`, message: !quotes.length && !proposals.length
       ? "Cierre registrado sin cotización o propuesta vinculada en esta vista. Puedes consultar sus antecedentes sin volver a iniciar el proceso comercial."
       : "El cierre está registrado. No hay una propuesta ganada vinculada en esta vista; revisa los documentos disponibles como antecedente." };
-    if (winning.length > 1) return { label: "Revisar propuestas ganadas", href: `${base}#propuestas`, message: "El negocio está ganado. Revisa la facturación y el seguimiento de cada propuesta ganada vinculada." };
+    if (winning.length > 1) return { label: input.complementaryWins ? "Consultar complementos ganados" : "Revisar propuestas ganadas", href: `${base}#propuestas`, message: "El negocio está ganado. Revisa la facturación y el seguimiento de cada propuesta ganada vinculada." };
     const proposal = winning[0]!;
     if (!input.billingEnabled) return { label: "Consultar propuesta ganada", href: proposalLink(proposal.proposal_id), message: "El negocio está ganado. Consulta el cierre y sus documentos; la facturación no está habilitada para esta empresa." };
     const href = `${proposalLink(proposal.proposal_id)}#facturacion`;

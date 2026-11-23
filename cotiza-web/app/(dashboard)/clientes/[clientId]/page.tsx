@@ -179,7 +179,7 @@ export default async function ClientDetailPage({ params }: ClientDetailPageProps
                     {opp.opportunityNumber} — {opp.title}
                   </p>
                   <div className="text-xs text-zinc-500">
-                    <OpportunityAmount amount={opp.amount} options={opp.commercialOptions} opportunityId={opp.opportunityId} canChoose={canSeeAll} stage={opp.stage} />
+                    <OpportunityAmount amount={opp.amount} options={opp.commercialOptions} relationship={opp.proposalRelationship} opportunityId={opp.opportunityId} canChoose={canSeeAll} stage={opp.stage} />
                     {opp.expectedCloseDate ? ` · cierre esperado ${formatDate(opp.expectedCloseDate)}` : ""}
                   </div>
                   <OpportunityReview key={`${opp.opportunityId}:${opp.disposition?.revision ?? 0}`} opportunity={opp} canManage={canSeeAll || Boolean(tenant.userId && opp.ownerUserId === tenant.userId)} />

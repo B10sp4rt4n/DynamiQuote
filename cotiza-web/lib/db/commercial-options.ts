@@ -3,6 +3,7 @@ import { randomUUID, createHash } from "crypto";
 import { Prisma } from "@prisma/client";
 import { cache } from "react";
 import { prisma } from "@/lib/db/prisma";
+import { getProposalRelationshipReportingExclusions } from "./proposal-relationships";
 import { optionSetSchema, labelOptionQuote, summarizeOptions, type CommercialOptionSet, type OptionQuote, type CommercialOptionsSummary } from "@/lib/domain/commercial-options";
 
 type Source = { rootId: string; metadata: Prisma.JsonValue; set: CommercialOptionSet; quotes: OptionQuote[] };
@@ -98,7 +99,10 @@ export const getCommercialReportingExclusions = cache(async (tenantId: string) =
     }
   }
 
-  return { quoteIds: [...excludedQuotes], offerIds: [...excludedOffers], decisionIds: [...excludedDecisions] };
+  const classified = await getProposalRelationshipReportingExclusions(tenantId);
+  return { quoteIds: [...new Set([...excludedQuotes, ...classified.quoteIds])],
+    offerIds: [...new Set([...excludedOffers, ...classified.offerIds])],
+    decisionIds: [...new Set([...excludedDecisions, ...classified.decisionIds])] };
 });
 
 export async function getCommercialOpportunityOverrides(tenantId: string, opportunityIds: string[], proposalViewerUserId?: string | null) {

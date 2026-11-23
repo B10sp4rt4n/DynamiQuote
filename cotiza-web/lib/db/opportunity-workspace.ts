@@ -2,12 +2,13 @@ import "server-only";
 import { prisma } from "./prisma";
 import { getOpportunityPipelineByTenant } from "./opportunities";
 import { labelOptionQuote } from "@/lib/domain/commercial-options";
+import { readProposalRelationship } from "@/lib/domain/proposal-relationship";
 import { getCommercialOptionSets } from "./commercial-options";
 export type BusinessViewer = { userId: string; canSeeAll: boolean };
 export async function resolveBusiness(tenantId: string, id: string, viewer: BusinessViewer) {
   const visible = (await getOpportunityPipelineByTenant(tenantId, viewer.userId, viewer.canSeeAll))
     .filter(o=>viewer.canSeeAll || o.ownerUserId===viewer.userId);
-  const allowed=await prisma.opportunities.findMany({where:{tenant_id:tenantId,...(viewer.canSeeAll?{}:{owner_user_id:viewer.userId})},select:{opportunity_id:true,client_id:true}});
+  const allowed=await prisma.opportunities.findMany({where:{tenant_id:tenantId,...(viewer.canSeeAll?{}:{owner_user_id:viewer.userId})},select:{opportunity_id:true,client_id:true,intake_metadata:true}});
   const sources=await getCommercialOptionSets(tenantId,allowed.map(o=>o.opportunity_id));
   const alias=sources.find(s=>s.set.memberOpportunityIds.includes(id));
   const opportunity=visible.find(o=>o.opportunityId===(alias?.set.canonicalOpportunityId ?? id));
@@ -15,16 +16,17 @@ export async function resolveBusiness(tenantId: string, id: string, viewer: Busi
   const source=sources.find(s=>s.set.canonicalOpportunityId===opportunity.opportunityId);
   const ids=source?source.set.memberOpportunityIds:[opportunity.opportunityId];
   if(!ids.every(member=>allowed.some(o=>o.opportunity_id===member && o.client_id===opportunity.clientId)))return null;
-  return {opportunity,ids,optionLabels:source ? Object.fromEntries(source.quotes.map(q=>[q.quoteId,labelOptionQuote(source.set,q.quoteId,source.quotes)])) : {}};
+  const relationship = source ? null : readProposalRelationship(allowed.find(row => row.opportunity_id === opportunity.opportunityId)?.intake_metadata);
+  return {opportunity,ids,relationship,optionLabels:source ? Object.fromEntries(source.quotes.map(q=>[q.quoteId,labelOptionQuote(source.set,q.quoteId,source.quotes)])) : {}};
 }
 export async function getBusinessWorkspace(tenantId: string, id: string, viewer: BusinessViewer) {
   const business=await resolveBusiness(tenantId,id,viewer);if(!business)return null;
   const {opportunity,ids}=business;
   const quotes=await prisma.quote.findMany({where:{tenantId,opportunity_id:{in:ids},...(viewer.canSeeAll?{}:{created_by_user_id:viewer.userId})},orderBy:[{createdAt:"desc"},{quote_id:"asc"}],select:{quote_id:true,quote_group_id:true,version:true,proposal_name:true,total_revenue:true,status:true,createdAt:true}});
-  const proposals=await prisma.proposals.findMany({where:{tenant_id:tenantId,OR:[{opportunity_id:{in:ids}},{origin:{in:quotes.map(q=>q.quote_id)},opportunity_id:null}],...(viewer.canSeeAll?{}:{AND:[{OR:[{created_by_user_id:viewer.userId},{created_by_user_id:null}]}]})},orderBy:{created_at:"desc"},select:{proposal_id:true,origin:true,status:true,outcome:true,invoice_status:true,invoice_draft_id:true,invoice_uuid:true,invoice_stamped_at:true,proposal_items:{where:{tenant_id:tenantId},select:{subtotal_price:true}},formal_proposals:{where:{tenant_id:tenantId},orderBy:[{created_at:"desc"},{proposal_doc_id:"desc"}],take:1,select:{proposal_number:true,quote_id:true,subject:true,status:true,sent_at:true,currency:true}}}});
+  const proposals=await prisma.proposals.findMany({where:{tenant_id:tenantId,OR:[{opportunity_id:{in:ids}},{origin:{in:quotes.map(q=>q.quote_id)},opportunity_id:null}],...(viewer.canSeeAll?{}:{AND:[{OR:[{created_by_user_id:viewer.userId},{created_by_user_id:null}]}]})},orderBy:{created_at:"desc"},select:{proposal_id:true,opportunity_id:true,origin:true,status:true,outcome:true,invoice_status:true,invoice_draft_id:true,invoice_uuid:true,invoice_stamped_at:true,proposal_items:{where:{tenant_id:tenantId,status:{not:"deleted"}},select:{subtotal_price:true}},formal_proposals:{where:{tenant_id:tenantId},orderBy:[{created_at:"desc"},{proposal_doc_id:"desc"}],take:1,select:{proposal_number:true,quote_id:true,subject:true,status:true,sent_at:true,currency:true}}}});
   const tasks=await prisma.tasks.findMany({where:{tenant_id:tenantId,opportunity_id:{in:ids},completed_at:null,...(viewer.canSeeAll?{}:{created_by_user_id:viewer.userId})},orderBy:{due_date:"asc"},select:{task_id:true,description:true,due_date:true}});
   const owner=opportunity.ownerUserId ? await prisma.app_users.findFirst({where:{user_id:opportunity.ownerUserId,tenant_id:tenantId},select:{first_name:true,last_name:true}}):null;
-  return {opportunity,quotes,proposals,tasks,optionLabels:business.optionLabels,ownerName:owner?`${owner.first_name} ${owner.last_name}`.trim():null};
+  return {opportunity,quotes,proposals,tasks,relationship:business.relationship,optionLabels:business.optionLabels,ownerName:owner?`${owner.first_name} ${owner.last_name}`.trim():null};
 }
 export async function getDocumentBusinessContext(tenantId:string,kind:"quote"|"proposal",id:string,viewer:BusinessViewer) {
   let quoteId:string|undefined,proposalId:string|undefined,opportunityId:string|null=null;

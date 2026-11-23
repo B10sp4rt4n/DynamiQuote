@@ -3,7 +3,8 @@ import Link from "next/link";
 import { useState } from "react";
 import { useRouter } from "next/navigation";
 import type { CommercialOptionsSummary } from "@/lib/domain/commercial-options";
-export function OpportunityAmount({amount,options,opportunityId,canChoose=false,stage,currency="MXN",showCurrency=false,unknownCurrencyLabel="Moneda por confirmar",multipleCurrencies=false}:{amount:number;options?:CommercialOptionsSummary;opportunityId:string;canChoose?:boolean;stage?:string;currency?:string|null;showCurrency?:boolean;unknownCurrencyLabel?:string;multipleCurrencies?:boolean}) {
+import { PROPOSAL_RELATIONSHIP_LABELS, type ProposalRelationshipSummary } from "@/lib/domain/proposal-relationship";
+export function OpportunityAmount({amount,options,relationship,opportunityId,canChoose=false,stage,currency="MXN",showCurrency=false,unknownCurrencyLabel="Moneda por confirmar",multipleCurrencies=false}:{amount:number;options?:CommercialOptionsSummary;relationship?:ProposalRelationshipSummary;opportunityId:string;canChoose?:boolean;stage?:string;currency?:string|null;showCurrency?:boolean;unknownCurrencyLabel?:string;multipleCurrencies?:boolean}) {
   const money = (value: number, code = currency, displayCode = showCurrency) => code
     ? new Intl.NumberFormat("es-MX", { style: "currency", currency: code, currencyDisplay: displayCode ? "code" : "symbol" }).format(value)
     : `${new Intl.NumberFormat("es-MX", { minimumFractionDigits: 2, maximumFractionDigits: 2 }).format(value)} · ${unknownCurrencyLabel}`;
@@ -12,6 +13,18 @@ export function OpportunityAmount({amount,options,opportunityId,canChoose=false,
     setSaving(true);setError(null);
     try {const response=await fetch(`/api/opportunities/${encodeURIComponent(opportunityId)}/commercial-option`,{method:"PATCH",headers:{"Content-Type":"application/json"},body:JSON.stringify({optionId:value||null})});const result=await response.json();if(!response.ok)throw Error(result.error??"No se pudo seleccionar");router.refresh();}
     catch(e){setError(e instanceof Error?e.message:"No se pudo seleccionar");}finally{setSaving(false);}
+  }
+  if (relationship) {
+    const { range, amounts, pendingChoice, reviewRequired, unclassifiedCount } = relationship;
+    return <div className="space-y-1">
+      {range ? <span className="block font-semibold">
+        {money(range.minimum, range.currency, true)}{range.maximum !== range.minimum ? ` a ${money(range.maximum, range.currency, true)}` : ""}
+      </span> : amounts.length ? amounts.map(entry => <span key={entry.currency ?? "unknown"} className="block font-semibold">{money(entry.value, entry.currency, true)}</span>)
+        : <span className="block font-semibold">{pendingChoice ? "Consulta los importes de las alternativas" : "Importe por confirmar"}</span>}
+      <span className="block text-xs text-zinc-600">{PROPOSAL_RELATIONSHIP_LABELS[relationship.mode]}{pendingChoice ? " · por elegir" : ""}</span>
+      {reviewRequired ? <span className="block text-xs text-amber-800">Revisa la relación o los importes de las propuestas.</span> : null}
+      {unclassifiedCount ? <span className="block text-xs text-amber-800">{unclassifiedCount} {unclassifiedCount === 1 ? "propuesta sin clasificar" : "propuestas sin clasificar"}</span> : null}
+    </div>;
   }
   if (!options) return multipleCurrencies ? <span>Importes en varias monedas · revisa cada propuesta</span> : <>{money(amount)}</>;
 

@@ -120,3 +120,20 @@ it("identifies an unnamed draft as a quotation and exposes its naming action out
   expect(quoteCard?.indexOf("</a>")).toBeLessThan(quoteCard!.indexOf("<button"));
   expect(html).toContain("El nombre se captura al crear la cotización");
 });
+
+it("shows the current revision as the estimate and leaves the earlier proposal accessible", async () => {
+  const data = workspace();
+  const earlier = { ...data.proposals[0]!, opportunity_id: "opp-a", outcome: null };
+  const current = { ...earlier, proposal_id: "proposal-b",
+    formal_proposals: [{ ...earlier.formal_proposals[0]!, proposal_number: "PROP-2", quote_id: "quote-v2" }] };
+  m.workspace.mockResolvedValue({ ...data, proposals: [earlier, current],
+    relationship: { mode: "revision", preferredProposalId: "proposal-b", proposalIds: ["proposal-a", "proposal-b"], revision: 1 },
+    opportunity: { ...opportunity, stage: "open", amount: 7900, proposalRelationship: { mode: "revision", amounts: [{ currency: "USD", value: 7900 }] } },
+  });
+  const html = await render();
+  expect(html).toContain("Relación entre propuestas · Revisiones");
+  expect(html).toContain("Revisión vigente");
+  expect(html).toContain("Revisión anterior");
+  expect(html).toContain('href="/propuestas/proposal-a"');
+  expect(html).toContain('href="/propuestas/proposal-b"');
+});

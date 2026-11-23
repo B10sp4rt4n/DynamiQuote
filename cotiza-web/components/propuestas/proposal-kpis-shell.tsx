@@ -414,7 +414,7 @@ export function ProposalKpisShell({
         Pendientes de acción (borrador, enviada o en revisión): {summary.pendingActionCount}
       </p>
       <p className="mt-1 text-xs text-zinc-500">
-        Los importes de un negocio con alternativas incluyen la opción ganada o la opción preferida. Las alternativas pendientes de elegir se consultan en el pipeline.
+        Los importes siguen la relación registrada en cada oportunidad. Las alternativas pendientes de elegir se consultan en el pipeline.
       </p>
 
       {summary.legacyCreationOutcomeCount > 0 ? (
