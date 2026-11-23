@@ -13,12 +13,7 @@ export const quoteInputLineSchema = z.object({
 });
 export type QuoteInputLine = z.infer<typeof quoteInputLineSchema>;
 export type QuoteInputSource = { kind: "template" | "excel" | "threatdown-pdf"; id?: string; revision?: string;
-  commercial?: {
-    currency: "USD"; targetCurrency: "MXN"; exchangeRate: number; marginPct: number;
-    expiresOn: string; startsOn: string; endsOn: string; termMonths: number; preliminary: boolean;
-    netTotal: number; reviewedBy: string | null;
-    lines: Array<{ sku: string; quantity: number; costUnit: number; netTotal: number }>;
-  };
+  importMode?: "items-only"; reviewedBy?: string | null;
 };
 
 export class QuoteInputError extends Error {
