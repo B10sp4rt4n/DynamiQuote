@@ -35,6 +35,24 @@ describe("ThreatDown quote adapter", () => {
     expect(items.totals).toEqual({ totalCost: 0, totalRevenue: 0, grossProfit: 0, avgMargin: 0 });
   });
   it.each([
+    ["USD", 1, [10.25, 2.10, 0], 565.75],
+    ["MXN", 20, [205, 42, 0], 11315],
+    ["MXN", 20.123456, [206.27, 42.26, 0], 11385.05],
+  ] as const)("imports NET UNIT costs in %s using rate %s, leaving sale prices editable", (currency, exchangeRate, units, total) => {
+    const result = threatDownItemInput(parseThreatDownQuote(vendorText), { currency, exchangeRate } as Parameters<typeof threatDownItemInput>[1]);
+    expect(result.lines.map(line => line.costUnit)).toEqual(units);
+    expect(result.lines.every(line => line.priceUnit === 0 && line.marginPct === 0)).toBe(true);
+    expect(result.totals.totalCost).toBe(total);
+    expect(result.lines[2]).toMatchObject({ costUnit: 0, priceUnit: 0, lineType: "service" });
+  });
+  it.each([
+    { currency: "USD", exchangeRate: 20 }, { currency: "MXN", exchangeRate: 0 },
+    { currency: "MXN", exchangeRate: -1 }, { currency: "MXN", exchangeRate: NaN },
+    { currency: "EUR", exchangeRate: 1 }, { currency: "MXN", exchangeRate: Infinity },
+  ])("rejects an invalid cost conversion %s", options => {
+    expect(() => threatDownItemInput(parseThreatDownQuote(vendorText), options as never)).toThrow("moneda");
+  });
+  it.each([
     vendorText.replace("Subtotal USD 565.75", "Subtotal USD 566.75"),
     vendorText.replace("USD 10.25 USD 51.25", "USD 12.25 USD 51.25"),
     vendorText.replace("245 USD", "2.45 USD"),

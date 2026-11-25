@@ -1,5 +1,6 @@
 import "server-only";
 import { quoteNameLabel } from "@/lib/domain/quote-name";
+import { quoteCurrencyFromMetadata, type QuoteCurrency } from "@/lib/domain/quote-currency";
 
 import { randomUUID } from "crypto";
 import { Prisma } from "@prisma/client";
@@ -33,6 +34,7 @@ export type UpdatedQuoteTotals = {
 };
 
 export type UpdatedQuoteVersion = {
+  currency?: QuoteCurrency;
   avgMargin: number;
   clientName: string;
   createdAt: string;
@@ -47,6 +49,7 @@ export type UpdatedQuoteVersion = {
 };
 
 export type QuoteVersionHistoryItem = {
+  currency?: QuoteCurrency;
   commercialOption?: OptionLabel | null;
   emptyPlaceholder?: boolean;
   archiveReason?: string | null;
@@ -225,6 +228,7 @@ export async function updateQuoteLinesByTenant(
   if (quote.status === "archived") throw new Error("Reactiva el borrador antes de modificarlo");
   if (isOptionPlaceholder(quote.input_metadata,quote.quote_id)) throw new Error("Este registro inicial vacío es histórico. Abre una opción comercial para trabajar.");
   const quoteGroupId = quote.quote_group_id ?? quote.quote_id;
+  const pricingCurrency = quoteCurrencyFromMetadata(quote.input_metadata);
 
   const latestInGroup = await tx.quote.findFirst({
     orderBy: [{ version: "desc" }, { createdAt: "desc" }],
@@ -328,6 +332,7 @@ export async function updateQuoteLinesByTenant(
           createdAt,
           gross_profit: grossProfit,
           opportunity_id: quote.opportunity_id,
+          ...(pricingCurrency ? { input_metadata: { pricingCurrency } } : {}),
           parent_quote_id: quote.quote_id,
           playbook_name: quote.playbook_name,
           proposal_name: quote.proposal_name,
@@ -443,6 +448,7 @@ export async function updateQuoteLinesByTenant(
   return {
     lines: freshLines,
     quote: {
+      ...(pricingCurrency ? { currency: pricingCurrency } : {}),
       avgMargin,
       clientName: quote.client_name ?? "Sin cliente",
       createdAt: createdAt.toISOString(),
@@ -514,6 +520,7 @@ export async function getQuoteVersionsByTenant(
     currentQuoteId: quote.quote_id,
     quoteGroupId,
     versions: versions.map((item) => ({
+      ...(quoteCurrencyFromMetadata(item.input_metadata) ? { currency: quoteCurrencyFromMetadata(item.input_metadata) } : {}),
       archiveReason: archiveReasonFromMetadata(item.input_metadata),
       commercialOption: set ? labelOptionQuote(set,item.quote_id,optionQuotes) : null,
       emptyPlaceholder: set?.placeholderQuoteIds.includes(item.quote_id) ?? false,

@@ -20,6 +20,12 @@ export const threatDownQuoteSchema = z.object({
 });
 export type ThreatDownQuote = z.infer<typeof threatDownQuoteSchema>;
 
+export const threatDownCostImportSchema = z.discriminatedUnion("currency", [
+  z.object({ currency: z.literal("USD"), exchangeRate: z.literal(1) }),
+  z.object({ currency: z.literal("MXN"), exchangeRate: z.number().finite().positive().max(10_000) }),
+]);
+export type ThreatDownCostImport = z.infer<typeof threatDownCostImportSchema>;
+
 function date(value: string | undefined) {
   const match = value?.match(/^(\d{1,2})\/(\d{1,2})\/(\d{4})$/);
   if (!match) throw new QuoteInputError("No se pudo reconocer una fecha de la cotización.");
@@ -79,10 +85,15 @@ export function parseThreatDownQuote(text: string): ThreatDownQuote {
   return quote.data;
 }
 
-// The PDF supplies product data only. Commercial values belong to the editor.
-export function threatDownItemInput(quote: ThreatDownQuote) {
-  return normalizeQuoteInput(quote.lines.map(({ sku, description, quantity }) => ({
-    sku, description, quantity, costUnit: 0, priceUnit: 0,
+// NET UNIT is an optional reviewed cost. Sale prices and margins remain in the editor.
+export function threatDownItemInput(quote: ThreatDownQuote, costImport?: ThreatDownCostImport) {
+  if (costImport && !threatDownCostImportSchema.safeParse(costImport).success) {
+    throw new QuoteInputError("Revisa la moneda y el tipo de cambio de los costos del PDF.");
+  }
+  return normalizeQuoteInput(quote.lines.map(({ sku, description, quantity, costUnit }) => ({
+    sku, description, quantity,
+    costUnit: costImport ? roundQuoteMoney(costUnit * costImport.exchangeRate) : 0,
+    priceUnit: 0,
     lineType: sku.startsWith("MPSNC") ? "service" : "product",
   })));
 }

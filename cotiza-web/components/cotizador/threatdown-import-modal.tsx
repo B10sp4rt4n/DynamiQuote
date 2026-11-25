@@ -1,7 +1,8 @@
 "use client";
 
 import { useEffect, useRef, useState } from "react";
-import { threatDownQuoteSchema, type ThreatDownQuote } from "@/lib/domain/threatdown-quote";
+import { threatDownQuoteSchema, threatDownCostImportSchema, type ThreatDownQuote } from "@/lib/domain/threatdown-quote";
+import { MAX_QUOTE_AMOUNT, roundQuoteMoney } from "@/lib/domain/quote-input";
 import { quoteLinesPutResponseSchema, type QuoteLinesPutResponse } from "@/lib/validations/quote-editor-response";
 
 class ImportRequestError extends Error {}
@@ -20,35 +21,59 @@ export function ThreatDownImportModal({ quoteId, clientName, hasUnsavedChanges =
   const [fileHash, setFileHash] = useState("");
   const [confirmed, setConfirmed] = useState(false);
   const [saveEvidence, setSaveEvidence] = useState(false);
+  const [includeCosts, setIncludeCosts] = useState(true);
+  const [costCurrency, setCostCurrency] = useState<"USD" | "MXN">("USD");
+  const [exchangeRate, setExchangeRate] = useState("");
+  const [recoveringOperation, setRecoveringOperation] = useState(false);
   const [pendingAction, setPendingAction] = useState<"preview" | "apply" | null>(null);
   const busy = pendingAction !== null;
   const [error, setError] = useState<string | null>(null);
+  const pricing = threatDownCostImportSchema.safeParse({ currency: costCurrency, exchangeRate: costCurrency === "USD" ? 1 : Number(exchangeRate) });
+  const optionsLocked = busy || recoveringOperation;
+  const destinationCost = (amount: number) => includeCosts && pricing.success ? roundQuoteMoney(amount * pricing.data.exchangeRate) : 0;
+  const importTotal = source ? roundQuoteMoney(source.lines.reduce((total, line) => total + destinationCost(line.costUnit) * line.quantity, 0)) : 0;
+  const invalidPricing = includeCosts && (!pricing.success || importTotal > MAX_QUOTE_AMOUNT);
+  const money = (amount: number, currency: "USD" | "MXN") => new Intl.NumberFormat("es-MX", { style: "currency", currency, currencyDisplay: "code" }).format(amount);
 
   useEffect(() => { const d = dialog.current; d?.showModal(); return () => d?.close(); }, []);
 
   function resetReview(keepOperation = false) {
     setConfirmed(false);
-    if (!keepOperation) { setSaveEvidence(false); operation.current = null; }
+    if (!keepOperation) {
+      setSaveEvidence(false); setIncludeCosts(true); setCostCurrency("USD"); setExchangeRate(""); operation.current = null; setRecoveringOperation(false);
+    }
   }
   async function submit(action: "preview" | "apply", selectedFile: File | null = file) {
     if (!selectedFile || inFlight.current) return;
-    if (action === "apply" && (!source || !confirmed || hasUnsavedChanges)) return;
+    if (action === "apply" && (!source || !confirmed || hasUnsavedChanges || invalidPricing)) return;
     inFlight.current = true;
     setPendingAction(action); setError(null);
     if (action === "preview") { setSource(null); setFileHash(""); setConfirmed(false); }
     const controller = new AbortController();
     const timeout = setTimeout(() => controller.abort(), 35_000);
+    let newOperation = false;
     try {
       const form = new FormData(); form.set("file", selectedFile); form.set("action", action);
       if (action === "apply") {
+        newOperation = operation.current === null;
         operation.current ??= { id: crypto.randomUUID(), fileHash };
+        setRecoveringOperation(true);
         form.set("operationId", operation.current.id); form.set("expectedHash", fileHash);
         form.set("confirmed", "yes");
+        form.set("includeCosts", includeCosts ? "yes" : "no");
+        if (includeCosts && pricing.success) {
+          form.set("costCurrency", pricing.data.currency); form.set("exchangeRate", String(pricing.data.exchangeRate));
+        }
         if (commercialEvidenceEnabled && saveEvidence) form.set("saveCommercialEvidence", "yes");
       }
       const response = await fetch(`/api/quotes/${quoteId}/import-threatdown`, { method: "POST", body: form, signal: controller.signal });
       const data = await response.json();
-      if (!response.ok) throw new ImportRequestError(typeof data.error === "string" ? data.error : "No se pudo completar la solicitud. Puedes reintentar.");
+      if (!response.ok) {
+        if (newOperation && response.status >= 400 && response.status < 500 && response.status !== 409) {
+          operation.current = null; setRecoveringOperation(false);
+        }
+        throw new ImportRequestError(typeof data.error === "string" ? data.error : "No se pudo completar la solicitud. Puedes reintentar.");
+      }
       if (action === "preview") {
         const parsedSource = threatDownQuoteSchema.safeParse(data.source);
         if (!parsedSource.success || typeof data.fileHash !== "string" || !/^[a-f0-9]{64}$/.test(data.fileHash)) {
@@ -61,6 +86,9 @@ export function ThreatDownImportModal({ quoteId, clientName, hasUnsavedChanges =
       } else {
         const imported = quoteLinesPutResponseSchema.safeParse(data);
         if (!imported.success) throw new ImportRequestError("No se pudo confirmar la respuesta de importación. Reintenta Importar partidas sin cambiar los datos para recuperar la misma operación.");
+        if (includeCosts && (imported.data.quote.currency !== costCurrency || Math.abs(imported.data.totals.totalCost - importTotal) > 0.011)) {
+          throw new ImportRequestError("La respuesta no confirma los costos y la moneda revisados. Reintenta Importar partidas sin cambiar los datos para recuperar la misma operación.");
+        }
         onImported(imported.data);
       }
     } catch (e) {
@@ -115,23 +143,41 @@ export function ThreatDownImportModal({ quoteId, clientName, hasUnsavedChanges =
         <p>Suscripción: {source.startsOn} a {source.endsOn} · {source.termMonths} meses. Vigencia de la cotización: {source.expiresOn}.</p>
         {source.preliminary ? <p className="mt-1 text-amber-800">El proveedor identifica este documento como preliminar. La importación crea sólo un borrador.</p> : null}
       </div>
-      <p className="mt-4 rounded-lg bg-sky-50 p-3 text-sm text-sky-900">Sólo se importan SKU, cantidades y descripciones. Las partidas comienzan con costo y precio en cero. Captura los costos y define el margen o precio de venta en el editor de Cotiza antes de generar la propuesta.</p>
+      <fieldset className="mt-4 space-y-3 rounded-lg border border-zinc-300 p-3 text-sm" disabled={optionsLocked}>
+        <legend className="px-1 font-semibold">Costos del fabricante</legend>
+        <label className="flex items-start gap-3"><input className="mt-1 size-5 shrink-0" type="checkbox" checked={includeCosts} onChange={e => { setIncludeCosts(e.target.checked); setConfirmed(false); }} />Importar el costo neto unitario (NET UNIT) del PDF</label>
+        {includeCosts ? <div className="flex flex-wrap items-end gap-4">
+          <label className="block">Moneda de la cotización<select aria-label="Moneda de los costos importados" className="mt-1 block min-h-11 rounded-lg border border-zinc-400 bg-white p-2" value={costCurrency} onChange={e => { setCostCurrency(e.target.value as "USD" | "MXN"); setConfirmed(false); }}>
+            <option value="USD">USD · Conservar dólares del PDF</option><option value="MXN">MXN · Convertir a pesos</option>
+          </select></label>
+          {costCurrency === "MXN" ? <label className="block">Pesos por cada dólar<input aria-label="Tipo de cambio USD a MXN" type="number" min="0.000001" max="10000" step="0.000001" className="mt-1 block min-h-11 w-48 rounded-lg border border-zinc-400 bg-white p-2" value={exchangeRate} onChange={e => { setExchangeRate(e.target.value); setConfirmed(false); }} /></label> : null}
+        </div> : null}
+      </fieldset>
+      {invalidPricing ? <p className="mt-2 text-sm text-amber-900" role="status">{pricing.success ? "El costo total convertido excede el máximo permitido. Revisa el tipo de cambio." : "Captura un tipo de cambio positivo para convertir los costos a MXN."}</p> : null}
+      <p className="mt-3 rounded-lg bg-sky-50 p-3 text-sm text-sky-900">{includeCosts
+        ? `Se importan SKU, cantidades, descripciones y costo neto en ${costCurrency}. El precio de venta comienza en cero; define el margen o precio en el editor de Cotiza. No se usa el MSRP como precio de venta.`
+        : "Sólo se importan SKU, cantidades y descripciones. Costo y precio comienzan en cero; los defines en el editor de Cotiza."}
+        {includeCosts && costCurrency === "MXN" ? " La conversión se redondea por costo unitario a dos decimales." : null}
+      </p>
       <div className="mt-4 overflow-x-auto">
         <table className="w-full text-left text-sm"><thead><tr className="border-b">
-          {["SKU", "Producto", "Cantidad"].map((s) => <th className="p-2" key={s}>{s}</th>)}
+          {["SKU", "Producto", "Cantidad", "Costo neto USD", ...(includeCosts ? [`Costo a importar ${costCurrency}`] : [])].map((s) => <th className="p-2" key={s}>{s}</th>)}
         </tr></thead><tbody>{source.lines.map((l) => <tr className="border-b" key={l.sku}>
-          <td className="p-2 font-mono text-xs">{l.sku}</td><td className="p-2">{l.description}</td><td className="p-2">{l.quantity}</td>
+          <td className="p-2 font-mono text-xs">{l.sku}</td><td className="p-2">{l.description}</td><td className="p-2">{l.quantity}</td><td className="p-2">{money(l.costUnit, "USD")}</td>
+          {includeCosts ? <td className="p-2">{pricing.success ? money(destinationCost(l.costUnit), costCurrency) : "Pendiente de tipo de cambio"}</td> : null}
         </tr>)}</tbody></table>
       </div>
+      {includeCosts && pricing.success ? <p className="mt-3 text-sm font-semibold">Costo total a importar: {money(importTotal, costCurrency)}</p> : null}
+      {recoveringOperation ? <p className="mt-3 text-sm text-amber-900">Para recuperar la misma operación, conserva las opciones y reintenta Importar partidas. Seleccionar otro PDF inicia una importación nueva.</p> : null}
       {commercialEvidenceEnabled ? <label className="mt-4 flex items-start gap-3 text-sm">
-        <input className="mt-1 size-5 shrink-0" checked={saveEvidence} disabled={busy} type="checkbox" onChange={e => setSaveEvidence(e.target.checked)} />
+        <input className="mt-1 size-5 shrink-0" checked={saveEvidence} disabled={optionsLocked} type="checkbox" onChange={e => setSaveEvidence(e.target.checked)} />
         Guardar PDF como evidencia comercial
       </label> : null}
       <label className="mt-4 flex items-start gap-3 text-sm" htmlFor="td-confirm">
-        <input className="mt-1 size-5 shrink-0" checked={confirmed} disabled={busy || !source || hasUnsavedChanges} id="td-confirm" type="checkbox" onChange={(e) => setConfirmed(e.target.checked)} />
-        Confirmo que las licencias corresponden al cliente destino y revisé cantidades, SKU y descripciones. Acepto reemplazar las partidas del borrador destino.
+        <input className="mt-1 size-5 shrink-0" checked={confirmed} disabled={busy || !source || hasUnsavedChanges || invalidPricing} id="td-confirm" type="checkbox" onChange={(e) => setConfirmed(e.target.checked)} />
+        Confirmo que las licencias corresponden al cliente destino y revisé cantidades, SKU y descripciones{includeCosts ? ", costos y moneda" : ""}. Acepto reemplazar las partidas del borrador destino.
       </label>
-      <div className="mt-4 flex justify-end"><button className="min-h-11 rounded-lg bg-emerald-700 px-4 text-sm font-medium text-white disabled:opacity-50" disabled={busy || !source || !confirmed || hasUnsavedChanges}
+      <div className="mt-4 flex justify-end"><button className="min-h-11 rounded-lg bg-emerald-700 px-4 text-sm font-medium text-white disabled:opacity-50" disabled={busy || !source || !confirmed || hasUnsavedChanges || invalidPricing}
         onClick={() => { void submit("apply"); }} type="button">{pendingAction === "apply" ? "Importando partidas…" : "Importar partidas"}</button></div>
     </> : <p className="mt-4 text-sm text-zinc-600">Admite cotizaciones digitales con la tabla Purchase Summary. Los PDF escaneados requieren captura manual.</p>}
   </dialog>;

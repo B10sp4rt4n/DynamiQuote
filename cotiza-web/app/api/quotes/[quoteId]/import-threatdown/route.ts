@@ -7,7 +7,7 @@ import { isQuoteVisibleToViewer } from "@/lib/db/quotes";
 import { createDraftFromQuoteInput } from "@/lib/db/quote-input";
 import { COMMERCIAL_EVIDENCE } from "@/lib/tenant-capabilities";
 import { readThreatDownPdf } from "@/lib/import/threatdown-pdf";
-import { threatDownItemInput } from "@/lib/domain/threatdown-quote";
+import { threatDownItemInput, threatDownCostImportSchema } from "@/lib/domain/threatdown-quote";
 import { QuoteInputError } from "@/lib/domain/quote-input";
 import { enforceRateLimit, getRequestIdentity } from "@/lib/utils/rate-limit";
 
@@ -17,6 +17,7 @@ const applySchema = z.object({
   operationId: z.string().uuid(), expectedHash: z.string().regex(/^[a-f0-9]{64}$/),
   confirmed: z.literal("yes"),
   saveCommercialEvidence: z.literal("yes").optional(),
+  includeCosts: z.enum(["yes", "no"]).default("no"),
 });
 
 export async function POST(request: Request, { params }: { params: Promise<{ quoteId: string }> }) {
@@ -57,16 +58,25 @@ export async function POST(request: Request, { params }: { params: Promise<{ quo
       && (!evidenceActor || !await isTenantCapabilityEnabled(tenant.id, COMMERCIAL_EVIDENCE))) {
       throw new QuoteInputError("Evidencia comercial desactivada para esta empresa. Puedes importar las partidas sin adjuntar el PDF.", 403);
     }
+    const costImport = parsed?.success && parsed.data.includeCosts === "yes" ? threatDownCostImportSchema.safeParse({
+      currency: form.get("costCurrency"),
+      exchangeRate: form.get("exchangeRate") === null ? NaN : Number(form.get("exchangeRate")),
+    }) : null;
+    if (costImport && !costImport.success) {
+      throw new QuoteInputError("Elige USD sin conversión (tipo de cambio 1) o MXN con un tipo de cambio positivo para importar los costos.");
+    }
+    const pricing = costImport?.success ? costImport.data : undefined;
     stage = "read";
     const source = await readThreatDownPdf(bytes);
     if (!parsed?.success) return NextResponse.json({ source, fileHash });
     const { operationId } = parsed.data;
-    const items = threatDownItemInput(source);
+    const items = threatDownItemInput(source, pricing);
     stage = "import";
     const result = await createDraftFromQuoteInput({ tenantId: tenant.id, quoteId, operationId,
       mode: "replace", lines: items.lines,
       source: { kind: "threatdown-pdf", id: source.quoteNumber, revision: fileHash,
-        importMode: "items-only", reviewedBy: tenant.userId },
+        importMode: pricing ? "items-with-costs" : "items-only", reviewedBy: tenant.userId,
+        ...(pricing ? { pricing: { sourceCurrency: source.currency, ...pricing } } : {}) },
       ...(evidenceActor ? { evidence: { userId: evidenceActor, bytes, filename: file.name,
         supplier: "ThreatDown", reference: source.quoteNumber, expiresOn: source.expiresOn } } : {}),
     });

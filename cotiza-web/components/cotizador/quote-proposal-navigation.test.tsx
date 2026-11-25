@@ -118,9 +118,9 @@ it.each([true, false])("saves cost edits before creating a proposal even when re
 
 it("keeps a changed margin after a PDF import with free support and generates from the saved quote", async () => {
   await render();
-  m.imported = { quote: { ...quote, totalRevenue: 100 }, lines: [line,
+  m.imported = { quote: { ...quote, currency: "USD", totalRevenue: 0 }, lines: [{ ...line, priceUnit: 0, marginPct: 0 },
     { ...line, lineId: "support", sku: "MPSNC12S01", description: "Support", costUnit: 0, priceUnit: 0, marginPct: 0, classification1: "service" }],
-    versionCreated: false, totals: { totalCost: 80, totalRevenue: 100, grossProfit: 20, avgMargin: 20 } };
+    versionCreated: false, totals: { totalCost: 80, totalRevenue: 0, grossProfit: -80, avgMargin: 0 } };
   await click("Importar PDF ThreatDown"); await click("Completar importación sintética");
   const fallback = m.fetch.getMockImplementation()!;
   m.fetch.mockImplementation(async (url: string, init?: RequestInit) => {
@@ -128,7 +128,7 @@ it("keeps a changed margin after a PDF import with free support and generates fr
       const { lines } = JSON.parse(init.body as string);
       const { resolveBidirectionalPricing } = await import("@/lib/domain/pricing-engine");
       const saved = lines.map((l: typeof line) => ({ ...l, ...resolveBidirectionalPricing({ costUnit: l.costUnit, priceUnit: l.priceUnit }) }));
-      m.imported = { ...m.imported!, lines: saved, quote: { ...quote, totalRevenue: saved[0].priceUnit, avgMargin: 35 } };
+      m.imported = { ...m.imported!, lines: saved, quote: { ...m.imported!.quote, totalRevenue: saved[0].priceUnit, avgMargin: 35 } };
       return { ok: true, json: async () => m.imported };
     }
     return fallback(url, init);
@@ -137,7 +137,8 @@ it("keeps a changed margin after a PDF import with free support and generates fr
   await editInput(margin, "35");
   await click("Crear propuesta");
   const save = m.fetch.mock.calls.find(([, init]) => init?.method === "PUT")!;
-  expect(JSON.parse(save[1].body).lines[0]).toMatchObject({ marginPct: 35, priceUnit: 123.08 });
+  expect(JSON.parse(save[1].body).lines[0]).toMatchObject({ costUnit: 80, marginPct: 35, priceUnit: 123.08 });
+  expect(m.imported.quote.currency).toBe("USD");
   expect(m.imported.lines[0].marginPct).toBe(35);
   expect(m.imported.lines[1].priceUnit).toBe(0);
   expect(m.navigate).toHaveBeenCalledExactlyOnceWith("/propuestas?proposalId=synthetic-proposal");

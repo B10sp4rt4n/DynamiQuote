@@ -89,9 +89,10 @@ function normalizeLineQuantity(line: EditableQuoteLine): EditableQuoteLine {
   };
 }
 
-function formatCurrency(value: number): string {
+function formatCurrency(value: number, currency?: "USD" | "MXN"): string {
   return new Intl.NumberFormat("es-MX", {
-    currency: "MXN",
+    currency: currency ?? "MXN",
+    ...(currency ? { currencyDisplay: "code" as const } : {}),
     maximumFractionDigits: 2,
     style: "currency",
   }).format(value);
@@ -995,6 +996,12 @@ export function QuoteLineEditor({
     if (!baseQuoteId || !targetQuoteId || baseQuoteId === targetQuoteId) {
       return;
     }
+    const baseCurrency = versions.find(version => version.quoteId === baseQuoteId)?.currency;
+    const targetCurrency = versions.find(version => version.quoteId === targetQuoteId)?.currency;
+    if (baseCurrency && targetCurrency && baseCurrency !== targetCurrency) {
+      setMessage(`Las versiones usan monedas distintas (${baseCurrency} y ${targetCurrency}). Elige versiones en la misma moneda para comparar importes.`);
+      return;
+    }
 
     try {
       const [baseResponse, targetResponse] = await Promise.all([
@@ -1254,6 +1261,7 @@ export function QuoteLineEditor({
   );
 
   const currentStatus = currentVersion?.status ?? selectedQuote?.status ?? "draft";
+  const pricingCurrency = currentVersion?.currency ?? selectedQuote?.currency;
 
   function exportComparisonCsv() {
     if (lines.length === 0) {
@@ -1457,6 +1465,7 @@ export function QuoteLineEditor({
         {selectedQuote ? <div className="rounded-lg border border-zinc-200 p-3">
           <p className="text-sm text-zinc-600">Nombre de la cotización · {selectedQuote.quoteGroupId} · Revisión {currentVersion?.version ?? selectedQuote.version}</p>
           <h3 className="mt-1 break-words text-lg font-semibold">{quoteNameLabel(selectedQuote.proposalName)}</h3>
+          {pricingCurrency ? <p className="mt-1 text-sm text-zinc-700">Moneda de costos y precios: <strong>{pricingCurrency}</strong>. La propuesta conservará esta moneda.</p> : null}
           {currentStatus === "draft" ? <QuoteNameEditor key={selectedQuoteId} quoteId={selectedQuoteId} initialName={selectedQuote.proposalName}
             disabled={loading || saving || savingName || versioningNow || creatingProposal || takingAction} onSavingChange={setSavingName}
             onSaved={(id, name) => { setQuoteNames(current => ({ ...current, [id]: name })); onQuoteNameSaved?.(id, name); }} /> : null}
@@ -1541,7 +1550,9 @@ export function QuoteLineEditor({
           onSelectedQuoteChange?.(data.quote.quoteId);
           savedLinesRef.current = JSON.stringify(data.lines.map(normalizeLineQuantity));
           setLines(data.lines.map(normalizeLineQuantity));
-          setMessage(`Partidas ThreatDown importadas: borrador v${data.quote.version}. Captura costos y define márgenes o precios en Cotiza.`);
+          setMessage(data.quote.currency
+            ? `Partidas y costos netos ThreatDown importados en ${data.quote.currency}: borrador v${data.quote.version}. Define el margen o precio de venta en Cotiza.`
+            : `Partidas ThreatDown importadas: borrador v${data.quote.version}. Captura costos y define márgenes o precios en Cotiza.`);
         }} /> : null}
 
       {showPackagePicker && (
@@ -1631,7 +1642,7 @@ export function QuoteLineEditor({
                       </td>
                       <td className="py-2 pr-6 text-xs font-semibold text-zinc-900">
                         {version.totalRevenue !== null
-                          ? new Intl.NumberFormat("es-MX", { currency: "MXN", maximumFractionDigits: 0, style: "currency" }).format(version.totalRevenue)
+                          ? new Intl.NumberFormat("es-MX", { currency: version.currency ?? "MXN", maximumFractionDigits: 0, style: "currency", ...(version.currency ? { currencyDisplay: "code" as const } : {}) }).format(version.totalRevenue)
                           : "—"}
                       </td>
                       <td className="py-2 pr-6 text-xs text-zinc-600">
@@ -1697,7 +1708,8 @@ export function QuoteLineEditor({
                       const numericValue = typeof resolved === "number" ? resolved : Number(resolved ?? 0);
 
                       return new Intl.NumberFormat("es-MX", {
-                        currency: "MXN",
+                        currency: pricingCurrency ?? "MXN",
+                        ...(pricingCurrency ? { currencyDisplay: "code" as const } : {}),
                         maximumFractionDigits: 0,
                         style: "currency",
                       }).format(Number.isFinite(numericValue) ? numericValue : 0);
@@ -1723,15 +1735,15 @@ export function QuoteLineEditor({
             <div className="grid content-start gap-3 sm:grid-cols-2">
               <article className="flex min-h-[124px] flex-col justify-between rounded-xl border border-zinc-200 bg-white p-4 text-sm">
                 <p className="text-zinc-500">Costo total</p>
-                <p className="mt-2 text-xl font-semibold text-zinc-900">{formatCurrency(totals.totalCost)}</p>
+                <p className="mt-2 text-xl font-semibold text-zinc-900">{formatCurrency(totals.totalCost, pricingCurrency)}</p>
               </article>
               <article className="flex min-h-[124px] flex-col justify-between rounded-xl border border-zinc-200 bg-white p-4 text-sm">
                 <p className="text-zinc-500">Revenue total</p>
-                <p className="mt-2 text-xl font-semibold text-zinc-900">{formatCurrency(totals.totalRevenue)}</p>
+                <p className="mt-2 text-xl font-semibold text-zinc-900">{formatCurrency(totals.totalRevenue, pricingCurrency)}</p>
               </article>
               <article className="flex min-h-[124px] flex-col justify-between rounded-xl border border-zinc-200 bg-white p-4 text-sm">
                 <p className="text-zinc-500">Utilidad</p>
-                <p className="mt-2 text-xl font-semibold text-zinc-900">{formatCurrency(totals.grossProfit)}</p>
+                <p className="mt-2 text-xl font-semibold text-zinc-900">{formatCurrency(totals.grossProfit, pricingCurrency)}</p>
               </article>
               <article className="flex min-h-[124px] flex-col justify-between rounded-xl border border-zinc-200 bg-white p-4 text-sm">
                 <p className="text-zinc-500">Margen promedio</p>
@@ -1745,15 +1757,15 @@ export function QuoteLineEditor({
           <div className="grid gap-3 sm:grid-cols-2 xl:grid-cols-4">
             <article className="flex min-h-[112px] flex-col justify-between rounded-xl border border-zinc-200 bg-white p-4 text-sm">
               <p className="text-zinc-500">Costo total</p>
-              <p className="mt-2 text-xl font-semibold text-zinc-900">{formatCurrency(totals.totalCost)}</p>
+              <p className="mt-2 text-xl font-semibold text-zinc-900">{formatCurrency(totals.totalCost, pricingCurrency)}</p>
             </article>
             <article className="flex min-h-[112px] flex-col justify-between rounded-xl border border-zinc-200 bg-white p-4 text-sm">
               <p className="text-zinc-500">Revenue total</p>
-              <p className="mt-2 text-xl font-semibold text-zinc-900">{formatCurrency(totals.totalRevenue)}</p>
+              <p className="mt-2 text-xl font-semibold text-zinc-900">{formatCurrency(totals.totalRevenue, pricingCurrency)}</p>
             </article>
             <article className="flex min-h-[112px] flex-col justify-between rounded-xl border border-zinc-200 bg-white p-4 text-sm">
               <p className="text-zinc-500">Utilidad</p>
-              <p className="mt-2 text-xl font-semibold text-zinc-900">{formatCurrency(totals.grossProfit)}</p>
+              <p className="mt-2 text-xl font-semibold text-zinc-900">{formatCurrency(totals.grossProfit, pricingCurrency)}</p>
             </article>
             <article className="flex min-h-[112px] flex-col justify-between rounded-xl border border-zinc-200 bg-white p-4 text-sm">
               <p className="text-zinc-500">Margen promedio</p>
@@ -1904,16 +1916,16 @@ export function QuoteLineEditor({
                 </td>
                 <td className="px-4 py-3 text-zinc-700">
                   <div className="space-y-0.5 text-xs">
-                    <div>C: {formatCurrency(accumulation?.subtotalCost ?? 0)}</div>
-                    <div>R: {formatCurrency(accumulation?.subtotalRevenue ?? 0)}</div>
-                    <div>U: {formatCurrency(accumulation?.subtotalProfit ?? 0)}</div>
+                    <div>C: {formatCurrency(accumulation?.subtotalCost ?? 0, pricingCurrency)}</div>
+                    <div>R: {formatCurrency(accumulation?.subtotalRevenue ?? 0, pricingCurrency)}</div>
+                    <div>U: {formatCurrency(accumulation?.subtotalProfit ?? 0, pricingCurrency)}</div>
                   </div>
                 </td>
                 <td className="px-4 py-3 font-medium text-zinc-900">
                   <div className="space-y-0.5 text-xs">
-                    <div>C: {formatCurrency(accumulation?.runningCost ?? 0)}</div>
-                    <div>R: {formatCurrency(accumulation?.runningRevenue ?? 0)}</div>
-                    <div>U: {formatCurrency(accumulation?.runningProfit ?? 0)}</div>
+                    <div>C: {formatCurrency(accumulation?.runningCost ?? 0, pricingCurrency)}</div>
+                    <div>R: {formatCurrency(accumulation?.runningRevenue ?? 0, pricingCurrency)}</div>
+                    <div>U: {formatCurrency(accumulation?.runningProfit ?? 0, pricingCurrency)}</div>
                   </div>
                 </td>
                 <td className={`px-4 py-3 ${diffCellClass(Boolean(lineDiffMap[line.lineId]?.has("marginPct")))}`}>

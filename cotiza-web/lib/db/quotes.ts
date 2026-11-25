@@ -8,8 +8,10 @@ import { getCommercialReportingExclusions } from "@/lib/db/commercial-options";
 import { normalizeQuoteName, quoteNameLabel } from "@/lib/domain/quote-name";
 import { createOpportunityForTenant, getOpportunityPipelineByTenant } from "@/lib/db/opportunities";
 import { createDraftFromQuoteInput } from "@/lib/db/quote-input";
+import { quoteCurrencyFromMetadata } from "@/lib/domain/quote-currency";
 
 type QuoteSummaryRow = {
+  input_metadata?: unknown;
   quote_group_id: string | null;
   quote_id: string;
   version: number | null;
@@ -37,6 +39,7 @@ type RecentQuoteRow = {
 };
 
 export type QuoteGroupSummary = {
+  currency?: "USD" | "MXN";
   avgMargin: number | null;
   clientName: string;
   createdAt: string | null;
@@ -100,6 +103,7 @@ export async function getQuoteVersionSummaryByTenant(
     select: {
       avg_margin: true, client_name: true, createdAt: true, playbook_name: true,
       proposal_name: true, quote_group_id: true, quote_id: true, status: true,
+      input_metadata: true,
       total_revenue: true, version: true,
     },
     where: {
@@ -113,6 +117,7 @@ export async function getQuoteVersionSummaryByTenant(
 
   const versionCount = await prisma.quote.count({ where: { tenantId, quote_group_id: quote.quote_group_id } });
   return {
+    ...(quoteCurrencyFromMetadata(quote.input_metadata) ? { currency: quoteCurrencyFromMetadata(quote.input_metadata) } : {}),
     avgMargin: decimalToNumber(quote.avg_margin),
     clientName: quote.client_name ?? "Sin cliente",
     createdAt: dateToIso(quote.createdAt),
@@ -340,7 +345,8 @@ export async function getQuoteGroupsSummaryByTenant(
         avg_margin,
         client_name,
         proposal_name,
-        playbook_name
+        playbook_name,
+        input_metadata
       FROM quotes
       WHERE tenant_id = ${tenantId} ${scopeFilter}
       ORDER BY quote_group_id, version DESC
@@ -362,7 +368,8 @@ export async function getQuoteGroupsSummaryByTenant(
       lv.avg_margin,
       lv.client_name,
       lv.proposal_name,
-      lv.playbook_name
+      lv.playbook_name,
+      lv.input_metadata
     FROM latest_versions lv
     JOIN version_counts vc ON lv.quote_group_id = vc.quote_group_id
     ORDER BY lv.created_at DESC NULLS LAST
@@ -372,6 +379,7 @@ export async function getQuoteGroupsSummaryByTenant(
   return rows
     .filter((row) => row.quote_group_id)
     .map((row) => ({
+      ...(quoteCurrencyFromMetadata(row.input_metadata) ? { currency: quoteCurrencyFromMetadata(row.input_metadata) } : {}),
       avgMargin: decimalToNumber(row.avg_margin),
       clientName: row.client_name ?? "Sin cliente",
       createdAt: dateToIso(row.created_at),
@@ -410,7 +418,8 @@ export async function getQuoteGroupsByClientForTenant(
         avg_margin,
         client_name,
         proposal_name,
-        playbook_name
+        playbook_name,
+        input_metadata
       FROM quotes
       WHERE tenant_id = ${tenantId} AND client_id = ${clientId} ${scopeFilter}
       ORDER BY quote_group_id, version DESC
@@ -432,7 +441,8 @@ export async function getQuoteGroupsByClientForTenant(
       lv.avg_margin,
       lv.client_name,
       lv.proposal_name,
-      lv.playbook_name
+      lv.playbook_name,
+      lv.input_metadata
     FROM latest_versions lv
     JOIN version_counts vc ON lv.quote_group_id = vc.quote_group_id
     ORDER BY lv.created_at DESC NULLS LAST
@@ -441,6 +451,7 @@ export async function getQuoteGroupsByClientForTenant(
   return rows
     .filter((row) => row.quote_group_id)
     .map((row) => ({
+      ...(quoteCurrencyFromMetadata(row.input_metadata) ? { currency: quoteCurrencyFromMetadata(row.input_metadata) } : {}),
       avgMargin: decimalToNumber(row.avg_margin),
       clientName: row.client_name ?? "Sin cliente",
       createdAt: dateToIso(row.created_at),
