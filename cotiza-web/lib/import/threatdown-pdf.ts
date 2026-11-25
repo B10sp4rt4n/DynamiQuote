@@ -42,7 +42,9 @@ export async function readThreatDownPdf(bytes: Uint8Array) {
   if (bytes.length > 3 * 1024 * 1024 || Buffer.from(bytes.subarray(0, 5)).toString() !== "%PDF-") {
     throw new QuoteInputError("Adjunta un PDF válido de hasta 3 MB.");
   }
-  const pdf = await getDocumentProxy(bytes);
+  // PDF.js transfers ownership of its input buffer to its worker. The caller
+  // still needs the exact original for evidence storage and its SHA-256.
+  const pdf = await getDocumentProxy(Uint8Array.from(bytes));
   try {
     if (pdf.numPages > 10) throw new QuoteInputError("El PDF supera el límite de 10 páginas.");
     const pages: string[] = [];

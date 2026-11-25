@@ -1,5 +1,5 @@
 import { createHash } from "node:crypto";
-import { beforeEach, describe, expect, it, vi } from "vitest";
+import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 const m = vi.hoisted(() => ({ tenant: vi.fn(), visible: vi.fn(), read: vi.fn(), write: vi.fn(), rate: vi.fn(), capability: vi.fn() }));
 vi.mock("@/lib/auth/tenant-context", () => ({ getCurrentTenantContext: m.tenant }));
 vi.mock("@/lib/db/tenant-capabilities", () => ({ isTenantCapabilityEnabled: m.capability, THREATDOWN_PDF_IMPORT: "threatdown_pdf_import" }));
@@ -23,10 +23,12 @@ function request(fields: Record<string, string> = {}, filename = "quote.pdf") {
 const apply = { action: "apply", operationId, expectedHash: hash, confirmed: "yes" };
 describe("ThreatDown PDF route", () => {
   beforeEach(() => {
+    vi.spyOn(console, "error").mockImplementation(() => {});
     vi.clearAllMocks(); m.tenant.mockResolvedValue({ id: "tenant-1", userId: "u1", userRole: "seller", isSuperAdmin: false });
     m.capability.mockResolvedValue(true); m.visible.mockResolvedValue(true); m.rate.mockReturnValue({ allowed: true }); m.read.mockResolvedValue(source);
     m.write.mockResolvedValue({ quote: { quoteId: "new-v3" }, replayed: false });
   });
+  afterEach(() => vi.restoreAllMocks());
   it("requires a session", async () => {
     m.tenant.mockResolvedValue(null); expect((await POST(request(),ctx)).status).toBe(401); expect(m.read).not.toHaveBeenCalled();
   });
@@ -83,5 +85,33 @@ describe("ThreatDown PDF route", () => {
   });
   it("rejects wrong extensions", async () => {
     expect((await POST(request({},"quote.xlsx"),ctx)).status).toBe(422); expect(m.read).not.toHaveBeenCalled();
+  });
+  it("reports an unconfirmed import without blaming a PDF that was read successfully", async () => {
+    m.write.mockRejectedValue(new TypeError("private database arguments"));
+    const r = await POST(request(apply), ctx);
+    expect(r.status).toBe(500);
+    const body = await r.json();
+    expect(body.error).toContain("La lectura del PDF se completó");
+    expect(body.error).toContain("misma operación");
+    expect(body.error).not.toContain("contraseña");
+    expect(body.error).not.toContain("private");
+    expect(console.error).toHaveBeenCalledWith("[threatdown:import]", { stage: "import", action: "apply", name: "TypeError" });
+    expect(JSON.stringify(vi.mocked(console.error).mock.calls)).not.toContain("private");
+  });
+  it("reports unexpected reader errors as internal errors and never writes", async () => {
+    m.read.mockRejectedValue(new TypeError("private PDF contents"));
+    const r = await POST(request(), ctx);
+    expect(r.status).toBe(500);
+    expect((await r.json()).error).toContain("error interno al leer");
+    expect(m.write).not.toHaveBeenCalled();
+    expect(console.error).toHaveBeenCalledWith("[threatdown:import]", { stage: "read", action: "preview", name: "TypeError" });
+  });
+  it.each(["PasswordException", "InvalidPDFException"])("identifies a real %s as a document error", async name => {
+    const error = new Error("private PDF contents"); error.name = name;
+    m.read.mockRejectedValue(error);
+    const r = await POST(request(), ctx);
+    expect(r.status).toBe(422);
+    expect((await r.json()).error).toContain(name === "PasswordException" ? "protegido con contraseña" : "PDF válido");
+    expect(m.write).not.toHaveBeenCalled();
   });
 });

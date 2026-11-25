@@ -37,10 +37,12 @@ export async function POST(request: Request, { params }: { params: Promise<{ quo
   if (Number(request.headers.get("content-length") ?? 0) > 3 * 1024 * 1024 + 16384) {
     return NextResponse.json({ error: "El PDF supera el límite de 3 MB." }, { status: 413 });
   }
+  let stage: "upload" | "read" | "import" = "upload";
+  let action: FormDataEntryValue | null = null;
   try {
     const form = await request.formData();
     const file = form.get("file");
-    const action = form.get("action");
+    action = form.get("action");
     if (action !== "preview" && action !== "apply") throw new QuoteInputError("Acción inválida.");
     if (!(file instanceof File) || !file.name.toLowerCase().endsWith(".pdf") || file.size === 0 || file.size > 3 * 1024 * 1024) {
       throw new QuoteInputError("Adjunta un PDF de ThreatDown de hasta 3 MB.");
@@ -55,10 +57,12 @@ export async function POST(request: Request, { params }: { params: Promise<{ quo
       && (!evidenceActor || !await isTenantCapabilityEnabled(tenant.id, COMMERCIAL_EVIDENCE))) {
       throw new QuoteInputError("Evidencia comercial desactivada para esta empresa. Puedes importar las partidas sin adjuntar el PDF.", 403);
     }
+    stage = "read";
     const source = await readThreatDownPdf(bytes);
     if (!parsed?.success) return NextResponse.json({ source, fileHash });
     const { operationId } = parsed.data;
     const items = threatDownItemInput(source);
+    stage = "import";
     const result = await createDraftFromQuoteInput({ tenantId: tenant.id, quoteId, operationId,
       mode: "replace", lines: items.lines,
       source: { kind: "threatdown-pdf", id: source.quoteNumber, revision: fileHash,
@@ -70,8 +74,20 @@ export async function POST(request: Request, { params }: { params: Promise<{ quo
     return NextResponse.json(result);
   } catch (error) {
     if (error instanceof QuoteInputError) return NextResponse.json({ error: error.message }, { status: error.status });
-    // Parsing/password/encoding failures never expose PDF contents or credentials.
-    console.error("[threatdown:import]", error instanceof Error ? error.name : "unknown");
-    return NextResponse.json({ error: "No se pudo procesar el PDF. Usa una cotización digital sin contraseña y vuelve a intentarlo." }, { status: 422 });
+    const name = error instanceof Error && /^[A-Za-z][A-Za-z0-9_]{0,60}$/.test(error.name) ? error.name : "unknown";
+    // Log the failing step, never PDF contents, SQL arguments or error messages.
+    console.error("[threatdown:import]", { stage, action: action === "apply" ? "apply" : "preview", name });
+    if (stage === "read" && name === "PasswordException") {
+      return NextResponse.json({ error: "El PDF está protegido con contraseña. Usa una copia digital sin contraseña y vuelve a intentarlo." }, { status: 422 });
+    }
+    if (stage === "read" && name === "InvalidPDFException") {
+      return NextResponse.json({ error: "El archivo no se pudo reconocer como un PDF válido. Vuelve a descargar el original y reintenta." }, { status: 422 });
+    }
+    const message = stage === "import"
+      ? "La lectura del PDF se completó, pero no se pudo confirmar la importación. Reintenta Importar partidas sin cambiar los datos para recuperar la misma operación."
+      : stage === "read"
+        ? "Ocurrió un error interno al leer el PDF. Vuelve a intentarlo."
+        : "No se pudo recibir el archivo. Vuelve a seleccionarlo y reintenta.";
+    return NextResponse.json({ error: message }, { status: 500 });
   }
 }
