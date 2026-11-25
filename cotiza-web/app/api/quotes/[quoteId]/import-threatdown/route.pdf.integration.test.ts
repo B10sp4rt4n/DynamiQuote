@@ -22,7 +22,12 @@ const operationId = "48bc6a1e-c041-490b-92ae-aa0347c69a2e";
 
 beforeEach(() => { mocks.write.mockReset(); });
 
-it.each([false, true])("previews and applies an actual digital PDF, save evidence=%s", async saveEvidence => {
+it.each([
+  { saveEvidence: false, currency: undefined, rate: 1 },
+  { saveEvidence: true, currency: undefined, rate: 1 },
+  { saveEvidence: false, currency: "USD", rate: 1 },
+  { saveEvidence: true, currency: "MXN", rate: 20 },
+])("previews and applies an actual digital PDF: %j", async ({ saveEvidence, currency, rate }) => {
   const original = syntheticThreatDownPdf();
   const hash = createHash("sha256").update(original).digest("hex");
   function request(action: "preview" | "apply") {
@@ -32,6 +37,9 @@ it.each([false, true])("previews and applies an actual digital PDF, save evidenc
     if (action === "apply") {
       body.set("operationId", operationId); body.set("confirmed", "yes"); body.set("expectedHash", hash);
       if (saveEvidence) body.set("saveCommercialEvidence", "yes");
+      if (currency) {
+        body.set("includeCosts", "yes"); body.set("costCurrency", currency); body.set("exchangeRate", String(rate));
+      }
     }
     return new Request("http://localhost/api/quotes/test-quote/import-threatdown", { method: "POST", body });
   }
@@ -41,7 +49,9 @@ it.each([false, true])("previews and applies an actual digital PDF, save evidenc
   expect(mocks.write).not.toHaveBeenCalled();
   mocks.write.mockImplementation(async input => {
     expect(input.lines.map((line: { quantity: number }) => line.quantity)).toEqual([2, 1]);
-    expect(input.lines.every((line: { costUnit: number; priceUnit: number }) => line.costUnit === 0 && line.priceUnit === 0)).toBe(true);
+    expect(input.lines.map((line: { costUnit: number }) => line.costUnit)).toEqual(currency ? [123.45 * rate, 0] : [0, 0]);
+    expect(input.lines.every((line: { priceUnit: number }) => line.priceUnit === 0)).toBe(true);
+    if (currency) expect(input.source.pricing).toEqual({ sourceCurrency: "USD", currency, exchangeRate: rate });
     expect(input.source.revision).toBe(hash);
     if (saveEvidence) {
       // This exact conversion used by PostgreSQL threw a TypeError before the fix.

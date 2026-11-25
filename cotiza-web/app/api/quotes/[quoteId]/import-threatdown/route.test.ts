@@ -61,6 +61,24 @@ describe("ThreatDown PDF route", () => {
     expect(value.source).not.toHaveProperty("commercial");
     expect(value).not.toHaveProperty("evidence");
   });
+  it.each([["USD", "1", 10], ["MXN", "20", 200]])("imports reviewed net costs in %s, ignoring client prices and costs", async (currency, exchangeRate, costUnit) => {
+    const r = await POST(request({ ...apply, includeCosts: "yes", costCurrency: String(currency), exchangeRate: String(exchangeRate),
+      costUnit: "99999", priceUnit: "99999", marginPct: "35" }), ctx);
+    expect(r.status).toBe(200);
+    expect(m.write.mock.lastCall?.[0]).toMatchObject({
+      lines: [{ sku: "TDADV", quantity: 2, costUnit, priceUnit: 0, marginPct: 0 }],
+      source: { importMode: "items-with-costs", pricing: { sourceCurrency: "USD", currency, exchangeRate: Number(exchangeRate) } },
+    });
+    expect(m.write.mock.lastCall?.[0]).not.toHaveProperty("evidence");
+  });
+  it.each([
+    { costCurrency: "EUR", exchangeRate: "1" }, { costCurrency: "USD", exchangeRate: "20" },
+    { costCurrency: "MXN", exchangeRate: "0" }, { costCurrency: "MXN", exchangeRate: "" },
+    { costCurrency: "MXN", exchangeRate: "NaN" },
+  ])("rejects incomplete or inconsistent conversion %s before reading or writing", async options => {
+    const r = await POST(request({ ...apply, includeCosts: "yes", ...options }), ctx);
+    expect(r.status).toBe(422); expect(m.read).not.toHaveBeenCalled(); expect(m.write).not.toHaveBeenCalled();
+  });
   it("accepts evidence only with a separate tenant entitlement and explicit consent", async () => {
     m.capability.mockImplementation(async (_tenant, capability) => capability === "threatdown_pdf_import");
     expect((await POST(request({ ...apply, saveCommercialEvidence: "yes" }), ctx)).status).toBe(403);

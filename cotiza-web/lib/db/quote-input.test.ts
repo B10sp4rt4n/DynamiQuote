@@ -4,6 +4,7 @@ const m=vi.hoisted(()=>({ tx:vi.fn(), execute:vi.fn(), find:vi.fn(), lines:vi.fn
 vi.mock("@/lib/db/prisma",()=>({prisma:{$transaction:m.tx,quote:{count:m.count}}}));
 vi.mock("@/lib/db/quote-editor",()=>({getEditableQuoteLinesByTenant:m.read}));
 import { createDraftFromQuoteInput } from "./quote-input";
+import type { QuoteInputSource } from "@/lib/domain/quote-input";
 const base=()=>({quote_id:"q1",quote_group_id:"COT-1",tenantId:"t1",version:1,status:"draft",input_metadata:null,createdAt:new Date(),total_cost:0,total_revenue:0,client_id:"c1",client_name:"Client",proposal_name:"Test",opportunity_id:"opp1",created_by_user_id:"u1"});
 let stored:ReturnType<typeof base>;
 const input=()=>({tenantId:"t1",quoteId:"q1",operationId:"op1",mode:"replace" as const,source:{kind:"excel" as const},lines:[{sku:"X",description:"Product",quantity:1,costUnit:80,priceUnit:100,lineType:"product" as const,serviceOrigin:""}]});
@@ -11,3 +12,18 @@ beforeEach(()=>{vi.clearAllMocks();stored=base();m.execute.mockResolvedValue(0);
 it("fills an unused empty initial draft in v1 and preserves quote identity",async()=>{const result=await createDraftFromQuoteInput(input());expect(result!.quote.quoteId).toBe("q1");expect(result!.quote.version).toBe(1);expect(result!.versionCreated).toBe(false);expect(m.create).not.toHaveBeenCalled();expect(m.remove).toHaveBeenCalledWith({where:{quote_id:"q1"}});expect(m.insert.mock.calls[0][0].data[0].quote_id).toBe("q1");expect(m.update.mock.calls[0][0].data.input_metadata.operationId).toBe("op1");});
 it.each(["populated","closed","proposal","formal","metadata","laterVersion"])("preserves history and creates v2 for %s",async(reason)=>{if(reason==="populated")m.lines.mockResolvedValue([{description_final:"Existing",sku:"Y",cost_unit:1,final_price_unit:2}]);if(reason==="closed")stored.status="closed";if(reason==="proposal")m.props.mockResolvedValue(1);if(reason==="formal")m.formal.mockResolvedValue(1);if(reason==="metadata")stored.input_metadata={} as never;if(reason==="laterVersion")m.count.mockResolvedValue(2);const result=await createDraftFromQuoteInput(input());expect(result!.quote.version).toBe(2);expect(result!.versionCreated).toBe(true);expect(m.update).not.toHaveBeenCalled();expect(m.remove).not.toHaveBeenCalled();});
 it("replays initial-fill operations without another version or duplicate lines",async()=>{m.find.mockImplementation(async(args)=>args.where.input_metadata?{...stored,input_metadata:{inputHash:vi.mocked(m.update).mock.calls[0]?.[0]?.data.input_metadata.inputHash}}:stored);m.find.mockImplementationOnce(async()=>stored).mockImplementationOnce(async()=>null).mockImplementationOnce(async()=>stored).mockImplementationOnce(async()=>({version:1}));const first=await createDraftFromQuoteInput(input());expect(first!.versionCreated).toBe(false);const result=await createDraftFromQuoteInput(input());expect(result!.replayed).toBe(true);expect(result!.quote.quoteId).toBe("q1");expect(m.insert).toHaveBeenCalledOnce();});
+
+it.each(["USD", "MXN"] as const)("persists and returns the explicitly reviewed %s currency", async currency => {
+  const source: QuoteInputSource = { kind: "threatdown-pdf", importMode: "items-with-costs",
+    pricing: { sourceCurrency: "USD", currency, exchangeRate: currency === "USD" ? 1 : 20 } };
+  const result = await createDraftFromQuoteInput({ ...input(), source });
+  expect(result!.quote.currency).toBe(currency);
+  expect(m.update.mock.calls[0][0].data.input_metadata).toMatchObject({ pricingCurrency: currency, source });
+});
+
+it("carries the quote currency into subsequent ordinary imports", async () => {
+  stored.input_metadata = { pricingCurrency: "USD" } as never;
+  const result = await createDraftFromQuoteInput(input());
+  expect(result!.quote.currency).toBe("USD");
+  expect(m.create.mock.calls[0][0].data.input_metadata.pricingCurrency).toBe("USD");
+});

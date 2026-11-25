@@ -30,10 +30,11 @@ type QuoteShellProps = {
   tenantName: string;
 };
 
-function formatCurrency(value: number | null): string {
+function formatCurrency(value: number | null, currency?: "USD" | "MXN"): string {
   return new Intl.NumberFormat("es-MX", {
     style: "currency",
-    currency: "MXN",
+    currency: currency ?? "MXN",
+    ...(currency ? { currencyDisplay: "code" as const } : {}),
     maximumFractionDigits: 0,
   }).format(value ?? 0);
 }
@@ -222,7 +223,8 @@ export function QuoteShell({
         return left.clientName.localeCompare(right.clientName, "es");
       }
 
-      return (right.totalRevenue ?? 0) - (left.totalRevenue ?? 0);
+      const currencyOrder = (left.currency ?? "MXN").localeCompare(right.currency ?? "MXN");
+      return currencyOrder || (right.totalRevenue ?? 0) - (left.totalRevenue ?? 0);
     });
   }, [quoteItems, quoteSearch, quoteSort, showArchived]);
 
@@ -487,6 +489,7 @@ export function QuoteShell({
         quoteId: savedQuote.quoteId,
         status: savedQuote.status,
         totalRevenue: savedQuote.totalRevenue,
+        ...(savedQuote.currency ? { currency: savedQuote.currency } : {}),
         version: savedQuote.version,
         versionCount: savedQuote.versionCount,
       };
@@ -847,7 +850,7 @@ export function QuoteShell({
                       <td className="px-4 py-3 text-zinc-600">
                         v{item.version} de {item.versionCount}
                       </td>
-                      <td className="px-4 py-3 text-zinc-900">{formatCurrency(item.totalRevenue)}</td>
+                      <td className="px-4 py-3 text-zinc-900">{formatCurrency(item.totalRevenue, item.currency)}</td>
                       <td className="px-4 py-3 text-zinc-600">
                         {item.avgMargin !== null ? `${item.avgMargin.toFixed(1)}%` : "N/D"}
                       </td>

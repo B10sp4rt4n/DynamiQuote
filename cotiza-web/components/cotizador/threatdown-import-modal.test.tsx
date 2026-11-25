@@ -13,11 +13,11 @@ const source = {
 };
 const imported = {
   lines: [{ lineId: "line-1", sku: "TESTSKU1", description: "Producto sintetico", quantity: 2,
-    costUnit: 0, priceUnit: 0, marginPct: 0, classification1: "product", classification2: "" }],
+    costUnit: 10, priceUnit: 0, marginPct: 0, classification1: "product", classification2: "" }],
   quote: { quoteId: "quote-imported", quoteGroupId: "group-1", clientName: "Cliente sintetico",
     proposalName: "Cotizacion", createdAt: "2026-11-25T12:00:00Z", playbookName: null,
-    status: "draft", version: 1, versionCount: 1, totalRevenue: 0, avgMargin: 0 },
-  totals: { totalCost: 0, totalRevenue: 0, grossProfit: 0, avgMargin: 0 }, versionCreated: false,
+    status: "draft", version: 1, versionCount: 1, totalRevenue: 0, avgMargin: 0, currency: "USD" },
+  totals: { totalCost: 20, totalRevenue: 0, grossProfit: -20, avgMargin: 0 }, versionCreated: false,
 };
 const response = (data: unknown, ok = true) => ({ ok, json: async () => data });
 let container: HTMLDivElement, root: Root;
@@ -55,8 +55,53 @@ async function saveEvidence() {
   await act(async () => [...container.querySelectorAll("label")].find(l => l.textContent?.includes("Guardar PDF"))!.querySelector("input")!.click());
 }
 const forms = () => mocks.fetch.mock.calls.map(([, init]) => (init as RequestInit).body as FormData);
+async function selectCurrency(currency: string) {
+  await act(async () => {
+    const select = container.querySelector<HTMLSelectElement>('[aria-label="Moneda de los costos importados"]')!;
+    select.value = currency; select.dispatchEvent(new Event("change", { bubbles: true }));
+  });
+}
+async function setRate(value: string) {
+  await act(async () => {
+    const input = container.querySelector<HTMLInputElement>('[aria-label="Tipo de cambio USD a MXN"]')!;
+    Object.getOwnPropertyDescriptor(HTMLInputElement.prototype, "value")!.set!.call(input, value);
+    input.dispatchEvent(new Event("input", { bubbles: true }));
+  });
+}
 
 describe("ThreatDown PDF review and import recovery", () => {
+  it("defaults to net costs in USD without opting into evidence", async () => {
+    await render(); await selectFile(); await confirm(); await click("Importar partidas");
+    const form = forms().find(form => form.get("action") === "apply")!;
+    expect(form.get("includeCosts")).toBe("yes"); expect(form.get("costCurrency")).toBe("USD");
+    expect(form.get("exchangeRate")).toBe("1"); expect(form.has("saveCommercialEvidence")).toBe(false);
+    expect(mocks.imported).toHaveBeenCalledOnce();
+  });
+  it("requires a reviewed exchange rate for MXN and displays the converted unit cost and total", async () => {
+    await render(); await selectFile(); await selectCurrency("MXN");
+    expect(button("Importar partidas").disabled).toBe(true);
+    expect(container.textContent).toContain("Captura un tipo de cambio positivo");
+    await setRate("20");
+    expect(container.textContent).toMatch(/MXN\s+200\.00/);
+    expect(container.textContent).toMatch(/MXN\s+400\.00/);
+    await confirm();
+    mocks.fetch.mockResolvedValueOnce(response({ ...imported, quote: { ...imported.quote, currency: "MXN" },
+      totals: { ...imported.totals, totalCost: 400, grossProfit: -400 } }));
+    await click("Importar partidas");
+    const form = forms().find(form => form.get("action") === "apply")!;
+    expect(form.get("costCurrency")).toBe("MXN"); expect(form.get("exchangeRate")).toBe("20");
+    expect(mocks.imported).toHaveBeenCalledOnce();
+  });
+  it("retains the explicit items-only path", async () => {
+    await render(); await selectFile();
+    await act(async () => [...container.querySelectorAll("label")].find(l => l.textContent?.includes("Importar el costo neto unitario"))!.querySelector("input")!.click());
+    await confirm();
+    mocks.fetch.mockResolvedValueOnce(response({ ...imported, quote: { ...imported.quote, currency: undefined },
+      totals: { ...imported.totals, totalCost: 0, grossProfit: 0 } }));
+    await click("Importar partidas");
+    expect(forms().find(form => form.get("action") === "apply")!.get("includeCosts")).toBe("no");
+    expect(mocks.imported).toHaveBeenCalledOnce();
+  });
   it("removes an earlier preview and confirmation when a re-read fails", async () => {
     await render(); await selectFile(); await confirm();
     expect(container.textContent).toContain("TESTSKU1");
@@ -83,18 +128,23 @@ describe("ThreatDown PDF review and import recovery", () => {
     expect(mocks.imported).toHaveBeenCalledOnce();
   });
 
-  it("preserves the operation and evidence consent across re-reading the same PDF after a lost response", async () => {
-    await render(); await selectFile(); await saveEvidence(); await confirm();
+  it("preserves MXN conversion and evidence consent across re-reading the same PDF after a lost response", async () => {
+    await render(); await selectFile(); await selectCurrency("MXN"); await setRate("20"); await saveEvidence(); await confirm();
     mocks.fetch.mockRejectedValueOnce(new TypeError("connection interrupted"));
     await click("Importar partidas");
     expect(container.textContent).toContain("No se pudo confirmar la importación");
     await click("Volver a leer PDF");
     expect(container.querySelector<HTMLInputElement>("#td-confirm")!.checked).toBe(false);
+    expect(container.querySelector<HTMLSelectElement>("select")!.value).toBe("MXN");
+    expect(container.querySelector<HTMLInputElement>('[aria-label="Tipo de cambio USD a MXN"]')!.value).toBe("20");
+    mocks.fetch.mockResolvedValueOnce(response({ ...imported, quote: { ...imported.quote, currency: "MXN" },
+      totals: { ...imported.totals, totalCost: 400, grossProfit: -400 } }));
     await confirm(); await click("Importar partidas");
     const attempts = forms().filter(form => form.get("action") === "apply");
     expect(attempts).toHaveLength(2);
     expect(attempts[1].get("operationId")).toBe(attempts[0].get("operationId"));
     expect(attempts.map(form => form.get("saveCommercialEvidence"))).toEqual(["yes", "yes"]);
+    expect(attempts.map(form => [form.get("costCurrency"), form.get("exchangeRate")])).toEqual([["MXN", "20"], ["MXN", "20"]]);
     expect(mocks.imported).toHaveBeenCalledOnce();
   });
 

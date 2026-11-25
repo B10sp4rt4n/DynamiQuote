@@ -13,6 +13,7 @@ export const editableQuoteLineResponseSchema = z.object({
 });
 
 export const quoteVersionResponseSchema = z.object({
+  currency: z.enum(["USD", "MXN"]).optional(),
   avgMargin: z.number(),
   clientName: z.string(),
   createdAt: z.string(),
@@ -43,6 +44,7 @@ export const quoteLinesPutResponseSchema = z.object({
 });
 
 export const quoteVersionHistoryItemSchema = z.object({
+  currency: z.enum(["USD", "MXN"]).optional(),
   archiveReason: z.string().nullable().optional(),
   commercialOption: z.object({optionId:z.string(),ordinal:z.number(),label:z.string(),revision:z.number()}).nullable().optional(),
   emptyPlaceholder:z.boolean().optional(),

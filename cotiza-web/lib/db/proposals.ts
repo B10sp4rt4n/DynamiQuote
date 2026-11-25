@@ -1,4 +1,5 @@
 import "server-only";
+import { quoteCurrencyFromMetadata, assertQuotePricingCurrency } from "@/lib/domain/quote-currency";
 import { normalizeQuoteName } from "@/lib/domain/quote-name";
 
 import { randomUUID } from "crypto";
@@ -795,6 +796,7 @@ export async function createProposalFromQuoteByTenant(
 
   const quote = await prisma.quote.findFirst({
     select: {
+      input_metadata: true,
       client_id: true,
       client_name: true,
       status: true,
@@ -825,6 +827,10 @@ export async function createProposalFromQuoteByTenant(
 
   if (!quote || quote.status === "archived") {
     return null;
+  }
+  const pricingCurrency = quoteCurrencyFromMetadata(quote.input_metadata);
+  if (pricingCurrency && quote.quote_lines.some(line => decimalToNumber(line.cost_unit) > 0 && decimalToNumber(line.final_price_unit) <= 0)) {
+    throw new Error("Define el margen o precio de venta de las partidas importadas antes de crear la propuesta.");
   }
 
   // Si esta versión de la cotización no tiene propuesta propia (no hubo
@@ -921,6 +927,7 @@ export async function createProposalFromQuoteByTenant(
 
     await tx.formal_proposals.create({
       data: {
+        ...(pricingCurrency ? { currency: pricingCurrency } : {}),
         created_at: now,
         created_by: issuerContactName,
         issuer_company: issuerCompany,
@@ -991,7 +998,7 @@ export async function createProposalFromQuoteByTenant(
     createdAt: now.toISOString(),
     formal: toFormalSlice({
       client_logo_id: catalogContact?.clientLogoId ?? null,
-      currency: null,
+      currency: pricingCurrency ?? null,
       issuer_company: issuerCompany,
       issuer_contact_name: issuerContactName,
       issuer_email: null,
@@ -2259,6 +2266,12 @@ export async function updateProposalWorkflowByTenant(
   const hasCurrencyUpdate =
     input.currency !== undefined &&
     input.currency !== (currentFormal?.currency ?? "");
+  if (hasCurrencyUpdate && (currentFormal?.quoteId || current.origin)) {
+    const pricingQuote = await prisma.quote.findFirst({
+      where: { tenantId, quote_id: currentFormal?.quoteId || current.origin! }, select: { input_metadata: true },
+    });
+    if (pricingQuote) assertQuotePricingCurrency(pricingQuote.input_metadata, input.currency!);
+  }
   const hasValidUntilUpdate =
     input.validUntil !== undefined &&
     input.validUntil !== (currentFormal?.validUntil?.slice(0, 10) ?? "");

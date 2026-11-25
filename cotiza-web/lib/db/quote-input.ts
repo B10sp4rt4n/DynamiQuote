@@ -1,5 +1,6 @@
 import "server-only";
 import { quoteNameLabel } from "@/lib/domain/quote-name";
+import { quoteCurrencyFromMetadata } from "@/lib/domain/quote-currency";
 import { createHash, randomUUID } from "crypto";
 import { Prisma } from "@prisma/client";
 import { prisma } from "@/lib/db/prisma";
@@ -65,6 +66,7 @@ export async function createDraftFromQuoteInput(input: {
       && await tx.proposals.count({ where: { tenant_id: input.tenantId, origin: base.quote_id } }) === 0
       && await tx.formal_proposals.count({ where: { tenant_id: input.tenantId, quote_id: base.quote_id } }) === 0;
     const version = initialFill ? 1 : (latest?.version ?? base.version ?? 1) + 1;
+    const pricingCurrency = quoteCurrencyFromMetadata({ source: input.source }) ?? quoteCurrencyFromMetadata(base.input_metadata);
     const now = new Date();
     const data = {
       quote_id: `${groupId}-v${version}-${randomUUID().slice(0, 8)}`,
@@ -75,6 +77,7 @@ export async function createDraftFromQuoteInput(input: {
       total_cost: combined.totals.totalCost, total_revenue: combined.totals.totalRevenue,
       gross_profit: combined.totals.grossProfit, avg_margin: combined.totals.avgMargin,
       input_metadata: { contractVersion: 1, operationId: input.operationId, inputHash,
+        ...(pricingCurrency ? { pricingCurrency } : {}),
         source: input.source, resolvedInput: incoming.lines, baseQuoteId: base.quote_id,
         mode: input.mode, capturedAt: now.toISOString() } as Prisma.InputJsonObject,
     };
@@ -110,6 +113,7 @@ export async function createDraftFromQuoteInput(input: {
   return {
     lines: lines ?? [], replayed: result.replayed, versionCreated: result.versionCreated,
     quote: { quoteId: q.quote_id, quoteGroupId: q.quote_group_id ?? q.quote_id, version: q.version ?? 1,
+      ...(quoteCurrencyFromMetadata(q.input_metadata) ? { currency: quoteCurrencyFromMetadata(q.input_metadata) } : {}),
       versionCount, status: q.status ?? "draft", createdAt: q.createdAt!.toISOString(),
       clientName: q.client_name ?? "Sin cliente", proposalName: quoteNameLabel(q.proposal_name),
       playbookName: q.playbook_name, totalRevenue: Number(q.total_revenue), avgMargin: Number(q.avg_margin) },
