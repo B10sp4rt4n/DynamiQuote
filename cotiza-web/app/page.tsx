@@ -95,7 +95,7 @@ export default function Home() {
             <div><p className={styles.eyebrow}>A la medida de tu empresa</p><h2 id="company-title">Tu equipo.<br />Tu forma de trabajar.</h2><p>Cada empresa tiene su propio espacio, usuarios, permisos y políticas de margen.</p></div>
             <div className={styles.companyDetails}>
               <div><h3>También en la parte fiscal</h3><p>Pagos en una sola exhibición o diferidos, complementos de pago, cancelaciones y sustituciones, según la configuración fiscal habilitada.</p></div>
-              <div><h3>Funciones que eliges habilitar</h3><p>La importación de cotizaciones PDF de ThreatDown y la evidencia comercial son opcionales por empresa. Tú decides si conservas cada PDF como respaldo.</p></div>
+              <div><h3>Funciones que eliges habilitar</h3><p>La evidencia comercial es opcional por empresa. Tú decides si conservas documentos de respaldo para tus cotizaciones.</p></div>
               <p className={styles.pilotNote}>La vista CRM ampliada está en piloto con acceso restringido; su habilitación se administra por empresa.</p>
             </div>
           </div>
