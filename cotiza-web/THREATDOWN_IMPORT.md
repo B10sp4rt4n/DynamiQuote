@@ -18,6 +18,15 @@ Conserva descripciones de varios renglones. Rechaza tablas incompletas, SKU
 repetidos, fechas inválidas o descuadres. No hace OCR. Límites: 3 MB y 10 páginas.
 No necesita IA ni servicios adicionales.
 
+El lector entrega una copia de los bytes a PDF.js, que transfiere su buffer al
+worker. El original permanece intacto para guardar evidencia y calcular el mismo
+SHA-256 usado en la revisión. Las regresiones usan un PDF digital sintético real.
+
+Una relectura invalida la vista previa anterior hasta obtener una nueva lectura
+válida. Los errores internos distinguen lectura e importación; una respuesta
+incierta de importación se recupera con la misma clave de operación, incluso tras
+releer el mismo archivo. No se atribuyen errores de guardado a una contraseña.
+
 POST /api/quotes/:quoteId/import-threatdown admite multipart con file y action.
 preview no escribe. apply vuelve a leer el original y exige expectedHash,
 operationId UUID y confirmed=yes. Ignora precios, tipo de cambio, margen y
