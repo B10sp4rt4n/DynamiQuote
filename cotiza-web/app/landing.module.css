@@ -1,0 +1,141 @@
+.landing {
+  --ink: #342f28;
+  --muted: #6c645b;
+  --cream: #faf7f0;
+  --terracotta: #9b472e;
+  --green: #3d5948;
+  background: var(--cream);
+  color: var(--ink);
+  font-family: var(--font-geist-sans), Arial, sans-serif;
+  font-size: 16px;
+  line-height: 1.6;
+}
+.container { width: min(1180px, calc(100% - 96px)); margin-inline: auto; }
+.landing h1, .landing h2, .landing h3, .landing p { margin: 0; }
+.landing a { text-decoration: none; }
+.landing a:focus-visible { outline: 3px solid var(--terracotta); outline-offset: 6px; border-radius: 4px; }
+.landing h1, .sectionIntro h2, .capabilitiesIntro h2, .companyInner h2, .closing h2 { font-family: Georgia, "Times New Roman", serif; font-weight: 400; letter-spacing: -0.045em; line-height: 1.08; }
+.landing h1 em, .capabilitiesIntro h2 em, .closing h2 em { color: var(--terracotta); font-weight: 400; }
+.landing .eyebrow { color: var(--terracotta); font-size: 11px; font-weight: 650; letter-spacing: 0.15em; text-transform: uppercase; }
+.skipLink { position: absolute; left: 24px; top: -100px; z-index: 10; background: white; padding: 12px 20px; }
+.skipLink:focus { top: 12px; }
+.header { border-bottom: 1px solid #e7e0d4; }
+.headerInner { display: flex; align-items: center; justify-content: space-between; gap: 24px; min-height: 102px; }
+.navigation { display: flex; align-items: center; gap: 34px; font-size: 13px; font-weight: 500; }
+.navLink { color: var(--muted); }
+.navLink:hover, .textLink:hover, .footer a:hover { color: var(--terracotta); }
+.loginLink { display: inline-flex; align-items: center; gap: 18px; border: 1px solid #d8cabb; padding: 11px 17px; border-radius: 6px; color: var(--ink); }
+.loginLink:hover { background: #f0e8dc; }
+.hero { display: grid; grid-template-columns: 1.05fr 1fr; align-items: center; gap: 60px; padding-block: 76px 88px; }
+.hero h1 { font-size: clamp(50px, 5.1vw, 72px); margin-block: 24px; }
+.heroDescription { max-width: 480px; color: var(--muted); font-size: 16px; line-height: 1.85; }
+.heroActions { display: flex; align-items: center; flex-wrap: wrap; gap: 22px; margin-top: 32px; }
+.primaryButton { display: inline-flex; align-items: center; justify-content: center; gap: 22px; color: #fffaf2; background: var(--terracotta); border: 1px solid var(--terracotta); padding: 14px 22px; border-radius: 6px; font-size: 13px; font-weight: 600; transition: background 150ms; }
+.primaryButton:hover { background: #803721; }
+.textLink { display: inline-flex; gap: 12px; align-items: center; color: var(--ink); font-size: 12px; font-weight: 500; }
+.landing .heroNote { margin-top: 25px; color: var(--muted); font-size: 11px; }
+.heroVisual { background: #eddfcc; border-radius: 160px 160px 12px 12px; padding: 34px 36px 26px; }
+.visualHeading { display: flex; align-items: center; justify-content: center; gap: 10px; margin-bottom: 24px; color: #6c543e; font-size: 11px; }
+.smallSun { font-size: 30px; line-height: 1; color: #9b472e; }
+.paperStack { position: relative; isolation: isolate; }
+.paperStack::before { content: ""; position: absolute; inset: 8px 1px -8px; background: #e4cdb2; border: 1px solid #d7bea2; border-radius: 6px; transform: rotate(-3deg); z-index: -1; }
+.paper { padding: 27px; border: 1px solid #e2d9cb; border-radius: 6px; background: #fffcf6; box-shadow: 0 16px 30px -20px #7b6045; }
+.paperTop { display: flex; justify-content: space-between; align-items: center; gap: 10px; }
+.paperBrand { font-size: 20px; font-weight: 650; letter-spacing: -1px; }
+.paperBrand > span { color: var(--terracotta); }
+.draftBadge { border: 1px solid #e3d9c8; border-radius: 4px; color: #6c5c47; font-size: 9px; padding: 4px 8px; }
+.landing .exampleLabel { margin-top: 27px; color: var(--muted); font-size: 9px; }
+.paper h2 { margin-block: 9px 24px; font-family: Georgia, "Times New Roman", serif; font-size: clamp(24px, 2.3vw, 31px); font-weight: 400; line-height: 1.22; letter-spacing: -0.03em; }
+.paperLines { display: grid; gap: 13px; font-size: 11px; color: var(--muted); }
+.paperLines > div { display: flex; justify-content: space-between; gap: 12px; }
+.paperLines strong { color: var(--ink); font-weight: 500; font-variant-numeric: tabular-nums; }
+.profitBlock { display: flex; align-items: center; justify-content: space-between; flex-wrap: wrap; gap: 12px; background: #eaf0e5; border-radius: 4px; padding: 14px; margin-top: 20px; color: var(--green); }
+.profitBlock > div { display: grid; gap: 2px; }
+.profitBlock > div > span { font-size: 10px; }
+.profitBlock strong { font-size: 25px; line-height: 1.35; font-weight: 500; letter-spacing: -0.04em; }
+.marginBadge { font-size: 9px; border: 1px solid #bcccb5; border-radius: 20px; padding: 4px 7px; }
+.landing .paperFootnote { margin-top: 9px; color: var(--muted); font-size: 9px; }
+.paperFooter { display: flex; align-items: center; justify-content: space-between; border-top: 1px solid #e9e0d3; margin-top: 22px; padding-top: 14px; color: var(--muted); font-size: 10px; }
+.visualNote { display: flex; justify-content: center; align-items: center; gap: 12px; margin-top: 28px; color: #6c543e; font-size: 10px; line-height: 1.8; }
+.visualNote > span { display: grid; place-items: center; width: 26px; height: 26px; background: #f8f1e6; border-radius: 50%; color: var(--green); }
+.visualNote strong { font-weight: 600; }
+.journeySection { background: #eaf0e7; padding-block: 65px 70px; scroll-margin-top: 24px; }
+.journeySection .eyebrow { color: var(--green); }
+.sectionIntro h2 { font-size: 40px; margin-top: 18px; }
+.journey { list-style: none; display: grid; grid-template-columns: repeat(4, minmax(0, 1fr)); gap: 36px; padding: 0; margin: 42px 0 0; }
+.journey li { border-top: 1px solid #bbcabb; padding-top: 18px; }
+.stepNumber { color: var(--green); font-size: 12px; font-weight: 500; }
+.journey h3 { font-size: 14px; font-weight: 600; margin-block: 17px 8px; }
+.journey p { color: #596455; font-size: 12px; line-height: 1.85; }
+.capabilitiesSection { padding-block: 86px; scroll-margin-top: 24px; }
+.capabilitiesIntro { display: grid; grid-template-columns: 1fr 1fr; gap: 60px; align-items: end; margin-bottom: 42px; }
+.capabilitiesIntro h2 { font-size: 48px; margin-top: 18px; }
+.capabilitiesIntro > p { max-width: 430px; color: var(--muted); font-size: 14px; line-height: 1.9; padding-bottom: 5px; }
+.capabilities { display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); column-gap: 60px; }
+.capability { display: flex; align-items: baseline; gap: 22px; padding-block: 28px 32px; border-top: 1px solid #ddd4c7; }
+.featureNumber { color: var(--terracotta); font-size: 11px; }
+.capability h3 { font-size: 17px; font-weight: 550; letter-spacing: -0.025em; }
+.capability p { margin-top: 12px; color: var(--muted); font-size: 13px; line-height: 1.9; }
+.capability .featureDetail { font-size: 11px; color: var(--green); }
+.optionsNote { display: grid; grid-template-columns: 1fr 1fr; gap: 60px; align-items: center; background: #f0e5d6; border-radius: 8px; padding: 34px 38px; margin-top: 30px; }
+.optionsNote .eyebrow { font-size: 9px; }
+.optionsNote h3 { font-family: Georgia, "Times New Roman", serif; font-size: 27px; font-weight: 400; line-height: 1.2; letter-spacing: -0.025em; margin-top: 14px; }
+.optionsNote > p { color: #665543; font-size: 12px; line-height: 1.9; }
+.companySection { background: #f1ede4; padding-block: 64px; }
+.companyInner { display: grid; grid-template-columns: 1fr 1fr; gap: 85px; }
+.companyInner h2 { font-size: 44px; margin-top: 18px; }
+.companyInner > div > p:not(.eyebrow) { max-width: 350px; color: var(--muted); font-size: 13px; line-height: 1.9; margin-top: 22px; }
+.companyDetails { display: grid; gap: 24px; }
+.companyDetails h3 { font-size: 14px; font-weight: 600; }
+.companyDetails p { color: var(--muted); font-size: 12px; line-height: 1.9; margin-top: 8px; }
+.companyDetails .pilotNote { border-top: 1px solid #d9d0c2; padding-top: 17px; margin: 0; font-size: 10px; }
+.closing { text-align: center; padding-block: 82px 90px; }
+.closing h2 { font-size: 48px; margin-block: 20px 30px; }
+.footer { border-top: 1px solid #e3dacd; padding-block: 25px; }
+.footerInner { display: flex; align-items: center; justify-content: space-between; gap: 24px; }
+.footer p, .footer a { color: var(--muted); font-size: 10px; }
+.footer a > span { margin-left: 8px; }
+@media (min-width: 1440px) { .hero { padding-block: 90px 100px; } }
+@media (max-width: 1000px) {
+  .container { width: calc(100% - 64px); }
+  .hero { gap: 35px; }
+  .heroVisual { padding-inline: 22px; }
+  .paper { padding: 21px; }
+  .hero h1 { font-size: 56px; }
+  .navigation { gap: 22px; }
+  .journey { gap: 24px; }
+  .capabilitiesIntro, .capabilities, .optionsNote { column-gap: 36px; }
+  .optionsNote { padding: 30px; }
+  .companyInner { gap: 45px; }
+}
+@media (max-width: 760px) {
+  .container { width: calc(100% - 40px); }
+  .headerInner { min-height: 82px; gap: 15px; }
+  .navLink { display: none; }
+  .loginLink { font-size: 11px; padding: 9px 12px; gap: 8px; }
+  .hero { grid-template-columns: 1fr; gap: 42px; padding-block: 44px 50px; }
+  .hero h1 { font-size: clamp(48px, 9vw, 68px); }
+  .heroDescription { font-size: 15px; max-width: 540px; }
+  .heroActions { gap: 20px; }
+  .heroVisual { width: 100%; max-width: 470px; justify-self: center; padding: 32px 30px 24px; }
+  .paper { padding: 27px; }
+  .paper h2 { font-size: 30px; }
+  .journeySection, .companySection { padding-block: 44px; }
+  .sectionIntro h2 { font-size: 33px; }
+  .journey { grid-template-columns: repeat(2, minmax(0, 1fr)); gap: 28px 24px; margin-top: 30px; }
+  .journey h3 { font-size: 13px; }
+  .capabilitiesSection { padding-block: 50px; }
+  .capabilitiesIntro { grid-template-columns: 1fr; gap: 22px; margin-bottom: 24px; }
+  .capabilitiesIntro h2 { font-size: 42px; }
+  .capabilitiesIntro > p { font-size: 13px; }
+  .capabilities { grid-template-columns: 1fr; }
+  .capability { padding-block: 25px; }
+  .optionsNote { grid-template-columns: 1fr; gap: 20px; padding: 25px; margin-top: 20px; }
+  .companyInner { grid-template-columns: 1fr; gap: 30px; }
+  .companyInner h2 { font-size: 38px; }
+  .closing { padding-block: 52px 60px; }
+  .closing h2 { font-size: 37px; }
+  .footerInner { flex-wrap: wrap; gap: 18px; }
+  .footerInner > p { order: 3; width: 100%; }
+}
+@media (prefers-reduced-motion: reduce) { .primaryButton { transition: none; } }
