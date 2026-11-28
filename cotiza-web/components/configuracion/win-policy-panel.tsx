@@ -15,7 +15,7 @@ export function WinPolicyPanel({ initial, tenantId, tenantName, users }: { initi
   }
   async function save(event: FormEvent) {
     event.preventDefault(); setError(null); setMessage(null);
-    const parsed = winPolicySchema.safeParse({ rules: policy.rules, ...(policy.reviewNoticeUserIds ? { reviewNoticeUserIds: policy.reviewNoticeUserIds } : {}), ...(policy.approvalEmailEnabled !== undefined ? { approvalEmailEnabled: policy.approvalEmailEnabled } : {}), ...(policy.procurementDraftsEnabled !== undefined ? { procurementDraftsEnabled: policy.procurementDraftsEnabled } : {}) });
+    const parsed = winPolicySchema.safeParse({ rules: policy.rules, ...(policy.reviewNoticeUserIds ? { reviewNoticeUserIds: policy.reviewNoticeUserIds } : {}), ...(policy.approvalEmailEnabled !== undefined ? { approvalEmailEnabled: policy.approvalEmailEnabled } : {}), ...(policy.procurementDraftsEnabled !== undefined ? { procurementDraftsEnabled: policy.procurementDraftsEnabled } : {}), ...(policy.customerEvidenceRequired !== undefined ? { customerEvidenceRequired: policy.customerEvidenceRequired } : {}) });
     if (!parsed.success) { setError(parsed.error.issues[0]?.message ?? "Revisa los requisitos"); return; }
     setSaving(true);
     try {
@@ -31,6 +31,10 @@ export function WinPolicyPanel({ initial, tenantId, tenantName, users }: { initi
     <p className="text-sm">Empresa: <strong>{tenantName}</strong>. Configura los OK mínimos antes de consolidar y continuar hacia compras.</p>
     <p className="text-sm text-zinc-600">Sin requisitos adicionales se usa la regla mínima: aceptación del cliente. Los circuitos abiertos conservan la política aplicada; los cierres anteriores se mantienen.</p>
     <form onSubmit={save} className="space-y-4">
+      <label className="flex min-h-11 items-start gap-2 rounded-lg border border-zinc-300 p-3 text-sm">
+        <input type="checkbox" disabled={disabled} checked={policy.customerEvidenceRequired ?? false} onChange={e => { setPolicy({ ...policy, customerEvidenceRequired: e.target.checked }); setMessage(null); }} />
+        Exigir respaldo escrito de la aceptación del cliente antes de consolidar como ganada. Permite pegar un correo o WhatsApp, o adjuntar una orden de compra, contrato o captura. La confirmación verbal queda pendiente hasta completarlo. Se aplica a nuevas aceptaciones de esta empresa.
+      </label>
       <label className="flex min-h-11 items-start gap-2 rounded-lg border border-zinc-300 p-3 text-sm">
         <input type="checkbox" disabled={disabled} checked={policy.procurementDraftsEnabled ?? false} onChange={e => { setPolicy({ ...policy, procurementDraftsEnabled: e.target.checked }); setMessage(null); }} />
         Preparar una requisición interna en borrador al consolidar una nueva ganada. Conserva las partidas, moneda, condiciones y OK de la versión aprobada; requiere revisar después la compra y sus proveedores. Para consolidar se exigirán moneda, descripción, cantidades y costos completos.

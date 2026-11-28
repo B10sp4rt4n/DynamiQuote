@@ -1,4 +1,5 @@
 import { z } from "zod";
+import { customerConfirmationSchema, type CustomerConfirmation } from "./customer-confirmation";
 
 export const winRuleSchema = z.object({
   id: z.string().regex(/^[a-z][a-z0-9_-]{0,39}$/),
@@ -18,6 +19,7 @@ export const winPolicySchema = z.object({
   reviewNoticeUserIds: z.array(z.string().min(1).max(200)).max(30).optional(),
   approvalEmailEnabled: z.boolean().optional(),
   procurementDraftsEnabled: z.boolean().optional(),
+  customerEvidenceRequired: z.boolean().optional(),
 }).strict().superRefine(({ rules }, ctx) => {
   const ids = new Set(rules.map(r => r.id));
   if (ids.size !== rules.length) ctx.addIssue({ code: "custom", message: "Cada requisito necesita una clave única" });
@@ -45,17 +47,21 @@ export type WinCase = {
   acceptedOn: string; acceptedAt: string; acceptedBy: string; acceptanceEvidence: string;
   decisions: Record<string, WinDecision>; consolidatedAt: string | null; cancelledAt: string | null;
   procurementDraftsEnabled?: boolean;
+  customerEvidenceRequired?: boolean;
+  customerConfirmation?: CustomerConfirmation;
 };
 export type WinPolicyVersion = WinPolicy & { revision: number };
 export type WinView = {
   people?: Record<string, string>;
   tenantId: string; proposalId: string; policy: WinPolicyVersion; case: WinCase | null;
-  state: "not_accepted" | "pending" | "blocked" | "stale" | "consolidated" | "legacy" | "cancelled";
+  document?: { proposalNumber: string | null; quoteId: string | null; quoteName?: string | null; quoteVersion?: number | null; customer: string | null; amount: number | null; currency: string | null };
+  state: "not_accepted" | "pending" | "evidence_pending" | "blocked" | "stale" | "consolidated" | "legacy" | "cancelled";
   canRecordAcceptance: boolean; canConsolidate: boolean; canCancel: boolean;
   requirements: Array<WinRule & { decision: WinDecision | null; canDecide: boolean; canWaive: boolean; waitingFor: string[] }>;
 };
 export const winActionSchema = z.discriminatedUnion("action", [
-  z.object({ action: z.literal("accept"), expectedRevision: z.number().int().nonnegative(), expectedPolicyRevision: z.number().int().nonnegative(), acceptedOn: z.string().regex(/^\d{4}-\d{2}-\d{2}$/), evidence: z.string().trim().min(3).max(2000) }).strict(),
+  z.object({ action: z.literal("accept"), expectedRevision: z.number().int().nonnegative(), expectedPolicyRevision: z.number().int().nonnegative(), acceptedOn: z.string().regex(/^\d{4}-\d{2}-\d{2}$/), evidence: z.string().trim().max(20000), confirmation: customerConfirmationSchema.optional() }).strict()
+    .refine(value => value.confirmation || value.evidence.length >= 3, "Registra la confirmación del cliente"),
   z.object({ action: z.literal("decide"), expectedRevision: z.number().int().positive(), ruleId: z.string(), decision: z.enum(["approved", "rejected", "waived"]), evidence: z.string().trim().max(2000) }).strict(),
   z.object({ action: z.enum(["consolidate", "cancel"]), expectedRevision: z.number().int().positive() }).strict(),
 ]);

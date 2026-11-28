@@ -11,6 +11,6 @@ export function WinConsolidationSummary({ proposalId }: { proposalId: string }) 
     return () => controller.abort();
   }, [proposalId]);
   if (!view?.case || ["legacy", "cancelled", "not_accepted"].includes(view.state)) return null;
-  return <span className="mt-2 block text-sm font-medium text-blue-900">{view.state === "consolidated" ? "Ganada consolidada" : view.state === "stale" ? "Documento modificado: revisar aceptación" : view.state === "blocked" ? "Consolidación observada" : "Aceptada: pendiente de consolidación"}
+  return <span className="mt-2 block text-sm font-medium text-blue-900">{view.state === "consolidated" ? "Ganada consolidada" : view.state === "evidence_pending" ? "Respaldo escrito pendiente" : view.state === "stale" ? "Documento modificado: revisar aceptación" : view.state === "blocked" ? "Consolidación observada" : "Aceptada: pendiente de consolidación"}
     {" · "}{view.requirements.filter(r => isSatisfied(r.decision)).length}/{view.requirements.length} OK</span>;
 }

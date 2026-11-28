@@ -165,3 +165,53 @@ como archivo WORM o certificación externa. No agrega servicios ni dependencias
 productivas. Las pruebas PostgreSQL comprueban la migración doble, concurrencia,
 folios por empresa, rollback, roles, RLS e inmutabilidad. El recorrido de navegador
 incluye preparación, revisión, cambios y respuesta perdida a 1360 y 390 px.
+
+## Confirmación escrita del cliente
+
+En Propuesta → Consolidación de ganada se pregunta «¿Con qué evidencia cuentas
+para respaldar que el cliente aceptó esta propuesta?». La pantalla identifica
+folio, cliente, importe/moneda y revisión de la cotización vinculada. Permite
+seleccionar correo, WhatsApp, orden de compra, documento firmado, otra evidencia
+escrita o confirmación verbal; registra quién confirmó y la fecha. El contacto
+es opcional. Se puede pegar el mensaje y su contexto (hasta 20,000 caracteres),
+adjuntar el original, o hacer ambas cosas. La captura de texto es manual: no
+implica verificación del remitente ni del contenido.
+
+Los adjuntos admitidos son PDF, PNG, JPG y EML de hasta 3 MB. Se valida el tipo
+por el contenido además de la extensión; el servidor asigna la referencia del
+archivo. Se guardan los bytes originales y SHA-256 en la misma transacción de
+la aceptación, vinculados a empresa y propuesta. Los reintentos de una misma
+propuesta reutilizan el archivo, conservando las versiones de aceptación en la
+auditoría. La descarga exige sesión Clerk y los permisos actuales de esa propuesta.
+Los archivos se entregan como descarga y no se comparten entre empresas. Esta
+evidencia es independiente de las cotizaciones de fabricantes.
+
+`customerEvidenceRequired` es opcional por empresa, administrado por owner o
+superadmin en Configuración → Reglas de ganada. Su ausencia conserva la política
+anterior; no reclasifica cierres históricos ni circuitos ya abiertos. Al activarlo,
+una confirmación verbal se puede guardar, pero queda como «Respaldo escrito
+pendiente»: no suma ganadas, no permite dar OK ni preparar Compras. Completar
+el respaldo conserva la política aplicada y requiere registrar explícitamente
+la fecha y confirmación escritas. Una nueva política no elimina el requisito
+capturado en un circuito abierto. El endpoint anterior de desenlace tampoco
+puede omitirlo. El cambio de alcance, precio o condiciones sigue invalidando
+la huella y requiere una nueva aceptación; la anterior permanece en auditoría.
+
+Aplicar `cotiza-web/prisma/manual/20261127_customer_acceptance_files.sql` después
+de `20261113_won_consolidation.sql`, antes del código que permita adjuntar. Es
+aditiva e idempotente, sin cambios en políticas o resultados. La captura de texto
+funciona sin la tabla; intentar adjuntar antes de completar la migración devuelve
+un error explícito, sin guardar un cierre parcial. Publicar el código y después
+activar `customerEvidenceRequired` en SynAppsSys; las demás empresas conservan su
+configuración. No se ejecutan correos ni operaciones fiscales para probarlo.
+
+Cuando Compras está habilitado, su snapshot y JSON también conservan medio,
+contacto y referencia/hash del archivo del cliente. La vista ofrece descargar
+ese respaldo con los mismos permisos de propuesta.
+
+Validación adicional: esquema y archivos, rutas JSON/multipart y de descarga,
+formulario con texto y archivo, conservación del texto ante respuesta perdida,
+y PostgreSQL real (migración doble, verbal pendiente, política capturada,
+bloqueo de bypass, aislamiento, bytes originales, deduplicación, copia a Compras
+y rollback). El recorrido de navegador comprueba captura verbal, WhatsApp y EML
+original a 1360 y 390 px con registros sintéticos.

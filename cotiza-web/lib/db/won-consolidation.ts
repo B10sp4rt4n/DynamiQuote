@@ -7,6 +7,8 @@ import { applicableRules, isSatisfied, mayApprove, winPolicySchema, type WinActi
 import { closeDateInstant, earliestCommercialStart, isValidCloseDate, mexicoCalendarDate } from "@/lib/domain/commercial-close-date";
 import { procurementEligibility, validateProcurementBasis, type ProcurementAction, type ProcurementBasis, type ProcurementView } from "@/lib/domain/procurement-draft";
 import { invalidateProcurementInTransaction, prepareProcurementInTransaction, procurementClosureKey, procurementTablesReady, readProcurementDrafts, updateProcurementInTransaction } from "./procurement-store";
+import { isCustomerEvidencePending } from "@/lib/domain/customer-confirmation";
+import { readCustomerEvidence, storeCustomerEvidence, type CustomerEvidenceUpload } from "./customer-evidence";
 
 type Tx = Prisma.TransactionClient;
 export class WinError extends Error {
@@ -46,7 +48,7 @@ export async function invalidateWinCase(tx: Tx, tenantId: string, proposalId: st
 export async function requiresWinCircuit(tx: Tx, tenantId: string, proposalId: string) {
   const policy = await readWinPolicy(tx, tenantId);
   const current = await readCase(tx, tenantId, proposalId);
-  return policy.procurementDraftsEnabled === true || policy.rules.length > 0 || Boolean(current && !current.cancelledAt);
+  return policy.customerEvidenceRequired === true || policy.procurementDraftsEnabled === true || policy.rules.length > 0 || Boolean(current && !current.cancelledAt);
 }
 async function liveActor(tx: Tx, tenantId: string, actor: WinActor): Promise<WinActor> {
   const user = await tx.app_users.findFirst({ where: { user_id: actor.userId, active: true }, select: { tenant_id: true, role: true } });
@@ -83,7 +85,7 @@ export async function listWinCases(tenantId: string, inputActor: WinActor) {
       WHERE c.tenant_id=${tenantId} ORDER BY (c.snapshot->>'acceptedAt') DESC`;
     return rows.filter(row => canSeeAll(actor) || row.created_by_user_id === actor.userId || row.snapshot.rules.some(rule => mayApprove(rule, actor, row.created_by_user_id)))
       .map(row => ({ proposalId: row.proposal_id, acceptedOn: row.snapshot.acceptedOn,
-        state: row.outcome === "won" ? "Ganada consolidada" : row.snapshot.cancelledAt ? "Aceptación retirada" : "Pendiente de consolidación" }));
+        state: row.outcome === "won" ? "Ganada consolidada" : row.snapshot.cancelledAt ? "Aceptación retirada" : isCustomerEvidencePending(row.snapshot) ? "Respaldo escrito pendiente" : "Pendiente de consolidación" }));
   });
 }
 function project(tenantId: string, proposalId: string, policy: WinPolicyVersion, current: WinCase | null, doc: Awaited<ReturnType<typeof document>>, actor: WinActor): WinView {
@@ -91,7 +93,7 @@ function project(tenantId: string, proposalId: string, policy: WinPolicyVersion,
   const owns = canSeeAll(actor) || seller === actor.userId;
   const stale = current !== null && (current.fingerprint !== doc.fingerprint || doc.proposal.status !== "approved");
   const state: WinView["state"] = doc.proposal.outcome === "won" ? current?.consolidatedAt ? "consolidated" : "legacy" :
-    !current ? "not_accepted" : current.cancelledAt ? "cancelled" : stale ? "stale" :
+    !current ? "not_accepted" : current.cancelledAt ? "cancelled" : stale ? "stale" : isCustomerEvidencePending(current) ? "evidence_pending" :
     Object.values(current.decisions).some(d => d.decision === "rejected") ? "blocked" : "pending";
   const active = state === "pending" || state === "blocked";
   const requirements = (current?.rules ?? []).map(rule => ({ ...rule, decision: current?.decisions[rule.id] ?? null,
@@ -100,7 +102,7 @@ function project(tenantId: string, proposalId: string, policy: WinPolicyVersion,
     canWaive: active && rule.allowWaiver && canManage(actor) && (rule.allowSelfApproval || (seller !== null && seller !== actor.userId)),
   }));
   return { tenantId, proposalId, policy, case: current, state, requirements,
-    canRecordAcceptance: owns && doc.proposal.status === "approved" && !doc.proposal.outcome && ["not_accepted", "cancelled", "stale"].includes(state),
+    canRecordAcceptance: owns && doc.proposal.status === "approved" && !doc.proposal.outcome && ["not_accepted", "cancelled", "stale", "evidence_pending"].includes(state),
     canCancel: owns && current !== null && !current.cancelledAt && !current.consolidatedAt,
     canConsolidate: owns && state === "pending" && requirements.every(r => isSatisfied(r.decision)),
   };
@@ -114,7 +116,13 @@ export async function getWinView(tenantId: string, proposalId: string, inputActo
   return prisma.$transaction(async tx => {
     const actor = await liveActor(tx, tenantId, inputActor);
     const [policy, current, doc] = await Promise.all([readWinPolicy(tx, tenantId), readCase(tx, tenantId, proposalId), document(tx, tenantId, proposalId, actor)]);
-    return withPeople(tx, tenantId, project(tenantId, proposalId, policy, current, doc, actor));
+    const [number, quote] = await Promise.all([
+      doc.formal[0] ? tx.formal_proposals.findUnique({ where: { proposal_doc_id: doc.formal[0].proposal_doc_id }, select: { proposal_number: true } }) : null,
+      doc.formal[0]?.quote_id ? tx.quote.findFirst({ where: { tenantId, quote_id: doc.formal[0].quote_id }, select: { proposal_name: true, version: true } }) : null,
+    ]);
+    return withPeople(tx, tenantId, { ...project(tenantId, proposalId, policy, current, doc, actor),
+      document: { proposalNumber: number?.proposal_number ?? null, quoteId: doc.formal[0]?.quote_id ?? null, quoteName: quote?.proposal_name ?? null, quoteVersion: quote?.version ?? null,
+        customer: doc.formal[0]?.recipient_company ?? null, amount: doc.amount, currency: doc.currency } });
   }, { isolationLevel: Prisma.TransactionIsolationLevel.RepeatableRead });
 }
 export async function saveWinPolicy(tenantId: string, inputActor: WinActor, policy: unknown, expectedRevision: number): Promise<WinPolicyVersion> {
@@ -175,6 +183,7 @@ export async function getApprovalNotices(tenantId: string, inputActor: WinActor)
         AND c.snapshot->>'cancelledAt' IS NULL AND c.snapshot->>'consolidatedAt' IS NULL
       ORDER BY c.snapshot->>'acceptedAt' DESC,c.proposal_id LIMIT 100`;
     for (const item of cases) {
+      if (isCustomerEvidencePending(item.snapshot)) continue;
       const rules = item.snapshot.rules.filter(rule => !item.snapshot.decisions[rule.id]
         && rule.dependsOn.every(id => isSatisfied(item.snapshot.decisions[id])) && mayApprove(rule, actor, item.created_by_user_id));
       if (!rules.length) continue;
@@ -188,7 +197,7 @@ export async function getApprovalNotices(tenantId: string, inputActor: WinActor)
     return notices;
   }, { isolationLevel: Prisma.TransactionIsolationLevel.RepeatableRead });
 }
-export async function actOnWin(tenantId: string, proposalId: string, inputActor: WinActor, input: WinAction): Promise<WinView> {
+export async function actOnWin(tenantId: string, proposalId: string, inputActor: WinActor, input: WinAction, file?: CustomerEvidenceUpload): Promise<WinView> {
   return prisma.$transaction(async tx => {
     // Same lock order as the legacy outcome writer. No external side effects in this transaction.
     await lockWinPolicy(tx, tenantId);
@@ -201,6 +210,7 @@ export async function actOnWin(tenantId: string, proposalId: string, inputActor:
     let view = project(tenantId, proposalId, policy, current, doc, actor);
     if (input.expectedRevision !== (current?.revision ?? 0)) throw new WinError("El circuito cambió. Recarga antes de continuar");
     const now = new Date();
+    if (file && (input.action !== "accept" || !input.confirmation || input.confirmation.channel === "verbal")) throw new WinError("Selecciona el medio escrito al que corresponde el archivo", 422);
     if (input.action === "accept") {
       if (!view.canRecordAcceptance) throw new WinError("La propuesta debe estar autorizada, sin desenlace y sin un circuito vigente");
       if (input.expectedPolicyRevision !== policy.revision) throw new WinError("La política cambió. Recarga antes de registrar la aceptación");
@@ -208,12 +218,20 @@ export async function actOnWin(tenantId: string, proposalId: string, inputActor:
       const start = earliestCommercialStart(doc.proposal.created_at, opportunity?.created_at)!;
       if (!isValidCloseDate(input.acceptedOn, start, now, false)) throw new WinError("La aceptación debe estar entre el alta comercial y hoy", 422);
       if (await hasAnotherBusinessWin(tx, tenantId, doc.proposal)) throw new WinError("Este negocio ya tiene una propuesta ganada");
-      if (policy.rules.some(r => r.minimumAmount !== null) && (doc.amount === null || !Number.isFinite(doc.amount))) throw new WinError("El importe integrado no está disponible para evaluar los umbrales");
+      // Completing a verbal acceptance keeps the policy already pinned to that circuit.
+      const continuing = view.state === "evidence_pending" ? current : null;
+      if (!continuing && policy.rules.some(r => r.minimumAmount !== null) && (doc.amount === null || !Number.isFinite(doc.amount))) throw new WinError("El importe integrado no está disponible para evaluar los umbrales");
       let rules;
-      try { rules = applicableRules(policy, doc.amount ?? 0, doc.currency); } catch (e) { throw new WinError((e as Error).message, 422); }
-      current = { revision: (current?.revision ?? 0) + 1, policyRevision: policy.revision, rules, fingerprint: doc.fingerprint,
+      try { rules = continuing?.rules ?? applicableRules(policy, doc.amount ?? 0, doc.currency); } catch (e) { throw new WinError((e as Error).message, 422); }
+      const customerEvidenceRequired = continuing ? continuing.customerEvidenceRequired === true : policy.customerEvidenceRequired === true;
+      if (customerEvidenceRequired && !input.confirmation) throw new WinError("Indica el medio y quién confirmó por parte del cliente", 422);
+      if ((!input.confirmation || input.confirmation.channel !== "verbal") && input.evidence.trim().length < 3 && !file) throw new WinError("Pega la confirmación escrita o adjunta el respaldo", 422);
+      const attachment = file ? await storeCustomerEvidence(tx, tenantId, proposalId, actor.userId, file) : undefined;
+      current = { revision: (current?.revision ?? 0) + 1, policyRevision: continuing?.policyRevision ?? policy.revision, rules, fingerprint: doc.fingerprint,
         acceptedOn: input.acceptedOn, acceptedAt: now.toISOString(), acceptedBy: actor.userId, acceptanceEvidence: input.evidence,
-        decisions: {}, consolidatedAt: null, cancelledAt: null, procurementDraftsEnabled: policy.procurementDraftsEnabled === true };
+        ...(input.confirmation ? { customerConfirmation: { ...input.confirmation, ...(attachment ? { attachment } : {}) } } : {}),
+        customerEvidenceRequired, decisions: {}, consolidatedAt: null, cancelledAt: null,
+        procurementDraftsEnabled: continuing ? continuing.procurementDraftsEnabled : policy.procurementDraftsEnabled === true };
     } else {
       if (!current) throw new WinError("Registra primero la aceptación");
       if (input.action === "cancel") {
@@ -240,7 +258,7 @@ export async function actOnWin(tenantId: string, proposalId: string, inputActor:
       }
     }
     // Minimal policy consolidates immediately; a multi-step circuit needs an explicit final action.
-    if (input.action === "consolidate" || (input.action === "accept" && current.rules.length === 0)) {
+    if (input.action === "consolidate" || (input.action === "accept" && current.rules.length === 0 && !isCustomerEvidencePending(current))) {
       if (await hasAnotherBusinessWin(tx, tenantId, doc.proposal)) throw new WinError("Este negocio ya tiene una propuesta ganada");
       const consolidatedAt = now.toISOString();
       const outcomeAt = current.rules.length === 0 ? closeDateInstant(current.acceptedOn) : closeDateInstant(mexicoCalendarDate(now));
@@ -259,6 +277,14 @@ export async function actOnWin(tenantId: string, proposalId: string, inputActor:
   });
 }
 
+export async function getCustomerEvidenceFile(tenantId: string, proposalId: string, evidenceId: string, inputActor: WinActor) {
+  return prisma.$transaction(async tx => {
+    const actor = await liveActor(tx, tenantId, inputActor);
+    await document(tx, tenantId, proposalId, actor);
+    return readCustomerEvidence(tx, tenantId, proposalId, evidenceId);
+  }, { isolationLevel: Prisma.TransactionIsolationLevel.RepeatableRead });
+}
+
 async function procurementBasis(tx: Tx, tenantId: string, current: WinCase, doc: Awaited<ReturnType<typeof document>>): Promise<ProcurementBasis> {
   const reason = procurementEligibility(current,doc.proposal.outcome,doc.proposal.status,doc.fingerprint);
   if (reason) throw new WinError(reason);
@@ -271,6 +297,7 @@ async function procurementBasis(tx: Tx, tenantId: string, current: WinCase, doc:
       currency:doc.currency,terms:formal?.terms_and_conditions??"",fingerprint:doc.fingerprint,
       winRevision:current.revision,policyRevision:current.policyRevision,acceptedAt:current.acceptedAt,consolidatedAt:current.consolidatedAt,
       acceptedBy:current.acceptedBy,acceptanceEvidence:current.acceptanceEvidence,
+      ...(current.customerConfirmation ? { customerConfirmation: current.customerConfirmation } : {}),
       approvals:current.rules.map(rule=>({ruleId:rule.id,label:rule.label,...current.decisions[rule.id]})),
       items:doc.items.map(item=>({itemId:item.item_id,itemNumber:item.item_number,sku:item.sku,description:item.description,
         quantity:Number(item.quantity),costUnit:item.cost_unit===null?null:Number(item.cost_unit),
