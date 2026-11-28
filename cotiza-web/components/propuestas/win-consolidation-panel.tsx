@@ -5,6 +5,9 @@ import Link from "next/link";
 import { mexicoCalendarDate } from "@/lib/domain/commercial-close-date";
 import { isSatisfied, type WinAction, type WinView } from "@/lib/domain/won-consolidation";
 import { CUSTOMER_CONFIRMATION_CHANNELS, type CustomerConfirmationInput } from "@/lib/domain/customer-confirmation";
+import { customerEmailPreviewSchema, type CustomerEmailPreview } from "@/lib/domain/customer-email";
+import { CustomerEmailSummary } from "./customer-email-summary";
+type EmailFormValues = { confirmedBy: string; contact: string; acceptedOn: string; evidence: string };
 const STATES: Record<WinView["state"], string> = {
   not_accepted: "Aceptación pendiente", pending: "Aceptada · pendiente de consolidación", blocked: "Aceptada · requiere corrección",
   evidence_pending: "Respaldo escrito pendiente",
@@ -19,8 +22,13 @@ export function WinConsolidationPanel({ proposalId, tenantId }: { proposalId: st
   const [confirmation, setConfirmation] = useState<CustomerConfirmationInput>({ channel: "email", confirmedBy: "", contact: "" });
   const [file, setFile] = useState<File | null>(null);
   const fileInput = useRef<HTMLInputElement>(null);
+  const emailRequest = useRef<AbortController | null>(null);
+  const appliedEmail = useRef<{ before: EmailFormValues; after: EmailFormValues } | null>(null);
+  const [emailPreview, setEmailPreview] = useState<CustomerEmailPreview | null>(null);
+  const [emailLoading, setEmailLoading] = useState(false), [emailError, setEmailError] = useState<string | null>(null);
   const [decisionNotes, setDecisionNotes] = useState<Record<string, string>>({});
   const [reload, setReload] = useState(0);
+  useEffect(() => () => emailRequest.current?.abort(), []);
   useEffect(() => {
     const controller = new AbortController();
     fetch(`/api/proposals/${encodeURIComponent(proposalId)}/consolidation`, { signal: controller.signal, cache: "no-store" })
@@ -38,6 +46,45 @@ export function WinConsolidationPanel({ proposalId, tenantId }: { proposalId: st
       }).catch(err => { if (!controller.signal.aborted) setError(err instanceof Error ? err.message : "No se pudo cargar el circuito"); });
     return () => controller.abort();
   }, [proposalId, tenantId, reload]);
+  function clearEmailAutofill() {
+    emailRequest.current?.abort(); setEmailLoading(false); setEmailPreview(null); setEmailError(null);
+    const values: EmailFormValues = { confirmedBy: confirmation.confirmedBy, contact: confirmation.contact, acceptedOn, evidence };
+    const applied = appliedEmail.current;
+    if (applied) {
+      for (const key of ["confirmedBy", "contact", "acceptedOn", "evidence"] as const) {
+        if (values[key] === applied.after[key]) values[key] = applied.before[key];
+      }
+      setConfirmation(current => ({ ...current, confirmedBy: values.confirmedBy, contact: values.contact }));
+      setAcceptedOn(values.acceptedOn); setEvidence(values.evidence);
+    }
+    appliedEmail.current = null;
+    return values;
+  }
+  async function selectEvidenceFile(selected: File | null) {
+    const baseline = clearEmailAutofill();
+    if (selected && selected.size > 3 * 1024 * 1024) { setError("El archivo debe ocupar como máximo 3 MB."); setFile(null); return; }
+    setFile(selected); setError(null);
+    if (!selected || confirmation.channel !== "email" || !selected.name.toLowerCase().endsWith(".eml") || !view) return;
+    const controller = new AbortController(); emailRequest.current = controller; setEmailLoading(true);
+    try {
+      const form = new FormData(); form.set("data", JSON.stringify({ action: "preview-email" })); form.set("file", selected);
+      const response = await fetch(`/api/proposals/${encodeURIComponent(proposalId)}/consolidation/email-preview`, {
+        method: "POST", headers: { "X-Tenant-Context": view.tenantId }, body: form, signal: controller.signal,
+      });
+      const body = await response.json();
+      if (controller.signal.aborted) return;
+      if (!response.ok) throw new Error(body.error ?? "No se pudo leer el correo. Vuelve a adjuntar el original .eml.");
+      if (body.tenantId !== view.tenantId || body.proposalId !== proposalId) throw new Error("La empresa o propuesta activa cambió. Recarga antes de continuar.");
+      const preview = customerEmailPreviewSchema.parse(body);
+      const filled = { confirmedBy: preview.email.senderName ?? preview.email.senderEmail ?? "", contact: preview.email.senderEmail ?? "",
+        acceptedOn: preview.acceptedOn ?? "", evidence: preview.suggestedEvidence };
+      appliedEmail.current = { before: baseline, after: filled };
+      setConfirmation(current => ({ ...current, confirmedBy: filled.confirmedBy, contact: filled.contact }));
+      setAcceptedOn(filled.acceptedOn); setEvidence(filled.evidence); setEmailPreview(preview);
+    } catch (err) {
+      if (!controller.signal.aborted) setEmailError(err instanceof Error ? err.message : "No se pudo leer el correo");
+    } finally { if (!controller.signal.aborted) setEmailLoading(false); }
+  }
   async function submit(input: WinAction) {
     if (!view || busy || uncertain) return;
     setBusy(true); setError(null);
@@ -52,6 +99,7 @@ export function WinConsolidationPanel({ proposalId, tenantId }: { proposalId: st
       setView({ ...body, document: view.document }); setDecisionNotes({});
       if (input.action === "accept") {
         setFile(null); setEvidence("");
+        setEmailPreview(null); appliedEmail.current = null;
         if (body.state === "evidence_pending") setConfirmation(current => ({ ...current, channel: "email" }));
       }
       window.dispatchEvent(new Event("cotiza:approval-requests-changed")); router.refresh();
@@ -61,9 +109,13 @@ export function WinConsolidationPanel({ proposalId, tenantId }: { proposalId: st
   }
   function accept(event: FormEvent) {
     event.preventDefault();
-    if (view) void submit({ action: "accept", expectedRevision: view.case?.revision ?? 0, expectedPolicyRevision: view.policy.revision, acceptedOn, evidence, confirmation });
+    if (emailLoading || (file && confirmation.channel === "email" && file.name.toLowerCase().endsWith(".eml") && !emailPreview)) return;
+    if (view) void submit({ action: "accept", expectedRevision: view.case?.revision ?? 0, expectedPolicyRevision: view.policy.revision, acceptedOn, evidence,
+      confirmation: { ...confirmation, ...(emailPreview ? { emailSourceHash: emailPreview.email.sha256 } : {}) } });
   }
   const disabled = busy || uncertain;
+  const readingEmail = emailLoading || Boolean(file && confirmation.channel === "email" && file.name.toLowerCase().endsWith(".eml") && !emailPreview);
+  const editingDisabled = disabled || emailLoading;
   const evidenceRequired = view?.state === "evidence_pending" ? view.case?.customerEvidenceRequired : view?.policy.customerEvidenceRequired;
   return <section className="space-y-3 rounded-xl border border-blue-200 bg-blue-50 p-4 text-zinc-900 [color-scheme:light]" aria-label="Consolidación de ganada">
     <h2 className="text-lg font-semibold text-zinc-900">Consolidación de ganada</h2>
@@ -81,6 +133,7 @@ export function WinConsolidationPanel({ proposalId, tenantId }: { proposalId: st
         {view.case.customerConfirmation ? <>
           <p className="mt-1 font-medium">{view.case.customerConfirmation.channel === "verbal" ? "Respaldo escrito pendiente · confirmación verbal" : CUSTOMER_CONFIRMATION_CHANNELS[view.case.customerConfirmation.channel]}</p>
           <p>Confirmó: {view.case.customerConfirmation.confirmedBy}{view.case.customerConfirmation.contact ? ` · ${view.case.customerConfirmation.contact}` : ""}.</p>
+          {view.case.customerConfirmation.email ? <CustomerEmailSummary email={view.case.customerConfirmation.email} /> : null}
           {view.case.customerConfirmation.attachment ? <a className="mt-2 inline-block break-all font-medium text-blue-800 underline"
             href={`/api/proposals/${encodeURIComponent(proposalId)}/consolidation/evidence/${encodeURIComponent(view.case.customerConfirmation.attachment.id)}`}>Descargar respaldo: {view.case.customerConfirmation.attachment.filename}</a> : null}
         </> : null}
@@ -92,35 +145,40 @@ export function WinConsolidationPanel({ proposalId, tenantId }: { proposalId: st
         <h3 className="font-semibold text-zinc-950">¿Con qué evidencia cuentas para respaldar que el cliente aceptó esta propuesta?</h3>
         <p className="text-sm text-zinc-700">Puedes adjuntar un archivo, pegar el mensaje de confirmación o hacer ambas cosas.</p>
         <label className="block text-sm font-medium">Medio de confirmación
-          <select value={confirmation.channel} disabled={disabled} onChange={e => { setConfirmation({ ...confirmation, channel: e.target.value as CustomerConfirmationInput["channel"] }); setFile(null); }} className="mt-1 block w-full rounded-lg border border-zinc-500 bg-white p-2 text-zinc-900">
+          <select value={confirmation.channel} disabled={disabled} onChange={e => { clearEmailAutofill(); setConfirmation(current => ({ ...current, channel: e.target.value as CustomerConfirmationInput["channel"] })); setFile(null); }} className="mt-1 block w-full rounded-lg border border-zinc-500 bg-white p-2 text-zinc-900">
             {Object.entries(CUSTOMER_CONFIRMATION_CHANNELS).map(([value, label]) => <option key={value} value={value}>{label}</option>)}
           </select></label>
         {confirmation.channel !== "verbal" ? <div className="space-y-3 rounded-lg border border-zinc-400 bg-zinc-50 p-4 text-zinc-900">
           <h4 className="font-semibold">Adjuntar archivo de correo o respaldo</h4>
           <p className="text-sm text-zinc-700">Correo original <strong>.eml</strong>, PDF o captura PNG/JPG. Máximo 3 MB.</p>
+          {confirmation.channel === "email" ? <p className="text-sm text-zinc-700">Al adjuntar un .eml se completan el remitente, la fecha de envío y el texto de la respuesta con su contexto.</p> : null}
           <input ref={fileInput} key={`${confirmation.channel}:${file === null ? "empty" : "selected"}`} type="file" accept=".pdf,.png,.jpg,.jpeg,.eml" disabled={disabled} hidden aria-label="Archivo de respaldo del cliente"
-            onChange={e => { const selected = e.target.files?.[0] ?? null; if (selected && selected.size > 3 * 1024 * 1024) { setError("El archivo debe ocupar como máximo 3 MB."); e.target.value = ""; setFile(null); } else { setFile(selected); setError(null); } }} />
-          <button type="button" disabled={disabled} onClick={() => fileInput.current?.click()}
+            onChange={e => void selectEvidenceFile(e.target.files?.[0] ?? null)} />
+          <button type="button" disabled={disabled} onClick={() => { if (fileInput.current) { fileInput.current.value = ""; fileInput.current.click(); } }}
             className="min-h-11 rounded-lg bg-blue-800 px-4 py-3 text-sm font-semibold text-white hover:bg-blue-900 focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-blue-800 disabled:opacity-60">
             {confirmation.channel === "email" ? "Adjuntar archivo de correo" : "Adjuntar respaldo"}
           </button>
           <p aria-live="polite" className="break-all text-sm font-medium text-zinc-900">{file ? `Archivo seleccionado: ${file.name}` : "Ningún archivo seleccionado."}</p>
-          {file ? <button type="button" disabled={disabled} onClick={() => setFile(null)} className="min-h-11 rounded-lg border border-zinc-500 bg-white px-3 py-2 text-sm text-zinc-900">Quitar archivo</button> : null}
+          {emailLoading ? <p role="status" className="font-medium text-blue-950">Leyendo remitente, fecha y respuesta del correo…</p> : null}
+          {emailError ? <p role="alert" className="font-medium text-rose-800">{emailError}</p> : null}
+          {emailPreview ? <CustomerEmailSummary email={emailPreview.email} /> : null}
+          {file ? <button type="button" disabled={disabled} onClick={() => { clearEmailAutofill(); setFile(null); }} className="min-h-11 rounded-lg border border-zinc-500 bg-white px-3 py-2 text-sm text-zinc-900">Quitar archivo</button> : null}
           <p className="text-xs text-zinc-700">El archivo se guardará al registrar la aceptación. También puedes pegar el texto de confirmación en el campo de abajo.</p>
         </div> : null}
         <label className="block text-sm font-medium">¿Quién confirmó por parte del cliente?
-          <input required minLength={2} maxLength={200} value={confirmation.confirmedBy} disabled={disabled} onChange={e => setConfirmation({ ...confirmation, confirmedBy: e.target.value })} className="mt-1 block w-full rounded-lg border border-zinc-500 bg-white p-2 text-zinc-900" /></label>
+          <input required minLength={2} maxLength={200} value={confirmation.confirmedBy} disabled={editingDisabled} onChange={e => setConfirmation({ ...confirmation, confirmedBy: e.target.value })} className="mt-1 block w-full rounded-lg border border-zinc-500 bg-white p-2 text-zinc-900" /></label>
         <label className="block text-sm font-medium">Correo o teléfono del contacto (opcional)
-          <input maxLength={300} value={confirmation.contact} disabled={disabled} onChange={e => setConfirmation({ ...confirmation, contact: e.target.value })} className="mt-1 block w-full rounded-lg border border-zinc-500 bg-white p-2 text-zinc-900" /></label>
+          <input maxLength={300} value={confirmation.contact} disabled={editingDisabled} onChange={e => setConfirmation({ ...confirmation, contact: e.target.value })} className="mt-1 block w-full rounded-lg border border-zinc-500 bg-white p-2 text-zinc-900" /></label>
         <label className="block text-sm font-medium">Fecha de aceptación del cliente
-          <input type="date" required max={mexicoCalendarDate(new Date())} value={acceptedOn} disabled={disabled}
+          <input type="date" required max={mexicoCalendarDate(new Date())} value={acceptedOn} disabled={editingDisabled}
             onChange={e => setAcceptedOn(e.target.value)} className="mt-1 block max-w-full rounded-lg border border-zinc-500 bg-white p-2 text-zinc-900" /></label>
+        {emailPreview ? <p className="text-xs text-zinc-700">Se completó con la fecha de envío. Puedes ajustar la fecha de aceptación; la fecha original del correo se conserva por separado.</p> : null}
         <label className="block text-sm font-medium">{confirmation.channel === "verbal" ? "Notas de la confirmación verbal (opcional)" : "Pega la confirmación o los mensajes relevantes"}
-          <textarea required={confirmation.channel !== "verbal" && !file} minLength={3} maxLength={20000} rows={5} value={evidence} disabled={disabled} onChange={e => setEvidence(e.target.value)}
+          <textarea required={confirmation.channel !== "verbal" && !file} minLength={3} maxLength={20000} rows={5} value={evidence} disabled={editingDisabled} onChange={e => setEvidence(e.target.value)}
             placeholder="Incluye el mensaje y el contexto que identifica la propuesta, condiciones o versión aceptadas." className="mt-1 block w-full rounded-lg border border-zinc-500 bg-white p-2 text-zinc-900 placeholder:text-zinc-600" /></label>
-        <p className="text-xs text-zinc-600">El texto pegado se registra como captura manual. Incluye el contexto si la respuesta del cliente solo dice «adelante».</p>
+        <p className="text-xs text-zinc-600">{emailPreview ? "Texto completado a partir del correo. Puedes revisarlo o ajustarlo; el mensaje original y sus datos se conservan en el respaldo." : "El texto pegado se registra como captura manual. Incluye el contexto si la respuesta del cliente solo dice «adelante»."}</p>
         <p className="text-xs text-zinc-600">{evidenceRequired && confirmation.channel === "verbal" ? "Se guardará con respaldo escrito pendiente. Esta empresa exige completarlo antes de consolidar como ganada." : (view.state === "evidence_pending" ? view.case?.rules.length : view.policy.rules.length) ? "Se aplicarán los requisitos de la política vigente según sus condiciones." : "Sin requisitos adicionales y con el respaldo exigido completo, registrar la aceptación consolidará la ganada de inmediato."}</p>
-        <button disabled={disabled || confirmation.confirmedBy.trim().length < 2 || (view.state === "evidence_pending" && confirmation.channel === "verbal") || (confirmation.channel !== "verbal" && evidence.trim().length < 3 && !file)} className="min-h-11 rounded-lg bg-blue-800 px-4 py-2 font-medium text-white disabled:opacity-50">{view.state === "evidence_pending" ? "Completar respaldo del cliente" : "Registrar aceptación del cliente"}</button>
+        <button disabled={disabled || readingEmail || !acceptedOn || confirmation.confirmedBy.trim().length < 2 || (view.state === "evidence_pending" && confirmation.channel === "verbal") || (confirmation.channel !== "verbal" && evidence.trim().length < 3 && !file)} className="min-h-11 rounded-lg bg-blue-800 px-4 py-2 font-medium text-white disabled:opacity-50">{view.state === "evidence_pending" ? "Completar respaldo del cliente" : "Registrar aceptación del cliente"}</button>
       </form> : null}
       {view.requirements.length ? <ul className="space-y-3">{view.requirements.map(rule => <li key={rule.id} className="min-w-0 break-words rounded-lg border border-zinc-200 bg-white p-3 text-sm">
         <h3 className="font-semibold text-zinc-950">{rule.label} · {rule.decision?.decision === "approved" ? "OK" : rule.decision?.decision === "waived" ? "Excepción autorizada" : rule.decision?.decision === "rejected" ? "Observado" : "Pendiente"}</h3>
@@ -147,6 +205,6 @@ export function WinConsolidationPanel({ proposalId, tenantId }: { proposalId: st
       <Link href="/autorizaciones" className="block text-sm font-medium text-blue-800 underline">Ver autorizaciones de la empresa</Link>
     </> : null}
     {error ? <p role="alert" className="text-sm font-medium text-rose-800">{error}</p> : null}
-    {(error || view) ? <button type="button" disabled={busy} onClick={() => { setView(null); setError(null); setDecisionNotes({}); setReload(reload + 1); }} className="min-h-11 rounded-lg border border-zinc-400 bg-white px-3 py-2 text-sm text-zinc-800">Recargar autorizaciones</button> : null}
+    {(error || view) ? <button type="button" disabled={busy || emailLoading} onClick={() => { setView(null); setError(null); setDecisionNotes({}); setReload(reload + 1); }} className="min-h-11 rounded-lg border border-zinc-400 bg-white px-3 py-2 text-sm text-zinc-800">Recargar autorizaciones</button> : null}
   </section>;
 }

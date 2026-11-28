@@ -1,4 +1,5 @@
 import { z } from "zod";
+import { customerEmailSchema } from "./customer-email";
 
 export const CUSTOMER_CONFIRMATION_CHANNELS = {
   email: "Correo de confirmación",
@@ -13,13 +14,14 @@ export const customerConfirmationSchema = z.object({
   channel: z.enum(["email", "whatsapp", "purchase_order", "signed_document", "other", "verbal"]),
   confirmedBy: z.string().trim().min(2, "Indica quién confirmó por parte del cliente").max(200),
   contact: z.string().trim().max(300),
+  emailSourceHash: z.string().regex(/^[a-f0-9]{64}$/).optional(),
 }).strict();
 export type CustomerConfirmationInput = z.infer<typeof customerConfirmationSchema>;
 export const customerEvidenceAttachmentSchema = z.object({
   id: z.uuid(), filename: z.string().min(1).max(200), mimeType: z.enum(["application/pdf", "image/png", "image/jpeg", "message/rfc822"]), sha256: z.string().regex(/^[a-f0-9]{64}$/),
 }).strict();
 export type CustomerEvidenceAttachment = z.infer<typeof customerEvidenceAttachmentSchema>;
-export const customerConfirmationRecordSchema = customerConfirmationSchema.extend({ attachment: customerEvidenceAttachmentSchema.optional() });
+export const customerConfirmationRecordSchema = customerConfirmationSchema.omit({ emailSourceHash: true }).extend({ attachment: customerEvidenceAttachmentSchema.optional(), email: customerEmailSchema.optional() });
 export type CustomerConfirmation = z.infer<typeof customerConfirmationRecordSchema>;
 
 export function hasWrittenCustomerEvidence(evidence: string, confirmation?: CustomerConfirmation) {

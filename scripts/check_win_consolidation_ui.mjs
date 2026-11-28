@@ -1,5 +1,6 @@
 // Real React panels, synthetic HTTP responses only. No operational data or emails.
 import assert from 'node:assert/strict';
+import { createHash } from 'node:crypto';
 import { createServer } from 'node:http';
 import { mkdtemp, mkdir, readFile, writeFile } from 'node:fs/promises';
 import { tmpdir } from 'node:os';
@@ -40,6 +41,9 @@ await new Promise(resolve => server.listen(0, '127.0.0.1', resolve));
 const origin = 'http://127.0.0.1:' + server.address().port;
 const { chromium } = await import(process.env.PLAYWRIGHT_MODULE || 'playwright');
 const results = []; let browser;
+const emailSource=Buffer.from('From: Ana Cliente <cliente@example.test>\r\nDate: Fri, 27 Nov 2026 20:45:00 -0600\r\nSubject: Acepto PROP-SINTÉTICA\r\nMessage-ID: <reply@example.test>\r\nIn-Reply-To: <proposal@example.test>\r\nContent-Type: text/plain; charset=utf-8\r\n\r\nAdelante con la revisión 2.\r\n\r\nEl 27 nov 2026, Ventas escribió:\r\n> PROP-SINTÉTICA revisión 2 por 100 USD');
+const emailPreview={acceptedOn:'2026-11-27',suggestedEvidence:'Adelante con la revisión 2.\n\n--- Contexto de la respuesta ---\nEl 27 nov 2026, Ventas escribió:\n> PROP-SINTÉTICA revisión 2 por 100 USD',
+  email:{sha256:createHash('sha256').update(emailSource).digest('hex'),senderName:'Ana Cliente',senderEmail:'cliente@example.test',fromHeader:'Ana Cliente <cliente@example.test>',sentAt:'2026-11-28T02:45:00.000Z',dateHeader:'Fri, 27 Nov 2026 20:45:00 -0600',subject:'Acepto PROP-SINTÉTICA',messageId:'<reply@example.test>',inReplyTo:'<proposal@example.test>',replyText:'Adelante con la revisión 2.',quotedContext:'El 27 nov 2026, Ventas escribió:\n> PROP-SINTÉTICA revisión 2 por 100 USD',textTruncated:false,warnings:[]}};
 try {
   for (const {width, colorScheme} of [1360, 390].flatMap(width => ['light', 'dark'].map(colorScheme => ({width, colorScheme})))) {
     browser = await chromium.launch({ headless: true, ...(process.env.CHROMIUM_EXECUTABLE ? { executablePath: process.env.CHROMIUM_EXECUTABLE } : {}), args: ['--no-sandbox', '--disable-dev-shm-usage', ...(process.env.WIN_CHROMIUM_SINGLE_PROCESS ? ['--single-process','--no-zygote'] : [])] });
@@ -50,6 +54,12 @@ try {
     await page.route('**/*', async route => {
       const req = route.request(), url = new URL(req.url()); assert.equal(url.origin, origin);
       if (!url.pathname.startsWith('/api/')) return route.continue();
+      if (url.pathname.endsWith('/consolidation/email-preview')) {
+        const form=await new Response(req.postDataBuffer(),{headers:{'Content-Type':req.headers()['content-type']}}).formData();
+        assert.equal(JSON.parse(form.get('data')).action,'preview-email');assert.equal(form.get('file').name,'confirmacion.eml');
+        assert.equal(await form.get('file').text(),emailSource.toString('utf8'));
+        return route.fulfill({json:{tenantId:'synthetic-a',proposalId:'synthetic-proposal',...emailPreview}});
+      }
       if (req.method() === 'GET' && url.pathname === '/api/proposals/expiring-alerts') return route.fulfill({json:{tenantId:'synthetic-a',alerts:[],unlabeled:[],approvalNotices:approvalsResolved?[]:[{key:'internal:synthetic-proposal',proposalId:'synthetic-proposal',proposalNumber:'PROP-SINTÉTICA',recipientCompany:'Cliente sintético',kind:'internal',requirements:['Autorización del owner'],href:'/propuestas?proposalId=synthetic-proposal'}]}});
       if (url.pathname.endsWith('/procurement')) {
         if (req.method() === 'GET') return route.fulfill({json:procurement});
@@ -79,11 +89,12 @@ try {
       assert.equal(url.pathname, '/api/proposals/synthetic-proposal/consolidation');
       if (body.action === 'accept') {
         assert.equal(body.confirmation.confirmedBy, 'Ana Cliente'); assert.equal(body.expectedRevision, view.case?.revision ?? 0);
+        if(uploaded)assert.equal(body.confirmation.emailSourceHash,emailPreview.email.sha256);
         const pending = body.confirmation.channel === 'verbal';
         view = {...view, state:pending?'evidence_pending':'consolidated', canRecordAcceptance:pending, canCancel:pending,
           case:{revision:(view.case?.revision??0)+1,policyRevision:view.policy.revision,rules:[],fingerprint:'synthetic',
             acceptedOn:body.acceptedOn,acceptedAt:'2026-11-27T18:00:00Z',acceptedBy:'seller',acceptanceEvidence:body.evidence,
-            customerEvidenceRequired:true, customerConfirmation:{...body.confirmation,...(uploaded?{attachment:{id:'00000000-0000-4000-8000-000000000001',filename:uploaded.name,mimeType:'message/rfc822',sha256:'a'.repeat(64)}}:{})},
+            customerEvidenceRequired:true, customerConfirmation:{channel:body.confirmation.channel,confirmedBy:body.confirmation.confirmedBy,contact:body.confirmation.contact,...(uploaded?{email:emailPreview.email,attachment:{id:'00000000-0000-4000-8000-000000000001',filename:uploaded.name,mimeType:'message/rfc822',sha256:emailPreview.email.sha256}}:{})},
             decisions:{},consolidatedAt:pending?null:'2026-11-27T18:00:00Z',cancelledAt:null}};
       } else if (body.action === 'decide') {
         assert.equal(body.expectedRevision,1); assert.equal(body.evidence,'Anticipo confirmado');
@@ -141,9 +152,17 @@ try {
     await page.getByRole('status').filter({hasText:'Ganada consolidada'}).waitFor();await capture('customer-written-confirmation');
     view=unaccepted();await page.getByRole('button',{name:'Recargar autorizaciones'}).click();
     await page.getByLabel('Medio de confirmación').selectOption('email');
+    await page.getByLabel('¿Quién confirmó por parte del cliente?').fill('');await page.getByLabel('Correo o teléfono del contacto (opcional)').fill('');
+    await page.getByLabel('Fecha de aceptación del cliente').fill('2026-11-25');
     const fileChooser=page.waitForEvent('filechooser');
     await page.getByRole('button',{name:'Adjuntar archivo de correo',exact:true}).click();
-    await (await fileChooser).setFiles({name:'confirmacion.eml',mimeType:'message/rfc822',buffer:Buffer.from('From: cliente@example.test\r\nSubject: Acepto PROP-SINTÉTICA\r\n\r\nAdelante con la revisión 2')});
+    await (await fileChooser).setFiles({name:'confirmacion.eml',mimeType:'message/rfc822',buffer:emailSource});
+    await page.getByText('Datos leídos del correo adjunto',{exact:true}).waitFor();
+    assert.equal(await page.getByLabel('¿Quién confirmó por parte del cliente?').inputValue(),'Ana Cliente');
+    assert.equal(await page.getByLabel('Correo o teléfono del contacto (opcional)').inputValue(),'cliente@example.test');
+    assert.equal(await page.getByLabel('Fecha de aceptación del cliente').inputValue(),'2026-11-27');
+    assert.match(await page.getByLabel('Pega la confirmación o los mensajes relevantes').inputValue(),/Contexto de la respuesta/);
+    await page.getByText('Ver respuesta original y contexto del hilo',{exact:true}).click();
     await page.getByText('Archivo seleccionado: confirmacion.eml',{exact:true}).waitFor();await capture('customer-selected-email');
     await page.getByRole('button',{name:'Registrar aceptación del cliente',exact:true}).click();
     await page.getByRole('link',{name:'Descargar respaldo: confirmacion.eml'}).waitFor();await capture('customer-original-email');

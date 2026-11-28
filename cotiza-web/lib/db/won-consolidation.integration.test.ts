@@ -262,13 +262,17 @@ suite("consolidation with actual PostgreSQL transactions", () => {
     const policy = await api.saveWinPolicy("a", seller, { rules: [], customerEvidenceRequired: true }, current.revision);
     await purchasingProposal("written-file"); await purchasingProposal("file-other-proposal");
     const confirmation = { channel: "email" as const, confirmedBy: "Cliente de prueba", contact: "cliente@example.test" };
-    const bytes = new Uint8Array(Buffer.from("From: cliente@example.test\r\nSubject: Acepto la propuesta\r\n\r\nAdelante con 40 USD"));
+    const bytes = new Uint8Array(Buffer.from("From: Ana Cliente <cliente@example.test>\r\nDate: Thu, 1 Oct 2026 10:15:00 -0600\r\nSubject: Acepto la propuesta\r\nIn-Reply-To: <propuesta@example.test>\r\n\r\nAdelante con 40 USD\r\n\r\nOn Thursday, Sales wrote:\r\n> Propuesta por 40 USD"));
     const file = { bytes, filename: "aceptacion.eml", mimeType: "message/rfc822" };
     const input = { action: "accept" as const, expectedRevision: 0, expectedPolicyRevision: policy.revision, acceptedOn: "2026-10-01", evidence: "", confirmation };
     await expect(api.actOnWin("a", "written-file", seller, input)).rejects.toMatchObject({ status: 422 });
+    await expect(api.actOnWin("a", "written-file", seller, { ...input, confirmation: { ...confirmation, emailSourceHash: "0".repeat(64) } }, file)).rejects.toThrow("correo cambió");
+    expect((await pool.query("SELECT count(*) FROM customer_acceptance_files WHERE proposal_id='written-file'")).rows[0].count).toBe("0");
     const closed = await api.actOnWin("a", "written-file", seller, input, file);
     const attachment = closed.case!.customerConfirmation!.attachment!;
     expect(closed.state).toBe("consolidated");
+    expect(closed.case!.customerConfirmation).toMatchObject({ confirmedBy: "Cliente de prueba", email: { senderName: "Ana Cliente", senderEmail: "cliente@example.test", sentAt: "2026-10-01T16:15:00.000Z", replyText: "Adelante con 40 USD", sha256: attachment.sha256 } });
+    expect(closed.case!.customerConfirmation!.email?.quotedContext).toContain("Propuesta por 40 USD");
     expect(Buffer.from((await api.getCustomerEvidenceFile("a", "written-file", attachment.id, seller))!.bytes)).toEqual(Buffer.from(bytes));
     expect(await api.getCustomerEvidenceFile("a", "file-other-proposal", attachment.id, seller)).toBeNull();
     await expect(api.getCustomerEvidenceFile("b", "written-file", attachment.id, { userId: "intruder", userRole: "user", isSuperAdmin: false })).rejects.toMatchObject({ status: 404 });
@@ -282,6 +286,7 @@ suite("consolidation with actual PostgreSQL transactions", () => {
     await api.actOnWin("a", "file-procurement", seller, { ...input, expectedPolicyRevision: procurementPolicy.revision }, file);
     const requisition = await api.getProcurementView("a", "file-procurement", seller);
     expect(requisition.drafts[0].basis.customerConfirmation).toMatchObject({ ...confirmation, attachment: { filename: "aceptacion.eml", sha256: attachment.sha256 } });
+    expect(requisition.drafts[0].basis.customerConfirmation?.email).toMatchObject({ senderName: "Ana Cliente", sentAt: "2026-10-01T16:15:00.000Z", sha256: attachment.sha256 });
     await purchasingProposal("file-rollback", "a", "seller", null);
     await expect(api.actOnWin("a", "file-rollback", seller, { ...input, expectedPolicyRevision: procurementPolicy.revision }, file)).rejects.toMatchObject({ status: 422 });
     expect((await pool.query("SELECT count(*) FROM customer_acceptance_files WHERE proposal_id='file-rollback'")).rows[0].count).toBe("0");

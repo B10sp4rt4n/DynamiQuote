@@ -1,4 +1,5 @@
 "use client";
+import { CustomerEmailSummary } from "@/components/propuestas/customer-email-summary";
 import { useEffect, useState } from "react";
 import Link from "next/link";
 import type { ProcurementAction, ProcurementDraft, ProcurementView } from "@/lib/domain/procurement-draft";
@@ -54,6 +55,7 @@ export function ProcurementDraftPanel({tenantId,proposalId}:{tenantId:string;pro
           <p>Consolidación: {new Date(draft.basis.consolidatedAt).toLocaleString("es-MX",{timeZone:"America/Mexico_City"})}. Política aplicada: revisión {draft.basis.policyRevision}.</p>
           <p className="mt-2 whitespace-pre-wrap">{draft.basis.acceptanceEvidence}</p>
           {draft.basis.customerConfirmation ? <p className="mt-2">Confirmó: {draft.basis.customerConfirmation.confirmedBy}{draft.basis.customerConfirmation.contact ? ` · ${draft.basis.customerConfirmation.contact}` : ""}.</p> : null}
+          {draft.basis.customerConfirmation?.email ? <CustomerEmailSummary email={draft.basis.customerConfirmation.email} /> : null}
           {draft.basis.customerConfirmation?.attachment ? <a className="mt-2 inline-block break-all font-medium text-blue-800 underline" href={`/api/proposals/${encodeURIComponent(proposalId)}/consolidation/evidence/${encodeURIComponent(draft.basis.customerConfirmation.attachment.id)}`}>Descargar respaldo del cliente: {draft.basis.customerConfirmation.attachment.filename}</a> : null}
           <ul className="mt-2 space-y-1">{draft.basis.approvals.map(approval=><li key={approval.ruleId}>{approval.label}: {approval.decision==="approved"?"OK":"Excepción autorizada"} · {approval.evidence}</li>)}</ul>
           <p className="mt-2 whitespace-pre-wrap">Condiciones: {draft.basis.terms||"Sin condiciones adicionales registradas."}</p>

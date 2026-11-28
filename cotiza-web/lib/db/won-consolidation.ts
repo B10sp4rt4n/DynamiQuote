@@ -9,6 +9,7 @@ import { procurementEligibility, validateProcurementBasis, type ProcurementActio
 import { invalidateProcurementInTransaction, prepareProcurementInTransaction, procurementClosureKey, procurementTablesReady, readProcurementDrafts, updateProcurementInTransaction } from "./procurement-store";
 import { isCustomerEvidencePending } from "@/lib/domain/customer-confirmation";
 import { readCustomerEvidence, storeCustomerEvidence, type CustomerEvidenceUpload } from "./customer-evidence";
+import { parseCustomerEmail } from "@/lib/customer-email";
 
 type Tx = Prisma.TransactionClient;
 export class WinError extends Error {
@@ -226,10 +227,14 @@ export async function actOnWin(tenantId: string, proposalId: string, inputActor:
       const customerEvidenceRequired = continuing ? continuing.customerEvidenceRequired === true : policy.customerEvidenceRequired === true;
       if (customerEvidenceRequired && !input.confirmation) throw new WinError("Indica el medio y quién confirmó por parte del cliente", 422);
       if ((!input.confirmation || input.confirmation.channel !== "verbal") && input.evidence.trim().length < 3 && !file) throw new WinError("Pega la confirmación escrita o adjunta el respaldo", 422);
+      const email = file?.mimeType === "message/rfc822" && input.confirmation?.channel === "email" ? (await parseCustomerEmail(file.bytes)).email : undefined;
+      if (input.confirmation?.emailSourceHash && input.confirmation.emailSourceHash !== email?.sha256) throw new WinError("El correo cambió. Adjunta de nuevo el archivo y revisa los datos leídos");
+      // Parsed source fields are server-owned; manual corrections remain separately visible.
+      const confirmation = input.confirmation ? { channel: input.confirmation.channel, confirmedBy: input.confirmation.confirmedBy, contact: input.confirmation.contact } : undefined;
       const attachment = file ? await storeCustomerEvidence(tx, tenantId, proposalId, actor.userId, file) : undefined;
       current = { revision: (current?.revision ?? 0) + 1, policyRevision: continuing?.policyRevision ?? policy.revision, rules, fingerprint: doc.fingerprint,
         acceptedOn: input.acceptedOn, acceptedAt: now.toISOString(), acceptedBy: actor.userId, acceptanceEvidence: input.evidence,
-        ...(input.confirmation ? { customerConfirmation: { ...input.confirmation, ...(attachment ? { attachment } : {}) } } : {}),
+        ...(confirmation ? { customerConfirmation: { ...confirmation, ...(attachment ? { attachment } : {}), ...(email ? { email } : {}) } } : {}),
         customerEvidenceRequired, decisions: {}, consolidatedAt: null, cancelledAt: null,
         procurementDraftsEnabled: continuing ? continuing.procurementDraftsEnabled : policy.procurementDraftsEnabled === true };
     } else {
