@@ -1,5 +1,5 @@
 "use client";
-import { useEffect, useState, type FormEvent } from "react";
+import { useEffect, useRef, useState, type FormEvent } from "react";
 import { useRouter } from "next/navigation";
 import Link from "next/link";
 import { mexicoCalendarDate } from "@/lib/domain/commercial-close-date";
@@ -18,6 +18,7 @@ export function WinConsolidationPanel({ proposalId, tenantId }: { proposalId: st
   const [acceptedOn, setAcceptedOn] = useState(mexicoCalendarDate(new Date())), [evidence, setEvidence] = useState("");
   const [confirmation, setConfirmation] = useState<CustomerConfirmationInput>({ channel: "email", confirmedBy: "", contact: "" });
   const [file, setFile] = useState<File | null>(null);
+  const fileInput = useRef<HTMLInputElement>(null);
   const [decisionNotes, setDecisionNotes] = useState<Record<string, string>>({});
   const [reload, setReload] = useState(0);
   useEffect(() => {
@@ -64,7 +65,7 @@ export function WinConsolidationPanel({ proposalId, tenantId }: { proposalId: st
   }
   const disabled = busy || uncertain;
   const evidenceRequired = view?.state === "evidence_pending" ? view.case?.customerEvidenceRequired : view?.policy.customerEvidenceRequired;
-  return <section className="space-y-3 rounded-xl border border-blue-200 bg-blue-50 p-4" aria-label="Consolidación de ganada">
+  return <section className="space-y-3 rounded-xl border border-blue-200 bg-blue-50 p-4 text-zinc-900 [color-scheme:light]" aria-label="Consolidación de ganada">
     <h2 className="text-lg font-semibold text-zinc-900">Consolidación de ganada</h2>
     {!view && !error ? <p role="status">Consultando autorizaciones…</p> : null}
     {view ? <>
@@ -87,27 +88,36 @@ export function WinConsolidationPanel({ proposalId, tenantId }: { proposalId: st
         <p className="mt-1">Política aplicada: revisión {view.case.policyRevision}. {view.requirements.filter(r => isSatisfied(r.decision)).length} de {view.requirements.length} autorizaciones completas.</p>
         {view.case.consolidatedAt ? <p className="mt-1">Consolidación: {date(view.case.consolidatedAt)}.</p> : null}
       </div> : null}
-      {view.canRecordAcceptance ? <form className="space-y-3 rounded-lg bg-white p-3" onSubmit={accept}>
+      {view.canRecordAcceptance ? <form className="space-y-4 rounded-lg bg-white p-4 text-zinc-900" onSubmit={accept}>
         <h3 className="font-semibold text-zinc-950">¿Con qué evidencia cuentas para respaldar que el cliente aceptó esta propuesta?</h3>
+        <p className="text-sm text-zinc-700">Puedes adjuntar un archivo, pegar el mensaje de confirmación o hacer ambas cosas.</p>
         <label className="block text-sm font-medium">Medio de confirmación
-          <select value={confirmation.channel} disabled={disabled} onChange={e => { setConfirmation({ ...confirmation, channel: e.target.value as CustomerConfirmationInput["channel"] }); setFile(null); }} className="mt-1 block w-full rounded-lg border border-zinc-400 bg-white p-2 text-zinc-900">
+          <select value={confirmation.channel} disabled={disabled} onChange={e => { setConfirmation({ ...confirmation, channel: e.target.value as CustomerConfirmationInput["channel"] }); setFile(null); }} className="mt-1 block w-full rounded-lg border border-zinc-500 bg-white p-2 text-zinc-900">
             {Object.entries(CUSTOMER_CONFIRMATION_CHANNELS).map(([value, label]) => <option key={value} value={value}>{label}</option>)}
           </select></label>
+        {confirmation.channel !== "verbal" ? <div className="space-y-3 rounded-lg border border-zinc-400 bg-zinc-50 p-4 text-zinc-900">
+          <h4 className="font-semibold">Adjuntar archivo de correo o respaldo</h4>
+          <p className="text-sm text-zinc-700">Correo original <strong>.eml</strong>, PDF o captura PNG/JPG. Máximo 3 MB.</p>
+          <input ref={fileInput} key={`${confirmation.channel}:${file === null ? "empty" : "selected"}`} type="file" accept=".pdf,.png,.jpg,.jpeg,.eml" disabled={disabled} hidden aria-label="Archivo de respaldo del cliente"
+            onChange={e => { const selected = e.target.files?.[0] ?? null; if (selected && selected.size > 3 * 1024 * 1024) { setError("El archivo debe ocupar como máximo 3 MB."); e.target.value = ""; setFile(null); } else { setFile(selected); setError(null); } }} />
+          <button type="button" disabled={disabled} onClick={() => fileInput.current?.click()}
+            className="min-h-11 rounded-lg bg-blue-800 px-4 py-3 text-sm font-semibold text-white hover:bg-blue-900 focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-blue-800 disabled:opacity-60">
+            {confirmation.channel === "email" ? "Adjuntar archivo de correo" : "Adjuntar respaldo"}
+          </button>
+          <p aria-live="polite" className="break-all text-sm font-medium text-zinc-900">{file ? `Archivo seleccionado: ${file.name}` : "Ningún archivo seleccionado."}</p>
+          {file ? <button type="button" disabled={disabled} onClick={() => setFile(null)} className="min-h-11 rounded-lg border border-zinc-500 bg-white px-3 py-2 text-sm text-zinc-900">Quitar archivo</button> : null}
+          <p className="text-xs text-zinc-700">El archivo se guardará al registrar la aceptación. También puedes pegar el texto de confirmación en el campo de abajo.</p>
+        </div> : null}
         <label className="block text-sm font-medium">¿Quién confirmó por parte del cliente?
-          <input required minLength={2} maxLength={200} value={confirmation.confirmedBy} disabled={disabled} onChange={e => setConfirmation({ ...confirmation, confirmedBy: e.target.value })} className="mt-1 block w-full rounded-lg border border-zinc-400 p-2 text-zinc-900" /></label>
+          <input required minLength={2} maxLength={200} value={confirmation.confirmedBy} disabled={disabled} onChange={e => setConfirmation({ ...confirmation, confirmedBy: e.target.value })} className="mt-1 block w-full rounded-lg border border-zinc-500 bg-white p-2 text-zinc-900" /></label>
         <label className="block text-sm font-medium">Correo o teléfono del contacto (opcional)
-          <input maxLength={300} value={confirmation.contact} disabled={disabled} onChange={e => setConfirmation({ ...confirmation, contact: e.target.value })} className="mt-1 block w-full rounded-lg border border-zinc-400 p-2 text-zinc-900" /></label>
+          <input maxLength={300} value={confirmation.contact} disabled={disabled} onChange={e => setConfirmation({ ...confirmation, contact: e.target.value })} className="mt-1 block w-full rounded-lg border border-zinc-500 bg-white p-2 text-zinc-900" /></label>
         <label className="block text-sm font-medium">Fecha de aceptación del cliente
           <input type="date" required max={mexicoCalendarDate(new Date())} value={acceptedOn} disabled={disabled}
-            onChange={e => setAcceptedOn(e.target.value)} className="mt-1 block max-w-full rounded-lg border border-zinc-400 p-2 text-zinc-900" /></label>
+            onChange={e => setAcceptedOn(e.target.value)} className="mt-1 block max-w-full rounded-lg border border-zinc-500 bg-white p-2 text-zinc-900" /></label>
         <label className="block text-sm font-medium">{confirmation.channel === "verbal" ? "Notas de la confirmación verbal (opcional)" : "Pega la confirmación o los mensajes relevantes"}
-          <textarea required={confirmation.channel !== "verbal" && !file} minLength={3} maxLength={20000} value={evidence} disabled={disabled} onChange={e => setEvidence(e.target.value)}
-            placeholder="Incluye el mensaje y el contexto que identifica la propuesta, condiciones o versión aceptadas." className="mt-1 block w-full rounded-lg border border-zinc-400 p-2 text-zinc-900" /></label>
-        {confirmation.channel !== "verbal" ? <label className="block text-sm font-medium">Adjuntar respaldo (opcional si pegaste la confirmación)
-          <input key={`${confirmation.channel}:${file === null ? "empty" : "selected"}`} type="file" accept=".pdf,.png,.jpg,.jpeg,.eml" disabled={disabled} className="mt-1 block w-full min-w-0 text-sm"
-            onChange={e => { const selected = e.target.files?.[0] ?? null; if (selected && selected.size > 3 * 1024 * 1024) { setError("El archivo debe ocupar como máximo 3 MB."); e.target.value = ""; setFile(null); } else { setFile(selected); setError(null); } }} />
-          <span className="mt-1 block break-words text-xs text-zinc-600">{file ? `Seleccionado: ${file.name}. ` : ""}PDF, PNG, JPG o correo original EML. Hasta 3 MB.</span></label> : null}
-        {file ? <button type="button" disabled={disabled} onClick={() => setFile(null)} className="min-h-11 rounded-lg border border-zinc-400 px-3 py-2 text-sm">Quitar archivo</button> : null}
+          <textarea required={confirmation.channel !== "verbal" && !file} minLength={3} maxLength={20000} rows={5} value={evidence} disabled={disabled} onChange={e => setEvidence(e.target.value)}
+            placeholder="Incluye el mensaje y el contexto que identifica la propuesta, condiciones o versión aceptadas." className="mt-1 block w-full rounded-lg border border-zinc-500 bg-white p-2 text-zinc-900 placeholder:text-zinc-600" /></label>
         <p className="text-xs text-zinc-600">El texto pegado se registra como captura manual. Incluye el contexto si la respuesta del cliente solo dice «adelante».</p>
         <p className="text-xs text-zinc-600">{evidenceRequired && confirmation.channel === "verbal" ? "Se guardará con respaldo escrito pendiente. Esta empresa exige completarlo antes de consolidar como ganada." : (view.state === "evidence_pending" ? view.case?.rules.length : view.policy.rules.length) ? "Se aplicarán los requisitos de la política vigente según sus condiciones." : "Sin requisitos adicionales y con el respaldo exigido completo, registrar la aceptación consolidará la ganada de inmediato."}</p>
         <button disabled={disabled || confirmation.confirmedBy.trim().length < 2 || (view.state === "evidence_pending" && confirmation.channel === "verbal") || (confirmation.channel !== "verbal" && evidence.trim().length < 3 && !file)} className="min-h-11 rounded-lg bg-blue-800 px-4 py-2 font-medium text-white disabled:opacity-50">{view.state === "evidence_pending" ? "Completar respaldo del cliente" : "Registrar aceptación del cliente"}</button>

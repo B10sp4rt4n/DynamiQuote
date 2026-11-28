@@ -27,7 +27,7 @@ window.showPolicy();`, loader: 'tsx', resolveDir: root }, bundle: true, jsx: 'au
     builder.onResolve({filter:/^next\/(navigation|link)$/}, args=>({path:args.path,namespace:'synthetic-next'}));
     builder.onLoad({filter:/.*/,namespace:'synthetic-next'}, args=>({contents:args.path.endsWith('navigation')?'export const useRouter=()=>({refresh(){}});':`import React from 'react';export default function Link(props){return React.createElement('a',props);}`,resolveDir:root}));
   }}] });
-const css = await require('postcss')([require('@tailwindcss/postcss')({ base: root })]).process('@import "tailwindcss";', { from: root + 'app/globals.css' });
+const css = await require('postcss')([require('@tailwindcss/postcss')({ base: root })]).process(await readFile(root + 'app/globals.css', 'utf8'), { from: root + 'app/globals.css' });
 await writeFile(out + '/app.css', css.css);
 const server = createServer(async (req, res) => {
   const url = new URL(req.url, 'http://localhost');
@@ -41,9 +41,9 @@ const origin = 'http://127.0.0.1:' + server.address().port;
 const { chromium } = await import(process.env.PLAYWRIGHT_MODULE || 'playwright');
 const results = []; let browser;
 try {
-  for (const width of [1360, 390]) {
+  for (const {width, colorScheme} of [1360, 390].flatMap(width => ['light', 'dark'].map(colorScheme => ({width, colorScheme})))) {
     browser = await chromium.launch({ headless: true, ...(process.env.CHROMIUM_EXECUTABLE ? { executablePath: process.env.CHROMIUM_EXECUTABLE } : {}), args: ['--no-sandbox', '--disable-dev-shm-usage', ...(process.env.WIN_CHROMIUM_SINGLE_PROCESS ? ['--single-process','--no-zygote'] : [])] });
-    const page = await browser.newPage({ viewport: { width, height: 1000 }, timezoneId: 'America/Mexico_City' });
+    const page = await browser.newPage({ viewport: { width, height: 1000 }, timezoneId: 'America/Mexico_City', locale: 'es-MX', colorScheme });
     const errors = [], writes = [];
     page.on('pageerror', e=>errors.push(e.message));
     let view, procurement, drop = false, purchaseDrop = false, approvalsResolved = false;
@@ -92,7 +92,7 @@ try {
       } else { assert.equal(body.action,'consolidate'); assert.equal(body.expectedRevision,2); view.state='consolidated';view.canConsolidate=false;view.canCancel=false;view.case.consolidatedAt='2026-11-13T17:01:00Z';view.case.revision++;view.requirements[0].canDecide=false; }
       return route.fulfill({ json: view });
     });
-    const capture=async name=>{assert.equal(await page.evaluate(()=>document.documentElement.scrollWidth>innerWidth),false,'Overflow '+width+' '+name);await page.screenshot({path:path.join(artifacts,`win-${width}-${name}.png`),fullPage:true});};
+    const capture=async name=>{assert.equal(await page.evaluate(()=>document.documentElement.scrollWidth>innerWidth),false,'Overflow '+width+' '+colorScheme+' '+name);await page.screenshot({path:path.join(artifacts,`win-${width}-${colorScheme}-${name}.png`),fullPage:true});};
     await page.goto(origin);await page.getByRole('heading',{name:'Reglas para consolidar ganada'}).waitFor();await capture('minimum-policy');
     await page.getByLabel(/Exigir respaldo escrito/).check();
     await page.getByLabel(/Preparar una requisición interna/).check();
@@ -118,6 +118,18 @@ try {
       document:{proposalNumber:'PROP-SINTÉTICA',quoteId:'q-synthetic',quoteName:'Renovación de licencias',quoteVersion:2,customer:'Cliente de prueba',amount:100,currency:'USD'}});
     view=unaccepted();await page.evaluate(()=>window.showWin());
     await page.getByRole('heading',{name:'¿Con qué evidencia cuentas para respaldar que el cliente aceptó esta propuesta?'}).waitFor();
+    const contrast=await page.locator('section[aria-label="Consolidación de ganada"] form').evaluate(form=>{
+      const canvas=document.createElement('canvas');canvas.width=canvas.height=1;const ctx=canvas.getContext('2d');
+      const rgb=color=>{ctx.clearRect(0,0,1,1);ctx.fillStyle=color;ctx.fillRect(0,0,1,1);return [...ctx.getImageData(0,0,1,1).data];};
+      const luminance=rgba=>rgba.slice(0,3).map(value=>{const c=value/255;return c<=0.04045?c/12.92:((c+0.055)/1.055)**2.4;}).reduce((sum,c,index)=>sum+c*[0.2126,0.7152,0.0722][index],0);
+      const ratio=el=>{let parent=el,bg;while(parent){bg=rgb(getComputedStyle(parent).backgroundColor);if(bg[3]===255)break;parent=parent.parentElement;}const fg=luminance(rgb(getComputedStyle(el).color)),background=luminance(bg);return (Math.max(fg,background)+0.05)/(Math.min(fg,background)+0.05);};
+      const labels=[...form.querySelectorAll('label')].map(el=>({label:el.firstChild.textContent.trim(),ratio:ratio(el)}));
+      const button=[...form.querySelectorAll('button')].find(el=>el.textContent.trim()==='Adjuntar archivo de correo');
+      return {labels,uploadButtonRatio:ratio(button),nativeControlScheme:getComputedStyle(form).colorScheme};
+    });
+    assert(contrast.labels.every(label=>label.ratio>=4.5),'Low label contrast '+JSON.stringify({colorScheme,contrast}));
+    assert(contrast.uploadButtonRatio>=4.5,'Low upload button contrast');assert.equal(contrast.nativeControlScheme,'light');
+    await page.getByRole('button',{name:'Adjuntar archivo de correo',exact:true}).waitFor();await capture('customer-attachment-form');
     await page.getByLabel('¿Quién confirmó por parte del cliente?').fill('Ana Cliente');
     await page.getByLabel('Medio de confirmación').selectOption('verbal');await capture('customer-verbal-form');
     await page.getByRole('button',{name:'Registrar aceptación del cliente',exact:true}).click();
@@ -129,7 +141,10 @@ try {
     await page.getByRole('status').filter({hasText:'Ganada consolidada'}).waitFor();await capture('customer-written-confirmation');
     view=unaccepted();await page.getByRole('button',{name:'Recargar autorizaciones'}).click();
     await page.getByLabel('Medio de confirmación').selectOption('email');
-    await page.locator('input[type=file]').setInputFiles({name:'confirmacion.eml',mimeType:'message/rfc822',buffer:Buffer.from('From: cliente@example.test\r\nSubject: Acepto PROP-SINTÉTICA\r\n\r\nAdelante con la revisión 2')});
+    const fileChooser=page.waitForEvent('filechooser');
+    await page.getByRole('button',{name:'Adjuntar archivo de correo',exact:true}).click();
+    await (await fileChooser).setFiles({name:'confirmacion.eml',mimeType:'message/rfc822',buffer:Buffer.from('From: cliente@example.test\r\nSubject: Acepto PROP-SINTÉTICA\r\n\r\nAdelante con la revisión 2')});
+    await page.getByText('Archivo seleccionado: confirmacion.eml',{exact:true}).waitFor();await capture('customer-selected-email');
     await page.getByRole('button',{name:'Registrar aceptación del cliente',exact:true}).click();
     await page.getByRole('link',{name:'Descargar respaldo: confirmacion.eml'}).waitFor();await capture('customer-original-email');
     assert.equal(writes.length,7);
@@ -157,7 +172,7 @@ try {
     assert.equal(await page.getByLabel('Observaciones para Compras · REQ-2026-0001').isDisabled(),true);await capture('purchase-review-required');
     procurement={...procurement,tenantId:'synthetic-b'};await page.getByRole('button',{name:'Recuperar estado de la requisición'}).click();await page.getByRole('alert').filter({hasText:'empresa o propuesta activa cambió'}).waitFor();
     assert.equal(await page.getByRole('heading',{name:/REQ-2026-0001/}).count(),0);
-    assert.equal(writes.length,10);assert.deepEqual(errors,[]);results.push({width,errors,mutations:writes.length});await browser.close();browser=null;
+    assert.equal(writes.length,10);assert.deepEqual(errors,[]);results.push({width,colorScheme,contrast,errors,mutations:writes.length});await browser.close();browser=null;
   }
   await writeFile(path.join(artifacts,'results.json'),JSON.stringify({synthetic:true,results},null,2));console.log(JSON.stringify({ok:true,results}));
 } finally {await browser?.close();await new Promise(resolve=>server.close(resolve));}
