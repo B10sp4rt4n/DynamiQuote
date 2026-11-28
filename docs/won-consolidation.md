@@ -215,3 +215,43 @@ y PostgreSQL real (migración doble, verbal pendiente, política capturada,
 bloqueo de bypass, aislamiento, bytes originales, deduplicación, copia a Compras
 y rollback). El recorrido de navegador comprueba captura verbal, WhatsApp y EML
 original a 1360 y 390 px con registros sintéticos.
+
+### Lectura automática del correo original
+
+Al seleccionar «Correo de confirmación» y adjuntar un `.eml`, Cotiza lee el
+remitente del encabezado `From`, su dirección, el `Date` con zona horaria, el
+asunto y el cuerpo del mensaje. Completa nombre/contacto, fecha de aceptación
+(calendario de Ciudad de México) y texto, conservando el contexto citado para
+respuestas como «adelante». El usuario revisa los datos antes de registrar; la
+lectura por sí sola no registra aceptación, autorizaciones ni envíos.
+
+La vista muestra el remitente, fecha/hora de envío, asunto y un detalle de la
+respuesta original y del contexto. La fecha de envío original queda separada
+de la fecha de aceptación editable y del momento de registro del servidor.
+Si faltan encabezados inequívocos, el campo correspondiente queda pendiente;
+los reenvíos se señalan sin atribuir al remitente externo del hilo la identidad
+del encabezado del correo adjunto. Un extracto largo queda señalado. El archivo
+completo conserva sus bytes originales.
+
+La lectura MIME usa mailparser 3.15.0, con decodificación de encabezados,
+base64/quoted-printable, charsets y alternativa HTML a texto. No se muestra HTML
+ni se cargan imágenes remotas. Se reconocen límites de respuesta habituales de
+Gmail y Outlook en español/inglés; los mensajes que no se pueden separar se
+conservan completos en el extracto. El texto sugerido se limita a 20,000
+caracteres y la vista mantiene por separado el contexto citado y el archivo.
+
+`POST /api/proposals/{proposalId}/consolidation/email-preview` requiere Clerk,
+origen y empresa capturada, visibilidad de propuesta y permiso vigente para
+registrar aceptación. Usa el lector multipart acotado y límite de frecuencia;
+no escribe en la base. Al registrar, el servidor vuelve a leer el mismo archivo,
+comprueba el SHA-256 de la vista previa cuando se proporciona y guarda los datos
+originales bajo `customerConfirmation.email`. Los cambios manuales permanecen
+en los campos de confirmación. La interfaz descarta respuestas tardías al cambiar
+archivo o medio; quitar el correo restaura los valores anteriores que no hayan
+sido editados manualmente. El snapshot y JSON de Compras conservan también esta
+lectura original. No modifica aceptaciones históricas y no requiere migración.
+
+Las pruebas usan correos sintéticos: encabezados codificados, texto, HTML,
+quoted-printable, límites de cita, reenvíos, fechas ambiguas, lectura tardía,
+campos automáticos, cambio de archivo y rechazo de un hash diferente. PostgreSQL
+comprueba la persistencia de la fuente, correcciones manuales y copia a Compras.
