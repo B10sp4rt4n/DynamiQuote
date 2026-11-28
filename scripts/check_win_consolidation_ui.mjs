@@ -67,11 +67,25 @@ try {
       }
       if (req.method() === 'GET') return route.fulfill({ json: view });
       assert.equal(req.headers()['x-tenant-context'],'synthetic-a');
-      const body = req.postDataJSON(); writes.push(body);
+      let body, uploaded = null;
+      if (req.headers()['content-type']?.startsWith('multipart/form-data')) {
+        const form = await new Response(req.postDataBuffer(), { headers: { 'Content-Type': req.headers()['content-type'] } }).formData();
+        body = JSON.parse(form.get('data')); uploaded = form.get('file');
+        assert.equal(uploaded.name, 'confirmacion.eml'); assert.match(await uploaded.text(), /Acepto PROP-SINTÉTICA/);
+      } else body = req.postDataJSON();
+      writes.push(body);
       if (drop) { drop = false; return route.abort('failed'); }
       if (url.pathname === '/api/settings/win-policy') return route.fulfill({ json: { policy: {...body.policy,revision:1} } });
       assert.equal(url.pathname, '/api/proposals/synthetic-proposal/consolidation');
-      if (body.action === 'decide') {
+      if (body.action === 'accept') {
+        assert.equal(body.confirmation.confirmedBy, 'Ana Cliente'); assert.equal(body.expectedRevision, view.case?.revision ?? 0);
+        const pending = body.confirmation.channel === 'verbal';
+        view = {...view, state:pending?'evidence_pending':'consolidated', canRecordAcceptance:pending, canCancel:pending,
+          case:{revision:(view.case?.revision??0)+1,policyRevision:view.policy.revision,rules:[],fingerprint:'synthetic',
+            acceptedOn:body.acceptedOn,acceptedAt:'2026-11-27T18:00:00Z',acceptedBy:'seller',acceptanceEvidence:body.evidence,
+            customerEvidenceRequired:true, customerConfirmation:{...body.confirmation,...(uploaded?{attachment:{id:'00000000-0000-4000-8000-000000000001',filename:uploaded.name,mimeType:'message/rfc822',sha256:'a'.repeat(64)}}:{})},
+            decisions:{},consolidatedAt:pending?null:'2026-11-27T18:00:00Z',cancelledAt:null}};
+      } else if (body.action === 'decide') {
         assert.equal(body.expectedRevision,1); assert.equal(body.evidence,'Anticipo confirmado');
         view.case.revision++; view.case.decisions.finance={decision:'approved',actorId:'finance',actorRole:'admin',recordedAt:'2026-11-13T17:00:00Z',evidence:body.evidence};
         view.requirements[0].decision=view.case.decisions.finance;view.canConsolidate=true;
@@ -80,6 +94,7 @@ try {
     });
     const capture=async name=>{assert.equal(await page.evaluate(()=>document.documentElement.scrollWidth>innerWidth),false,'Overflow '+width+' '+name);await page.screenshot({path:path.join(artifacts,`win-${width}-${name}.png`),fullPage:true});};
     await page.goto(origin);await page.getByRole('heading',{name:'Reglas para consolidar ganada'}).waitFor();await capture('minimum-policy');
+    await page.getByLabel(/Exigir respaldo escrito/).check();
     await page.getByLabel(/Preparar una requisición interna/).check();
     await page.getByRole('button',{name:'Agregar requisito'}).click();
     await page.getByLabel('Nombre del requisito').fill('Finanzas: anticipo');
@@ -98,7 +113,26 @@ try {
     await page.evaluate(()=>window.showBell());await page.getByRole('button',{name:/Notificaciones: 1/}).waitFor();
     await page.getByRole('button',{name:/Notificaciones: 1/}).click();await page.getByText('Tu autorización interna está pendiente',{exact:true}).waitFor();await capture('approval-notification');
     approvalsResolved=true;await page.getByRole('button',{name:'Actualizar notificaciones'}).click();await page.getByText('No tienes aprobaciones pendientes.',{exact:true}).waitFor();await capture('approval-resolved');
-    assert.equal(writes.length,4);assert.equal(writes[0].policy.procurementDraftsEnabled,true);
+    assert.equal(writes.length,4);assert.equal(writes[0].policy.procurementDraftsEnabled,true);assert.equal(writes[0].policy.customerEvidenceRequired,true);
+    const unaccepted=()=>({tenantId:'synthetic-a',proposalId:'synthetic-proposal',policy:{rules:[],revision:1,customerEvidenceRequired:true},case:null,state:'not_accepted',canRecordAcceptance:true,canConsolidate:false,canCancel:false,requirements:[],
+      document:{proposalNumber:'PROP-SINTÉTICA',quoteId:'q-synthetic',quoteName:'Renovación de licencias',quoteVersion:2,customer:'Cliente de prueba',amount:100,currency:'USD'}});
+    view=unaccepted();await page.evaluate(()=>window.showWin());
+    await page.getByRole('heading',{name:'¿Con qué evidencia cuentas para respaldar que el cliente aceptó esta propuesta?'}).waitFor();
+    await page.getByLabel('¿Quién confirmó por parte del cliente?').fill('Ana Cliente');
+    await page.getByLabel('Medio de confirmación').selectOption('verbal');await capture('customer-verbal-form');
+    await page.getByRole('button',{name:'Registrar aceptación del cliente',exact:true}).click();
+    await page.getByRole('status').filter({hasText:'Respaldo escrito pendiente'}).waitFor();
+    assert.equal(await page.getByRole('button',{name:'Consolidar ganada',exact:true}).count(),0);await capture('customer-evidence-pending');
+    await page.getByLabel('Medio de confirmación').selectOption('whatsapp');
+    await page.getByLabel('Pega la confirmación o los mensajes relevantes').fill('Acepto PROP-SINTÉTICA, revisión 2, por 100 USD. Adelante con la renovación.');
+    await page.getByRole('button',{name:'Completar respaldo del cliente',exact:true}).click();
+    await page.getByRole('status').filter({hasText:'Ganada consolidada'}).waitFor();await capture('customer-written-confirmation');
+    view=unaccepted();await page.getByRole('button',{name:'Recargar autorizaciones'}).click();
+    await page.getByLabel('Medio de confirmación').selectOption('email');
+    await page.locator('input[type=file]').setInputFiles({name:'confirmacion.eml',mimeType:'message/rfc822',buffer:Buffer.from('From: cliente@example.test\r\nSubject: Acepto PROP-SINTÉTICA\r\n\r\nAdelante con la revisión 2')});
+    await page.getByRole('button',{name:'Registrar aceptación del cliente',exact:true}).click();
+    await page.getByRole('link',{name:'Descargar respaldo: confirmacion.eml'}).waitFor();await capture('customer-original-email');
+    assert.equal(writes.length,7);
     const purchaseDraft=()=>({id:'00000000-0000-4000-8000-000000000001',tenantId:'synthetic-a',proposalId:'synthetic-proposal',folio:'REQ-2026-0001',closureKey:'b'.repeat(64),sourceHash:'c'.repeat(64),revision:1,state:'draft',reason:null,current:true,notes:'',neededOn:null,createdAt:'2026-11-16T16:00:00.000Z',createdBy:'seller',basis:{schemaVersion:1,tenantId:'synthetic-a',proposalId:'synthetic-proposal',proposalNumber:'PROP-SINTÉTICA',formalDocId:'formal-synthetic',quoteId:'quote-synthetic',opportunityId:null,customer:'Cliente de prueba',subject:'Licencias de prueba',currency:'USD',terms:'Condiciones aprobadas',fingerprint:'a'.repeat(64),winRevision:3,policyRevision:1,acceptedAt:'2026-11-16T15:00:00.000Z',consolidatedAt:'2026-11-16T16:00:00.000Z',acceptedBy:'seller',acceptanceEvidence:'Orden de compra de prueba',approvals:[{ruleId:'finance',label:'Finanzas',decision:'approved',actorId:'finance',actorRole:'admin',recordedAt:'2026-11-16T15:30:00.000Z',evidence:'Anticipo de prueba'}],items:[{itemId:'item-synthetic',itemNumber:1,sku:'LIC-TEST',description:'Licencias de prueba con descripción larga para comprobar la lectura en pantalla móvil',quantity:2,costUnit:10,subtotalCost:20,componentType:'product',origin:'vendor'}]}});
     procurement={tenantId:'synthetic-a',proposalId:'synthetic-proposal',enabled:true,canPrepare:false,reason:'Completa primero la consolidación de ganada y sus autorizaciones.',winRevision:1,fingerprint:'a'.repeat(64),drafts:[]};
     await page.evaluate(()=>window.showProcurement());await page.getByRole('status').filter({hasText:'Completa primero'}).waitFor();
@@ -123,7 +157,7 @@ try {
     assert.equal(await page.getByLabel('Observaciones para Compras · REQ-2026-0001').isDisabled(),true);await capture('purchase-review-required');
     procurement={...procurement,tenantId:'synthetic-b'};await page.getByRole('button',{name:'Recuperar estado de la requisición'}).click();await page.getByRole('alert').filter({hasText:'empresa o propuesta activa cambió'}).waitFor();
     assert.equal(await page.getByRole('heading',{name:/REQ-2026-0001/}).count(),0);
-    assert.equal(writes.length,7);assert.deepEqual(errors,[]);results.push({width,errors,mutations:writes.length});await browser.close();browser=null;
+    assert.equal(writes.length,10);assert.deepEqual(errors,[]);results.push({width,errors,mutations:writes.length});await browser.close();browser=null;
   }
   await writeFile(path.join(artifacts,'results.json'),JSON.stringify({synthetic:true,results},null,2));console.log(JSON.stringify({ok:true,results}));
 } finally {await browser?.close();await new Promise(resolve=>server.close(resolve));}

@@ -141,3 +141,12 @@ Para validar el SQL y el almacenamiento, ejecutar
 `lib/db/commercial-evidence.integration.test.ts` con
 `COTIZA_EVIDENCE_TEST_DATABASE_URL` apuntando a una base local vacía llamada
 `cotiza_evidence_test`.
+
+## Respaldo de aceptación del cliente
+
+`20261127_customer_acceptance_files.sql` crea el almacenamiento de adjuntos por
+empresa/propuesta; aplicar después de `20261113_won_consolidation.sql` y antes de
+publicar la carga de archivos. No modifica políticas ni cierres anteriores. La
+exigencia de respaldo escrito se configura después de publicar el código, en
+Configuración → Reglas de ganada (`customerEvidenceRequired`). Ver
+`docs/won-consolidation.md` en la raíz. No usar `prisma db push`.

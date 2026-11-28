@@ -1,5 +1,6 @@
 import { z } from "zod";
 import { isSatisfied, type WinCase } from "./won-consolidation";
+import { customerConfirmationRecordSchema } from "./customer-confirmation";
 
 export const procurementBasisSchema = z.object({
   schemaVersion: z.literal(1), tenantId: z.string().min(1), proposalId: z.string().min(1),
@@ -8,6 +9,7 @@ export const procurementBasisSchema = z.object({
   currency: z.enum(["MXN", "USD", "EUR"]), terms: z.string(),
   fingerprint: z.string().regex(/^[a-f0-9]{64}$/), winRevision: z.number().int().positive(), policyRevision: z.number().int().nonnegative(),
   acceptedAt: z.iso.datetime(), consolidatedAt: z.iso.datetime(), acceptedBy: z.string().min(1), acceptanceEvidence: z.string(),
+  customerConfirmation: customerConfirmationRecordSchema.optional(),
   approvals: z.array(z.object({ ruleId: z.string(), label: z.string(), decision: z.enum(["approved", "waived"]),
     actorId: z.string(), actorRole: z.string(), recordedAt: z.iso.datetime(), evidence: z.string() }).strict()).max(20),
   items: z.array(z.object({ itemId: z.string().min(1), itemNumber: z.number().int().positive(), sku: z.string().nullable(),
