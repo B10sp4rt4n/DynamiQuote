@@ -19,9 +19,10 @@ const supportingNavigation = [
   { href: "/configuracion", label: "Configuración" },
 ];
 
-export function DashboardNav({ crmWorkspaceEnabled = false, recordiaEnabled = false, procurementEnabled = false }: { crmWorkspaceEnabled?: boolean; recordiaEnabled?: boolean; procurementEnabled?: boolean }) {
+export function DashboardNav({ crmWorkspaceEnabled = false, recordiaEnabled = false, procurementEnabled = false, recurringEnabled = false }: { crmWorkspaceEnabled?: boolean; recordiaEnabled?: boolean; procurementEnabled?: boolean; recurringEnabled?: boolean }) {
   const links = [
     ...navigation,
+    ...(recurringEnabled ? [{ href: "/servicios-recurrentes", label: "Suscripciones" }] : []),
     ...(crmWorkspaceEnabled ? [{ href: "/crm", label: "CRM · Piloto" }] : []),
     ...(recordiaEnabled ? [{ href: "/recordia", label: "Recordia · Premium" }] : []),
     ...(procurementEnabled ? [{ href: "/compras", label: "Compras" }] : []),
