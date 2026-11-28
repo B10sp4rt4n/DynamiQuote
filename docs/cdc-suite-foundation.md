@@ -68,3 +68,9 @@ Los cambios se preparan sobre `main` de Cotiza y Digestor, y `feat/rep-import-sa
 
 La revisión de producción deberá comprobar un administrador y un usuario ordinario, la empresa visible y el recorrido de SynAppsSys. La apariencia común se valida separadamente de la integración funcional y de la sesión única.
 
+
+## Corrección de visibilidad Fiscal en la vista previa
+
+El menú inicialmente reutilizaba la comprobación de conexión operativa de Digestor. Sus credenciales sólo están asignadas a producción, por lo que Fiscal desaparecía en la vista previa aunque la empresa ya operara el módulo.
+
+La visibilidad del espacio se separa de la capacidad operativa. Una asignación explícita CDC_FISCAL_PREVIEW_TENANT_ID, limitada a la rama de vista previa y al entorno VERCEL_ENV=preview, permite consultar las propuestas de la empresa activa mediante el lector y los permisos existentes. No habilita las APIs fiscales ni copia credenciales de producción. La página identifica el modo de consulta y omite la configuración operativa.

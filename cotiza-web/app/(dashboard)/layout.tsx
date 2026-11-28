@@ -14,7 +14,7 @@ import type { CSSProperties } from "react";
 import { DashboardNav } from "@/components/layout/dashboard-nav";
 import { TenantSwitcher } from "@/components/layout/tenant-switcher";
 import { getActiveTenants } from "@/lib/db/tenants";
-import { isDigestorFiscalEnabledForTenant } from "@/lib/integrations/digestor-fiscal";
+import { getFiscalWorkspaceAccess } from "@/lib/suite/fiscal-workspace";
 import { isDigestorFiscalSandboxTenant } from "@/lib/integrations/digestor-routing";
 import { recordiaPilotVisible } from "@/lib/integrations/recordia/access";
 import { getWinPolicy } from "@/lib/db/won-consolidation";
@@ -64,7 +64,7 @@ export default async function DashboardLayout({ children }: DashboardLayoutProps
   const showTenantSwitcher = tenant.isSuperAdmin && tenantOptions.length > 1;
 
   const canAdminister = tenant.isSuperAdmin || tenant.userRole === "owner" || tenant.userRole === "admin";
-  const fiscalEnabled = isDigestorFiscalEnabledForTenant(tenant.id);
+  const fiscalEnabled = getFiscalWorkspaceAccess(tenant.id).visible;
   const theme = Object.fromEntries(Object.entries(experience.colors).map(([key, value]) => [`--cdc-${key}`, value])) as CSSProperties;
 
   return (
