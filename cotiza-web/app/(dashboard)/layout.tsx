@@ -15,6 +15,7 @@ import { getActiveTenants } from "@/lib/db/tenants";
 import { isDigestorFiscalSandboxTenant } from "@/lib/integrations/digestor-routing";
 import { recordiaPilotVisible } from "@/lib/integrations/recordia/access";
 import { getWinPolicy } from "@/lib/db/won-consolidation";
+import { recurringVisible } from "@/lib/recurring-access";
 
 type DashboardLayoutProps = {
   children: React.ReactNode;
@@ -52,11 +53,12 @@ export default async function DashboardLayout({ children }: DashboardLayoutProps
     );
   }
 
-  const [crmWorkspaceEnabled, tenantOptions, recordiaEnabled, winPolicy] = await Promise.all([
+  const [crmWorkspaceEnabled, tenantOptions, recordiaEnabled, winPolicy, recurringEnabled] = await Promise.all([
     tenant.isSuperAdmin && isTenantCapabilityEnabled(tenant.id, "crm_workspace_pilot"),
     tenant.isSuperAdmin ? getActiveTenants() : [],
     recordiaPilotVisible(tenant),
     getWinPolicy(tenant.id),
+    recurringVisible(tenant),
   ]);
   const showTenantSwitcher = tenant.isSuperAdmin && tenantOptions.length > 1;
 
@@ -82,7 +84,7 @@ export default async function DashboardLayout({ children }: DashboardLayoutProps
             <TenantSwitcher key={`${tenant.id}:${tenant.userId}`} currentSlug={tenant.slug} currentName={tenant.name} options={tenantOptions} />
           </div> : null}
           <div className="col-span-2 min-w-0">
-            <DashboardNav crmWorkspaceEnabled={crmWorkspaceEnabled} recordiaEnabled={recordiaEnabled} procurementEnabled={winPolicy.procurementDraftsEnabled === true} />
+            <DashboardNav crmWorkspaceEnabled={crmWorkspaceEnabled} recordiaEnabled={recordiaEnabled} procurementEnabled={winPolicy.procurementDraftsEnabled === true} recurringEnabled={recurringEnabled} />
           </div>
         </div>
       </header>

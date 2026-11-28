@@ -1,0 +1,34 @@
+// @vitest-environment jsdom
+import React,{act} from 'react';
+import {createRoot,type Root} from 'react-dom/client';
+import {afterEach,beforeEach,expect,it,vi} from 'vitest';
+import {RecurringServicesPanel} from './recurring-services-panel';
+import type {RecurringView,RecurringWorkspace} from '@/lib/domain/recurring-services';
+import {reviewRecurringRenewal} from '@/lib/domain/recurring-services';
+vi.mock('next/link',()=>({default:({href,children}:{href:string;children:React.ReactNode})=><a href={href}>{children}</a>}));
+let root:Root,host:HTMLDivElement;const fetcher=vi.fn();
+const agreement=():RecurringView=>{const view:Omit<RecurringView,'renewalReview'>={id:'11111111-1111-4111-8111-111111111111',number:'SR-0000000001',revision:2,status:'active',missing:[],periods:[],createdAt:'2030-01-01T00:00:00Z',updatedAt:'2030-01-01T00:00:00Z',terms:{title:'Servicio sintético',clientId:'synthetic-client',contractKind:'month_to_month',startsOn:'2030-01-31',endsOn:'2031-01-31',autoRenew:false,noticeDays:30,cadence:'monthly',basis:'advance',anchorDay:31,timezone:'America/Mexico_City',dueDays:10,currency:'MXN',effectiveFrom:'2030-01-31',acceptanceEvidence:'Contrato sintético',lines:[{lineId:'line-1',description:'Prueba',sku:null,quantity:'2',unitPrice:'125.2500'}]}};return {...view,renewalReview:reviewRecurringRenewal(view.terms,view.status,new Date('2031-01-01T18:00:00Z'))};};
+const workspace=():RecurringWorkspace=>({agreements:[agreement()],clients:[{id:'synthetic-client',name:'Cliente sintético'}],hasMore:false,clientsTruncated:false});
+const button=(name:string)=>[...host.querySelectorAll('button')].find(b=>b.textContent===name)!;
+const input=(label:string)=>[...host.querySelectorAll('label')].find(l=>l.firstChild?.textContent===label)!.querySelector('input')!;
+async function change(label:string,value:string){await act(async()=>{const element=input(label);Object.getOwnPropertyDescriptor(HTMLInputElement.prototype,'value')!.set!.call(element,value);element.dispatchEvent(new Event('input',{bubbles:true}));});}
+beforeEach(()=>{vi.stubGlobal('IS_REACT_ACT_ENVIRONMENT',true);vi.stubGlobal('fetch',fetcher);fetcher.mockReset();host=document.createElement('div');document.body.append(host);root=createRoot(host);});
+afterEach(async()=>{await act(async()=>root.unmount());host.remove();vi.unstubAllGlobals();});
+async function open(){await act(async()=>root.render(<RecurringServicesPanel tenantId="synthetic" initialWorkspace={workspace()}/>));await act(async()=>button('Abrir acuerdo').click());}
+it('uses server-loaded data and prevents planning over unsaved terms',async()=>{await open();expect(fetcher).not.toHaveBeenCalled();expect(button('Registrar periodos').disabled).toBe(false);await change('Nombre del servicio','Revisión sin guardar');expect(button('Registrar periodos').disabled).toBe(true);expect(host.textContent).toContain('Guarda los cambios');expect(input('Precio unitario').value).toBe('125.2500');});
+it('blocks writes after an uncertain result and recovers the committed state',async()=>{await open();fetcher.mockRejectedValueOnce(new TypeError('Network interrupted'));await act(async()=>button('Registrar periodos').click());expect(button('Registrar periodos').disabled).toBe(true);expect(button('Nuevo acuerdo').disabled).toBe(true);fetcher.mockResolvedValueOnce({ok:true,json:async()=>({agreement:{...agreement(),status:'paused',revision:3}})});await act(async()=>button('Consultar resultado antes de continuar').click());expect(host.textContent).toContain('SR-0000000001 · Pausado');expect(button('Registrar periodos').disabled).toBe(true);expect(button('Nuevo acuerdo').disabled).toBe(false);expect(fetcher.mock.calls[0][0]).toBe('/api/recurring-services');expect(JSON.parse(fetcher.mock.calls[0][1].body).action).toBe('generate');expect(fetcher.mock.calls[1][1].headers['X-Tenant-Context']).toBe('synthetic');});
+it('clears displayed customer terms after access is revoked',async()=>{await open();fetcher.mockResolvedValueOnce({ok:false,status:404,json:async()=>({error:'Piloto no disponible'})});await act(async()=>button('Registrar periodos').click());expect(input('Nombre del servicio').value).toBe('');expect(button('Guardar borrador').disabled).toBe(true);expect(host.textContent).not.toContain('Cliente sintético');});
+it('shows saved contractual renewal dates and the existing customer route without a write',async()=>{await open();expect(host.textContent).toContain('Renovación · próximos 30 días');expect(host.textContent).toContain('Último día del contrato: 30/01/2031');expect(host.textContent).toContain('Preaviso: 01/01/2031');expect(host.textContent).toContain('America/Mexico_City');expect(host.querySelector('a[href="/clientes/synthetic-client"]')?.textContent).toBe('Ver ficha del cliente');expect(fetcher).not.toHaveBeenCalled();await change('Fin exclusivo (primer día fuera del contrato)','2035-01-31');expect(host.textContent).toContain('Último día del contrato: 30/01/2031');});
+it('keeps expired contracts visible and does not claim automatic extension',async()=>{const view=agreement();view.terms={...view.terms,autoRenew:true};view.renewalReview=reviewRecurringRenewal(view.terms,view.status,new Date('2031-02-01T18:00:00Z'));await act(async()=>root.render(<RecurringServicesPanel tenantId="synthetic" initialWorkspace={{...workspace(),agreements:[view]}}/>));expect(host.textContent).toContain('Vigencia contractual cumplida · revisar continuidad');expect(host.textContent).toContain('Renovación automática pactada; confirmar continuidad y condiciones.');expect(button('Abrir acuerdo')).toBeTruthy();expect(fetcher).not.toHaveBeenCalled();});
+it('offers only the two pilot modalities and submits annual as a fixed yearly term',async()=>{
+ await act(async()=>root.render(<RecurringServicesPanel tenantId="synthetic" initialWorkspace={workspace()}/>));
+ await act(async()=>button('Nuevo acuerdo').click());
+ const select=host.querySelector('select[aria-label="Modalidad"]') as HTMLSelectElement;
+ expect([...select.options].map(o=>o.text)).toEqual(['Pendiente de seleccionar','Mensual renovable','Anual con pago único']);
+ await act(async()=>{select.value='annual';select.dispatchEvent(new Event('change',{bubbles:true}));});
+ await change('Nombre del servicio','Anual sintético');
+ fetcher.mockResolvedValueOnce({ok:true,json:async()=>({agreement:agreement()})});
+ await act(async()=>button('Guardar borrador').click());
+ expect(JSON.parse(fetcher.mock.calls[0][1].body).terms).toMatchObject({contractKind:'fixed_term',cadence:'annual'});
+ expect(host.textContent).toContain('Anual facturado mensualmente: previsto');
+});
