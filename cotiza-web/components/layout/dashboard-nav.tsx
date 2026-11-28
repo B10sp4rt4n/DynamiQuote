@@ -4,74 +4,66 @@ import Link from "next/link";
 import { usePathname } from "next/navigation";
 import { useState } from "react";
 
-const navigation = [
-  { href: "/inicio", label: "Inicio" },
-  { href: "/configuracion/clientes", label: "Clientes" },
-  { href: "/pipeline", label: "Oportunidades" },
-  { href: "/cotizaciones", label: "Cotizaciones" },
-  { href: "/propuestas", label: "Propuestas" },
-  { href: "/propuestas/kpis", label: "KPIs" },
-];
+type Area = "Inicio" | "Comercial" | "Fiscal" | "Inteligencia" | "Administración";
+type NavigationItem = { href: string; label: string; area: Area };
+type Props = {
+  crmWorkspaceEnabled?: boolean;
+  recordiaEnabled?: boolean;
+  procurementEnabled?: boolean;
+  fiscalEnabled?: boolean;
+  canAdminister?: boolean;
+};
 
-const supportingNavigation = [
-  { href: "/paquetes", label: "Paquetes" },
-  { href: "/autorizaciones", label: "Autorizaciones" },
-  { href: "/configuracion", label: "Configuración" },
-];
-
-export function DashboardNav({ crmWorkspaceEnabled = false, recordiaEnabled = false, procurementEnabled = false }: { crmWorkspaceEnabled?: boolean; recordiaEnabled?: boolean; procurementEnabled?: boolean }) {
-  const links = [
-    ...navigation,
-    ...(crmWorkspaceEnabled ? [{ href: "/crm", label: "CRM · Piloto" }] : []),
-    ...(recordiaEnabled ? [{ href: "/recordia", label: "Recordia · Premium" }] : []),
-    ...(procurementEnabled ? [{ href: "/compras", label: "Compras" }] : []),
-    ...supportingNavigation,
+export function DashboardNav({ crmWorkspaceEnabled = false, recordiaEnabled = false, procurementEnabled = false, fiscalEnabled = false, canAdminister = false }: Props) {
+  const links: NavigationItem[] = [
+    { href: "/inicio", label: "Inicio", area: "Inicio" },
+    { href: "/configuracion/clientes", label: "Clientes", area: "Comercial" },
+    { href: "/pipeline", label: "Oportunidades", area: "Comercial" },
+    { href: "/cotizaciones", label: "Cotizaciones", area: "Comercial" },
+    { href: "/propuestas", label: "Propuestas", area: "Comercial" },
+    { href: "/paquetes", label: "Paquetes", area: "Comercial" },
+    { href: "/autorizaciones", label: "Autorizaciones", area: "Comercial" },
+    ...(crmWorkspaceEnabled ? [{ href: "/crm", label: "CRM · Piloto", area: "Comercial" as const }] : []),
+    ...(procurementEnabled ? [{ href: "/compras", label: "Compras", area: "Comercial" as const }] : []),
+    ...(fiscalEnabled ? [{ href: "/fiscal", label: "Documentos por propuesta", area: "Fiscal" as const }] : []),
+    { href: "/propuestas/kpis", label: "KPIs comerciales", area: "Inteligencia" },
+    ...(recordiaEnabled ? [{ href: "/recordia", label: "Recordia · Premium", area: "Inteligencia" as const }] : []),
+    ...(canAdminister ? [{ href: "/configuracion", label: "Configuración", area: "Administración" as const }] : []),
   ];
   const currentPath = usePathname();
   const [mobileOpen, setMobileOpen] = useState(false);
-  const pathname = currentPath.startsWith("/oportunidades/") ? "/pipeline" : currentPath;
-  const activeHref = links
-    .filter(({ href }) => pathname === href || pathname.startsWith(`${href}/`))
-    .reduce<string | undefined>(
-      (active, { href }) => (!active || href.length > active.length ? href : active),
-      undefined,
-    );
+  const pathname = currentPath.startsWith("/oportunidades/") ? "/pipeline"
+    : currentPath === "/clientes" || currentPath.startsWith("/clientes/") ? "/configuracion/clientes"
+    : currentPath.startsWith("/configuracion/facturacion") && fiscalEnabled ? "/fiscal" : currentPath;
+  const active = links.filter(({ href }) => pathname === href || pathname.startsWith(`${href}/`))
+    .sort((a, b) => b.href.length - a.href.length)[0];
+  const area = active?.area ?? "Inicio";
+  const areas = (["Inicio", "Comercial", "Fiscal", "Inteligencia", "Administración"] as const)
+    .filter(name => links.some(link => link.area === name));
+  const linkClass = "inline-flex min-h-11 items-center rounded-lg px-3 py-2 text-sm font-medium focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-zinc-900";
 
-  return (
-    <div className="space-y-3">
-      <button type="button" aria-expanded={mobileOpen} aria-controls="dashboard-primary-navigation"
-        onClick={() => setMobileOpen(open => !open)}
-        className="flex min-h-11 w-full items-center justify-between gap-3 rounded-lg border border-zinc-300 px-3 py-2 text-left text-sm font-semibold text-zinc-900 focus-visible:outline-2 focus-visible:outline-offset-2 md:hidden">
-        <span>Menú · {links.find(link => link.href === activeHref)?.label ?? "Cotiza"}</span>
-        <span aria-hidden="true">{mobileOpen ? "−" : "+"}</span>
-      </button>
-      <nav id="dashboard-primary-navigation" aria-label="Menu principal" className={`${mobileOpen ? "flex" : "hidden"} flex-wrap gap-2 md:flex`}>
-        {links.map(({ href, label }) => (
-          <Link
-            aria-current={activeHref === href ? "page" : undefined}
-            className={`inline-flex min-h-11 items-center rounded-lg px-3 py-2 text-sm font-medium transition focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-zinc-900 ${
-              activeHref === href
-                ? "bg-zinc-900 text-white"
-                : "text-zinc-600 hover:bg-zinc-100 hover:text-zinc-900"
-            }`}
-            href={href}
-            onClick={() => setMobileOpen(false)}
-            key={href}
-          >
-            {label}
-          </Link>
-        ))}
+  return <div className="space-y-3">
+    <button type="button" aria-expanded={mobileOpen} aria-controls="dashboard-primary-navigation"
+      onClick={() => setMobileOpen(open => !open)}
+      className="flex min-h-11 w-full items-center justify-between gap-3 rounded-lg border border-zinc-300 px-3 py-2 text-left text-sm font-semibold text-zinc-900 focus-visible:outline-2 focus-visible:outline-offset-2 md:hidden">
+      <span>Menú · {active?.label ?? "CDC Suite"}</span>
+      <span aria-hidden="true">{mobileOpen ? "−" : "+"}</span>
+    </button>
+    <div id="dashboard-primary-navigation" className={`${mobileOpen ? "block" : "hidden"} space-y-2 md:block`}>
+      <nav aria-label="Áreas de CDC Suite" className="flex flex-wrap gap-2">
+        {areas.map(name => {
+          const first = links.find(link => link.area === name)!;
+          const href = name === "Comercial" ? "/pipeline" : first.href;
+          return <Link key={name} href={href} onClick={() => setMobileOpen(false)}
+            aria-current={area === name ? name === "Inicio" ? "page" : "location" : undefined}
+            className={`${linkClass} ${area === name ? "bg-zinc-900 text-white" : "text-zinc-600 hover:bg-zinc-100"}`}>{name}</Link>;
+        })}
       </nav>
-      <details className="rounded-lg border border-indigo-200 bg-indigo-50 px-4 py-3 text-sm text-indigo-950">
-        <summary className="cursor-pointer font-semibold focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-indigo-700">
-          Actualizamos el orden del menú
-        </summary>
-        <div className="mt-3 space-y-2">
-          <p>El menú ahora sigue tu recorrido comercial: Inicio → Clientes → Oportunidades → Cotizaciones → Propuestas → KPIs.</p>
-          <p>Pipeline ahora se llama <strong>Oportunidades</strong>. KPIs está después de Propuestas; Paquetes y Configuración quedan al final.</p>
-          <p>Puedes abrir cualquier sección directamente, en el orden que necesites.</p>
-        </div>
-      </details>
+      {area !== "Inicio" ? <nav aria-label={`Vistas de ${area}`} className="flex flex-wrap gap-1 border-t border-zinc-200 pt-2">
+        {links.filter(link => link.area === area).map(({ href, label }) => <Link key={href} href={href}
+          onClick={() => setMobileOpen(false)} aria-current={active?.href === href ? "page" : undefined}
+          className={`${linkClass} ${active?.href === href ? "bg-zinc-100 text-zinc-950" : "text-zinc-600 hover:bg-zinc-100"}`}>{label}</Link>)}
+      </nav> : null}
     </div>
-  );
+  </div>;
 }

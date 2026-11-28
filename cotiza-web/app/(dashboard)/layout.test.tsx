@@ -17,7 +17,7 @@ import DashboardLayout from "./layout";
 beforeEach(()=>{vi.clearAllMocks();m.context.mockResolvedValue({id:"a",name:"Empresa A",slug:"a",userId:"actor",userRole:"owner",isSuperAdmin:false});m.tenants.mockResolvedValue([{id:"a",name:"Empresa A",slug:"a"},{id:"b",name:"Empresa B",slug:"b"}]);m.capability.mockResolvedValue(false);m.policy.mockResolvedValue({rules:[],revision:0});});
 it("shows active context without disclosing other companies to a non-superadmin",async()=>{
   const html=renderToStaticMarkup(await DashboardLayout({children:<p>Contenido</p>}));
-  expect(html).toContain("Empresa activa: Empresa A");expect(html).not.toContain("Empresa B");expect(html).not.toContain("Cambiar empresa");expect(m.tenants).not.toHaveBeenCalled();
+  expect(html).toContain('class="cdc-label">Empresa activa</span><span class="cdc-company-name">Empresa A</span>');expect(html).not.toContain("Empresa B");expect(html).not.toContain("Cambiar empresa");expect(m.tenants).not.toHaveBeenCalled();
 });
 it("places the superadmin switcher in the shared header above the page content",async()=>{
   m.context.mockResolvedValue({id:"a",name:"Empresa A",slug:"a",userId:"actor",isSuperAdmin:true});

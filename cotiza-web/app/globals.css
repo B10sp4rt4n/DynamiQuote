@@ -24,3 +24,17 @@ body {
   color: var(--foreground);
   font-family: Arial, Helvetica, sans-serif;
 }
+
+/* CDC contract v1, scoped to authenticated workspaces. */
+.cdc-workspace { background: var(--cdc-canvas); color: var(--cdc-ink); font-family: Arial, Helvetica, sans-serif; }
+.cdc-brand-context { display: flex; flex-wrap: wrap; align-items: center; gap: 1rem; min-width: 0; font-family: Arial, Helvetica, sans-serif; }
+.cdc-brand { display: inline-flex; align-items: center; gap: .875rem; min-width: 0; }
+.cdc-mark { display: grid; place-items: center; width: 48px; height: 48px; flex-shrink: 0; border-radius: 16px; background: var(--cdc-ink); color: white; font-size: 1.5rem; font-weight: 700; border-bottom: 3px solid var(--cdc-accent); }
+.cdc-brand-title { display: block; font-size: 1.2rem; font-weight: 650; letter-spacing: -.02em; }
+.cdc-subtitle { display: block; font-size: .8rem; color: var(--cdc-muted); }
+.cdc-company { min-width: 0; max-width: 100%; overflow-wrap: anywhere; }
+.cdc-label { display: block; font-size: .65rem; letter-spacing: .12em; text-transform: uppercase; color: var(--cdc-muted); }
+.cdc-company-name { display: block; font-size: .9rem; font-weight: 600; }
+@media (max-width: 640px) {
+  .cdc-company { width: 100%; border-top: 1px solid var(--cdc-line); padding-top: .75rem; }
+}

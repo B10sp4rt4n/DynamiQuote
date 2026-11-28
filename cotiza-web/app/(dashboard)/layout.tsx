@@ -8,10 +8,13 @@ import { hasClerkCredentials } from "@/lib/auth/clerk";
 import { isTenantCapabilityEnabled } from "@/lib/db/tenant-capabilities";
 import { getCurrentTenantContext } from "@/lib/auth/tenant-context";
 import { ExpiryAlertsBell } from "@/components/layout/expiry-alerts-bell";
-import { CotizaBrand } from "@/components/ui/cotiza-brand";
+import { SuiteBrand } from "@/components/layout/suite-brand";
+import experience from "@/lib/suite/experience.json";
+import type { CSSProperties } from "react";
 import { DashboardNav } from "@/components/layout/dashboard-nav";
 import { TenantSwitcher } from "@/components/layout/tenant-switcher";
 import { getActiveTenants } from "@/lib/db/tenants";
+import { isDigestorFiscalEnabledForTenant } from "@/lib/integrations/digestor-fiscal";
 import { isDigestorFiscalSandboxTenant } from "@/lib/integrations/digestor-routing";
 import { recordiaPilotVisible } from "@/lib/integrations/recordia/access";
 import { getWinPolicy } from "@/lib/db/won-consolidation";
@@ -43,9 +46,9 @@ export default async function DashboardLayout({ children }: DashboardLayoutProps
     return (
       <div className="min-h-screen bg-zinc-100 px-6 py-10">
         <section className="mx-auto max-w-3xl rounded-xl border border-zinc-200 bg-white p-6 shadow-sm">
-          <h1 className="text-2xl font-semibold text-zinc-900">Falta contexto de tenant</h1>
+          <h1 className="text-2xl font-semibold text-zinc-900">Acceso a empresa pendiente</h1>
           <p className="mt-2 text-zinc-600">
-            Si Clerk esta habilitado, agrega `tenantId` o `tenantSlug` en la metadata de la sesion o del usuario para aislar correctamente los datos.
+            Tu cuenta no tiene una empresa habilitada. Solicita al administrador que revise tu acceso.
           </p>
         </section>
       </div>
@@ -60,11 +63,15 @@ export default async function DashboardLayout({ children }: DashboardLayoutProps
   ]);
   const showTenantSwitcher = tenant.isSuperAdmin && tenantOptions.length > 1;
 
+  const canAdminister = tenant.isSuperAdmin || tenant.userRole === "owner" || tenant.userRole === "admin";
+  const fiscalEnabled = isDigestorFiscalEnabledForTenant(tenant.id);
+  const theme = Object.fromEntries(Object.entries(experience.colors).map(([key, value]) => [`--cdc-${key}`, value])) as CSSProperties;
+
   return (
-    <div className="min-h-screen bg-zinc-100">
+    <div className="cdc-workspace min-h-screen" style={theme}>
       <header className="border-b border-zinc-200 bg-white">
         <div className="mx-auto grid max-w-7xl grid-cols-[minmax(0,1fr)_auto] items-center gap-3 px-4 py-3 sm:px-6 sm:py-4">
-          <CotizaBrand href="/inicio" subtitle={showTenantSwitcher ? null : `Empresa activa: ${tenant.name}`} />
+          <SuiteBrand companyName={tenant.name} />
           <div className="flex shrink-0 items-center gap-2 text-sm text-zinc-600 sm:gap-4">
             <ExpiryAlertsBell key={`${tenant.id}:${tenant.userId}`} tenantId={tenant.id} />
             {clerkEnabled ? (
@@ -82,7 +89,7 @@ export default async function DashboardLayout({ children }: DashboardLayoutProps
             <TenantSwitcher key={`${tenant.id}:${tenant.userId}`} currentSlug={tenant.slug} currentName={tenant.name} options={tenantOptions} />
           </div> : null}
           <div className="col-span-2 min-w-0">
-            <DashboardNav crmWorkspaceEnabled={crmWorkspaceEnabled} recordiaEnabled={recordiaEnabled} procurementEnabled={winPolicy.procurementDraftsEnabled === true} />
+            <DashboardNav canAdminister={canAdminister} fiscalEnabled={fiscalEnabled} crmWorkspaceEnabled={crmWorkspaceEnabled} recordiaEnabled={recordiaEnabled} procurementEnabled={winPolicy.procurementDraftsEnabled === true} />
           </div>
         </div>
       </header>
